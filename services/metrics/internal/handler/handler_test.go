@@ -59,12 +59,13 @@ func TestComputeMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "e0000000-0000-0000-0000-000000000001", resp.Msg.GetExperimentId())
-	assert.Equal(t, int32(3), resp.Msg.GetMetricsComputed())
+	// 4 metrics: ctr_recommendation, watch_time_minutes, stream_start_rate, rebuffer_rate (RATIO)
+	assert.Equal(t, int32(4), resp.Msg.GetMetricsComputed())
 	assert.NotNil(t, resp.Msg.GetCompletedAt())
 
-	// Verify query logs were written.
+	// Verify query logs: 4 daily_metric + 1 delta_method = 5 entries.
 	entries := qlWriter.AllEntries()
-	assert.Len(t, entries, 3)
+	assert.Len(t, entries, 5)
 }
 
 func TestComputeMetrics_EmptyID(t *testing.T) {
@@ -103,7 +104,7 @@ func TestGetQueryLog(t *testing.T) {
 		ExperimentId: "e0000000-0000-0000-0000-000000000001",
 	}))
 	require.NoError(t, err)
-	assert.Len(t, resp.Msg.GetEntries(), 3)
+	assert.Len(t, resp.Msg.GetEntries(), 5)
 
 	for _, entry := range resp.Msg.GetEntries() {
 		assert.NotEmpty(t, entry.GetSqlText())
@@ -153,8 +154,9 @@ func TestExportNotebook(t *testing.T) {
 	err = json.Unmarshal(resp.Msg.GetNotebookContent(), &nb)
 	require.NoError(t, err, "notebook content must be valid JSON")
 	assert.Equal(t, 4, nb.NBFormat)
-	// header + setup + 3 * (description + SQL) = 8 cells
-	assert.Equal(t, 8, len(nb.Cells))
+	// header + setup + 5 * (description + SQL) = 12 cells
+	// (4 daily_metric + 1 delta_method = 5 queries)
+	assert.Equal(t, 12, len(nb.Cells))
 }
 
 func TestExportNotebook_NoLogs(t *testing.T) {
