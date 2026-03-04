@@ -88,13 +88,17 @@ impl SnapshotStore {
         let prefix = format!("{experiment_id}:");
         let mut keys: Vec<String> = Vec::new();
 
-        let iter = self.db.iterator(IteratorMode::Start);
+        // Start iteration from the experiment prefix and stop once keys no longer match it.
+        let iter = self
+            .db
+            .iterator(IteratorMode::From(prefix.as_bytes(), rocksdb::Direction::Forward));
         for item in iter {
             let (key, _value) = item?;
             let key_str = String::from_utf8_lossy(&key).into_owned();
-            if key_str.starts_with(&prefix) {
-                keys.push(key_str);
+            if !key_str.starts_with(&prefix) {
+                break;
             }
+            keys.push(key_str);
         }
 
         if keys.len() <= keep {
