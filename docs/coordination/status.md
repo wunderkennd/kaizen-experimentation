@@ -13,7 +13,7 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🟡 Not Started | — | Hash crate + WASM/FFI bindings | — | Can start immediately |
+| Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/wasm-ffi-hash-bindings | Hash crate + WASM/FFI bindings | — | M1.1 complete, next: M1.2 GetAssignment RPC |
 | Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/event-pipeline | Bloom filter dedup optimization (1.8) | — | M1.6+1.7 complete (PR #1). Rotating Bloom filter + Prometheus metrics implemented. |
 | Agent-3 | M3 Metrics | 🔵 In Progress | — | RATIO metric with delta method inputs (1.11) | Agent-2 (events on Kafka) | M1.10 merged (PR #3). Advancing to RATIO + delta method. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟡 Not Started | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-2 (reward events) for M4b | M4a partially unblocked: metric_summaries now available from M3. Algorithm crates can start. |
@@ -44,7 +44,7 @@
 
 | # | Milestone | Owner | Status | PR | Merged | Unblocks |
 |---|-----------|-------|--------|-----|--------|----------|
-| **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟡 | — | — | Agent-7 (CGo bridge), SDKs |
+| **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟢 | agent-1/feat/wasm-ffi-hash-bindings | — | Agent-7 (CGo bridge), SDKs |
 | 1.2 | GetAssignment RPC (static bucketing) | Agent-1 | 🟡 | — | — | SDKs, Agent-6 (debug view) |
 | 1.3 | Config cache (subscribe to M5 StreamConfigUpdates) | Agent-1 | ⚪ | — | — | — |
 | 1.4 | Targeting rule evaluation | Agent-1 | 🟡 | — | — | — |

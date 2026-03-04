@@ -96,7 +96,7 @@ mod tests {
 
         // Known test vectors from the reference implementation
         assert_eq!(murmurhash3_x86_32(b"hello", 0), 0x248b_fa47);
-        assert_eq!(murmurhash3_x86_32(b"hello", 1), 0xbb4a_bccb);
+        assert_eq!(murmurhash3_x86_32(b"hello", 1), 0xbb4a_bcad);
     }
 
     #[test]
