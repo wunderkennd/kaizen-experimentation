@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-5 (M1.21 layer allocation + bucket reuse — PR #7)
+> **Last updated**: 2026-03-04 by Agent-3 (M1.12 CUPED covariate computation — PR #9)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/wasm-ffi-hash-bindings | Hash crate + WASM/FFI bindings | — | M1.1 complete, next: M1.2 GetAssignment RPC |
 | Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/event-pipeline | Bloom filter dedup optimization (1.8) | — | M1.6+1.7 complete (PR #1). Rotating Bloom filter + Prometheus metrics implemented. |
-| Agent-3 | M3 Metrics | 🔵 In Progress | — | RATIO metric with delta method inputs (1.11) | Agent-2 (events on Kafka) | M1.10 merged (PR #3). Advancing to RATIO + delta method. |
+| Agent-3 | M3 Metrics | 🔵 In Progress | agent-3/feat/cuped-covariate | Guardrail breach detection (1.13) | Agent-2 (events on Kafka) | M1.10 (PR #3), M1.11 (PR #5) merged. M1.12 CUPED in PR #9. Next: guardrail alerts. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟡 Not Started | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-2 (reward events) for M4b | M4a partially unblocked: metric_summaries now available from M3. Algorithm crates can start. |
 | Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/layer-allocation-bucket-reuse | Layer allocation + bucket reuse (1.21) | — | M1.20 merged. M1.21 in PR #7: allocation, bucket reuse, layer CRUD |
 | Agent-6 | M6 UI | ⚪ Waiting | — | Experiment list + detail shell | Agent-5 (CRUD APIs) | Use MSW mocks until M5 delivers |
@@ -54,8 +54,8 @@
 | 1.8 | Bloom filter dedup (0.1% FPR at 100M/day) | Agent-2 | 🔵 | — | — | Rotating filter + Prometheus metrics |
 | 1.9 | Go orchestration + SQL query logging | Agent-2 | 🟡 | — | — | — |
 | **1.10** | **Standard metric computation (MEAN, PROPORTION, COUNT)** | Agent-3 | 🟢 | PR #3 | 2026-03-04 | Agent-4 M4a |
-| 1.11 | RATIO metric with delta method inputs | Agent-3 | ⚪ | — | — | — |
-| 1.12 | CUPED covariate computation | Agent-3 | ⚪ | — | — | — |
+| 1.11 | RATIO metric with delta method inputs | Agent-3 | 🟢 | PR #5 | 2026-03-04 | Delta method Var(N), Var(D), Cov(N,D) |
+| 1.12 | CUPED covariate computation | Agent-3 | 🔵 | PR #9 | — | Pre-experiment 7-day lookback covariate |
 | 1.13 | Guardrail breach detection → guardrail_alerts topic | Agent-3 | ⚪ | — | — | Agent-5 (auto-pause) |
 | **1.14** | **Welch t-test + SRM check (golden-file validated)** | Agent-4 | 🟡 | — | — | Agent-6 (results page) |
 | 1.15 | CUPED variance reduction | Agent-4 | ⚪ | — | — | — |
