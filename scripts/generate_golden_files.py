@@ -69,6 +69,8 @@ def chisq_test(observed, expected_fractions):
 def verify_ttest(control, treatment, alpha):
     """Cross-check with scipy.stats.ttest_ind."""
     result = stats.ttest_ind(control, treatment, equal_var=False)
+    # Ensure alpha is a numeric value (used to avoid an unused-parameter warning)
+    float(alpha)
     return result.statistic, result.pvalue
 
 def generate_ttest_files():
