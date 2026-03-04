@@ -1,12 +1,12 @@
 //! Stub gRPC server for the policy service.
 //!
 //! Full implementation pending proto code generation.
-//! Currently provides a health check endpoint only.
+//! Currently does not expose any gRPC endpoints; logs startup and returns immediately.
 
 use tracing::info;
 
-/// Start the gRPC server (stub — health check only).
+/// Start the stub gRPC server (logs startup and returns immediately; no endpoints active).
 pub async fn serve_grpc(addr: String) -> Result<(), String> {
-    info!(%addr, "gRPC server stub started (health check only, awaiting proto codegen)");
+    info!(%addr, "gRPC server stub started (no gRPC endpoints active; awaiting proto codegen)");
     Ok(())
 }
