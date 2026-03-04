@@ -130,7 +130,14 @@ impl SnapshotStore {
 
 /// Build a lexicographically sortable snapshot key.
 fn snapshot_key(experiment_id: &str, timestamp_millis: i64) -> String {
-    format!("{experiment_id}:{timestamp_millis:020}")
+    // Ensure the timestamp used in the key is non-negative so that the key
+    // format remains zero-padded digits only and preserves lexicographic order.
+    let clamped: u64 = if timestamp_millis < 0 {
+        0
+    } else {
+        timestamp_millis as u64
+    };
+    format!("{experiment_id}:{clamped:020}")
 }
 
 #[cfg(test)]
