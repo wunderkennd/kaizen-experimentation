@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
@@ -61,10 +62,12 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 	for _, m := range metrics {
 		params := spark.TemplateParams{
-			ExperimentID:    exp.ExperimentID,
-			MetricID:        m.MetricID,
-			SourceEventType: m.SourceEventType,
-			ComputationDate: computationDate,
+			ExperimentID:         exp.ExperimentID,
+			MetricID:             m.MetricID,
+			SourceEventType:      m.SourceEventType,
+			ComputationDate:      computationDate,
+			NumeratorEventType:   m.NumeratorEventType,
+			DenominatorEventType: m.DenominatorEventType,
 		}
 
 		sql, err := j.renderer.RenderForType(m.Type, params)
@@ -92,6 +95,36 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 		totalRows += result.RowCount
 		metricsComputed++
+
+		// For RATIO metrics, also compute delta method variance components.
+		if strings.ToUpper(m.Type) == "RATIO" {
+			deltaSQL, err := j.renderer.RenderRatioDeltaMethod(params)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: render delta method for %s: %w", m.MetricID, err)
+			}
+
+			deltaResult, err := j.executor.ExecuteAndWrite(ctx, deltaSQL, "delta.daily_treatment_effects")
+			if err != nil {
+				return nil, fmt.Errorf("jobs: execute delta method for %s: %w", m.MetricID, err)
+			}
+
+			if err := j.queryLog.Log(ctx, querylog.Entry{
+				ExperimentID: experimentID,
+				MetricID:     m.MetricID,
+				SQLText:      deltaSQL,
+				RowCount:     deltaResult.RowCount,
+				DurationMs:   deltaResult.Duration.Milliseconds(),
+				JobType:      "delta_method",
+			}); err != nil {
+				return nil, fmt.Errorf("jobs: log delta method query for %s: %w", m.MetricID, err)
+			}
+
+			slog.Info("computed delta method inputs",
+				"experiment_id", experimentID,
+				"metric_id", m.MetricID,
+				"rows", deltaResult.RowCount,
+			)
+		}
 
 		slog.Info("computed metric",
 			"experiment_id", experimentID,
