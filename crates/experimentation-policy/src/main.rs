@@ -15,7 +15,7 @@ pub mod snapshot;
 pub mod types;
 
 use config::PolicyConfig;
-use core::PolicyCore;
+use self::core::PolicyCore;
 use snapshot::SnapshotStore;
 use std::path::Path;
 use tokio::sync::mpsc;
