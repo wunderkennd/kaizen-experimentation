@@ -60,6 +60,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 	var totalRows int64
 	metricsComputed := 0
 
+	const defaultCupedLookbackDays = 7
+
 	for _, m := range metrics {
 		params := spark.TemplateParams{
 			ExperimentID:         exp.ExperimentID,
@@ -123,6 +125,50 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 				"experiment_id", experimentID,
 				"metric_id", m.MetricID,
 				"rows", deltaResult.RowCount,
+			)
+		}
+
+		// If metric has a CUPED covariate configured and experiment has a start date,
+		// compute the pre-experiment covariate value for variance reduction.
+		if m.CupedCovariateMetricID != "" && exp.StartedAt != "" {
+			covMetric, err := j.config.GetMetric(m.CupedCovariateMetricID)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: resolve CUPED covariate metric %s for %s: %w",
+					m.CupedCovariateMetricID, m.MetricID, err)
+			}
+
+			cupedParams := params
+			cupedParams.CupedEnabled = true
+			cupedParams.CupedCovariateEventType = covMetric.SourceEventType
+			cupedParams.ExperimentStartDate = exp.StartedAt
+			cupedParams.CupedLookbackDays = defaultCupedLookbackDays
+
+			cupedSQL, err := j.renderer.RenderCupedCovariate(cupedParams)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: render CUPED covariate for %s: %w", m.MetricID, err)
+			}
+
+			cupedResult, err := j.executor.ExecuteAndWrite(ctx, cupedSQL, "delta.metric_summaries")
+			if err != nil {
+				return nil, fmt.Errorf("jobs: execute CUPED covariate for %s: %w", m.MetricID, err)
+			}
+
+			if err := j.queryLog.Log(ctx, querylog.Entry{
+				ExperimentID: experimentID,
+				MetricID:     m.MetricID,
+				SQLText:      cupedSQL,
+				RowCount:     cupedResult.RowCount,
+				DurationMs:   cupedResult.Duration.Milliseconds(),
+				JobType:      "cuped_covariate",
+			}); err != nil {
+				return nil, fmt.Errorf("jobs: log CUPED covariate query for %s: %w", m.MetricID, err)
+			}
+
+			slog.Info("computed CUPED covariate",
+				"experiment_id", experimentID,
+				"metric_id", m.MetricID,
+				"covariate_metric_id", m.CupedCovariateMetricID,
+				"rows", cupedResult.RowCount,
 			)
 		}
 

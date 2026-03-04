@@ -174,6 +174,51 @@ func TestRenderRatio_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, deltaSQL, "mean_denominator")
 }
 
+func TestRenderCupedCovariate(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	p := testParams
+	p.MetricID = "watch_time_minutes"
+	p.CupedEnabled = true
+	p.CupedCovariateEventType = "heartbeat"
+	p.ExperimentStartDate = "2024-01-08"
+	p.CupedLookbackDays = 7
+
+	sql, err := r.RenderCupedCovariate(p)
+	require.NoError(t, err)
+
+	expected := readGolden(t, "cuped_covariate_expected.sql")
+	assert.Equal(t, expected, sql)
+}
+
+func TestRenderCupedCovariate_ContainsKeyFields(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	p := TemplateParams{
+		ExperimentID:            "test-exp-456",
+		MetricID:                "my_metric",
+		ComputationDate:         "2024-06-01",
+		CupedEnabled:            true,
+		CupedCovariateEventType: "heartbeat",
+		ExperimentStartDate:     "2024-05-20",
+		CupedLookbackDays:       7,
+	}
+
+	sql, err := r.RenderCupedCovariate(p)
+	require.NoError(t, err)
+
+	assert.Contains(t, sql, "test-exp-456")
+	assert.Contains(t, sql, "my_metric")
+	assert.Contains(t, sql, "heartbeat")
+	assert.Contains(t, sql, "2024-05-20")
+	assert.Contains(t, sql, "cuped_covariate")
+	assert.Contains(t, sql, "pre_experiment_data")
+	assert.Contains(t, sql, "DATE_SUB")
+	assert.Contains(t, sql, "7")
+}
+
 func TestRenderSQL_ContainsKeyFields(t *testing.T) {
 	r, err := NewSQLRenderer()
 	require.NoError(t, err)

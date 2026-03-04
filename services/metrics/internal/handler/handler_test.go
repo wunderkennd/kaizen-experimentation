@@ -63,9 +63,9 @@ func TestComputeMetrics(t *testing.T) {
 	assert.Equal(t, int32(4), resp.Msg.GetMetricsComputed())
 	assert.NotNil(t, resp.Msg.GetCompletedAt())
 
-	// Verify query logs: 4 daily_metric + 1 delta_method = 5 entries.
+	// Verify query logs: 4 daily_metric + 1 delta_method + 2 cuped_covariate = 7 entries.
 	entries := qlWriter.AllEntries()
-	assert.Len(t, entries, 5)
+	assert.Len(t, entries, 7)
 }
 
 func TestComputeMetrics_EmptyID(t *testing.T) {
@@ -104,7 +104,7 @@ func TestGetQueryLog(t *testing.T) {
 		ExperimentId: "e0000000-0000-0000-0000-000000000001",
 	}))
 	require.NoError(t, err)
-	assert.Len(t, resp.Msg.GetEntries(), 5)
+	assert.Len(t, resp.Msg.GetEntries(), 7)
 
 	for _, entry := range resp.Msg.GetEntries() {
 		assert.NotEmpty(t, entry.GetSqlText())
@@ -126,8 +126,11 @@ func TestGetQueryLog_FilterByMetric(t *testing.T) {
 		MetricId:     "watch_time_minutes",
 	}))
 	require.NoError(t, err)
-	assert.Len(t, resp.Msg.GetEntries(), 1)
-	assert.Equal(t, "watch_time_minutes", resp.Msg.GetEntries()[0].GetMetricId())
+	// watch_time_minutes has daily_metric + cuped_covariate = 2 entries
+	assert.Len(t, resp.Msg.GetEntries(), 2)
+	for _, entry := range resp.Msg.GetEntries() {
+		assert.Equal(t, "watch_time_minutes", entry.GetMetricId())
+	}
 }
 
 func TestExportNotebook(t *testing.T) {
@@ -154,9 +157,9 @@ func TestExportNotebook(t *testing.T) {
 	err = json.Unmarshal(resp.Msg.GetNotebookContent(), &nb)
 	require.NoError(t, err, "notebook content must be valid JSON")
 	assert.Equal(t, 4, nb.NBFormat)
-	// header + setup + 5 * (description + SQL) = 12 cells
-	// (4 daily_metric + 1 delta_method = 5 queries)
-	assert.Equal(t, 12, len(nb.Cells))
+	// header + setup + 7 * (description + SQL) = 16 cells
+	// (4 daily_metric + 1 delta_method + 2 cuped_covariate = 7 queries)
+	assert.Equal(t, 16, len(nb.Cells))
 }
 
 func TestExportNotebook_NoLogs(t *testing.T) {

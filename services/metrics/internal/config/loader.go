@@ -23,6 +23,7 @@ type ExperimentConfig struct {
 	Name               string          `json:"name"`
 	Type               string          `json:"type"`
 	State              string          `json:"state"`
+	StartedAt          string          `json:"started_at,omitempty"` // ISO8601 date (YYYY-MM-DD)
 	PrimaryMetricID    string          `json:"primary_metric_id"`
 	SecondaryMetricIDs []string        `json:"secondary_metric_ids"`
 	Variants           []VariantConfig `json:"variants"`
@@ -37,6 +38,9 @@ type MetricConfig struct {
 	// NumeratorEventType and DenominatorEventType are used for RATIO metrics.
 	NumeratorEventType   string `json:"numerator_event_type,omitempty"`
 	DenominatorEventType string `json:"denominator_event_type,omitempty"`
+	// CupedCovariateMetricID references another metric whose pre-experiment
+	// values serve as a covariate for CUPED variance reduction (M4a).
+	CupedCovariateMetricID string `json:"cuped_covariate_metric_id,omitempty"`
 }
 
 // seedFile is the top-level JSON structure.
