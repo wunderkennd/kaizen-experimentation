@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-5 (M1.21 layer allocation + bucket reuse — PR #7)
+> **Last updated**: 2026-03-04 by Agent-2 (M1.9 Go orchestration + SQL query logging)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -14,7 +14,7 @@
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/wasm-ffi-hash-bindings | Hash crate + WASM/FFI bindings | — | M1.1 complete, next: M1.2 GetAssignment RPC |
-| Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/event-pipeline | Bloom filter dedup optimization (1.8) | — | M1.6+1.7 complete (PR #1). Rotating Bloom filter + Prometheus metrics implemented. |
+| Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/go-orchestration-querylog | Go orchestration + SQL query logging (1.9) | — | M1.6–1.8 complete (PR #1). Working on Go orchestration layer. |
 | Agent-3 | M3 Metrics | 🔵 In Progress | — | RATIO metric with delta method inputs (1.11) | Agent-2 (events on Kafka) | M1.10 merged (PR #3). Advancing to RATIO + delta method. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟡 Not Started | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-2 (reward events) for M4b | M4a partially unblocked: metric_summaries now available from M3. Algorithm crates can start. |
 | Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/layer-allocation-bucket-reuse | Layer allocation + bucket reuse (1.21) | — | M1.20 merged. M1.21 in PR #7: allocation, bucket reuse, layer CRUD |
@@ -51,8 +51,8 @@
 | 1.5 | Layer-aware + session-level assignment | Agent-1 | 🟡 | — | — | — |
 | **1.6** | **IngestExposure + IngestMetricEvent RPCs** | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-3 (events to compute) |
 | 1.7 | IngestRewardEvent + IngestQoEEvent RPCs | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-4 M4b (rewards) |
-| 1.8 | Bloom filter dedup (0.1% FPR at 100M/day) | Agent-2 | 🔵 | — | — | Rotating filter + Prometheus metrics |
-| 1.9 | Go orchestration + SQL query logging | Agent-2 | 🟡 | — | — | — |
+| 1.8 | Bloom filter dedup (0.1% FPR at 100M/day) | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Rotating filter + Prometheus metrics |
+| 1.9 | Go orchestration + SQL query logging | Agent-2 | 🔵 | — | — | querylog Writer + HTTP handler + main.go wiring |
 | **1.10** | **Standard metric computation (MEAN, PROPORTION, COUNT)** | Agent-3 | 🟢 | PR #3 | 2026-03-04 | Agent-4 M4a |
 | 1.11 | RATIO metric with delta method inputs | Agent-3 | ⚪ | — | — | — |
 | 1.12 | CUPED covariate computation | Agent-3 | ⚪ | — | — | — |

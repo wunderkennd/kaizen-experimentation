@@ -1,14 +1,19 @@
 // Package main is the entry point for the orchestration service.
+// Provides SQL query logging for M3 transparency and health/readiness probes.
 package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/org/experimentation-platform/services/orchestration/internal/handler"
+	"github.com/org/experimentation-platform/services/orchestration/internal/querylog"
 )
 
 func main() {
@@ -20,16 +25,41 @@ func main() {
 		port = "50055"
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "ok")
-	})
-
-	srv := &http.Server{Addr: ":" + port, Handler: mux}
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// PostgreSQL connection (optional — use MemWriter for dev/testing).
+	var (
+		qlWriter querylog.Writer
+		pgPool   *pgxpool.Pool
+	)
+
+	if pgURL := os.Getenv("POSTGRES_URL"); pgURL != "" {
+		pool, err := pgxpool.New(ctx, pgURL)
+		if err != nil {
+			slog.Error("failed to connect to postgres", "error", err)
+			os.Exit(1)
+		}
+		defer pool.Close()
+
+		if err := pool.Ping(ctx); err != nil {
+			slog.Error("failed to ping postgres", "error", err)
+			os.Exit(1)
+		}
+
+		pgPool = pool
+		qlWriter = querylog.NewPgWriter(pool)
+		slog.Info("using PostgreSQL query log writer")
+	} else {
+		qlWriter = querylog.NewMemWriter()
+		slog.Warn("POSTGRES_URL not set, using in-memory query log (dev mode)")
+	}
+
+	h := handler.New(qlWriter, pgPool)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	srv := &http.Server{Addr: ":" + port, Handler: mux}
 
 	go func() {
 		slog.Info("orchestration service starting", "port", port)
@@ -41,5 +71,7 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("shutting down gracefully")
-	srv.Shutdown(context.Background())
+	if err := srv.Shutdown(context.Background()); err != nil {
+		slog.Error("shutdown error", "error", err)
+	}
 }
