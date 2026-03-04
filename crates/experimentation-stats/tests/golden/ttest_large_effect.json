@@ -71,6 +71,7 @@
     "ci_lower": 21.325794228138644,
     "ci_upper": 26.098490980387826,
     "p_value": 0.0,
+    "p_value_comment": "For this large-effect case, the t-statistic is so large that the t-distribution CDF saturates to 1.0 in f64 arithmetic, causing the computed two-sided p-value (2 * (1 - CDF(|t|))) to underflow to 0.0. The true mathematical p-value is non-zero but below double-precision resolution.",
     "is_significant": true,
     "df": 57.72035519965426,
     "control_mean": 100.98796098321186,
