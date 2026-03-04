@@ -34,6 +34,9 @@ type MetricConfig struct {
 	Name            string `json:"name"`
 	Type            string `json:"type"` // MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM
 	SourceEventType string `json:"source_event_type"`
+	// NumeratorEventType and DenominatorEventType are used for RATIO metrics.
+	NumeratorEventType   string `json:"numerator_event_type,omitempty"`
+	DenominatorEventType string `json:"denominator_event_type,omitempty"`
 }
 
 // seedFile is the top-level JSON structure.
