@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-3 (M1.10 merged, advancing to M1.11)
+> **Last updated**: 2026-03-04 by Agent-5 (M1.21 layer allocation + bucket reuse in PR)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -17,7 +17,7 @@
 | Agent-2 | M2 Pipeline | 🟡 Not Started | — | Event validation + Kafka publisher | — | Can start immediately |
 | Agent-3 | M3 Metrics | 🔵 In Progress | — | RATIO metric with delta method inputs (1.11) | Agent-2 (events on Kafka) | M1.10 merged (PR #3). Advancing to RATIO + delta method. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟡 Not Started | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-2 (reward events) for M4b | M4a partially unblocked: metric_summaries now available from M3. Algorithm crates can start. |
-| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/experiment-crud-handlers | Experiment CRUD + state machine | — | M1.20 complete: CRUD + lifecycle + validation + audit trail |
+| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/layer-allocation-bucket-reuse | Layer allocation + bucket reuse (1.21) | — | M1.20 merged. M1.21 in PR: allocation, bucket reuse, layer CRUD |
 | Agent-6 | M6 UI | ⚪ Waiting | — | Experiment list + detail shell | Agent-5 (CRUD APIs) | Use MSW mocks until M5 delivers |
 | Agent-7 | M7 Flags | ⚪ Waiting | — | Boolean flag CRUD + CGo hash bridge | Agent-1 (hash crate + FFI headers) | Can start Go scaffolding; CGo bridge waits |
 
@@ -63,8 +63,8 @@
 | 1.17 | Thompson Sampling with Beta-Bernoulli (M4b) | Agent-4 | 🟡 | — | — | Agent-1 (SelectArm) |
 | 1.18 | LMAX single-threaded policy core (M4b) | Agent-4 | 🟡 | — | — | — |
 | 1.19 | RocksDB policy snapshots (M4b) | Agent-4 | 🟡 | — | — | — |
-| **1.20** | **Experiment CRUD + state machine enforcement** | Agent-5 | 🟢 | agent-5/feat/experiment-crud-handlers | — | Agent-6 (list/detail), Agent-1 (configs), Agent-3 (experiment list) |
-| 1.21 | Layer allocation + bucket reuse | Agent-5 | 🟡 | — | — | — |
+| **1.20** | **Experiment CRUD + state machine enforcement** | Agent-5 | 🟢 | agent-5/feat/experiment-crud-handlers | 2026-03-04 | Agent-6 (list/detail), Agent-1 (configs), Agent-3 (experiment list) |
+| 1.21 | Layer allocation + bucket reuse | Agent-5 | 🔵 | agent-5/feat/layer-allocation-bucket-reuse | — | In review |
 | 1.22 | StreamConfigUpdates RPC | Agent-5 | 🟡 | — | — | Agent-1 (config cache) |
 | 1.23 | Guardrail alert consumer → auto-pause | Agent-5 | ⚪ | — | — | — |
 | 1.24 | Metric definition CRUD | Agent-5 | 🟡 | — | — | Agent-3 |
