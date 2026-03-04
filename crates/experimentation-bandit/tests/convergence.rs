@@ -24,7 +24,7 @@ fn converges_to_optimal_arm_within_1000_rounds() {
 
         policy.update(&selection.arm_id, reward, None);
 
-        // After 500 rounds, arm "a" should be selected most of the time
+        // After 1000 rounds, arm "a" should be selected most of the time
         if round == 999 {
             let selection_rate = arm_a_selections as f64 / 1000.0;
             assert!(
