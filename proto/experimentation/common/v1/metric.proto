@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// MetricType determines the aggregation method M3 uses.
+enum MetricType {
+  METRIC_TYPE_UNSPECIFIED = 0;
+  // Mean of numeric values (e.g., average watch time).
+  METRIC_TYPE_MEAN = 1;
+  // Proportion of users triggering the event (e.g., conversion rate).
+  METRIC_TYPE_PROPORTION = 2;
+  // Ratio of two sums (e.g., total revenue / total sessions). Delta method for variance.
+  METRIC_TYPE_RATIO = 3;
+  // Count of events per user (e.g., sessions per week).
+  METRIC_TYPE_COUNT = 4;
+  // Percentile of a numeric distribution (e.g., p95 TTFF).
+  METRIC_TYPE_PERCENTILE = 5;
+  // Custom SQL-defined metric. M3 executes the custom_sql field.
+  METRIC_TYPE_CUSTOM = 6;
+}
+
+// MetricDefinition is the specification for a metric computed by M3.
+message MetricDefinition {
+  string metric_id = 1;
+  string name = 2;
+  string description = 3;
+  MetricType type = 4;
+  // Event type that feeds this metric. Must match MetricEvent.event_type.
+  string source_event_type = 5;
+  // For RATIO metrics: the numerator event type.
+  string numerator_event_type = 6;
+  // For RATIO metrics: the denominator event type.
+  string denominator_event_type = 7;
+  // For PERCENTILE metrics: which percentile (e.g., 0.95).
+  double percentile = 8;
+  // For CUSTOM metrics: Spark SQL expression. Logged to query_log.
+  string custom_sql = 9;
+  // Whether lower values are better (true for TTFF, rebuffer) or
+  // higher values are better (false for watch time, conversion).
+  // Used by guardrails to determine breach direction.
+  bool lower_is_better = 10;
+  // If set, this metric serves as a surrogate input and links to a target metric.
+  string surrogate_target_metric_id = 11;
+  // Whether this is a QoE metric (computed from qoe_events topic).
+  bool is_qoe_metric = 12;
+  // CUPED covariate metric ID. If set, M4a applies CUPED variance reduction
+  // using this metric's pre-experiment values as the covariate.
+  string cuped_covariate_metric_id = 13;
+  // Minimum detectable effect size. Used by M5 for power calculations.
+  double minimum_detectable_effect = 14;
+}

@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package experimentation.flags.v1;
+
+import "experimentation/common/v1/experiment.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/flags/v1;flagsv1";
+
+// FeatureFlagService is implemented in Go (M7).
+// Uses experimentation-hash Rust library via CGo for deterministic evaluation
+// identical to M1 Assignment Service. No statistical computation.
+service FeatureFlagService {
+  rpc CreateFlag(CreateFlagRequest) returns (Flag);
+  rpc GetFlag(GetFlagRequest) returns (Flag);
+  rpc UpdateFlag(UpdateFlagRequest) returns (Flag);
+  rpc ListFlags(ListFlagsRequest) returns (ListFlagsResponse);
+  rpc EvaluateFlag(EvaluateFlagRequest) returns (EvaluateFlagResponse);
+  rpc EvaluateFlags(EvaluateFlagsRequest) returns (EvaluateFlagsResponse);
+  // Convert a flag to a tracked experiment. Delegates lifecycle to M5.
+  rpc PromoteToExperiment(PromoteToExperimentRequest) returns (experimentation.common.v1.Experiment);
+}
+
+enum FlagType {
+  FLAG_TYPE_UNSPECIFIED = 0;
+  FLAG_TYPE_BOOLEAN = 1;
+  FLAG_TYPE_STRING = 2;
+  FLAG_TYPE_NUMERIC = 3;
+  FLAG_TYPE_JSON = 4;
+}
+
+message Flag {
+  string flag_id = 1;
+  string name = 2;
+  string description = 3;
+  FlagType type = 4;
+  string default_value = 5;
+  bool enabled = 6;
+  // Percentage rollout (0.0 to 1.0). Uses MurmurHash3 via CGo.
+  double rollout_percentage = 7;
+  repeated FlagVariant variants = 8;
+  string targeting_rule_id = 9;
+}
+
+message FlagVariant {
+  string variant_id = 1;
+  string value = 2;
+  double traffic_fraction = 3;
+}
+
+message CreateFlagRequest { Flag flag = 1; }
+message GetFlagRequest { string flag_id = 1; }
+message UpdateFlagRequest { Flag flag = 1; }
+message ListFlagsRequest { int32 page_size = 1; string page_token = 2; }
+message ListFlagsResponse { repeated Flag flags = 1; string next_page_token = 2; }
+
+message EvaluateFlagRequest {
+  string flag_id = 1;
+  string user_id = 2;
+  map<string, string> attributes = 3;
+}
+message EvaluateFlagResponse {
+  string flag_id = 1;
+  string value = 2;
+  string variant_id = 3;
+}
+
+message EvaluateFlagsRequest {
+  string user_id = 1;
+  map<string, string> attributes = 2;
+}
+message EvaluateFlagsResponse { repeated EvaluateFlagResponse evaluations = 1; }
+
+message PromoteToExperimentRequest {
+  string flag_id = 1;
+  experimentation.common.v1.ExperimentType experiment_type = 2;
+  string primary_metric_id = 3;
+  repeated string secondary_metric_ids = 4;
+}

@@ -1,0 +1,50 @@
+flowchart TB
+    subgraph T1["Thread 1: gRPC Server (tokio async)"]
+        GRPC["gRPC/Connect<br/>SelectArm requests"]
+        RESP["Send response<br/>via oneshot channel"]
+    end
+
+    subgraph T2["Thread 2: Kafka Consumer (tokio async)"]
+        KC["Kafka Consumer<br/>reward_events topic"]
+    end
+
+    subgraph T3["Thread 3: Policy Core (SINGLE DEDICATED THREAD)"]
+        direction TB
+        LOOP["Event Loop<br/>select! { }"]
+        TS["Thompson Sampling<br/>posterior update"]
+        LIN["LinUCB<br/>Sherman-Morrison update"]
+        SNAP["RocksDB Snapshot<br/>(crash-only persist)"]
+        SEL["Arm Selection<br/>(no locks needed)"]
+    end
+
+    subgraph Channels["Bounded Channels"]
+        PC["policy_channel<br/>(context, oneshot_tx)"]
+        RC["reward_channel<br/>(RewardEvent)"]
+    end
+
+    GRPC -->|"send request"| PC
+    KC -->|"send reward"| RC
+    PC -->|"recv"| LOOP
+    RC -->|"recv"| LOOP
+    LOOP --> SEL
+    LOOP --> TS
+    LOOP --> LIN
+    TS --> SNAP
+    LIN --> SNAP
+    SEL -->|"oneshot_tx.send(arm)"| RESP
+
+    subgraph Benefits["Design Properties"]
+        B1["Zero mutex contention"]
+        B2["Backpressure via channel depth"]
+        B3["Crash recovery = load snapshot + replay"]
+    end
+
+    classDef async fill:#7fb3d8,stroke:#2c5f8a,color:#000
+    classDef core fill:#deb887,stroke:#8b4513,color:#000
+    classDef chan fill:#fff3e0,stroke:#e65100,color:#000
+    classDef benefit fill:#c5e1a5,stroke:#558b2f,color:#000
+
+    class GRPC,RESP,KC async
+    class LOOP,TS,LIN,SNAP,SEL core
+    class PC,RC chan
+    class B1,B2,B3 benefit

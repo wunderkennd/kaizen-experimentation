@@ -1,0 +1,55 @@
+stateDiagram-v2
+    [*] --> DRAFT: Create Experiment
+
+    DRAFT --> STARTING: Start Command
+
+    state STARTING {
+        [*] --> ValidateConfig
+        ValidateConfig --> WarmBandit: if bandit type
+        ValidateConfig --> ConfirmMetrics: if non-bandit
+        WarmBandit --> ConfirmMetrics
+        ConfirmMetrics --> CheckSegmentPower
+        CheckSegmentPower --> [*]
+    }
+
+    STARTING --> RUNNING: All Checks Pass
+    STARTING --> DRAFT: Validation Failed
+
+    state RUNNING {
+        [*] --> Collecting
+        Collecting --> AutoPaused: Guardrail Breach<br/>(default behavior)
+        AutoPaused --> Collecting: Owner Resumes
+        Collecting --> [*]
+    }
+
+    RUNNING --> CONCLUDING: Stop Command /<br/>Sequential Boundary Crossed
+
+    state CONCLUDING {
+        [*] --> FinalMetrics
+        FinalMetrics --> FinalAnalysis
+        FinalAnalysis --> SurrogateProjections
+        SurrogateProjections --> PolicySnapshot: if bandit
+        SurrogateProjections --> GenerateReport: if non-bandit
+        PolicySnapshot --> GenerateReport
+        GenerateReport --> [*]
+    }
+
+    CONCLUDING --> CONCLUDED: Analysis Complete
+    CONCLUDED --> ARCHIVED: Archive Command
+
+    note right of STARTING
+        M5 (Go) orchestrates validation
+        M1 (Rust) blocked from serving
+        until RUNNING
+    end note
+
+    note right of CONCLUDING
+        M4a (Rust) runs final analysis
+        M6 (TS) shows progress bar
+        Result queries disabled
+    end note
+
+    note left of RUNNING
+        Bucket reuse: allocation freed
+        24h after CONCLUDED transition
+    end note

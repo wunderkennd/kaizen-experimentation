@@ -1,0 +1,28 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/org/experimentation/gen/go
+plugins:
+  # Go (connect-go for services, protobuf for messages)
+  - remote: buf.build/protocolbuffers/go
+    out: gen/go
+    opt: paths=source_relative
+  - remote: buf.build/connectrpc/go
+    out: gen/go
+    opt: paths=source_relative
+
+  # Rust (tonic + prost)
+  # Note: Rust generation handled via tonic-build in Cargo workspace build.rs
+  # This entry is for reference/documentation only
+  # - local: protoc-gen-prost
+  #   out: gen/rust
+
+  # TypeScript (connect-web)
+  - remote: buf.build/connectrpc/es
+    out: gen/ts
+    opt: target=ts
+  - remote: buf.build/bufbuild/es
+    out: gen/ts
+    opt: target=ts

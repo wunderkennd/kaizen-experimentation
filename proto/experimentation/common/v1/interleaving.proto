@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// InterleavingMethod determines which algorithm M1 uses to construct
+// the merged item list. See Chapelle et al. (2012), Radlinski & Craswell (2010).
+enum InterleavingMethod {
+  INTERLEAVING_METHOD_UNSPECIFIED = 0;
+  // Team Draft: fair coin determines first pick; algorithms alternate picking
+  // their highest-ranked unpicked item. Simple, unbiased.
+  INTERLEAVING_METHOD_TEAM_DRAFT = 1;
+  // Optimized: maximizes sensitivity by choosing merge that minimizes
+  // expected variance. Higher computational cost. Radlinski & Craswell (2010).
+  INTERLEAVING_METHOD_OPTIMIZED = 2;
+  // Multileave: generalizes interleaving to 3+ algorithms.
+  // Schuth et al. (2015). Requires algorithm_ids.size() >= 3.
+  INTERLEAVING_METHOD_MULTILEAVE = 3;
+}
+
+// CreditAssignment determines how M3 Metric Engine attributes user engagement
+// back to the source algorithm that contributed each item.
+enum CreditAssignment {
+  CREDIT_ASSIGNMENT_UNSPECIFIED = 0;
+  // Binary: 1 if user engaged with this algorithm's item, 0 otherwise.
+  // Simplest; used with sign test.
+  CREDIT_ASSIGNMENT_BINARY_WIN = 1;
+  // Proportional: credit proportional to engagement depth (e.g., watch duration).
+  // More nuanced; captures intensity of preference.
+  CREDIT_ASSIGNMENT_PROPORTIONAL = 2;
+  // Weighted: position-weighted credit (higher rank = more credit for engagement).
+  // Accounts for positional bias in ranked lists.
+  CREDIT_ASSIGNMENT_WEIGHTED = 3;
+}
+
+// InterleavingConfig is required when type = INTERLEAVING.
+// M5 validates: algorithm_ids.size() >= 2, credit_metric_event maps to valid event.
+message InterleavingConfig {
+  InterleavingMethod method = 1;
+  // Algorithm identifiers. M1 receives ranked lists from each algorithm
+  // and constructs a merged list. Minimum 2; minimum 3 for MULTILEAVE.
+  repeated string algorithm_ids = 2;
+  CreditAssignment credit_assignment = 3;
+  // Event type that constitutes "engagement" for credit assignment.
+  // Examples: "play_start", "watch_30s", "add_to_list".
+  string credit_metric_event = 4;
+  // Maximum number of items in the merged list. Default 50.
+  int32 max_list_size = 5;
+}
+
+// InterleavingScore is produced by M3 per user per experiment.
+// Consumed by M4a for sign test and Bradley-Terry analysis.
+message InterleavingScore {
+  string experiment_id = 1;
+  string user_id = 2;
+  // Per-algorithm credit scores for this user.
+  map<string, double> algorithm_scores = 3;
+  // Which algorithm "won" for this user (highest score). Empty if tied.
+  string winning_algorithm_id = 4;
+  // Total engagement events attributed to any algorithm.
+  int32 total_engagements = 5;
+}

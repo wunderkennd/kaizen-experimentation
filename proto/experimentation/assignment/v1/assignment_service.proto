@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package experimentation.assignment.v1;
+
+import "experimentation/common/v1/experiment.proto";
+import "experimentation/common/v1/interleaving.proto";
+import "experimentation/common/v1/bandit.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/assignment/v1;assignmentv1";
+
+// AssignmentService is implemented in Rust (M1).
+// Stateless, crash-only: restarts produce identical assignments immediately.
+// Uses deterministic MurmurHash3 bucketing (experimentation-hash crate).
+service AssignmentService {
+  // Get variant assignment for a single experiment.
+  // For static/session-level: deterministic hash. No external state.
+  // For bandit: delegates to M4b BanditPolicyService via low-latency gRPC.
+  rpc GetAssignment(GetAssignmentRequest) returns (GetAssignmentResponse);
+
+  // Get all assignments for a user across all active experiments.
+  // Used by SDK bulk-fetch on app startup.
+  rpc GetAssignments(GetAssignmentsRequest) returns (GetAssignmentsResponse);
+
+  // Construct interleaved list from 2+ algorithm outputs.
+  // Implements Team Draft, Optimized, or Multileave per InterleavingConfig.
+  // Returns merged list with per-item provenance metadata.
+  rpc GetInterleavedList(GetInterleavedListRequest) returns (GetInterleavedListResponse);
+
+  // Stream experiment config updates from M5 Management Service.
+  // M1 caches config in-process. On crash, re-subscribes from latest.
+  rpc StreamConfigUpdates(StreamConfigUpdatesRequest) returns (stream ConfigUpdate);
+}
+
+message GetAssignmentRequest {
+  string user_id = 1;
+  string experiment_id = 2;
+  // For session-level experiments.
+  string session_id = 3;
+  // User attributes for targeting evaluation and bandit context.
+  map<string, string> attributes = 4;
+}
+
+message GetAssignmentResponse {
+  string experiment_id = 1;
+  string variant_id = 2;
+  // Payload JSON from the assigned variant.
+  string payload_json = 3;
+  // For bandit experiments: assignment probability (for IPW logging).
+  double assignment_probability = 4;
+  // Whether this experiment is in a state where assignments are being served.
+  // False during STARTING, CONCLUDING, CONCLUDED, ARCHIVED.
+  bool is_active = 5;
+}
+
+message GetAssignmentsRequest {
+  string user_id = 1;
+  string session_id = 2;
+  map<string, string> attributes = 3;
+}
+
+message GetAssignmentsResponse {
+  repeated GetAssignmentResponse assignments = 1;
+}
+
+message GetInterleavedListRequest {
+  string experiment_id = 1;
+  string user_id = 2;
+  // Ranked item lists from each algorithm. Key: algorithm_id.
+  // Each list is ordered by algorithm's preference (index 0 = top rank).
+  map<string, RankedList> algorithm_lists = 3;
+}
+
+message RankedList {
+  repeated string item_ids = 1;
+}
+
+message GetInterleavedListResponse {
+  // Merged list of item IDs in display order.
+  repeated string merged_list = 1;
+  // Per-item provenance: which algorithm contributed each item.
+  // Key: item_id, Value: algorithm_id.
+  map<string, string> provenance = 2;
+}
+
+message StreamConfigUpdatesRequest {
+  // Last known config version. Server streams updates since this version.
+  int64 last_known_version = 1;
+}
+
+message ConfigUpdate {
+  experimentation.common.v1.Experiment experiment = 1;
+  // Whether this is a deletion (experiment archived or allocation freed).
+  bool is_deletion = 2;
+  int64 version = 3;
+}

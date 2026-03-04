@@ -1,0 +1,10 @@
+[package]
+name = "experimentation-ingest"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+experimentation-proto = { path = "../experimentation-proto" }
+bloomfilter = { workspace = true }
+chrono = { workspace = true }

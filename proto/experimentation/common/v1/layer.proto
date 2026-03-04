@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// Layer defines a traffic namespace. Experiments within the same layer
+// share traffic (mutually exclusive). Experiments in different layers
+// are orthogonal (users can be in one experiment per layer).
+// See Tang et al. (2010) Google Overlapping Experiment Infrastructure.
+message Layer {
+  string layer_id = 1;
+  string name = 2;
+  string description = 3;
+  // Total number of hash buckets in this layer. Default 10000.
+  int32 total_buckets = 4;
+  // Cooldown period before concluded experiment allocations can be reused.
+  // Default 24 hours. See ADR-009. Prevents late-arriving exposures from
+  // being associated with the wrong experiment.
+  google.protobuf.Duration bucket_reuse_cooldown = 5;
+}
+
+// LayerAllocation tracks which hash buckets are assigned to which experiment.
+// M5 manages allocation lifecycle; M1 reads allocations for assignment routing.
+message LayerAllocation {
+  string allocation_id = 1;
+  string layer_id = 2;
+  string experiment_id = 3;
+  // Inclusive bucket range. Must not overlap with other active allocations in same layer.
+  int32 start_bucket = 4;
+  int32 end_bucket = 5;
+  // When this allocation became active (experiment transitioned to RUNNING).
+  google.protobuf.Timestamp activated_at = 6;
+  // When this allocation was freed (experiment transitioned to CONCLUDED).
+  // Null while experiment is active.
+  google.protobuf.Timestamp released_at = 7;
+  // When this allocation becomes available for reuse.
+  // released_at + layer.bucket_reuse_cooldown.
+  // M5 rejects new allocations for buckets where reusable_after is in the future.
+  google.protobuf.Timestamp reusable_after = 8;
+}

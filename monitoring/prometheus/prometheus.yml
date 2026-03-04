@@ -1,0 +1,90 @@
+# ==============================================================================
+# Prometheus Configuration
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+# ---------------------------------------------------------------------------
+# Scrape Targets
+# ---------------------------------------------------------------------------
+# Each service exposes /metrics on its respective port.
+# Update these targets as services come online.
+
+scrape_configs:
+  # --- Rust Services ---
+  - job_name: assignment-service
+    static_configs:
+      - targets: ["host.docker.internal:50051"]
+        labels:
+          module: m1
+          language: rust
+
+  - job_name: pipeline-service
+    static_configs:
+      - targets: ["host.docker.internal:50052"]
+        labels:
+          module: m2
+          language: rust
+
+  - job_name: analysis-service
+    static_configs:
+      - targets: ["host.docker.internal:50053"]
+        labels:
+          module: m4a
+          language: rust
+
+  - job_name: policy-service
+    static_configs:
+      - targets: ["host.docker.internal:50054"]
+        labels:
+          module: m4b
+          language: rust
+
+  # --- Go Services ---
+  - job_name: management-service
+    static_configs:
+      - targets: ["host.docker.internal:50055"]
+        labels:
+          module: m5
+          language: go
+
+  - job_name: metrics-service
+    static_configs:
+      - targets: ["host.docker.internal:50056"]
+        labels:
+          module: m3
+          language: go
+
+  - job_name: flags-service
+    static_configs:
+      - targets: ["host.docker.internal:50057"]
+        labels:
+          module: m7
+          language: go
+
+  - job_name: orchestration-service
+    static_configs:
+      - targets: ["host.docker.internal:50058"]
+        labels:
+          module: m2-orch
+          language: go
+
+  # --- Infrastructure ---
+  - job_name: kafka
+    static_configs:
+      - targets: ["kafka:9092"]
+    # Note: Requires kafka_exporter sidecar in production
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis:6379"]
+    # Note: Requires redis_exporter sidecar in production
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

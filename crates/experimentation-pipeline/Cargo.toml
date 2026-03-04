@@ -1,0 +1,18 @@
+[package]
+name = "experimentation-pipeline"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "experimentation-pipeline"
+path = "src/main.rs"
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+experimentation-proto = { path = "../experimentation-proto" }
+experimentation-ingest = { path = "../experimentation-ingest" }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tonic-web = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -1,0 +1,31 @@
+name: Weekly Chaos Engineering
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"  # Sunday 2 AM UTC
+  workflow_dispatch: {}
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: ./scripts/deploy_staging.sh
+
+      - name: Chaos — Kill M1 Assignment under load
+        run: ./scripts/chaos_kill_assignment.sh
+        # Verifies: recovery < 2 seconds, no incorrect assignments
+
+      - name: Chaos — Kill M4b Policy under load
+        run: ./scripts/chaos_kill_policy.sh
+        # Verifies: recovery < 10 seconds, RocksDB snapshot restore
+
+      - name: Chaos — Kill M2 Pipeline under load
+        run: ./scripts/chaos_kill_ingestion.sh
+        # Verifies: recovery < 1 second, no data loss (Kafka idempotent producer)
+
+      - name: Verify data integrity
+        run: ./scripts/chaos_verify_integrity.sh

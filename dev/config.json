@@ -1,0 +1,21 @@
+{
+  "_comment": "Local development config for M1 Assignment Service. Replace with M5 StreamConfigUpdates in production.",
+  "experiments": [
+    {
+      "experiment_id": "exp_dev_001",
+      "name": "Dev Test A/B",
+      "state": "RUNNING",
+      "type": "AB",
+      "hash_salt": "dev_salt_001",
+      "layer_id": "layer_default",
+      "variants": [
+        { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"feature\": true}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 }
+    }
+  ],
+  "layers": [
+    { "layer_id": "layer_default", "total_buckets": 10000 }
+  ]
+}

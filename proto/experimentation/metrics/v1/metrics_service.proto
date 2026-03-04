@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package experimentation.metrics.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/metrics/v1;metricsv1";
+
+// MetricComputationService is implemented in Go (M3).
+// Orchestrates Spark SQL jobs. All SQL logged to query_log table.
+// No statistical analysis — that is M4a's responsibility.
+service MetricComputationService {
+  // Trigger metric computation for an experiment.
+  rpc ComputeMetrics(ComputeMetricsRequest) returns (ComputeMetricsResponse);
+  // Trigger guardrail metric computation (hourly schedule).
+  rpc ComputeGuardrailMetrics(ComputeGuardrailMetricsRequest) returns (ComputeMetricsResponse);
+  // Generate a Jupyter/Databricks notebook for an experiment's analysis.
+  rpc ExportNotebook(ExportNotebookRequest) returns (ExportNotebookResponse);
+  // Get the SQL query used for a specific metric computation.
+  rpc GetQueryLog(GetQueryLogRequest) returns (GetQueryLogResponse);
+}
+
+message ComputeMetricsRequest { string experiment_id = 1; }
+message ComputeGuardrailMetricsRequest { string experiment_id = 1; }
+message ComputeMetricsResponse {
+  string experiment_id = 1;
+  int32 metrics_computed = 2;
+  int32 users_processed = 3;
+  google.protobuf.Timestamp completed_at = 4;
+}
+
+message ExportNotebookRequest {
+  string experiment_id = 1;
+  // "databricks" or "jupyter".
+  string notebook_format = 2;
+}
+message ExportNotebookResponse {
+  // Base64-encoded .ipynb content.
+  bytes notebook_content = 1;
+  string filename = 2;
+}
+
+message GetQueryLogRequest {
+  string experiment_id = 1;
+  // Optional: filter to specific metric.
+  string metric_id = 2;
+}
+message GetQueryLogResponse {
+  repeated QueryLogEntry entries = 1;
+}
+message QueryLogEntry {
+  string experiment_id = 1;
+  string metric_id = 2;
+  string sql_text = 3;
+  int64 row_count = 4;
+  int64 duration_ms = 5;
+  google.protobuf.Timestamp computed_at = 6;
+}

@@ -1,0 +1,17 @@
+[package]
+name = "experimentation-ffi"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+experimentation-hash = { path = "../experimentation-hash" }
+
+[build-dependencies]
+cbindgen = { workspace = true }
+
+[features]
+default = []
+ffi = []

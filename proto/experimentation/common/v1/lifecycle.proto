@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// LifecycleSegment classifies subscribers by subscription maturity.
+// Classification uses subscription attributes from Redis feature store
+// at exposure time. M3 computes all metrics separately per segment.
+enum LifecycleSegment {
+  LIFECYCLE_SEGMENT_UNSPECIFIED = 0;
+  // Free trial period (not yet converted to paid).
+  LIFECYCLE_SEGMENT_TRIAL = 1;
+  // Paid subscriber for < 30 days.
+  LIFECYCLE_SEGMENT_NEW = 2;
+  // Paid subscriber for 30-180 days.
+  LIFECYCLE_SEGMENT_ESTABLISHED = 3;
+  // Paid subscriber for > 180 days.
+  LIFECYCLE_SEGMENT_MATURE = 4;
+  // Declining engagement signal (model-scored; threshold configurable).
+  LIFECYCLE_SEGMENT_AT_RISK = 5;
+  // Previously churned, now resubscribed.
+  LIFECYCLE_SEGMENT_WINBACK = 6;
+}
+
+// LifecycleStratificationConfig controls pre-specified subgroup analysis
+// in M4a. M5 validates that required subscription attributes exist in
+// Redis feature store during STARTING.
+message LifecycleStratificationConfig {
+  // Whether lifecycle stratification is enabled for this experiment.
+  bool enabled = 1;
+  // Which segments to analyze. If empty and enabled=true, all segments are analyzed.
+  repeated LifecycleSegment segments = 2;
+  // Minimum users per segment. M5 warns at experiment creation if any segment
+  // would be underpowered. Default 1000.
+  int32 min_users_per_segment = 3;
+}

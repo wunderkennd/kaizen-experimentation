@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package experimentation.pipeline.v1;
+
+import "experimentation/common/v1/event.proto";
+import "experimentation/common/v1/qoe.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/pipeline/v1;pipelinev1";
+
+// EventIngestionService is implemented in Rust (M2).
+// Stateless, crash-only: validates, deduplicates (Bloom filter), publishes to Kafka.
+// At-least-once delivery; downstream consumers handle idempotency.
+service EventIngestionService {
+  rpc IngestExposure(IngestExposureRequest) returns (IngestExposureResponse);
+  rpc IngestExposureBatch(IngestExposureBatchRequest) returns (IngestBatchResponse);
+  rpc IngestMetricEvent(IngestMetricEventRequest) returns (IngestMetricEventResponse);
+  rpc IngestMetricEventBatch(IngestMetricEventBatchRequest) returns (IngestBatchResponse);
+  rpc IngestRewardEvent(IngestRewardEventRequest) returns (IngestRewardEventResponse);
+  rpc IngestQoEEvent(IngestQoEEventRequest) returns (IngestQoEEventResponse);
+  rpc IngestQoEEventBatch(IngestQoEEventBatchRequest) returns (IngestBatchResponse);
+}
+
+message IngestExposureRequest { experimentation.common.v1.ExposureEvent event = 1; }
+message IngestExposureResponse { bool accepted = 1; }
+message IngestExposureBatchRequest { repeated experimentation.common.v1.ExposureEvent events = 1; }
+message IngestMetricEventRequest { experimentation.common.v1.MetricEvent event = 1; }
+message IngestMetricEventResponse { bool accepted = 1; }
+message IngestMetricEventBatchRequest { repeated experimentation.common.v1.MetricEvent events = 1; }
+message IngestRewardEventRequest { experimentation.common.v1.RewardEvent event = 1; }
+message IngestRewardEventResponse { bool accepted = 1; }
+message IngestQoEEventRequest { experimentation.common.v1.QoEEvent event = 1; }
+message IngestQoEEventResponse { bool accepted = 1; }
+message IngestQoEEventBatchRequest { repeated experimentation.common.v1.QoEEvent events = 1; }
+message IngestBatchResponse { int32 accepted_count = 1; int32 duplicate_count = 2; int32 invalid_count = 3; }

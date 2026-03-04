@@ -1,0 +1,79 @@
+flowchart LR
+    subgraph Sources["Event Sources"]
+        APP["App / Web Client"]
+        CDN["CDN / Player"]
+        REC["Rec Service"]
+    end
+
+    subgraph M2["M2: Event Ingestion (Rust)"]
+        VAL["Validate &<br/>Deduplicate"]
+    end
+
+    subgraph Kafka["Kafka Topics"]
+        EXP["exposures"]
+        MET["metric_events"]
+        REW["reward_events"]
+        QOE["qoe_events"]
+        GA["guardrail_alerts"]
+    end
+
+    subgraph M3["M3: Metric Engine (Go + Spark)"]
+        direction TB
+        STD["Standard Metrics<br/>(daily Spark jobs)"]
+        GRD["Guardrail Metrics<br/>(hourly Spark jobs)"]
+        ILS["Interleaving Scores"]
+        SUR["Surrogate Projections<br/>(MLflow models)"]
+        LCS["Lifecycle Segmentation<br/>(Redis feature store)"]
+        QM["QoE Metrics"]
+        SQL["query_log<br/>(all Spark SQL)"]
+    end
+
+    subgraph M4["M4: Analysis (Rust)"]
+        direction TB
+        M4A["<b>M4a: Statistical Engine</b><br/>Fixed-horizon, CUPED<br/>mSPRT, GST, Bayesian<br/>Novelty, Interference<br/>Clustered SEs"]
+        M4B["<b>M4b: Bandit Policy</b><br/>Thompson, LinUCB<br/>Cold-Start<br/>Single-Thread Core"]
+    end
+
+    subgraph Store["Storage"]
+        DL["Delta Lake"]
+        PG["PostgreSQL"]
+    end
+
+    subgraph M6["M6: UI (TypeScript)"]
+        DASH["Dashboards<br/>View SQL<br/>Export Notebook"]
+    end
+
+    APP --> VAL
+    CDN --> VAL
+    REC --> VAL
+
+    VAL --> EXP
+    VAL --> MET
+    VAL --> REW
+    VAL --> QOE
+
+    EXP --> M3
+    MET --> M3
+    QOE --> M3
+    REW --> M4B
+
+    M3 --> DL
+    M3 --> SQL
+
+    DL --> M4A
+    M4A --> PG
+    M4B -.->|IPW probs| EXP
+
+    PG --> DASH
+    SQL --> DASH
+
+    GRD -->|breach| GA
+    GA -->|auto-pause| M5P["M5: Auto-Pause"]
+
+    classDef rust fill:#deb887,stroke:#8b4513,color:#000
+    classDef golang fill:#7fb3d8,stroke:#2c5f8a,color:#000
+    classDef ts fill:#c5e1a5,stroke:#558b2f,color:#000
+
+    class VAL,M4A,M4B rust
+    class STD,GRD,ILS,SUR,LCS,QM,SQL golang
+    class DASH ts

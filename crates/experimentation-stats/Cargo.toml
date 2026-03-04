@@ -1,0 +1,31 @@
+[package]
+name = "experimentation-stats"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+statrs = { workspace = true }
+nalgebra = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+assert_approx_eq = { workspace = true }
+serde_json = { workspace = true }
+criterion = { workspace = true }
+
+[features]
+default = []
+simd = []          # Enable SIMD-optimized routines
+python = ["dep:pyo3"]
+
+[dependencies.pyo3]
+workspace = true
+optional = true
+
+[[bench]]
+name = "stats_bench"
+harness = false

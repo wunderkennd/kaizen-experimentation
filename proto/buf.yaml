@@ -1,0 +1,20 @@
+version: v2
+modules:
+  - path: experimentation
+    name: buf.build/experimentation/platform
+lint:
+  use:
+    - STANDARD
+    - COMMENTS
+  except:
+    - COMMENT_FIELD
+  enum_zero_value_suffix: _UNSPECIFIED
+  rpc_allow_same_request_response: false
+  rpc_allow_google_protobuf_empty_requests: true
+  rpc_allow_google_protobuf_empty_responses: false
+  service_suffix: Service
+breaking:
+  use:
+    - FILE
+    - PACKAGE
+    - WIRE_JSON

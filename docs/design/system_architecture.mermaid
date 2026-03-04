@@ -1,0 +1,66 @@
+flowchart TB
+    subgraph Clients["Client SDKs (TypeScript, Swift, Kotlin, Python, Go)"]
+        direction LR
+        RP["RemoteProvider"]
+        LP["LocalProvider<br/>(WASM/UniFFI hash)"]
+        MP["MockProvider<br/>(unit tests)"]
+    end
+
+    subgraph Rust["Rust Services (Cargo Workspace)"]
+        M1["<b>M1: Assignment Service</b><br/>Static, Session, Interleaving<br/>Bucket Reuse"]
+        M2R["<b>M2: Event Ingestion</b><br/>Validation, Dedup, Kafka Publish<br/>Crash-Only"]
+        M4A["<b>M4a: Analysis Engine</b><br/>Frequentist, mSPRT, GST<br/>Novelty, Interference<br/>proptest validated"]
+        M4B["<b>M4b: Bandit Policy</b><br/>Thompson, LinUCB, Neural<br/>LMAX Single-Thread Core<br/>RocksDB Snapshots"]
+    end
+
+    subgraph Go["Go Services"]
+        M2G["<b>M2: Orchestration</b><br/>SQL Query Logging"]
+        M3["<b>M3: Metric Engine</b><br/>Spark SQL, Surrogates<br/>Lifecycle, QoE, Interleaving"]
+        M5["<b>M5: Management</b><br/>CRUD, State Machine<br/>Auto-Pause Guardrails<br/>Bucket Reuse Mgmt"]
+        M7["<b>M7: Feature Flags</b><br/>Progressive Delivery<br/>CGo Hash Bridge"]
+    end
+
+    subgraph UI["TypeScript (UI Only)"]
+        M6["<b>M6: Decision Support UI</b><br/>Dashboards, View SQL<br/>Export to Notebook<br/>No Backend Computation"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        K["Kafka Topics<br/>exposures, metric_events<br/>reward_events, qoe_events<br/>guardrail_alerts"]
+        DL["Delta Lake<br/>+ MLflow"]
+        PG["PostgreSQL<br/>Config, Results, query_log"]
+        R["Redis Cluster<br/>Feature Store"]
+        RDB["RocksDB<br/>Policy Snapshots"]
+    end
+
+    RP -->|gRPC| M1
+    LP -.->|cached config| M1
+    Clients -->|events| M2R
+
+    M1 -->|arm selection| M4B
+    M2R --> K
+    K --> M3
+    K -->|rewards| M4B
+    M3 -->|metric summaries| DL
+    M3 -->|SQL| PG
+    M4A -->|reads| DL
+    M4A -->|results| PG
+    M4B --> RDB
+    M5 -->|config| M1
+    M5 -->|lifecycle| PG
+    M5 -->|auto-pause| K
+    M6 -->|reads| PG
+    M6 -->|reads| M5
+    M7 -->|CGo hash| M1
+    M3 --> R
+
+    classDef rust fill:#deb887,stroke:#8b4513,color:#000
+    classDef golang fill:#7fb3d8,stroke:#2c5f8a,color:#000
+    classDef ts fill:#c5e1a5,stroke:#558b2f,color:#000
+    classDef infra fill:#e0e0e0,stroke:#757575,color:#000
+    classDef client fill:#fff3e0,stroke:#e65100,color:#000
+
+    class M1,M2R,M4A,M4B rust
+    class M2G,M3,M5,M7 golang
+    class M6 ts
+    class K,DL,PG,R,RDB infra
+    class RP,LP,MP client

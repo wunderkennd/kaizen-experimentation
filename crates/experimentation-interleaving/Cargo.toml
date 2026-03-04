@@ -1,0 +1,11 @@
+[package]
+name = "experimentation-interleaving"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+rand = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

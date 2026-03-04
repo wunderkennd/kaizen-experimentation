@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package experimentation.analysis.v1;
+
+import "google/protobuf/timestamp.proto";
+import "experimentation/common/v1/lifecycle.proto";
+import "experimentation/common/v1/surrogate.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/analysis/v1;analysisv1";
+
+// AnalysisService is implemented in Rust (M4a).
+// All statistical computation runs here. M6 UI reads results; never computes.
+// Uses experimentation-stats crate. Fail-fast on NaN/Infinity/overflow.
+service AnalysisService {
+  // Run or re-run analysis for an experiment. Returns full results.
+  rpc RunAnalysis(RunAnalysisRequest) returns (AnalysisResult);
+  // Get latest analysis results.
+  rpc GetAnalysisResult(GetAnalysisResultRequest) returns (AnalysisResult);
+  // Get interleaving-specific analysis (sign test, Bradley-Terry).
+  rpc GetInterleavingAnalysis(GetInterleavingAnalysisRequest) returns (InterleavingAnalysisResult);
+  // Get novelty effect detection results.
+  rpc GetNoveltyAnalysis(GetNoveltyAnalysisRequest) returns (NoveltyAnalysisResult);
+  // Get content interference analysis.
+  rpc GetInterferenceAnalysis(GetInterferenceAnalysisRequest) returns (InterferenceAnalysisResult);
+}
+
+message RunAnalysisRequest { string experiment_id = 1; }
+message GetAnalysisResultRequest { string experiment_id = 1; }
+message GetInterleavingAnalysisRequest { string experiment_id = 1; }
+message GetNoveltyAnalysisRequest { string experiment_id = 1; }
+message GetInterferenceAnalysisRequest { string experiment_id = 1; }
+
+// MetricResult contains the treatment effect estimate for one metric, one variant.
+message MetricResult {
+  string metric_id = 1;
+  string variant_id = 2;
+  double control_mean = 3;
+  double treatment_mean = 4;
+  double absolute_effect = 5;
+  double relative_effect = 6;
+  double ci_lower = 7;
+  double ci_upper = 8;
+  double p_value = 9;
+  bool is_significant = 10;
+  // CUPED-adjusted values (if covariate configured).
+  double cuped_adjusted_effect = 11;
+  double cuped_ci_lower = 12;
+  double cuped_ci_upper = 13;
+  double variance_reduction_pct = 14;
+  // Sequential testing results (if configured).
+  SequentialResult sequential_result = 15;
+  // Per-lifecycle-segment results (if lifecycle stratification enabled).
+  repeated SegmentResult segment_results = 16;
+  // Session-level: both naive and clustered estimates.
+  SessionLevelResult session_level_result = 17;
+}
+
+message SequentialResult {
+  // Whether the effect has crossed the stopping boundary.
+  bool boundary_crossed = 1;
+  // Current alpha spent (cumulative across looks).
+  double alpha_spent = 2;
+  // Remaining alpha budget.
+  double alpha_remaining = 3;
+  // Current look number (1-indexed).
+  int32 current_look = 4;
+  // Adjusted p-value accounting for multiple looks.
+  double adjusted_p_value = 5;
+}
+
+message SegmentResult {
+  experimentation.common.v1.LifecycleSegment segment = 1;
+  double effect = 2;
+  double ci_lower = 3;
+  double ci_upper = 4;
+  double p_value = 5;
+  int64 sample_size = 6;
+}
+
+message SessionLevelResult {
+  double naive_se = 1;
+  double clustered_se = 2;
+  // Ratio of clustered variance to naive variance. Indicates design effect.
+  double design_effect = 3;
+  double naive_p_value = 4;
+  double clustered_p_value = 5;
+}
+
+// AnalysisResult is the top-level result for an experiment.
+message AnalysisResult {
+  string experiment_id = 1;
+  repeated MetricResult metric_results = 2;
+  // SRM check result.
+  SrmResult srm_result = 3;
+  // Surrogate projections (if surrogate model configured).
+  repeated experimentation.common.v1.SurrogateProjection surrogate_projections = 4;
+  // Cochran Q test for treatment effect heterogeneity across lifecycle segments.
+  double cochran_q_p_value = 5;
+  google.protobuf.Timestamp computed_at = 6;
+}
+
+message SrmResult {
+  double chi_squared = 1;
+  double p_value = 2;
+  bool is_mismatch = 3;
+  map<string, int64> observed_counts = 4;
+  map<string, int64> expected_counts = 5;
+}
+
+// InterleavingAnalysisResult from sign test and Bradley-Terry model.
+message InterleavingAnalysisResult {
+  string experiment_id = 1;
+  // Per-algorithm win rates from sign test.
+  map<string, double> algorithm_win_rates = 2;
+  double sign_test_p_value = 3;
+  // Bradley-Terry strength estimates with confidence intervals.
+  repeated AlgorithmStrength algorithm_strengths = 4;
+  // Per-position engagement analysis.
+  repeated PositionAnalysis position_analyses = 5;
+  google.protobuf.Timestamp computed_at = 6;
+}
+
+message AlgorithmStrength {
+  string algorithm_id = 1;
+  double strength = 2;
+  double ci_lower = 3;
+  double ci_upper = 4;
+}
+
+message PositionAnalysis {
+  int32 position = 1;
+  map<string, double> algorithm_engagement_rates = 2;
+}
+
+// NoveltyAnalysisResult from exponential decay fitting.
+message NoveltyAnalysisResult {
+  string experiment_id = 1;
+  string metric_id = 2;
+  bool novelty_detected = 3;
+  double raw_treatment_effect = 4;
+  double projected_steady_state_effect = 5;
+  double novelty_amplitude = 6;
+  double decay_constant_days = 7;
+  // Whether daily effect has stabilized (within 10% of steady state for 7 days).
+  bool is_stabilized = 8;
+  double days_until_projected_stability = 9;
+  google.protobuf.Timestamp computed_at = 10;
+}
+
+// InterferenceAnalysisResult from content consumption analysis.
+message InterferenceAnalysisResult {
+  string experiment_id = 1;
+  bool interference_detected = 2;
+  double jensen_shannon_divergence = 3;
+  double jaccard_similarity_top_100 = 4;
+  double treatment_gini_coefficient = 5;
+  double control_gini_coefficient = 6;
+  double treatment_catalog_coverage = 7;
+  double control_catalog_coverage = 8;
+  // Titles with significant treatment/control consumption differences.
+  repeated TitleSpillover spillover_titles = 9;
+  google.protobuf.Timestamp computed_at = 10;
+}
+
+message TitleSpillover {
+  string content_id = 1;
+  double treatment_watch_rate = 2;
+  double control_watch_rate = 3;
+  double p_value = 4;
+}

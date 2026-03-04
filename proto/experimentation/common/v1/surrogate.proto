@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// SurrogateModelType determines the ML model used for projection.
+// Models are trained and stored in MLflow; M3 loads them at computation time.
+enum SurrogateModelType {
+  SURROGATE_MODEL_TYPE_UNSPECIFIED = 0;
+  SURROGATE_MODEL_TYPE_LINEAR = 1;
+  SURROGATE_MODEL_TYPE_GRADIENT_BOOSTED = 2;
+  SURROGATE_MODEL_TYPE_NEURAL = 3;
+}
+
+// SurrogateModelConfig defines a mapping from short-term metrics to
+// long-term outcome predictions. Managed by M5 Management Service.
+message SurrogateModelConfig {
+  string model_id = 1;
+  // Long-term metric this model predicts. Example: "90_day_churn_rate".
+  string target_metric_id = 2;
+  // Short-term metrics used as model inputs. Example: ["7d_watch_time", "7d_session_freq"].
+  // M5 validates all input_metric_ids are included in the experiment's metric set.
+  repeated string input_metric_ids = 3;
+  // How many days of short-term data the model requires. Example: 7.
+  int32 observation_window_days = 4;
+  // How far ahead the model predicts. Example: 90.
+  int32 prediction_horizon_days = 5;
+  SurrogateModelType model_type = 6;
+  // R-squared from most recent calibration against historical experiments
+  // where long-term outcomes have been observed. Updated by periodic calibration job.
+  // UI displays confidence badge: green > 0.7, yellow 0.5-0.7, red < 0.5.
+  double calibration_r_squared = 7;
+  // MLflow model URI for the trained model artifact.
+  string mlflow_model_uri = 8;
+  google.protobuf.Timestamp last_calibrated_at = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+// SurrogateProjection is produced by M3 and reported by M4a alongside
+// observed short-term results. One per experiment per variant.
+message SurrogateProjection {
+  string experiment_id = 1;
+  string variant_id = 2;
+  string model_id = 3;
+  // Projected treatment effect on the target metric.
+  double projected_effect = 4;
+  double projection_ci_lower = 5;
+  double projection_ci_upper = 6;
+  // Calibration R-squared at the time this projection was computed.
+  // Snapshot for auditability; may differ from current model calibration.
+  double calibration_r_squared = 7;
+  google.protobuf.Timestamp computed_at = 8;
+}

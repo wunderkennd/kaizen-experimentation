@@ -1,0 +1,210 @@
+# ==============================================================================
+# Experimentation Platform — Prometheus Alert Rules
+# ==============================================================================
+
+groups:
+  # --------------------------------------------------------------------------
+  # Assignment Service (M1) — SLA: <10ms p99, <2s recovery
+  # --------------------------------------------------------------------------
+  - name: assignment
+    rules:
+      - alert: AssignmentLatencyHigh
+        expr: histogram_quantile(0.99, rate(assignment_request_duration_seconds_bucket[5m])) > 0.010
+        for: 2m
+        labels:
+          severity: warning
+          module: m1
+        annotations:
+          summary: "Assignment p99 latency above 10ms SLA"
+          description: "p99 latency is {{ $value | humanizeDuration }} (target: 10ms)"
+
+      - alert: AssignmentServiceDown
+        expr: up{job="assignment-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          module: m1
+        annotations:
+          summary: "Assignment service is unreachable"
+
+      - alert: AssignmentErrorRate
+        expr: rate(assignment_errors_total[5m]) / rate(assignment_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          module: m1
+        annotations:
+          summary: "Assignment error rate above 1%"
+          description: "Error rate: {{ $value | humanizePercentage }}"
+
+  # --------------------------------------------------------------------------
+  # Event Pipeline (M2) — SLA: <1s e2e ingestion
+  # --------------------------------------------------------------------------
+  - name: pipeline
+    rules:
+      - alert: PipelineConsumerLag
+        expr: kafka_consumer_group_lag > 100000
+        for: 5m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Kafka consumer lag exceeding 100K for {{ $labels.topic }}"
+          description: "Lag: {{ $value }} messages"
+
+      - alert: PipelineIngestionSlow
+        expr: histogram_quantile(0.95, rate(pipeline_ingestion_duration_seconds_bucket[5m])) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Event ingestion p95 above 1s SLA"
+
+      - alert: PipelineDeduplicationOverflow
+        expr: pipeline_bloom_filter_false_positive_rate > 0.005
+        for: 10m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Bloom filter FPR exceeding 0.5% — consider resizing"
+
+  # --------------------------------------------------------------------------
+  # Metric Computation (M3)
+  # --------------------------------------------------------------------------
+  - name: metrics
+    rules:
+      - alert: MetricComputationFailed
+        expr: increase(metric_computation_failures_total[1h]) > 5
+        labels:
+          severity: warning
+          module: m3
+        annotations:
+          summary: "Metric computation failures increasing"
+
+      - alert: MetricComputationSlow
+        expr: histogram_quantile(0.95, rate(metric_computation_duration_seconds_bucket[30m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          module: m3
+        annotations:
+          summary: "Metric computation taking >5 minutes at p95"
+
+  # --------------------------------------------------------------------------
+  # Statistical Analysis (M4a) — Fail-fast on numerical issues
+  # --------------------------------------------------------------------------
+  - name: analysis
+    rules:
+      - alert: AnalysisNaNDetected
+        expr: increase(analysis_nan_detected_total[1h]) > 0
+        labels:
+          severity: critical
+          module: m4a
+        annotations:
+          summary: "NaN detected in statistical computation — fail-fast triggered"
+          description: "Experiment: {{ $labels.experiment_id }}, metric: {{ $labels.metric_id }}"
+
+      - alert: AnalysisSRMDetected
+        expr: analysis_srm_pvalue < 0.001
+        for: 0m
+        labels:
+          severity: critical
+          module: m4a
+        annotations:
+          summary: "Sample Ratio Mismatch detected for experiment {{ $labels.experiment_id }}"
+          description: "SRM p-value: {{ $value }} — experiment integrity compromised"
+
+  # --------------------------------------------------------------------------
+  # Bandit Policy (M4b) — SLA: <10s recovery
+  # --------------------------------------------------------------------------
+  - name: policy
+    rules:
+      - alert: PolicyUpdateStale
+        expr: time() - policy_last_update_timestamp > 600
+        for: 2m
+        labels:
+          severity: warning
+          module: m4b
+        annotations:
+          summary: "Bandit policy hasn't updated in >10 minutes"
+
+      - alert: PolicyServiceDown
+        expr: up{job="policy-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          module: m4b
+        annotations:
+          summary: "Bandit policy service is unreachable"
+
+  # --------------------------------------------------------------------------
+  # Management Service (M5)
+  # --------------------------------------------------------------------------
+  - name: management
+    rules:
+      - alert: ExperimentStateTransitionFailed
+        expr: increase(management_state_transition_failures_total[1h]) > 0
+        labels:
+          severity: warning
+          module: m5
+        annotations:
+          summary: "Experiment state transition failure"
+
+  # --------------------------------------------------------------------------
+  # Feature Flags (M7) — SLA: <1s recovery
+  # --------------------------------------------------------------------------
+  - name: flags
+    rules:
+      - alert: FlagsServiceDown
+        expr: up{job="flags-service"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          module: m7
+        annotations:
+          summary: "Feature flag service is unreachable"
+
+      - alert: FlagEvaluationLatencyHigh
+        expr: histogram_quantile(0.99, rate(flags_evaluation_duration_seconds_bucket[5m])) > 0.005
+        for: 2m
+        labels:
+          severity: warning
+          module: m7
+        annotations:
+          summary: "Flag evaluation p99 above 5ms"
+
+  # --------------------------------------------------------------------------
+  # Infrastructure
+  # --------------------------------------------------------------------------
+  - name: infrastructure
+    rules:
+      - alert: KafkaBrokerDown
+        expr: up{job="kafka"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka broker is unreachable"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is unreachable"
+
+  # --------------------------------------------------------------------------
+  # Guardrail Auto-Pause (ADR-008)
+  # --------------------------------------------------------------------------
+  - name: guardrails
+    rules:
+      - alert: GuardrailBreachAutoPaused
+        expr: increase(guardrail_auto_pause_total[1h]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Experiment {{ $labels.experiment_id }} auto-paused by guardrail breach"
+          description: "Metric: {{ $labels.metric_id }}"

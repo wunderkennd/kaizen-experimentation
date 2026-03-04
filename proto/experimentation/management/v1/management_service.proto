@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package experimentation.management.v1;
+
+import "google/protobuf/empty.proto";
+import "experimentation/common/v1/experiment.proto";
+import "experimentation/common/v1/metric.proto";
+import "experimentation/common/v1/layer.proto";
+import "experimentation/common/v1/targeting.proto";
+import "experimentation/common/v1/surrogate.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/management/v1;managementv1";
+
+// ExperimentManagementService is implemented in Go (M5).
+// Manages experiment lifecycle including STARTING/CONCLUDING transitional states,
+// auto-pause guardrails, bucket reuse, and surrogate model registration.
+service ExperimentManagementService {
+  // Experiment CRUD.
+  rpc CreateExperiment(CreateExperimentRequest) returns (experimentation.common.v1.Experiment);
+  rpc GetExperiment(GetExperimentRequest) returns (experimentation.common.v1.Experiment);
+  rpc UpdateExperiment(UpdateExperimentRequest) returns (experimentation.common.v1.Experiment);
+  rpc ListExperiments(ListExperimentsRequest) returns (ListExperimentsResponse);
+
+  // Lifecycle transitions. M5 enforces type-specific validation gates.
+  // DRAFT -> STARTING: validates config, confirms metrics, checks power.
+  // RUNNING -> CONCLUDING: triggers final analysis in M4a.
+  rpc StartExperiment(StartExperimentRequest) returns (experimentation.common.v1.Experiment);
+  rpc ConcludeExperiment(ConcludeExperimentRequest) returns (experimentation.common.v1.Experiment);
+  rpc ArchiveExperiment(ArchiveExperimentRequest) returns (experimentation.common.v1.Experiment);
+
+  // Pause/resume. Auto-pause is triggered by guardrail_alerts Kafka consumer.
+  rpc PauseExperiment(PauseExperimentRequest) returns (experimentation.common.v1.Experiment);
+  rpc ResumeExperiment(ResumeExperimentRequest) returns (experimentation.common.v1.Experiment);
+
+  // Metric definitions.
+  rpc CreateMetricDefinition(CreateMetricDefinitionRequest) returns (experimentation.common.v1.MetricDefinition);
+  rpc GetMetricDefinition(GetMetricDefinitionRequest) returns (experimentation.common.v1.MetricDefinition);
+  rpc ListMetricDefinitions(ListMetricDefinitionsRequest) returns (ListMetricDefinitionsResponse);
+
+  // Layer management.
+  rpc CreateLayer(CreateLayerRequest) returns (experimentation.common.v1.Layer);
+  rpc GetLayer(GetLayerRequest) returns (experimentation.common.v1.Layer);
+  rpc GetLayerAllocations(GetLayerAllocationsRequest) returns (GetLayerAllocationsResponse);
+
+  // Targeting rules.
+  rpc CreateTargetingRule(CreateTargetingRuleRequest) returns (experimentation.common.v1.TargetingRule);
+
+  // Surrogate model management.
+  rpc CreateSurrogateModel(CreateSurrogateModelRequest) returns (experimentation.common.v1.SurrogateModelConfig);
+  rpc ListSurrogateModels(ListSurrogateModelsRequest) returns (ListSurrogateModelsResponse);
+  rpc GetSurrogateCalibration(GetSurrogateCalibrationRequest) returns (experimentation.common.v1.SurrogateModelConfig);
+  rpc TriggerSurrogateRecalibration(TriggerSurrogateRecalibrationRequest) returns (google.protobuf.Empty);
+}
+
+// --- Experiment CRUD ---
+message CreateExperimentRequest { experimentation.common.v1.Experiment experiment = 1; }
+message GetExperimentRequest { string experiment_id = 1; }
+message UpdateExperimentRequest { experimentation.common.v1.Experiment experiment = 1; }
+message ListExperimentsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  experimentation.common.v1.ExperimentState state_filter = 3;
+  experimentation.common.v1.ExperimentType type_filter = 4;
+  string owner_email_filter = 5;
+}
+message ListExperimentsResponse {
+  repeated experimentation.common.v1.Experiment experiments = 1;
+  string next_page_token = 2;
+}
+
+// --- Lifecycle ---
+message StartExperimentRequest { string experiment_id = 1; }
+message ConcludeExperimentRequest { string experiment_id = 1; }
+message ArchiveExperimentRequest { string experiment_id = 1; }
+message PauseExperimentRequest {
+  string experiment_id = 1;
+  string reason = 2;
+  // Whether this is an auto-pause triggered by guardrail breach.
+  bool is_guardrail_auto_pause = 3;
+}
+message ResumeExperimentRequest { string experiment_id = 1; }
+
+// --- Metric ---
+message CreateMetricDefinitionRequest { experimentation.common.v1.MetricDefinition metric = 1; }
+message GetMetricDefinitionRequest { string metric_id = 1; }
+message ListMetricDefinitionsRequest { int32 page_size = 1; string page_token = 2; }
+message ListMetricDefinitionsResponse {
+  repeated experimentation.common.v1.MetricDefinition metrics = 1;
+  string next_page_token = 2;
+}
+
+// --- Layer ---
+message CreateLayerRequest { experimentation.common.v1.Layer layer = 1; }
+message GetLayerRequest { string layer_id = 1; }
+message GetLayerAllocationsRequest { string layer_id = 1; bool include_released = 2; }
+message GetLayerAllocationsResponse { repeated experimentation.common.v1.LayerAllocation allocations = 1; }
+
+// --- Targeting ---
+message CreateTargetingRuleRequest { experimentation.common.v1.TargetingRule rule = 1; }
+
+// --- Surrogate ---
+message CreateSurrogateModelRequest { experimentation.common.v1.SurrogateModelConfig model = 1; }
+message ListSurrogateModelsRequest { int32 page_size = 1; string page_token = 2; }
+message ListSurrogateModelsResponse {
+  repeated experimentation.common.v1.SurrogateModelConfig models = 1;
+  string next_page_token = 2;
+}
+message GetSurrogateCalibrationRequest { string model_id = 1; }
+message TriggerSurrogateRecalibrationRequest { string model_id = 1; }

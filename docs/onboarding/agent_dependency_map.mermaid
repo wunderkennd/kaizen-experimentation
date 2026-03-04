@@ -1,0 +1,63 @@
+flowchart TB
+    subgraph Phase0["Phase 0: Schema & Toolchain (Week 1)"]
+        PROTO["Proto Schema<br/>(shared)"]
+        HASH["Agent-1: Hash Crate<br/>(Rust)"]
+    end
+
+    subgraph CriticalPath1["Critical Path: Data Pipeline"]
+        A2["Agent-2: Event Pipeline<br/>(Rust + Go)"]
+        A3["Agent-3: Metric Engine<br/>(Go + Spark)"]
+        A4A["Agent-4: M4a Analysis<br/>(Rust)"]
+    end
+
+    subgraph CriticalPath2["Critical Path: Config Pipeline"]
+        A5["Agent-5: Management<br/>(Go)"]
+        A1["Agent-1: Assignment<br/>(Rust)"]
+    end
+
+    subgraph Convergence["Convergence"]
+        A6["Agent-6: UI<br/>(TypeScript)"]
+    end
+
+    subgraph Additive["Additive"]
+        A7["Agent-7: Feature Flags<br/>(Go + CGo)"]
+        A4B["Agent-4: M4b Bandit Policy<br/>(Rust)"]
+        SDK["Client SDKs<br/>(TS, Swift, Kotlin, Go, Python)"]
+    end
+
+    PROTO --> A2
+    PROTO --> A5
+    PROTO --> A1
+    PROTO --> A3
+    PROTO --> A4A
+
+    HASH -->|"CGo bridge"| A7
+    HASH -->|"WASM/UniFFI"| SDK
+
+    A2 -->|"events on Kafka<br/>CRITICAL"| A3
+    A2 -->|"reward events"| A4B
+    A3 -->|"metric summaries<br/>CRITICAL"| A4A
+    A3 -->|"guardrail alerts"| A5
+
+    A5 -->|"config stream<br/>CRITICAL"| A1
+    A5 -->|"CRUD APIs<br/>CRITICAL"| A6
+    A5 -->|"experiment defs"| A3
+
+    A4A -->|"analysis results<br/>CRITICAL"| A6
+    A4A -->|"boundary crossing"| A5
+
+    A1 -->|"SelectArm"| A4B
+    A1 -->|"assignments"| SDK
+
+    A7 -->|"PromoteToExperiment"| A5
+
+    classDef rust fill:#deb887,stroke:#8b4513,color:#000
+    classDef golang fill:#7fb3d8,stroke:#2c5f8a,color:#000
+    classDef ts fill:#c5e1a5,stroke:#558b2f,color:#000
+    classDef shared fill:#e0e0e0,stroke:#757575,color:#000
+    classDef critical fill:#ffcdd2,stroke:#c62828,color:#000
+
+    class A1,A2,A4A,A4B,HASH rust
+    class A3,A5,A7 golang
+    class A6,SDK ts
+    class PROTO shared

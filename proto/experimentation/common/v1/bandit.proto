@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// BanditAlgorithm determines which policy algorithm M4b uses.
+// See ADR-002 for LMAX single-threaded core rationale.
+enum BanditAlgorithm {
+  BANDIT_ALGORITHM_UNSPECIFIED = 0;
+  // Beta posterior for binary rewards, Normal for continuous.
+  BANDIT_ALGORITHM_THOMPSON_SAMPLING = 1;
+  // Ridge regression with Sherman-Morrison rank-1 updates.
+  BANDIT_ALGORITHM_LINEAR_UCB = 2;
+  // Thompson Sampling with linear reward model.
+  BANDIT_ALGORITHM_THOMPSON_LINEAR = 3;
+  // 2-layer MLP with dropout (tch-rs). Requires gpu feature flag.
+  BANDIT_ALGORITHM_NEURAL_CONTEXTUAL = 4;
+}
+
+// BanditConfig is required for MAB, CONTEXTUAL_BANDIT, and CUMULATIVE_HOLDOUT
+// experiment types (when cold-start is involved).
+message BanditConfig {
+  BanditAlgorithm algorithm = 1;
+  // Arm definitions. Each arm maps to a variant or content placement.
+  repeated BanditArm arms = 2;
+  // Metric ID used as the reward signal. Must exist in experiment's metric set.
+  string reward_metric_id = 3;
+  // Context feature keys for contextual bandits. Each key must resolve in
+  // Redis feature store. M5 validates during STARTING.
+  repeated string context_feature_keys = 4;
+  // Minimum fraction of traffic per arm. Prevents starvation.
+  // Default 0.1 (10%). Applied even when policy would allocate 0%.
+  double min_exploration_fraction = 5;
+  // Number of uniform-random observations before policy activates.
+  // Default 1000. Ensures each arm has sufficient initial data.
+  int32 warmup_observations = 6;
+  // For content cold-start bandits: how long the bandit runs before
+  // exporting affinity scores to the recommendation system.
+  google.protobuf.Duration cold_start_window = 7;
+}
+
+// BanditArm represents a single selectable option in a bandit experiment.
+message BanditArm {
+  string arm_id = 1;
+  string name = 2;
+  // Opaque JSON payload delivered to the client (e.g., placement config).
+  string payload_json = 3;
+}
+
+// PolicySnapshot captures the bandit policy state at a point in time.
+// Written to RocksDB by M4b on every reward update (crash-only design).
+// Also written to PostgreSQL at CONCLUDING for long-term auditability.
+message PolicySnapshot {
+  string experiment_id = 1;
+  // Serialized policy parameters (algorithm-specific).
+  bytes policy_state = 2;
+  // Total rewards processed at snapshot time.
+  int64 total_rewards_processed = 3;
+  // Kafka consumer offset at snapshot time (for crash recovery replay).
+  int64 kafka_offset = 4;
+  google.protobuf.Timestamp snapshot_at = 5;
+}
+
+// ArmSelection is the response from M4b SelectArm RPC.
+message ArmSelection {
+  string arm_id = 1;
+  // Assignment probability for this arm at selection time.
+  // Logged in ExposureEvent.assignment_probability for IPW analysis.
+  double assignment_probability = 2;
+  // All arm probabilities at selection time (for IPW computation).
+  map<string, double> all_arm_probabilities = 3;
+}

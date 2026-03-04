@@ -1,0 +1,196 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ───────── Stage 1: Schema Validation ─────────
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.39.0"
+
+      - name: Lint proto
+        run: cd proto && buf lint
+
+      - name: Check breaking changes
+        if: github.event_name == 'pull_request'
+        run: |
+          cd proto
+          buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main,subdir=proto'
+
+      - name: Generate code
+        run: cd proto && buf generate
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-code
+          path: gen/
+
+  # ───────── Stage 2: Rust Build & Test ─────────
+  rust:
+    runs-on: ubuntu-latest
+    needs: schema
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Clippy (all features)
+        working-directory: crates
+        run: cargo clippy --workspace --all-features -- -D warnings
+
+      - name: Unit tests
+        working-directory: crates
+        run: cargo test --workspace
+
+      - name: Hash determinism vectors
+        working-directory: crates
+        run: cargo test --package experimentation-hash -- hash_vectors
+
+      - name: Property tests (stats)
+        working-directory: crates
+        run: cargo test --package experimentation-stats --features simd
+        timeout-minutes: 15
+
+      - name: WASM build
+        working-directory: crates
+        run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
+
+      - name: FFI build
+        working-directory: crates
+        run: cargo build --package experimentation-ffi --features ffi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-ffi-artifacts
+          path: |
+            crates/target/debug/libexperimentation_ffi.*
+            crates/target/experimentation_ffi.h
+
+  # ───────── Stage 3: Go Build & Test ─────────
+  go:
+    runs-on: ubuntu-latest
+    needs: [schema, rust]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: services/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: generated-code
+          path: gen/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-ffi-artifacts
+          path: services/flags/cgo/
+
+      - name: Vet
+        working-directory: services
+        run: go vet ./...
+
+      - name: Unit tests
+        working-directory: services
+        run: CGO_ENABLED=1 go test -race -cover ./...
+
+      - name: Integration tests
+        working-directory: services
+        run: |
+          docker compose -f ../docker-compose.test.yml up -d
+          CGO_ENABLED=1 go test -tags=integration -race ./...
+          docker compose -f ../docker-compose.test.yml down
+
+  # ───────── Stage 4: TypeScript Build & Test ─────────
+  typescript:
+    runs-on: ubuntu-latest
+    needs: schema
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: generated-code
+          path: gen/
+
+      - name: Install
+        working-directory: ui
+        run: npm ci
+
+      - name: Lint
+        working-directory: ui
+        run: npm run lint
+
+      - name: Type check
+        working-directory: ui
+        run: npm run type-check
+
+      - name: Test
+        working-directory: ui
+        run: npm run test -- --run
+
+      - name: Build
+        working-directory: ui
+        run: npm run build
+
+  # ───────── Stage 5: Cross-Language Hash Parity ─────────
+  hash-parity:
+    runs-on: ubuntu-latest
+    needs: [rust, go]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify hash parity (10,000 vectors)
+        run: python scripts/verify_hash_parity.py
+
+  # ───────── Stage 6: Docker Build (main only) ─────────
+  docker:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [rust, go, typescript, hash-parity]
+    strategy:
+      matrix:
+        service:
+          - { name: assignment, path: crates/experimentation-assignment }
+          - { name: pipeline, path: crates/experimentation-pipeline }
+          - { name: analysis, path: crates/experimentation-analysis }
+          - { name: policy, path: crates/experimentation-policy }
+          - { name: management, path: services/management }
+          - { name: metrics, path: services/metrics }
+          - { name: flags, path: services/flags }
+          - { name: ui, path: ui }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: |
+          docker build \
+            -f ${{ matrix.service.path }}/Dockerfile \
+            -t experimentation/${{ matrix.service.name }}:${{ github.sha }} \
+            .

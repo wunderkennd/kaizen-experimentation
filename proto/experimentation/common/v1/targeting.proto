@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// Operator for targeting predicate evaluation.
+enum TargetingOperator {
+  TARGETING_OPERATOR_UNSPECIFIED = 0;
+  TARGETING_OPERATOR_EQUALS = 1;
+  TARGETING_OPERATOR_NOT_EQUALS = 2;
+  TARGETING_OPERATOR_IN = 3;
+  TARGETING_OPERATOR_NOT_IN = 4;
+  TARGETING_OPERATOR_GREATER_THAN = 5;
+  TARGETING_OPERATOR_LESS_THAN = 6;
+  TARGETING_OPERATOR_CONTAINS = 7;
+  TARGETING_OPERATOR_REGEX = 8;
+}
+
+// TargetingPredicate is a single condition evaluated against user attributes.
+message TargetingPredicate {
+  // Attribute key. Must resolve in Redis feature store or request context.
+  // Examples: "country", "platform", "subscription_tier", "device_type".
+  string attribute_key = 1;
+  TargetingOperator operator = 2;
+  // Values to compare against. For EQUALS/NOT_EQUALS: single value.
+  // For IN/NOT_IN: multiple values.
+  repeated string values = 3;
+}
+
+// TargetingRule defines which users are eligible for an experiment.
+// Evaluated as a predicate tree (AND of ORs).
+message TargetingRule {
+  string rule_id = 1;
+  string name = 2;
+  // All groups must match (AND logic).
+  repeated TargetingGroup groups = 3;
+}
+
+// TargetingGroup is a set of predicates combined with OR logic.
+message TargetingGroup {
+  // At least one predicate must match (OR logic).
+  repeated TargetingPredicate predicates = 1;
+}

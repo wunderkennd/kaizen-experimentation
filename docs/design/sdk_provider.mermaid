@@ -1,0 +1,41 @@
+flowchart TB
+    APP["Application Code<br/><i>calls getAssignment(userId, experimentId)</i>"]
+
+    subgraph RP["ResilientProvider (fallback chain)"]
+        direction TB
+        R["1. RemoteProvider<br/>gRPC to M1 Assignment Service"]
+        L["2. LocalProvider<br/>WASM/UniFFI hash + cached config"]
+        S["3. Static Defaults<br/>DEFAULT_ASSIGNMENT"]
+    end
+
+    APP --> RP
+    R -->|"success"| RET["Return Assignment"]
+    R -->|"network error /<br/>timeout"| L
+    L -->|"success"| RET
+    L -->|"no cached config"| S
+    S --> RET
+
+    subgraph Testing["Test Environment"]
+        MOCK["MockProvider<br/>deterministic assignments<br/>for unit tests"]
+    end
+
+    APP -.->|"inject in tests"| MOCK
+    MOCK -.-> RET
+
+    subgraph Platforms["Platform SDK Builds"]
+        direction LR
+        WEB["Web SDK<br/>RemoteProvider: fetch API<br/>LocalProvider: WASM hash"]
+        IOS["iOS SDK<br/>RemoteProvider: gRPC-Swift<br/>LocalProvider: UniFFI hash"]
+        AND["Android SDK<br/>RemoteProvider: gRPC-Kotlin<br/>LocalProvider: UniFFI hash"]
+        SRV["Server SDK (Go/Python)<br/>RemoteProvider: gRPC<br/>LocalProvider: CGo/PyO3 hash"]
+    end
+
+    classDef primary fill:#7fb3d8,stroke:#2c5f8a,color:#000
+    classDef fallback fill:#fff3e0,stroke:#e65100,color:#000
+    classDef default fill:#e0e0e0,stroke:#757575,color:#000
+    classDef test fill:#c5e1a5,stroke:#558b2f,color:#000
+
+    class R primary
+    class L fallback
+    class S default
+    class MOCK test

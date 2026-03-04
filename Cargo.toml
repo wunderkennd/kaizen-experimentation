@@ -1,0 +1,75 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/experimentation-core",
+    "crates/experimentation-hash",
+    "crates/experimentation-proto",
+    "crates/experimentation-stats",
+    "crates/experimentation-bandit",
+    "crates/experimentation-interleaving",
+    "crates/experimentation-ingest",
+    "crates/experimentation-ffi",
+    "crates/experimentation-assignment",
+    "crates/experimentation-analysis",
+    "crates/experimentation-pipeline",
+    "crates/experimentation-policy",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "LicenseRef-Proprietary"
+repository = "https://github.com/org/experimentation-platform"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.36", features = ["full"] }
+# gRPC
+tonic = "0.12"
+tonic-build = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Kafka
+rdkafka = { version = "0.36", features = ["cmake-build"] }
+# RocksDB
+rocksdb = "0.22"
+# Numerical
+nalgebra = "0.33"
+statrs = "0.17"
+rand = "0.8"
+rand_distr = "0.4"
+# Property testing
+proptest = "1.4"
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+# Hashing
+byteorder = "1.5"
+# FFI
+cbindgen = "0.27"
+# WASM
+wasm-bindgen = "0.2"
+# Bloom filter
+bloomfilter = "1.0"
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+# UUID
+uuid = { version = "1.7", features = ["v4", "serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[profile.bench]
+inherits = "release"
+debug = true

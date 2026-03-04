@@ -1,0 +1,43 @@
+name: Nightly Validation
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # 3 AM UTC
+  workflow_dispatch: {}
+
+jobs:
+  stats-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Extended property tests (10,000 cases)
+        working-directory: crates
+        run: PROPTEST_CASES=10000 cargo test --package experimentation-stats --features simd -- --test-threads=1
+        timeout-minutes: 30
+
+      - name: GST boundary validation vs R gsDesign
+        run: python scripts/validate_gst_boundaries.py
+
+      - name: Bootstrap CI coverage check
+        working-directory: crates
+        run: cargo test --package experimentation-stats -- bootstrap_coverage --ignored
+        timeout-minutes: 20
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run benchmarks
+        working-directory: crates
+        run: |
+          cargo bench --package experimentation-hash -- --output-format bencher | tee bench.txt
+          cargo bench --package experimentation-stats -- --output-format bencher | tee -a bench.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: crates/bench.txt

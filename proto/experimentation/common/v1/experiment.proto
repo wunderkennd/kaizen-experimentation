@@ -1,0 +1,176 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+import "google/protobuf/timestamp.proto";
+import "experimentation/common/v1/interleaving.proto";
+import "experimentation/common/v1/lifecycle.proto";
+import "experimentation/common/v1/bandit.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// ExperimentState includes both stable and transitional states.
+// Transitional states (STARTING, CONCLUDING) prevent race conditions
+// during validation and final analysis. See ADR-005.
+enum ExperimentState {
+  EXPERIMENT_STATE_UNSPECIFIED = 0;
+  // Stable: configured but not yet validated or started.
+  EXPERIMENT_STATE_DRAFT = 1;
+  // Transitional: validating config, warming bandit policy,
+  // confirming metric availability, checking lifecycle segment power.
+  // M1 Assignment Service MUST NOT serve assignments for this experiment.
+  EXPERIMENT_STATE_STARTING = 2;
+  // Stable: actively collecting data. For bandits, policy is adapting.
+  EXPERIMENT_STATE_RUNNING = 3;
+  // Transitional: running final analysis, creating policy snapshots,
+  // computing surrogate projections, generating IPW estimates.
+  // M6 UI MUST show progress indicator; result queries MUST return 503.
+  EXPERIMENT_STATE_CONCLUDING = 4;
+  // Stable: analysis complete, results available, no longer collecting data.
+  EXPERIMENT_STATE_CONCLUDED = 5;
+  // Stable: retained for historical reference. Results still queryable.
+  EXPERIMENT_STATE_ARCHIVED = 6;
+}
+
+// ExperimentType determines which assignment mode M1 uses,
+// which analysis methods M4a applies, and which validation gates M5 enforces.
+enum ExperimentType {
+  EXPERIMENT_TYPE_UNSPECIFIED = 0;
+  EXPERIMENT_TYPE_AB = 1;
+  EXPERIMENT_TYPE_MULTIVARIATE = 2;
+  // Interleaving: M1 constructs merged lists via Team Draft / Optimized.
+  // M4a runs sign test + Bradley-Terry. Requires InterleavingConfig.
+  EXPERIMENT_TYPE_INTERLEAVING = 3;
+  // Session-level: M1 hashes session_id. M4a uses clustered SEs.
+  // Requires SessionConfig.
+  EXPERIMENT_TYPE_SESSION_LEVEL = 4;
+  // Playback QoE: M3 computes QoE metrics. M4a cross-references with engagement.
+  // Requires at least one QoE guardrail metric.
+  EXPERIMENT_TYPE_PLAYBACK_QOE = 5;
+  // Multi-armed bandit: M1 delegates to M4b. M4a runs IPW-adjusted analysis.
+  // Requires BanditConfig.
+  EXPERIMENT_TYPE_MAB = 6;
+  // Contextual bandit: M1 delegates to M4b with context features.
+  // Requires BanditConfig with context_feature_keys.
+  EXPERIMENT_TYPE_CONTEXTUAL_BANDIT = 7;
+  // Cumulative holdout: permanent baseline group measuring total algorithmic lift.
+  // M5 enforces no auto-conclusion. Requires is_cumulative_holdout = true.
+  EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT = 8;
+}
+
+// GuardrailAction determines platform behavior on guardrail metric breach.
+// Default is AUTO_PAUSE per Spotify-inspired safe-by-default policy. See ADR-008.
+enum GuardrailAction {
+  GUARDRAIL_ACTION_UNSPECIFIED = 0;
+  // DEFAULT: M5 pauses experiment (traffic -> 0%), alerts owner.
+  GUARDRAIL_ACTION_AUTO_PAUSE = 1;
+  // Owner must explicitly opt-in. Audited in experiment audit trail.
+  GUARDRAIL_ACTION_ALERT_ONLY = 2;
+}
+
+// SequentialMethod determines which sequential testing approach M4a uses.
+// See ADR-004 for rationale on offering both mSPRT and GST.
+enum SequentialMethod {
+  SEQUENTIAL_METHOD_UNSPECIFIED = 0;
+  // Always-valid p-values with arbitrary peeking. Lower power but max flexibility.
+  SEQUENTIAL_METHOD_MSPRT = 1;
+  // Group sequential with O'Brien-Fleming spending. Higher power; requires
+  // pre-commitment to planned_looks.
+  SEQUENTIAL_METHOD_GST_OBF = 2;
+  // Group sequential with Pocock spending. Equal stopping probability per look.
+  SEQUENTIAL_METHOD_GST_POCOCK = 3;
+}
+
+// SessionConfig is required when type = SESSION_LEVEL.
+// M1 hashes session_id instead of user_id for variant assignment.
+message SessionConfig {
+  // Attribute name in the event schema that contains the session identifier.
+  // M5 validates this resolves in the event schema during STARTING.
+  string session_id_attribute = 1;
+  // If true, same user may see different variants across sessions.
+  bool allow_cross_session_variation = 2;
+  // Minimum sessions per user before including in analysis.
+  // Filters out users with too few sessions for reliable clustered estimates.
+  int32 min_sessions_per_user = 3;
+}
+
+// SequentialTestConfig controls sequential analysis in M4a.
+message SequentialTestConfig {
+  SequentialMethod method = 1;
+  // For GST only: number of pre-specified analysis looks.
+  // Ignored for mSPRT. Must be >= 2 for GST.
+  int32 planned_looks = 2;
+  // Total Type I error budget across all looks. Default 0.05.
+  double overall_alpha = 3;
+}
+
+// GuardrailConfig defines a metric threshold that triggers protective action.
+message GuardrailConfig {
+  // Metric ID to monitor. Must exist in the experiment's metric set.
+  string metric_id = 1;
+  // Threshold value. Breach direction determined by metric definition
+  // (e.g., rebuffer_rate breach = exceeds threshold; engagement breach = falls below).
+  double threshold = 2;
+  // How many consecutive checks must breach before action triggers.
+  // Default 1 (immediate). Higher values reduce false alarms for noisy metrics.
+  int32 consecutive_breaches_required = 3;
+}
+
+// Variant defines a single treatment arm within an experiment.
+message Variant {
+  string variant_id = 1;
+  string name = 2;
+  // Traffic allocation as fraction (0.0 to 1.0). All variants must sum to 1.0.
+  double traffic_fraction = 3;
+  // Whether this is the control variant. Exactly one variant must be control.
+  bool is_control = 4;
+  // Opaque JSON payload delivered to the client SDK.
+  string payload_json = 5;
+}
+
+// Experiment is the top-level configuration entity managed by M5.
+message Experiment {
+  string experiment_id = 1;
+  string name = 2;
+  string description = 3;
+  string owner_email = 4;
+  ExperimentType type = 5;
+  ExperimentState state = 6;
+
+  // Variant definitions. Minimum 2 for A/B; minimum 1 for bandits (arms defined in BanditConfig).
+  repeated Variant variants = 7;
+
+  // Layer assignment. Experiments in the same layer share traffic; different layers are orthogonal.
+  string layer_id = 8;
+
+  // Metric configuration.
+  string primary_metric_id = 9;
+  repeated string secondary_metric_ids = 10;
+  repeated GuardrailConfig guardrail_configs = 11;
+  GuardrailAction guardrail_action = 12;
+
+  // Sequential testing. If unset, M4a uses fixed-horizon analysis.
+  SequentialTestConfig sequential_test_config = 13;
+
+  // Targeting. If unset, experiment targets all eligible users.
+  string targeting_rule_id = 14;
+
+  // Timestamps managed by M5. read-only for clients.
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp started_at = 16;
+  google.protobuf.Timestamp concluded_at = 17;
+
+  // SVOD-specific configurations. Set the one matching experiment type.
+  InterleavingConfig interleaving_config = 20;
+  SessionConfig session_config = 21;
+  string surrogate_model_id = 22;
+  LifecycleStratificationConfig lifecycle_config = 23;
+  BanditConfig bandit_config = 24;
+
+  // Cumulative holdout flag. When true, M5 enforces no auto-conclusion
+  // and Assignment Service prioritizes holdout assignment before layer allocation.
+  bool is_cumulative_holdout = 25;
+
+  // Hash salt. Auto-generated by M5 at creation. Used by M1 for deterministic bucketing.
+  string hash_salt = 26;
+}

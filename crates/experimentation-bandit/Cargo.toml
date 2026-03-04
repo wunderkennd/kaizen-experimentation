@@ -1,0 +1,23 @@
+[package]
+name = "experimentation-bandit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+experimentation-stats = { path = "../experimentation-stats" }
+rand = { workspace = true }
+rand_distr = { workspace = true }
+serde = { workspace = true }
+nalgebra = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[features]
+default = []
+gpu = ["dep:tch"]     # Neural contextual bandit (Phase 3)
+
+[dependencies.tch]
+workspace = true
+optional = true

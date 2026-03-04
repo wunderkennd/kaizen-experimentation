@@ -1,0 +1,52 @@
+flowchart BT
+    subgraph Foundation["Foundation Layer"]
+        CORE["experimentation-core<br/>timestamps, errors, tracing"]
+        HASH["experimentation-hash<br/>MurmurHash3<br/><i>features: wasm, uniffi, ffi, python</i>"]
+        PROTO["experimentation-proto<br/>tonic-build generated types"]
+    end
+
+    subgraph Algorithms["Algorithm Layer"]
+        STATS["experimentation-stats<br/>bootstrap, CUPED, mSPRT, GST<br/>novelty, interference<br/><i>features: simd, python</i>"]
+        BANDIT["experimentation-bandit<br/>Thompson, LinUCB, Neural<br/><i>features: gpu</i>"]
+        INTERLEAVE["experimentation-interleaving<br/>Team Draft, Optimized"]
+    end
+
+    subgraph Infrastructure["Infrastructure Layer"]
+        INGEST["experimentation-ingest<br/>event validation, dedup"]
+        FFI["experimentation-ffi<br/>cbindgen C headers<br/>for Go CGo bridge"]
+    end
+
+    subgraph Services["Service Binaries (thin shells)"]
+        SVC_ASSIGN["experimentation-assignment<br/>M1 binary"]
+        SVC_ANALYSIS["experimentation-analysis<br/>M4a binary"]
+        SVC_PIPELINE["experimentation-pipeline<br/>M2 binary"]
+        SVC_POLICY["experimentation-policy<br/>M4b binary"]
+    end
+
+    CORE --> HASH
+    CORE --> PROTO
+    CORE --> STATS
+    CORE --> BANDIT
+    CORE --> INTERLEAVE
+    CORE --> INGEST
+
+    HASH --> SVC_ASSIGN
+    HASH --> FFI
+    PROTO --> SVC_ASSIGN
+    PROTO --> SVC_ANALYSIS
+    PROTO --> SVC_PIPELINE
+    PROTO --> SVC_POLICY
+    INTERLEAVE --> SVC_ASSIGN
+    BANDIT --> SVC_POLICY
+    STATS --> SVC_ANALYSIS
+    INGEST --> SVC_PIPELINE
+
+    classDef found fill:#e8d5b7,stroke:#8b4513,color:#000
+    classDef algo fill:#b7d5e8,stroke:#2c5f8a,color:#000
+    classDef infra fill:#e0e0e0,stroke:#757575,color:#000
+    classDef svc fill:#deb887,stroke:#8b4513,color:#000
+
+    class CORE,HASH,PROTO found
+    class STATS,BANDIT,INTERLEAVE algo
+    class INGEST,FFI infra
+    class SVC_ASSIGN,SVC_ANALYSIS,SVC_PIPELINE,SVC_POLICY svc

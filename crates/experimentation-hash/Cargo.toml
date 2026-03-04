@@ -1,0 +1,27 @@
+[package]
+name = "experimentation-hash"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+serde = { workspace = true }
+proptest = { workspace = true }
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen"]
+ffi = []            # Enables C-compatible extern functions for cbindgen
+uniffi = []         # UniFFI bindings for Swift/Kotlin
+python = ["dep:pyo3"]
+
+[dependencies.wasm-bindgen]
+workspace = true
+optional = true
+
+[dependencies.pyo3]
+workspace = true
+optional = true

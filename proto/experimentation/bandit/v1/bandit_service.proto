@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package experimentation.bandit.v1;
+
+import "experimentation/common/v1/bandit.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/bandit/v1;banditv1";
+
+// BanditPolicyService is implemented in Rust (M4b).
+// LMAX-inspired: all policy state mutations on single dedicated thread.
+// gRPC serving on tokio async. Crash-only: RocksDB snapshot on every update.
+service BanditPolicyService {
+  // Select an arm for a user. Called by M1 Assignment Service.
+  // p99 < 15ms at 10K rps.
+  rpc SelectArm(SelectArmRequest) returns (experimentation.common.v1.ArmSelection);
+  // Create a cold-start bandit for new content.
+  // Auto-creates experiment, arms, and begins exploration.
+  rpc CreateColdStartBandit(CreateColdStartBanditRequest) returns (CreateColdStartBanditResponse);
+  // Export learned affinity scores after cold-start window closes.
+  // Scores consumed by recommendation system as content-level features.
+  rpc ExportAffinityScores(ExportAffinityScoresRequest) returns (ExportAffinityScoresResponse);
+  // Get current policy snapshot for an experiment.
+  rpc GetPolicySnapshot(GetPolicySnapshotRequest) returns (experimentation.common.v1.PolicySnapshot);
+  // Roll back policy to a previous snapshot.
+  rpc RollbackPolicy(RollbackPolicyRequest) returns (experimentation.common.v1.PolicySnapshot);
+}
+
+message SelectArmRequest {
+  string experiment_id = 1;
+  string user_id = 2;
+  // Context features for contextual bandits. Keys must match BanditConfig.context_feature_keys.
+  map<string, double> context_features = 3;
+}
+
+message CreateColdStartBanditRequest {
+  string content_id = 1;
+  // Content metadata used as bandit context features.
+  map<string, string> content_metadata = 2;
+  // Override default cold-start window duration.
+  int32 window_days = 3;
+}
+
+message CreateColdStartBanditResponse {
+  string experiment_id = 1;
+  string content_id = 2;
+}
+
+message ExportAffinityScoresRequest { string experiment_id = 1; }
+message ExportAffinityScoresResponse {
+  string content_id = 1;
+  // Per-segment affinity scores: which user segments respond best.
+  map<string, double> segment_affinity_scores = 2;
+  // Optimal placement per segment (arm with highest reward).
+  map<string, string> optimal_placements = 3;
+}
+
+message GetPolicySnapshotRequest { string experiment_id = 1; }
+message RollbackPolicyRequest {
+  string experiment_id = 1;
+  // Snapshot timestamp to rollback to. Must exist in RocksDB.
+  int64 target_snapshot_epoch_ms = 2;
+}

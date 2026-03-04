@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+import "google/protobuf/timestamp.proto";
+import "experimentation/common/v1/lifecycle.proto";
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// ExposureEvent records that a user was assigned and exposed to a variant.
+// Published to the exposures Kafka topic by M2 Event Ingestion.
+message ExposureEvent {
+  string event_id = 1;
+  string experiment_id = 2;
+  string user_id = 3;
+  string variant_id = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  // Platform where exposure occurred.
+  string platform = 6;
+  // For session-level experiments: the session that triggered this exposure.
+  string session_id = 7;
+  // For bandit experiments: the assignment probability at exposure time.
+  // Used by M4a for IPW-adjusted causal analysis.
+  double assignment_probability = 8;
+  // For interleaving experiments: per-item provenance mapping.
+  // Key: item_id, Value: algorithm_id that contributed this item.
+  map<string, string> interleaving_provenance = 9;
+  // For bandit experiments: serialized context features used for arm selection.
+  // Logged for offline policy evaluation and IPW computation.
+  string bandit_context_json = 10;
+  // Lifecycle segment at exposure time. Classified by M3 from Redis feature store.
+  LifecycleSegment lifecycle_segment = 11;
+}
+
+// MetricEvent records a user action or system observation.
+// Published to metric_events Kafka topic by M2 Event Ingestion.
+message MetricEvent {
+  string event_id = 1;
+  string user_id = 2;
+  // Event type identifier. Maps to metric definitions.
+  // Examples: "play_start", "watch_complete", "search", "add_to_list".
+  string event_type = 3;
+  // Numeric value for the event (e.g., watch duration in seconds).
+  double value = 4;
+  // Content identifier (for content-level analysis and interference detection).
+  string content_id = 5;
+  string session_id = 6;
+  google.protobuf.Timestamp timestamp = 7;
+  // Arbitrary key-value properties for custom metric definitions.
+  map<string, string> properties = 8;
+}
+
+// RewardEvent records a bandit reward observation.
+// Published to reward_events Kafka topic. Consumed by M4b Policy Service.
+message RewardEvent {
+  string event_id = 1;
+  string experiment_id = 2;
+  string user_id = 3;
+  string arm_id = 4;
+  // Reward value. For content cold-start: play_through_rate * completion_rate.
+  double reward = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  // Context features at reward time (for contextual bandits).
+  string context_json = 7;
+}
+
+// GuardrailAlert is published to guardrail_alerts Kafka topic when M3
+// detects a guardrail metric breach. Consumed by M5 for auto-pause.
+message GuardrailAlert {
+  string experiment_id = 1;
+  string metric_id = 2;
+  string variant_id = 3;
+  double current_value = 4;
+  double threshold = 5;
+  // How many consecutive checks have breached.
+  int32 consecutive_breach_count = 6;
+  google.protobuf.Timestamp detected_at = 7;
+}
