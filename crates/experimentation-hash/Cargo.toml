@@ -13,11 +13,12 @@ experimentation-core = { path = "../experimentation-core", optional = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 proptest = { workspace = true }
-uuid = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+uuid = { workspace = true }
 [features]
 default = []
 wasm = ["dep:wasm-bindgen"]
