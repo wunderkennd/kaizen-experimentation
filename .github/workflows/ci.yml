@@ -75,7 +75,7 @@ jobs:
 
       - name: WASM test vectors (10K via wasm-pack)
         run: |
-          cargo install wasm-pack --locked || true
+          cargo install wasm-pack --locked
           wasm-pack test --node --features wasm crates/experimentation-hash
 
       - name: FFI build
