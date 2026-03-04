@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: _YYYY-MM-DD by [your name]_
+> **Last updated**: 2026-03-04 by Agent-1
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -13,7 +13,7 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🟡 Not Started | — | Hash crate + WASM/FFI bindings | — | Can start immediately |
+| Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/wasm-ffi-hash-bindings | Hash crate + WASM/FFI bindings | — | M1.1 complete, next: M1.2 GetAssignment RPC |
 | Agent-2 | M2 Pipeline | 🟡 Not Started | — | Event validation + Kafka publisher | — | Can start immediately |
 | Agent-3 | M3 Metrics | ⚪ Waiting | — | Standard metric computation job | Agent-2 (events on Kafka) | Use synthetic events until M2 delivers |
 | Agent-4 | M4a Analysis + M4b Bandit | ⚪ Waiting | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-3 (metric summaries) for M4a; Agent-2 (reward events) for M4b | M4a/M4b algorithm crates can start immediately; service integration waits |
@@ -44,7 +44,7 @@
 
 | # | Milestone | Owner | Status | PR | Merged | Unblocks |
 |---|-----------|-------|--------|-----|--------|----------|
-| **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟡 | — | — | Agent-7 (CGo bridge), SDKs |
+| **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟢 | agent-1/feat/wasm-ffi-hash-bindings | — | Agent-7 (CGo bridge), SDKs |
 | 1.2 | GetAssignment RPC (static bucketing) | Agent-1 | 🟡 | — | — | SDKs, Agent-6 (debug view) |
 | 1.3 | Config cache (subscribe to M5 StreamConfigUpdates) | Agent-1 | ⚪ | — | — | — |
 | 1.4 | Targeting rule evaluation | Agent-1 | 🟡 | — | — | — |

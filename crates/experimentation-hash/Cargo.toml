@@ -4,12 +4,19 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-experimentation-core = { path = "../experimentation-core" }
+# experimentation-core is optional: the hash crate operates on u32 only and
+# does not need assert_finite!().  Keeping it optional avoids pulling chrono/uuid
+# into the wasm32-unknown-unknown target where they fail to compile.
+experimentation-core = { path = "../experimentation-core", optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 serde = { workspace = true }
 proptest = { workspace = true }
+uuid = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { workspace = true }
 
 [features]
 default = []
