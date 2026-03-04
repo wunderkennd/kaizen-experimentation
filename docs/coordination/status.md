@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-1
+> **Last updated**: 2026-03-04 by Agent-3 (M1.10 merged, advancing to M1.11)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -15,9 +15,9 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/wasm-ffi-hash-bindings | Hash crate + WASM/FFI bindings | — | M1.1 complete, next: M1.2 GetAssignment RPC |
 | Agent-2 | M2 Pipeline | 🟡 Not Started | — | Event validation + Kafka publisher | — | Can start immediately |
-| Agent-3 | M3 Metrics | ⚪ Waiting | — | Standard metric computation job | Agent-2 (events on Kafka) | Use synthetic events until M2 delivers |
-| Agent-4 | M4a Analysis + M4b Bandit | ⚪ Waiting | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-3 (metric summaries) for M4a; Agent-2 (reward events) for M4b | M4a/M4b algorithm crates can start immediately; service integration waits |
-| Agent-5 | M5 Management | 🟡 Not Started | — | Experiment CRUD + state machine | — | Can start immediately |
+| Agent-3 | M3 Metrics | 🔵 In Progress | — | RATIO metric with delta method inputs (1.11) | Agent-2 (events on Kafka) | M1.10 merged (PR #3). Advancing to RATIO + delta method. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🟡 Not Started | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-2 (reward events) for M4b | M4a partially unblocked: metric_summaries now available from M3. Algorithm crates can start. |
+| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/experiment-crud-handlers | Experiment CRUD + state machine | — | M1.20 complete: CRUD + lifecycle + validation + audit trail |
 | Agent-6 | M6 UI | ⚪ Waiting | — | Experiment list + detail shell | Agent-5 (CRUD APIs) | Use MSW mocks until M5 delivers |
 | Agent-7 | M7 Flags | ⚪ Waiting | — | Boolean flag CRUD + CGo hash bridge | Agent-1 (hash crate + FFI headers) | Can start Go scaffolding; CGo bridge waits |
 
@@ -53,7 +53,7 @@
 | 1.7 | IngestRewardEvent + IngestQoEEvent RPCs | Agent-2 | 🟡 | — | — | Agent-4 M4b (rewards) |
 | 1.8 | Bloom filter dedup (0.1% FPR at 100M/day) | Agent-2 | 🟡 | — | — | — |
 | 1.9 | Go orchestration + SQL query logging | Agent-2 | 🟡 | — | — | — |
-| **1.10** | **Standard metric computation (MEAN, PROPORTION, COUNT)** | Agent-3 | ⚪ | — | — | Agent-4 M4a |
+| **1.10** | **Standard metric computation (MEAN, PROPORTION, COUNT)** | Agent-3 | 🟢 | PR #3 | 2026-03-04 | Agent-4 M4a |
 | 1.11 | RATIO metric with delta method inputs | Agent-3 | ⚪ | — | — | — |
 | 1.12 | CUPED covariate computation | Agent-3 | ⚪ | — | — | — |
 | 1.13 | Guardrail breach detection → guardrail_alerts topic | Agent-3 | ⚪ | — | — | Agent-5 (auto-pause) |
@@ -63,12 +63,12 @@
 | 1.17 | Thompson Sampling with Beta-Bernoulli (M4b) | Agent-4 | 🟡 | — | — | Agent-1 (SelectArm) |
 | 1.18 | LMAX single-threaded policy core (M4b) | Agent-4 | 🟡 | — | — | — |
 | 1.19 | RocksDB policy snapshots (M4b) | Agent-4 | 🟡 | — | — | — |
-| **1.20** | **Experiment CRUD + state machine enforcement** | Agent-5 | 🟡 | — | — | Agent-6 (list/detail), Agent-1 (configs), Agent-3 (experiment list) |
+| **1.20** | **Experiment CRUD + state machine enforcement** | Agent-5 | 🟢 | agent-5/feat/experiment-crud-handlers | — | Agent-6 (list/detail), Agent-1 (configs), Agent-3 (experiment list) |
 | 1.21 | Layer allocation + bucket reuse | Agent-5 | 🟡 | — | — | — |
 | 1.22 | StreamConfigUpdates RPC | Agent-5 | 🟡 | — | — | Agent-1 (config cache) |
 | 1.23 | Guardrail alert consumer → auto-pause | Agent-5 | ⚪ | — | — | — |
 | 1.24 | Metric definition CRUD | Agent-5 | 🟡 | — | — | Agent-3 |
-| **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | ⚪ | — | — | Stakeholder demo |
+| **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20 |
 | 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | ⚪ | — | — | — |
 | 1.27 | View SQL page (query log from M3) | Agent-6 | ⚪ | — | — | — |
 | **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | ⚪ | — | — | — |

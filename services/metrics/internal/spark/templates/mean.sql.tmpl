@@ -1,0 +1,10 @@
+{{template "exposure_join" .}}
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    metric_data.user_id,
+    metric_data.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    AVG(metric_data.value) AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM metric_data
+GROUP BY metric_data.user_id, metric_data.variant_id
