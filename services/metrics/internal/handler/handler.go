@@ -22,11 +22,12 @@ type MetricsHandler struct {
 	job                 *jobs.StandardJob
 	guardrailJob        *jobs.GuardrailJob
 	contentConsumption  *jobs.ContentConsumptionJob
+	surrogateJob        *jobs.SurrogateJob
 	queryLog            querylog.Writer
 }
 
-func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, ql querylog.Writer) *MetricsHandler {
-	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, queryLog: ql}
+func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ql querylog.Writer) *MetricsHandler {
+	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, queryLog: ql}
 }
 
 func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Request[metricsv1.ComputeMetricsRequest]) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
@@ -41,6 +42,12 @@ func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Reques
 	// Also compute content consumption distributions for interference analysis.
 	if h.contentConsumption != nil {
 		if _, err := h.contentConsumption.Run(ctx, id); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+	// Compute surrogate projections if a model is linked.
+	if h.surrogateJob != nil {
+		if _, err := h.surrogateJob.Run(ctx, id); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}

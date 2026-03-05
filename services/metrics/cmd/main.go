@@ -21,6 +21,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	"github.com/org/experimentation-platform/services/metrics/internal/surrogate"
 )
 
 func main() {
@@ -52,7 +53,12 @@ func main() {
 	gVP := jobs.NewMockValueProvider()
 	gJob := jobs.NewGuardrailJob(cfgStore, renderer, executor, qlWriter, gPublisher, gTracker, gVP)
 	ccJob := jobs.NewContentConsumptionJob(cfgStore, renderer, executor, qlWriter)
-	metricsHandler := handler.NewMetricsHandler(stdJob, gJob, ccJob, qlWriter)
+	// Surrogate metric framework: mock input provider + mock model loader for dev.
+	mockInputProvider := &jobs.MockInputMetricsProvider{}
+	modelLoader := surrogate.NewMockModelLoader()
+	projWriter := surrogate.NewMemProjectionWriter()
+	surrJob := jobs.NewSurrogateJob(cfgStore, renderer, mockInputProvider, qlWriter, modelLoader, projWriter)
+	metricsHandler := handler.NewMetricsHandler(stdJob, gJob, ccJob, surrJob, qlWriter)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200); fmt.Fprint(w, "ok") })
 	path, h := metricsv1connect.NewMetricComputationServiceHandler(metricsHandler)

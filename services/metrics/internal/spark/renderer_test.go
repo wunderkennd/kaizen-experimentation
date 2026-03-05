@@ -243,3 +243,31 @@ func TestRenderLifecycleMean_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "lifecycle_segment")
 	assert.Contains(t, sql, "GROUP BY metric_data.user_id, metric_data.variant_id, metric_data.lifecycle_segment")
 }
+
+func TestRenderSurrogateInput(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.InputMetricIDs = []string{"watch_time_minutes", "stream_start_rate"}
+	p.ObservationWindowDays = 7
+	sql, err := r.RenderSurrogateInput(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "surrogate_input_expected.sql"), sql)
+}
+
+func TestRenderSurrogateInput_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{
+		ExperimentID:          "test-exp-surr",
+		ComputationDate:       "2024-06-01",
+		InputMetricIDs:        []string{"metric_a", "metric_b", "metric_c"},
+		ObservationWindowDays: 14,
+	}
+	sql, _ := r.RenderSurrogateInput(p)
+	assert.Contains(t, sql, "delta.metric_summaries")
+	assert.Contains(t, sql, "'metric_a', 'metric_b', 'metric_c'")
+	assert.Contains(t, sql, "DATE_SUB")
+	assert.Contains(t, sql, "14")
+	assert.Contains(t, sql, "GROUP BY ms.variant_id, ms.metric_id")
+	assert.Contains(t, sql, "avg_value")
+}
