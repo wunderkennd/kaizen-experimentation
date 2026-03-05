@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: bufbuild/buf-setup-action@v1
         with:
-          version: "1.39.0"
+          version: "latest"
 
       - name: Lint proto
         run: cd proto && buf lint
