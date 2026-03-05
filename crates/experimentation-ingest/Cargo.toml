@@ -8,3 +8,6 @@ experimentation-core = { path = "../experimentation-core" }
 experimentation-proto = { path = "../experimentation-proto" }
 bloomfilter = { workspace = true }
 chrono = { workspace = true }
+prost-types = { workspace = true }
+prometheus = { workspace = true }
+tracing = { workspace = true }

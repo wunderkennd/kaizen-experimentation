@@ -73,9 +73,18 @@ jobs:
         working-directory: crates
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
+      - name: WASM test vectors (10K via wasm-pack)
+        run: |
+          cargo install wasm-pack --locked
+          wasm-pack test --node --features wasm crates/experimentation-hash
+
       - name: FFI build
         working-directory: crates
         run: cargo build --package experimentation-ffi --features ffi
+
+      - name: FFI test vectors (10K through C ABI)
+        working-directory: crates
+        run: cargo test --package experimentation-ffi
 
       - uses: actions/upload-artifact@v4
         with:
