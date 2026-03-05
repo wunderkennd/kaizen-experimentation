@@ -14,7 +14,7 @@ fn bench_get_assignment(c: &mut Criterion) {
 
     c.bench_function("get_assignment_single", |b| {
         b.iter(|| {
-            svc.assign(black_box("exp_dev_001"), black_box("user_42"), black_box(&no_attrs))
+            svc.assign(black_box("exp_dev_001"), black_box("user_42"), black_box(""), black_box(&no_attrs))
                 .unwrap()
         })
     });
@@ -23,7 +23,24 @@ fn bench_get_assignment(c: &mut Criterion) {
         b.iter(|| {
             for i in 0..1000 {
                 let user_id = format!("user_{i}");
-                svc.assign(black_box("exp_dev_001"), black_box(&user_id), black_box(&no_attrs))
+                svc.assign(black_box("exp_dev_001"), black_box(&user_id), black_box(""), black_box(&no_attrs))
+                    .unwrap();
+            }
+        })
+    });
+
+    c.bench_function("get_assignment_session_level", |b| {
+        b.iter(|| {
+            svc.assign(black_box("exp_dev_003"), black_box("user_42"), black_box("session_42"), black_box(&no_attrs))
+                .unwrap()
+        })
+    });
+
+    c.bench_function("get_assignment_session_1000", |b| {
+        b.iter(|| {
+            for i in 0..1000 {
+                let session_id = format!("session_{i}");
+                svc.assign(black_box("exp_dev_003"), black_box("user_42"), black_box(&session_id), black_box(&no_attrs))
                     .unwrap();
             }
         })

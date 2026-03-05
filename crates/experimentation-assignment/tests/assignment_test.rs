@@ -25,8 +25,8 @@ fn attrs(pairs: &[(&str, &str)]) -> HashMap<String, String> {
 #[test]
 fn determinism_same_user_same_variant() {
     let svc = make_service();
-    let r1 = svc.assign("exp_dev_001", "user_42", &no_attrs()).unwrap();
-    let r2 = svc.assign("exp_dev_001", "user_42", &no_attrs()).unwrap();
+    let r1 = svc.assign("exp_dev_001", "user_42", "", &no_attrs()).unwrap();
+    let r2 = svc.assign("exp_dev_001", "user_42", "", &no_attrs()).unwrap();
     assert_eq!(r1.variant_id, r2.variant_id, "same user must get same variant");
     assert_eq!(r1.payload_json, r2.payload_json);
     assert!(r1.is_active);
@@ -39,7 +39,7 @@ fn balance_50_50_chi_squared() {
 
     for i in 0..10_000 {
         let user_id = format!("balance_user_{i}");
-        let resp = svc.assign("exp_dev_001", &user_id, &no_attrs()).unwrap();
+        let resp = svc.assign("exp_dev_001", &user_id, "", &no_attrs()).unwrap();
         *counts.entry(resp.variant_id).or_insert(0u64) += 1;
     }
 
@@ -63,7 +63,7 @@ fn balance_50_50_chi_squared() {
 #[test]
 fn not_found_unknown_experiment() {
     let svc = make_service();
-    let err = svc.assign("nonexistent_exp", "user_1", &no_attrs()).unwrap_err();
+    let err = svc.assign("nonexistent_exp", "user_1", "", &no_attrs()).unwrap_err();
     assert_eq!(err.code(), tonic::Code::NotFound);
 }
 
@@ -88,7 +88,7 @@ fn empty_assignment_outside_allocation() {
 
     let mut outside_count = 0;
     for i in 0..1000 {
-        let resp = svc.assign("narrow_exp", &format!("user_{i}"), &no_attrs()).unwrap();
+        let resp = svc.assign("narrow_exp", &format!("user_{i}"), "", &no_attrs()).unwrap();
         if resp.variant_id.is_empty() {
             assert!(resp.is_active, "outside allocation should still be is_active=true");
             outside_count += 1;
@@ -120,7 +120,7 @@ fn inactive_experiment_returns_is_active_false() {
     let config = Config::from_json(json).unwrap();
     let svc = AssignmentServiceImpl::new(Arc::new(config));
 
-    let resp = svc.assign("draft_exp", "user_1", &no_attrs()).unwrap();
+    let resp = svc.assign("draft_exp", "user_1", "", &no_attrs()).unwrap();
     assert!(!resp.is_active, "DRAFT experiment must return is_active=false");
     assert!(resp.variant_id.is_empty(), "DRAFT experiment must not assign a variant");
 }
@@ -131,7 +131,7 @@ fn inactive_experiment_returns_is_active_false() {
 fn targeting_country_in_match() {
     let svc = make_service();
     // exp_dev_002 targets country IN [US, UK] AND tier IN [premium, platinum]
-    let resp = svc.assign("exp_dev_002", "user_1", &attrs(&[("country", "US"), ("tier", "premium")])).unwrap();
+    let resp = svc.assign("exp_dev_002", "user_1", "", &attrs(&[("country", "US"), ("tier", "premium")])).unwrap();
     assert!(resp.is_active);
     assert!(!resp.variant_id.is_empty(), "targeted user should get a variant");
 }
@@ -140,7 +140,7 @@ fn targeting_country_in_match() {
 fn targeting_empty_rule_matches_all() {
     let svc = make_service();
     // exp_dev_001 has no targeting rule — all users match
-    let resp = svc.assign("exp_dev_001", "user_1", &no_attrs()).unwrap();
+    let resp = svc.assign("exp_dev_001", "user_1", "", &no_attrs()).unwrap();
     assert!(resp.is_active);
     assert!(!resp.variant_id.is_empty());
 }
@@ -149,7 +149,7 @@ fn targeting_empty_rule_matches_all() {
 fn targeting_missing_attribute_no_match() {
     let svc = make_service();
     // exp_dev_002 requires country + tier, but we provide neither
-    let resp = svc.assign("exp_dev_002", "user_1", &no_attrs()).unwrap();
+    let resp = svc.assign("exp_dev_002", "user_1", "", &no_attrs()).unwrap();
     assert!(resp.is_active, "targeting miss should still be is_active=true");
     assert!(resp.variant_id.is_empty(), "targeting miss should return empty variant");
 }
@@ -174,7 +174,7 @@ fn targeting_no_rule_matches_all() {
     let config = Config::from_json(json).unwrap();
     let svc = AssignmentServiceImpl::new(Arc::new(config));
 
-    let resp = svc.assign("no_target_exp", "user_1", &no_attrs()).unwrap();
+    let resp = svc.assign("no_target_exp", "user_1", "", &no_attrs()).unwrap();
     assert!(resp.is_active);
     assert!(!resp.variant_id.is_empty(), "no targeting rule → all users match");
 }
@@ -183,11 +183,11 @@ fn targeting_no_rule_matches_all() {
 fn targeting_compound_and_across_groups() {
     let svc = make_service();
     // Correct country but wrong tier → AND fails
-    let resp = svc.assign("exp_dev_002", "user_1", &attrs(&[("country", "US"), ("tier", "free")])).unwrap();
+    let resp = svc.assign("exp_dev_002", "user_1", "", &attrs(&[("country", "US"), ("tier", "free")])).unwrap();
     assert!(resp.variant_id.is_empty(), "wrong tier should not match");
 
     // Correct tier but wrong country → AND fails
-    let resp2 = svc.assign("exp_dev_002", "user_2", &attrs(&[("country", "FR"), ("tier", "premium")])).unwrap();
+    let resp2 = svc.assign("exp_dev_002", "user_2", "", &attrs(&[("country", "FR"), ("tier", "premium")])).unwrap();
     assert!(resp2.variant_id.is_empty(), "wrong country should not match");
 }
 
@@ -215,9 +215,127 @@ fn targeting_gt_numeric() {
     let config = Config::from_json(json).unwrap();
     let svc = AssignmentServiceImpl::new(Arc::new(config));
 
-    let resp = svc.assign("age_exp", "user_1", &attrs(&[("age", "25")])).unwrap();
+    let resp = svc.assign("age_exp", "user_1", "", &attrs(&[("age", "25")])).unwrap();
     assert!(!resp.variant_id.is_empty(), "age 25 > 18 should match");
 
-    let resp2 = svc.assign("age_exp", "user_2", &attrs(&[("age", "15")])).unwrap();
+    let resp2 = svc.assign("age_exp", "user_2", "", &attrs(&[("age", "15")])).unwrap();
     assert!(resp2.variant_id.is_empty(), "age 15 <= 18 should not match");
+}
+
+// ── M1.5 Tests (session-level + layer-aware assignment) ──
+
+#[test]
+fn session_level_determinism() {
+    let svc = make_service();
+    let r1 = svc.assign("exp_dev_003", "user_1", "session_abc", &no_attrs()).unwrap();
+    let r2 = svc.assign("exp_dev_003", "user_1", "session_abc", &no_attrs()).unwrap();
+    assert_eq!(r1.variant_id, r2.variant_id, "same session_id must get same variant");
+    assert!(r1.is_active);
+    assert!(!r1.variant_id.is_empty());
+}
+
+#[test]
+fn session_level_cross_session_variation() {
+    let svc = make_service();
+    // Collect variants across many sessions — should see both variants.
+    let mut variants = std::collections::HashSet::new();
+    for i in 0..200 {
+        let session = format!("session_{i}");
+        let resp = svc.assign("exp_dev_003", "user_1", &session, &no_attrs()).unwrap();
+        variants.insert(resp.variant_id);
+    }
+    assert!(
+        variants.len() >= 2,
+        "expected at least 2 distinct variants across sessions, got {variants:?}"
+    );
+}
+
+#[test]
+fn session_level_missing_session_id() {
+    let svc = make_service();
+    let err = svc.assign("exp_dev_003", "user_1", "", &no_attrs()).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert!(
+        err.message().contains("session_id"),
+        "error should mention session_id: {}",
+        err.message()
+    );
+}
+
+#[test]
+fn session_level_same_user_different_sessions() {
+    let svc = make_service();
+    let r1 = svc.assign("exp_dev_003", "user_42", "sess_A", &no_attrs()).unwrap();
+    let r2 = svc.assign("exp_dev_003", "user_42", "sess_B", &no_attrs()).unwrap();
+    // Different sessions may get different buckets (hash depends on session_id, not user_id).
+    // We can't guarantee different variants, but we verify both succeed.
+    assert!(r1.is_active);
+    assert!(r2.is_active);
+    assert!(!r1.variant_id.is_empty());
+    assert!(!r2.variant_id.is_empty());
+}
+
+#[test]
+fn layer_orthogonality() {
+    // User gets assignment in both default layer (AB) and session layer (SESSION_LEVEL).
+    let svc = make_service();
+    let ab_resp = svc.assign("exp_dev_001", "user_1", "", &no_attrs()).unwrap();
+    let session_resp = svc.assign("exp_dev_003", "user_1", "session_1", &no_attrs()).unwrap();
+    assert!(ab_resp.is_active);
+    assert!(session_resp.is_active);
+    assert!(!ab_resp.variant_id.is_empty(), "AB experiment should assign");
+    assert!(!session_resp.variant_id.is_empty(), "session experiment should assign");
+}
+
+#[test]
+fn layer_exclusive_allocation() {
+    // Two experiments in the same layer with non-overlapping allocations.
+    // A user should match at most one.
+    let json = r#"{
+        "experiments": [
+            {
+                "experiment_id": "exp_a",
+                "state": "RUNNING",
+                "hash_salt": "shared_salt",
+                "layer_id": "layer_exclusive",
+                "variants": [
+                    { "variant_id": "a_ctrl", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{}" }
+                ],
+                "allocation": { "start_bucket": 0, "end_bucket": 4999 }
+            },
+            {
+                "experiment_id": "exp_b",
+                "state": "RUNNING",
+                "hash_salt": "shared_salt",
+                "layer_id": "layer_exclusive",
+                "variants": [
+                    { "variant_id": "b_ctrl", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{}" }
+                ],
+                "allocation": { "start_bucket": 5000, "end_bucket": 9999 }
+            }
+        ],
+        "layers": [{ "layer_id": "layer_exclusive", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::new(Arc::new(config));
+
+    for i in 0..500 {
+        let user = format!("excl_user_{i}");
+        let a = svc.assign("exp_a", &user, "", &no_attrs()).unwrap();
+        let b = svc.assign("exp_b", &user, "", &no_attrs()).unwrap();
+
+        // With same salt and same layer, user hashes to one bucket.
+        // That bucket is in exactly one allocation range.
+        let a_assigned = !a.variant_id.is_empty();
+        let b_assigned = !b.variant_id.is_empty();
+        assert!(
+            !(a_assigned && b_assigned),
+            "user {user} matched both exp_a and exp_b — allocations must be exclusive"
+        );
+        assert!(
+            a_assigned || b_assigned,
+            "user {user} matched neither — should match exactly one"
+        );
+    }
 }

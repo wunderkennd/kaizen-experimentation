@@ -31,10 +31,12 @@ impl AssignmentServiceImpl {
     /// Core assignment logic — pure CPU, no async needed.
     ///
     /// Returns `Ok(response)` on success, `Err(Status)` on lookup failure.
+    #[allow(clippy::result_large_err)]
     pub fn assign(
         &self,
         experiment_id: &str,
         user_id: &str,
+        session_id: &str,
         attributes: &HashMap<String, String>,
     ) -> Result<GetAssignmentResponse, Status> {
         // 1. Look up experiment.
@@ -75,9 +77,19 @@ impl AssignmentServiceImpl {
                 Status::internal(format!("layer not found: {}", exp.layer_id))
             })?;
 
-        // 5. Hash user into a bucket.
+        // 5. Hash entity into a bucket (user_id for AB, session_id for SESSION_LEVEL).
+        let hash_input = if exp.r#type == "SESSION_LEVEL" {
+            if session_id.is_empty() {
+                return Err(Status::invalid_argument(
+                    "session_id required for session-level experiment",
+                ));
+            }
+            session_id
+        } else {
+            user_id
+        };
         let bucket =
-            experimentation_hash::bucket(user_id, &exp.hash_salt, layer.total_buckets);
+            experimentation_hash::bucket(hash_input, &exp.hash_salt, layer.total_buckets);
 
         // 6. Check allocation range.
         if !experimentation_hash::is_in_allocation(
@@ -109,10 +121,10 @@ impl AssignmentServiceImpl {
 ///
 /// Uses traffic_fraction to partition the allocation range. Falls through to the
 /// last variant if floating-point rounding causes no match (total function).
-fn select_variant<'a>(
-    exp: &'a ExperimentConfig,
+fn select_variant(
+    exp: &ExperimentConfig,
     bucket: u32,
-) -> &'a crate::config::VariantConfig {
+) -> &crate::config::VariantConfig {
     let alloc_size =
         (exp.allocation.end_bucket - exp.allocation.start_bucket + 1) as f64;
     let relative_bucket = (bucket - exp.allocation.start_bucket) as f64;
@@ -136,7 +148,7 @@ impl AssignmentService for AssignmentServiceImpl {
         request: Request<GetAssignmentRequest>,
     ) -> Result<Response<GetAssignmentResponse>, Status> {
         let req = request.into_inner();
-        let resp = self.assign(&req.experiment_id, &req.user_id, &req.attributes)?;
+        let resp = self.assign(&req.experiment_id, &req.user_id, &req.session_id, &req.attributes)?;
         Ok(Response::new(resp))
     }
 
@@ -149,7 +161,7 @@ impl AssignmentService for AssignmentServiceImpl {
 
         for exp in &self.config.experiments {
             // Best-effort: skip experiments that fail assignment.
-            if let Ok(resp) = self.assign(&exp.experiment_id, &req.user_id, &req.attributes) {
+            if let Ok(resp) = self.assign(&exp.experiment_id, &req.user_id, &req.session_id, &req.attributes) {
                 assignments.push(resp);
             }
         }
