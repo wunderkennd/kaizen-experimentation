@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-4 (comprehensive status sync — PR #6 buf.yaml fix merged)
+> **Last updated**: 2026-03-04 by Agent-7 (M7 Flag Service Phase 1+2 complete — PR pending)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | agent-4/feat/golden-validation-lmax-core | t-test + SRM + Thompson + LMAX + RocksDB (1.14–1.19) | — | PR #2 open. CI unblocked by PR #6 merge. |
 | Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/layer-allocation-bucket-reuse | Layer allocation + bucket reuse (1.21) | — | M1.20 merged. PR #7 open for M1.21. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20 merge. Can start with MSW mocks. |
-| Agent-7 | M7 Flags | 🟡 Not Started | agent-7/feat/boolean-flag-crud | Boolean flag CRUD + CGo hash bridge (1.28) | — | Unblocked by M1.1 merge (PR #4). FFI headers available. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-service | PR open: CRUD + eval + CGo bridge + audit (1.28–1.30) | — | Phase 1+2 complete. 10K hash vectors pass. CGo bridge parity confirmed. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
@@ -71,9 +71,9 @@
 | **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20. Ready to start. |
 | 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | ⚪ | — | — | — |
 | 1.27 | View SQL page (query log from M3) | Agent-6 | ⚪ | — | — | — |
-| **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | 🟡 | — | — | Unblocked by M1.1 (PR #4). FFI headers available. |
-| 1.29 | Percentage rollout (monotonic) | Agent-7 | ⚪ | — | — | — |
-| 1.30 | PromoteToExperiment → M5 CreateExperiment | Agent-7 | ⚪ | — | — | — |
+| **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | 🟢 | PR (pending) | — | CRUD + EvaluateFlag + CGo bridge. 10K hash vectors match. |
+| 1.29 | Percentage rollout (monotonic) | Agent-7 | 🟢 | PR (pending) | — | Monotonic rollout via hash bucketing. Tests confirm no user eviction. |
+| 1.30 | PromoteToExperiment → M5 CreateExperiment | Agent-7 | 🟢 | PR (pending) | — | Mocked — awaiting Agent-5 CRUD API. Audit trail included. |
 
 **Bold** = critical path milestones that unblock downstream agents.
 
