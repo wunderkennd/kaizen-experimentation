@@ -9,6 +9,7 @@ experimentation-stats = { path = "../experimentation-stats" }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 nalgebra = { workspace = true }
 
 [dev-dependencies]

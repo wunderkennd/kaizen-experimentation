@@ -13,8 +13,6 @@
 
 pub mod murmur3;
 
-use experimentation_core::error::assert_finite;
-
 /// Compute the bucket assignment for a user in an experiment.
 ///
 /// This is the core function that every SDK and service calls.
@@ -51,6 +49,12 @@ pub fn is_in_allocation(bucket: u32, start_bucket: u32, end_bucket: u32) -> bool
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn wasm_bucket(user_id: &str, salt: &str, total_buckets: u32) -> u32 {
     bucket(user_id, salt, total_buckets)
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn wasm_is_in_allocation(bucket: u32, start_bucket: u32, end_bucket: u32) -> bool {
+    is_in_allocation(bucket, start_bucket, end_bucket)
 }
 
 #[cfg(test)]

@@ -18,6 +18,9 @@ type TemplateParams struct {
 	MetricID        string
 	SourceEventType string
 	ComputationDate string // YYYY-MM-DD
+	// NumeratorEventType and DenominatorEventType are used for RATIO metrics.
+	NumeratorEventType   string
+	DenominatorEventType string
 }
 
 // SQLRenderer renders Spark SQL from embedded templates.
@@ -58,6 +61,17 @@ func (r *SQLRenderer) RenderCount(p TemplateParams) (string, error) {
 	return r.Render("count.sql.tmpl", p)
 }
 
+// RenderRatio renders the RATIO metric SQL template (per-user ratio value).
+func (r *SQLRenderer) RenderRatio(p TemplateParams) (string, error) {
+	return r.Render("ratio.sql.tmpl", p)
+}
+
+// RenderRatioDeltaMethod renders the delta method variance components SQL for RATIO metrics.
+// This produces per-variant Var(N), Var(D), Cov(N,D) needed by M4a for delta method CI.
+func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) {
+	return r.Render("ratio_delta_method.sql.tmpl", p)
+}
+
 // RenderForType dispatches to the correct template based on metric type string.
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {
@@ -67,7 +81,9 @@ func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string
 		return r.RenderProportion(p)
 	case "COUNT":
 		return r.RenderCount(p)
+	case "RATIO":
+		return r.RenderRatio(p)
 	default:
-		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT)", metricType)
+		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO)", metricType)
 	}
 }

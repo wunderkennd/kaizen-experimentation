@@ -31,9 +31,17 @@ func TestLoadFromFile(t *testing.T) {
 	t.Run("metrics for experiment", func(t *testing.T) {
 		metrics, err := cs.GetMetricsForExperiment("e0000000-0000-0000-0000-000000000001")
 		require.NoError(t, err)
-		// primary (ctr_recommendation) + secondary (watch_time_minutes, stream_start_rate)
-		assert.Len(t, metrics, 3)
+		// primary (ctr_recommendation) + secondary (watch_time_minutes, stream_start_rate, rebuffer_rate)
+		assert.Len(t, metrics, 4)
 		assert.Equal(t, "ctr_recommendation", metrics[0].MetricID)
+	})
+
+	t.Run("ratio metric has numerator and denominator", func(t *testing.T) {
+		m, err := cs.GetMetric("rebuffer_rate")
+		require.NoError(t, err)
+		assert.Equal(t, "RATIO", m.Type)
+		assert.Equal(t, "rebuffer_event", m.NumeratorEventType)
+		assert.Equal(t, "playback_minute", m.DenominatorEventType)
 	})
 
 	t.Run("running experiments", func(t *testing.T) {

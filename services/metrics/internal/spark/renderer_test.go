@@ -73,6 +73,38 @@ func TestRenderCount(t *testing.T) {
 	assert.Equal(t, expected, sql)
 }
 
+func TestRenderRatio(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	p := testParams
+	p.MetricID = "rebuffer_rate"
+	p.NumeratorEventType = "rebuffer_event"
+	p.DenominatorEventType = "playback_minute"
+
+	sql, err := r.RenderRatio(p)
+	require.NoError(t, err)
+
+	expected := readGolden(t, "ratio_expected.sql")
+	assert.Equal(t, expected, sql)
+}
+
+func TestRenderRatioDeltaMethod(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	p := testParams
+	p.MetricID = "rebuffer_rate"
+	p.NumeratorEventType = "rebuffer_event"
+	p.DenominatorEventType = "playback_minute"
+
+	sql, err := r.RenderRatioDeltaMethod(p)
+	require.NoError(t, err)
+
+	expected := readGolden(t, "ratio_delta_method_expected.sql")
+	assert.Equal(t, expected, sql)
+}
+
 func TestRenderForType(t *testing.T) {
 	r, err := NewSQLRenderer()
 	require.NoError(t, err)
@@ -80,6 +112,8 @@ func TestRenderForType(t *testing.T) {
 	p := testParams
 	p.MetricID = "test_metric"
 	p.SourceEventType = "test_event"
+	p.NumeratorEventType = "num_event"
+	p.DenominatorEventType = "denom_event"
 
 	tests := []struct {
 		metricType string
@@ -88,9 +122,10 @@ func TestRenderForType(t *testing.T) {
 		{"MEAN", false},
 		{"PROPORTION", false},
 		{"COUNT", false},
+		{"RATIO", false},
 		{"mean", false},   // case-insensitive
-		{"RATIO", true},   // unsupported in this milestone
-		{"CUSTOM", true},  // unsupported in this milestone
+		{"ratio", false},  // case-insensitive
+		{"CUSTOM", true},  // unsupported
 		{"INVALID", true},
 	}
 
@@ -104,6 +139,39 @@ func TestRenderForType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRenderRatio_ContainsKeyFields(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	p := TemplateParams{
+		ExperimentID:         "test-exp-123",
+		MetricID:             "my_ratio",
+		NumeratorEventType:   "revenue",
+		DenominatorEventType: "sessions",
+		ComputationDate:      "2024-06-01",
+	}
+
+	sql, err := r.RenderRatio(p)
+	require.NoError(t, err)
+
+	assert.Contains(t, sql, "test-exp-123")
+	assert.Contains(t, sql, "my_ratio")
+	assert.Contains(t, sql, "revenue")
+	assert.Contains(t, sql, "sessions")
+	assert.Contains(t, sql, "numerator_sum")
+	assert.Contains(t, sql, "denominator_sum")
+	assert.Contains(t, sql, "numerator_sum / per_user.denominator_sum")
+
+	deltaSQL, err := r.RenderRatioDeltaMethod(p)
+	require.NoError(t, err)
+
+	assert.Contains(t, deltaSQL, "VAR_SAMP(per_user.numerator_sum)")
+	assert.Contains(t, deltaSQL, "VAR_SAMP(per_user.denominator_sum)")
+	assert.Contains(t, deltaSQL, "COVAR_SAMP(per_user.numerator_sum, per_user.denominator_sum)")
+	assert.Contains(t, deltaSQL, "mean_numerator")
+	assert.Contains(t, deltaSQL, "mean_denominator")
 }
 
 func TestRenderSQL_ContainsKeyFields(t *testing.T) {
