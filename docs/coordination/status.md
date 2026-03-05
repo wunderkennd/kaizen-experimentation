@@ -14,7 +14,7 @@
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/targeting-rules | Targeting rule evaluation (1.4) | — | M1.1–1.2 merged. PR #21 open for 1.4. M1.3 unblocked by M5 StreamConfigUpdates (PR #15). |
-| Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/operational-hardening | Phase 2: Operational hardening | — | M1.6–1.9 merged. Phase 2: Prometheus metrics, backpressure, disk buffer. |
+| Agent-2 | M2 Pipeline | 🟢 Phase 1 Complete | — | Phase 2: Operational hardening | — | M1.6–1.9 all merged (PRs #1, #8). All Phase 1 milestones done. |
 | Agent-3 | M3 Metrics | 🟢 Phase 1 Complete | — | Phase 2: Surrogate metrics / SVOD (2.10–2.11) | — | M1.10–1.13 all merged (PRs #3, #5, #9, #16). All Phase 1 milestones done. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | — | mSPRT sequential testing (1.16) | — | M1.14–1.15, 1.17–1.19 merged (PRs #2, #14). Only 1.16 remains in Phase 1. |
 | Agent-5 | M5 Management | 🔵 In Progress | — | Metric definition CRUD (1.24) | — | M1.20–1.23 all merged (PRs #7, #10, #15, #18). Next: 1.24. |
