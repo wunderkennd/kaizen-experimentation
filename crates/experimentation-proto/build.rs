@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protos: Vec<String> = walkdir::WalkDir::new(proto_root)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "proto"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "proto"))
         .map(|e| e.path().display().to_string())
         .collect();
 

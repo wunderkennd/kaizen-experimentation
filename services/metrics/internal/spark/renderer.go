@@ -21,6 +21,11 @@ type TemplateParams struct {
 	// NumeratorEventType and DenominatorEventType are used for RATIO metrics.
 	NumeratorEventType   string
 	DenominatorEventType string
+	// CUPED covariate fields.
+	CupedEnabled             bool
+	CupedCovariateEventType  string // Source event type of the covariate metric
+	ExperimentStartDate      string // YYYY-MM-DD, used to bound pre-experiment window
+	CupedLookbackDays        int    // Default 7
 }
 
 // SQLRenderer renders Spark SQL from embedded templates.
@@ -70,6 +75,13 @@ func (r *SQLRenderer) RenderRatio(p TemplateParams) (string, error) {
 // This produces per-variant Var(N), Var(D), Cov(N,D) needed by M4a for delta method CI.
 func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) {
 	return r.Render("ratio_delta_method.sql.tmpl", p)
+}
+
+// RenderCupedCovariate renders the CUPED covariate SQL template.
+// This computes the pre-experiment metric value per user for use as a CUPED covariate.
+// The result is merged into metric_summaries.cuped_covariate by the job orchestrator.
+func (r *SQLRenderer) RenderCupedCovariate(p TemplateParams) (string, error) {
+	return r.Render("cuped_covariate.sql.tmpl", p)
 }
 
 // RenderForType dispatches to the correct template based on metric type string.

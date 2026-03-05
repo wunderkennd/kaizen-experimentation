@@ -1,0 +1,22 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+pre_experiment_data AS (
+    SELECT me.user_id, me.value
+    FROM delta.metric_events me
+    WHERE me.event_type = '{{.CupedCovariateEventType}}'
+      AND me.event_date >= DATE_SUB(CAST('{{.ExperimentStartDate}}' AS DATE), {{.CupedLookbackDays}})
+      AND me.event_date < CAST('{{.ExperimentStartDate}}' AS DATE)
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    eu.user_id,
+    eu.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    COALESCE(AVG(ped.value), 0.0) AS cuped_covariate,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM exposed_users eu
+LEFT JOIN pre_experiment_data ped ON eu.user_id = ped.user_id
+GROUP BY eu.user_id, eu.variant_id

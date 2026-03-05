@@ -44,6 +44,23 @@ func TestLoadFromFile(t *testing.T) {
 		assert.Equal(t, "playback_minute", m.DenominatorEventType)
 	})
 
+	t.Run("experiment has started_at", func(t *testing.T) {
+		exp, err := cs.GetExperiment("e0000000-0000-0000-0000-000000000001")
+		require.NoError(t, err)
+		assert.Equal(t, "2024-01-08", exp.StartedAt)
+	})
+
+	t.Run("metric has cuped_covariate_metric_id", func(t *testing.T) {
+		m, err := cs.GetMetric("watch_time_minutes")
+		require.NoError(t, err)
+		assert.Equal(t, "watch_time_minutes", m.CupedCovariateMetricID)
+
+		// stream_start_rate has no CUPED covariate
+		m2, err := cs.GetMetric("stream_start_rate")
+		require.NoError(t, err)
+		assert.Empty(t, m2.CupedCovariateMetricID)
+	})
+
 	t.Run("running experiments", func(t *testing.T) {
 		ids := cs.RunningExperimentIDs()
 		assert.Len(t, ids, 2)
