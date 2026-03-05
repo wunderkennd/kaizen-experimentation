@@ -1,5 +1,3 @@
-// Package config loads experiment and metric definitions from a local JSON file.
-// This mocks M5 (Experiment Management) until it delivers a real config API.
 package config
 
 import (
@@ -9,7 +7,6 @@ import (
 	"sync"
 )
 
-// VariantConfig describes a single experiment variant.
 type VariantConfig struct {
 	VariantID      string  `json:"variant_id"`
 	Name           string  `json:"name"`
@@ -17,84 +14,77 @@ type VariantConfig struct {
 	IsControl      bool    `json:"is_control"`
 }
 
-// ExperimentConfig describes a single experiment.
-type ExperimentConfig struct {
-	ExperimentID       string          `json:"experiment_id"`
-	Name               string          `json:"name"`
-	Type               string          `json:"type"`
-	State              string          `json:"state"`
-	StartedAt          string          `json:"started_at,omitempty"` // ISO8601 date (YYYY-MM-DD)
-	PrimaryMetricID    string          `json:"primary_metric_id"`
-	SecondaryMetricIDs []string        `json:"secondary_metric_ids"`
-	Variants           []VariantConfig `json:"variants"`
+type GuardrailConfig struct {
+	MetricID                   string  `json:"metric_id"`
+	Threshold                  float64 `json:"threshold"`
+	ConsecutiveBreachesRequired int     `json:"consecutive_breaches_required"`
 }
 
-// MetricConfig describes a metric definition.
+type ExperimentConfig struct {
+	ExperimentID       string            `json:"experiment_id"`
+	Name               string            `json:"name"`
+	Type               string            `json:"type"`
+	State              string            `json:"state"`
+	StartedAt          string            `json:"started_at,omitempty"`
+	PrimaryMetricID    string            `json:"primary_metric_id"`
+	SecondaryMetricIDs []string          `json:"secondary_metric_ids"`
+	Variants           []VariantConfig   `json:"variants"`
+	GuardrailConfigs   []GuardrailConfig `json:"guardrail_configs,omitempty"`
+	GuardrailAction    string            `json:"guardrail_action,omitempty"`
+}
+
 type MetricConfig struct {
-	MetricID        string `json:"metric_id"`
-	Name            string `json:"name"`
-	Type            string `json:"type"` // MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM
-	SourceEventType string `json:"source_event_type"`
-	// NumeratorEventType and DenominatorEventType are used for RATIO metrics.
+	MetricID             string `json:"metric_id"`
+	Name                 string `json:"name"`
+	Type                 string `json:"type"`
+	SourceEventType      string `json:"source_event_type"`
 	NumeratorEventType   string `json:"numerator_event_type,omitempty"`
 	DenominatorEventType string `json:"denominator_event_type,omitempty"`
-	// CupedCovariateMetricID references another metric whose pre-experiment
-	// values serve as a covariate for CUPED variance reduction (M4a).
 	CupedCovariateMetricID string `json:"cuped_covariate_metric_id,omitempty"`
+	LowerIsBetter        bool   `json:"lower_is_better,omitempty"`
 }
 
-// seedFile is the top-level JSON structure.
 type seedFile struct {
 	Experiments []ExperimentConfig `json:"experiments"`
 	Metrics     []MetricConfig     `json:"metrics"`
 }
 
-// ConfigStore holds experiment and metric configs in memory.
 type ConfigStore struct {
 	mu          sync.RWMutex
 	experiments map[string]*ExperimentConfig
 	metrics     map[string]*MetricConfig
-	// expMetrics maps experiment_id → list of metric IDs (primary + secondary).
-	expMetrics map[string][]string
+	expMetrics  map[string][]string
 }
 
-// LoadFromFile reads a seed JSON file and returns a ConfigStore.
 func LoadFromFile(path string) (*ConfigStore, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("config: read file %s: %w", path, err)
 	}
-
 	var sf seedFile
 	if err := json.Unmarshal(data, &sf); err != nil {
 		return nil, fmt.Errorf("config: parse JSON: %w", err)
 	}
-
 	cs := &ConfigStore{
 		experiments: make(map[string]*ExperimentConfig, len(sf.Experiments)),
 		metrics:     make(map[string]*MetricConfig, len(sf.Metrics)),
 		expMetrics:  make(map[string][]string, len(sf.Experiments)),
 	}
-
 	for i := range sf.Metrics {
 		m := sf.Metrics[i]
 		cs.metrics[m.MetricID] = &m
 	}
-
 	for i := range sf.Experiments {
 		e := sf.Experiments[i]
 		cs.experiments[e.ExperimentID] = &e
-
 		metricIDs := make([]string, 0, 1+len(e.SecondaryMetricIDs))
 		metricIDs = append(metricIDs, e.PrimaryMetricID)
 		metricIDs = append(metricIDs, e.SecondaryMetricIDs...)
 		cs.expMetrics[e.ExperimentID] = metricIDs
 	}
-
 	return cs, nil
 }
 
-// GetExperiment returns the config for a single experiment.
 func (c *ConfigStore) GetExperiment(id string) (*ExperimentConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -105,7 +95,6 @@ func (c *ConfigStore) GetExperiment(id string) (*ExperimentConfig, error) {
 	return e, nil
 }
 
-// GetMetric returns a single metric definition.
 func (c *ConfigStore) GetMetric(id string) (*MetricConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -116,16 +105,13 @@ func (c *ConfigStore) GetMetric(id string) (*MetricConfig, error) {
 	return m, nil
 }
 
-// GetMetricsForExperiment returns all metrics (primary + secondary) for an experiment.
 func (c *ConfigStore) GetMetricsForExperiment(id string) ([]MetricConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
 	metricIDs, ok := c.expMetrics[id]
 	if !ok {
 		return nil, fmt.Errorf("config: experiment %q not found", id)
 	}
-
 	result := make([]MetricConfig, 0, len(metricIDs))
 	for _, mid := range metricIDs {
 		m, ok := c.metrics[mid]
@@ -137,7 +123,16 @@ func (c *ConfigStore) GetMetricsForExperiment(id string) ([]MetricConfig, error)
 	return result, nil
 }
 
-// RunningExperimentIDs returns IDs of all experiments in RUNNING state.
+func (c *ConfigStore) GetGuardrailsForExperiment(id string) ([]GuardrailConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	e, ok := c.experiments[id]
+	if !ok {
+		return nil, fmt.Errorf("config: experiment %q not found", id)
+	}
+	return e.GuardrailConfigs, nil
+}
+
 func (c *ConfigStore) RunningExperimentIDs() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
