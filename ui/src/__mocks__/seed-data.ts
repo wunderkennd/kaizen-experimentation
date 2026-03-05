@@ -1,4 +1,4 @@
-import type { Experiment } from '@/lib/types';
+import type { Experiment, QueryLogEntry } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
   {
@@ -237,10 +237,60 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
   },
 ];
 
+/** Mock query log entries for RUNNING experiments. */
+const INITIAL_QUERY_LOG: Record<string, QueryLogEntry[]> = {
+  '11111111-1111-1111-1111-111111111111': [
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      metricId: 'click_through_rate',
+      sqlText: 'SELECT variant_id, COUNT(DISTINCT user_id) AS users, SUM(CASE WHEN clicked THEN 1 ELSE 0 END) AS clicks, SUM(CASE WHEN clicked THEN 1 ELSE 0 END)::FLOAT / COUNT(DISTINCT user_id) AS ctr FROM events.homepage_interactions WHERE experiment_id = \'11111111-1111-1111-1111-111111111111\' AND event_date BETWEEN \'2026-02-16\' AND \'2026-03-05\' GROUP BY variant_id',
+      rowCount: 125000,
+      durationMs: 3200,
+      computedAt: '2026-03-05T14:30:00Z',
+    },
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      metricId: 'watch_time_per_session',
+      sqlText: 'SELECT variant_id, AVG(watch_duration_seconds) AS avg_watch_time, STDDEV(watch_duration_seconds) AS stddev_watch_time FROM events.playback_sessions WHERE experiment_id = \'11111111-1111-1111-1111-111111111111\' AND session_date BETWEEN \'2026-02-16\' AND \'2026-03-05\' GROUP BY variant_id',
+      rowCount: 98500,
+      durationMs: 4100,
+      computedAt: '2026-03-05T14:30:05Z',
+    },
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      metricId: 'crash_rate',
+      sqlText: 'SELECT variant_id, COUNT(DISTINCT CASE WHEN crashed THEN session_id END)::FLOAT / COUNT(DISTINCT session_id) AS crash_rate FROM events.app_sessions WHERE experiment_id = \'11111111-1111-1111-1111-111111111111\' AND session_date BETWEEN \'2026-02-16\' AND \'2026-03-05\' GROUP BY variant_id',
+      rowCount: 250000,
+      durationMs: 1800,
+      computedAt: '2026-03-05T14:30:10Z',
+    },
+  ],
+  '33333333-3333-3333-3333-333333333333': [
+    {
+      experimentId: '33333333-3333-3333-3333-333333333333',
+      metricId: 'search_success_rate',
+      sqlText: 'SELECT variant_id, COUNT(DISTINCT CASE WHEN result_clicked THEN search_id END)::FLOAT / COUNT(DISTINCT search_id) AS success_rate FROM events.search_queries WHERE experiment_id = \'33333333-3333-3333-3333-333333333333\' AND query_date BETWEEN \'2026-02-21\' AND \'2026-03-05\' GROUP BY variant_id',
+      rowCount: 75000,
+      durationMs: 2400,
+      computedAt: '2026-03-05T14:35:00Z',
+    },
+    {
+      experimentId: '33333333-3333-3333-3333-333333333333',
+      metricId: 'clicks_per_search',
+      sqlText: 'SELECT variant_id, AVG(click_count) AS avg_clicks FROM events.search_queries WHERE experiment_id = \'33333333-3333-3333-3333-333333333333\' AND query_date BETWEEN \'2026-02-21\' AND \'2026-03-05\' GROUP BY variant_id',
+      rowCount: 75000,
+      durationMs: 450,
+      computedAt: '2026-03-05T14:35:02Z',
+    },
+  ],
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
+export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
+  SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
 }

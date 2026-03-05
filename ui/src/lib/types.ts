@@ -69,5 +69,14 @@ export interface Experiment {
 
 export interface ListExperimentsResponse {
   experiments: Experiment[];
-  totalCount: number;
+  nextPageToken: string;
+}
+
+export interface QueryLogEntry {
+  experimentId: string;
+  metricId: string;
+  sqlText: string;
+  rowCount: number;
+  durationMs: number;
+  computedAt?: string;
 }
