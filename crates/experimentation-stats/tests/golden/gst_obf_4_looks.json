@@ -1,0 +1,36 @@
+{
+  "test_name": "gst_obf_4_looks",
+  "spending_function": "OBrienFleming",
+  "planned_looks": 4,
+  "overall_alpha": 0.05,
+  "boundaries": [
+    {
+      "look": 1,
+      "information_fraction": 0.25,
+      "cumulative_alpha": 8.857543832130332e-05,
+      "incremental_alpha": 8.857543832130332e-05,
+      "critical_value": 3.919927969080382
+    },
+    {
+      "look": 2,
+      "information_fraction": 0.5,
+      "cumulative_alpha": 0.005574596680784305,
+      "incremental_alpha": 0.005486021242463002,
+      "critical_value": 2.7770175753094133
+    },
+    {
+      "look": 3,
+      "information_fraction": 0.75,
+      "cumulative_alpha": 0.023625121317601305,
+      "incremental_alpha": 0.018050524636817,
+      "critical_value": 2.3645800769988927
+    },
+    {
+      "look": 4,
+      "information_fraction": 1.0,
+      "cumulative_alpha": 0.050000000000000044,
+      "incremental_alpha": 0.02637487868239874,
+      "critical_value": 2.220647016435694
+    }
+  ]
+}

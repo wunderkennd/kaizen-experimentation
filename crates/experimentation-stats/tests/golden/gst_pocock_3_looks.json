@@ -1,0 +1,29 @@
+{
+  "test_name": "gst_pocock_3_looks",
+  "spending_function": "Pocock",
+  "planned_looks": 3,
+  "overall_alpha": 0.05,
+  "boundaries": [
+    {
+      "look": 1,
+      "information_fraction": 0.3333333333333333,
+      "cumulative_alpha": 0.022641621263197066,
+      "incremental_alpha": 0.022641621263197066,
+      "critical_value": 2.279428238917006
+    },
+    {
+      "look": 2,
+      "information_fraction": 0.6666666666666666,
+      "cumulative_alpha": 0.03816912576950707,
+      "incremental_alpha": 0.015527504506310002,
+      "critical_value": 2.4198360875552964
+    },
+    {
+      "look": 3,
+      "information_fraction": 1.0,
+      "cumulative_alpha": 0.05,
+      "incremental_alpha": 0.011830874230492935,
+      "critical_value": 2.5171491268496147
+    }
+  ]
+}
