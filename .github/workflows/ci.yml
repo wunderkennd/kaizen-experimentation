@@ -33,12 +33,14 @@ jobs:
         run: buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main,subdir=proto'
 
       - name: Generate code
-        run: cd proto && buf generate
+        run: |
+          cd proto && buf generate
+          test -d gen || { echo "::error::buf generate did not produce proto/gen/"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
           name: generated-code
-          path: gen/
+          path: proto/gen/
 
   # ───────── Stage 2: Rust Build & Test ─────────
   rust:
@@ -58,8 +60,12 @@ jobs:
 
       - name: Ensure sccache is working
         run: |
-          if ! sccache --start-server 2>/dev/null && ! sccache --show-stats 2>/dev/null; then
-            echo "::warning::sccache is not available; disabling RUSTC_WRAPPER"
+          if ! sccache --start-server 2>/dev/null; then
+            echo "::warning::sccache server failed to start; disabling RUSTC_WRAPPER"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          elif ! echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
+            echo "::warning::sccache cannot wrap rustc; disabling RUSTC_WRAPPER"
+            sccache --stop-server 2>/dev/null || true
             echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
