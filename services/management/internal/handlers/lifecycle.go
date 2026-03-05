@@ -43,7 +43,7 @@ func (s *ExperimentService) rollbackToDraft(ctx context.Context, id, reason stri
 	}
 }
 
-// StartExperiment transitions DRAFT → STARTING → RUNNING with bucket allocation
+// StartExperiment transitions DRAFT -> STARTING -> RUNNING with bucket allocation
 // and audit trail entries. Both transitions are audited. If allocation fails in
 // STARTING, rolls back to DRAFT.
 func (s *ExperimentService) StartExperiment(
@@ -55,7 +55,7 @@ func (s *ExperimentService) StartExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	// Transition 1: DRAFT → STARTING
+	// Transition 1: DRAFT -> STARTING
 	tx1, err := s.store.BeginTx(ctx)
 	if err != nil {
 		return nil, internalError("begin tx1", err)
@@ -86,7 +86,7 @@ func (s *ExperimentService) StartExperiment(
 	// TODO(M5): Validate metrics availability, check power, warm bandit policy.
 	slog.Info("starting experiment: validation passed", "id", id)
 
-	// Transition 2: STARTING → RUNNING (with bucket allocation)
+	// Transition 2: STARTING -> RUNNING (with bucket allocation)
 	tx2, err := s.store.BeginTx(ctx)
 	if err != nil {
 		return nil, internalError("begin tx2", err)
@@ -157,11 +157,11 @@ func (s *ExperimentService) StartExperiment(
 	}
 
 	allocDetails, _ := json.Marshal(map[string]any{
-		"phase":            "activated",
-		"allocation_id":    alloc.AllocationID,
-		"start_bucket":     alloc.StartBucket,
-		"end_bucket":       alloc.EndBucket,
-		"traffic_pct":      trafficPct,
+		"phase":             "activated",
+		"allocation_id":     alloc.AllocationID,
+		"start_bucket":      alloc.StartBucket,
+		"end_bucket":        alloc.EndBucket,
+		"traffic_pct":       trafficPct,
 		"buckets_allocated": bucketsNeeded,
 	})
 	if err := s.audit.Insert(ctx, tx2, store.AuditEntry{
@@ -179,6 +179,11 @@ func (s *ExperimentService) StartExperiment(
 		return nil, internalError("commit tx2", err)
 	}
 
+	// Notify subscribers that this experiment is now RUNNING.
+	if s.notifier != nil {
+		s.notifier.Publish(ctx, id, "upsert")
+	}
+
 	// Read back full experiment.
 	finalRow, variants, guardrails, err := s.store.GetByID(ctx, id)
 	if err != nil {
@@ -190,7 +195,7 @@ func (s *ExperimentService) StartExperiment(
 	return connect.NewResponse(store.RowToExperiment(finalRow, variants, guardrails)), nil
 }
 
-// ConcludeExperiment transitions RUNNING → CONCLUDING → CONCLUDED
+// ConcludeExperiment transitions RUNNING -> CONCLUDING -> CONCLUDED
 // and releases the experiment's bucket allocation with a cooldown period.
 func (s *ExperimentService) ConcludeExperiment(
 	ctx context.Context,
@@ -201,7 +206,7 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	// Transition 1: RUNNING → CONCLUDING
+	// Transition 1: RUNNING -> CONCLUDING
 	tx1, err := s.store.BeginTx(ctx)
 	if err != nil {
 		return nil, internalError("begin tx1", err)
@@ -232,7 +237,7 @@ func (s *ExperimentService) ConcludeExperiment(
 	// TODO(M4a): Trigger final analysis. For now, transition synchronously.
 	slog.Info("concluding experiment: final analysis mocked", "id", id)
 
-	// Transition 2: CONCLUDING → CONCLUDED (with allocation release)
+	// Transition 2: CONCLUDING -> CONCLUDED (with allocation release)
 	tx2, err := s.store.BeginTx(ctx)
 	if err != nil {
 		return nil, internalError("begin tx2", err)
@@ -281,6 +286,11 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, internalError("commit tx2", err)
 	}
 
+	// Notify subscribers that this experiment is no longer RUNNING.
+	if s.notifier != nil {
+		s.notifier.Publish(ctx, id, "delete")
+	}
+
 	finalRow, variants, guardrails, err := s.store.GetByID(ctx, concluded.ExperimentID)
 	if err != nil {
 		return nil, internalError("read back experiment", err)
@@ -290,7 +300,7 @@ func (s *ExperimentService) ConcludeExperiment(
 	return connect.NewResponse(store.RowToExperiment(finalRow, variants, guardrails)), nil
 }
 
-// ArchiveExperiment transitions CONCLUDED → ARCHIVED.
+// ArchiveExperiment transitions CONCLUDED -> ARCHIVED.
 func (s *ExperimentService) ArchiveExperiment(
 	ctx context.Context,
 	req *connect.Request[mgmtv1.ArchiveExperimentRequest],
@@ -326,6 +336,11 @@ func (s *ExperimentService) ArchiveExperiment(
 		return nil, internalError("commit tx", err)
 	}
 
+	// Notify subscribers that this experiment is archived.
+	if s.notifier != nil {
+		s.notifier.Publish(ctx, id, "delete")
+	}
+
 	expRow, variants, guardrails, err := s.store.GetByID(ctx, archived.ExperimentID)
 	if err != nil {
 		return nil, internalError("read back experiment", err)
@@ -336,7 +351,7 @@ func (s *ExperimentService) ArchiveExperiment(
 }
 
 // PauseExperiment records a pause event. The experiment stays in RUNNING state
-// (RUNNING→RUNNING is valid per ADR-005). Traffic zeroing deferred to M1.23.
+// (RUNNING->RUNNING is valid per ADR-005). Traffic zeroing deferred to M1.23.
 func (s *ExperimentService) PauseExperiment(
 	ctx context.Context,
 	req *connect.Request[mgmtv1.PauseExperimentRequest],
@@ -372,6 +387,11 @@ func (s *ExperimentService) PauseExperiment(
 		return nil, internalError("audit pause", err)
 	}
 
+	// Notify subscribers of the pause (traffic config may have changed).
+	if s.notifier != nil {
+		s.notifier.Publish(ctx, id, "upsert")
+	}
+
 	slog.Info("experiment paused", "id", id, "reason", req.Msg.GetReason())
 	return connect.NewResponse(store.RowToExperiment(expRow, variants, guardrails)), nil
 }
@@ -402,6 +422,11 @@ func (s *ExperimentService) ResumeExperiment(
 		NewState:      "RUNNING",
 	}); err != nil {
 		return nil, internalError("audit resume", err)
+	}
+
+	// Notify subscribers of the resume.
+	if s.notifier != nil {
+		s.notifier.Publish(ctx, id, "upsert")
 	}
 
 	slog.Info("experiment resumed", "id", id)
