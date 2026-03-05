@@ -47,7 +47,7 @@
 | **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟢 | PR #4 | 2026-03-04 | Agent-7 (CGo bridge), SDKs |
 | 1.2 | GetAssignment RPC (static bucketing) | Agent-1 | 🟢 | — | 2026-03-04 | SDKs, Agent-6 (debug view) |
 | 1.3 | Config cache (subscribe to M5 StreamConfigUpdates) | Agent-1 | ⚪ | — | — | — |
-| 1.4 | Targeting rule evaluation | Agent-1 | 🟢 | PR #TBD | — | AND-of-ORs predicate tree, 14 unit + 6 integration tests |
+| 1.4 | Targeting rule evaluation | Agent-1 | 🟢 | PR #21 | — | AND-of-ORs predicate tree, 14 unit + 6 integration tests |
 | 1.5 | Layer-aware + session-level assignment | Agent-1 | 🟡 | — | — | — |
 | **1.6** | **IngestExposure + IngestMetricEvent RPCs** | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-3 (events to compute) |
 | 1.7 | IngestRewardEvent + IngestQoEEvent RPCs | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-4 M4b (rewards) |
