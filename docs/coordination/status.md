@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/get-assignment-rpc | Config cache (1.3) | — | M1.1 (PR #4), M1.2 complete. Next: config cache. |
 | Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/go-orchestration-querylog | Go orchestration + SQL query logging (1.9) | — | M1.6+1.7+1.8 merged (PR #1). PR #8 open for M1.9. |
-| Agent-3 | M3 Metrics | 🔵 In Progress | agent-3/feat/cuped-covariate | CUPED covariate computation (1.12) | — | M1.10 (PR #3), M1.11 (PR #5) merged. PR #9 open for M1.12. |
+| Agent-3 | M3 Metrics | 🔵 In Progress | agent-3/feat/svod-specific-metrics | SVOD-specific metrics (2.11) | — | M1.10–1.13 merged (PRs #3, #5, #9, #16). Phase 2 in progress. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | agent-4/feat/golden-validation-lmax-core | t-test + SRM + Thompson + LMAX + RocksDB (1.14–1.19) | — | PR #2 open. CI unblocked by PR #6 merge. |
 | Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/guardrail-alert-consumer | Metric definition CRUD (1.24) | — | M1.20–1.23 complete. PRs #7, #10, #15, #18. Next: metric definition CRUD. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20 merge. Can start with MSW mocks. |
@@ -55,8 +55,8 @@
 | 1.9 | Go orchestration + SQL query logging | Agent-2 | 🔵 | PR #8 | — | In review |
 | **1.10** | **Standard metric computation (MEAN, PROPORTION, COUNT)** | Agent-3 | 🟢 | PR #3 | 2026-03-04 | Agent-4 M4a |
 | 1.11 | RATIO metric with delta method inputs | Agent-3 | 🟢 | PR #5 | 2026-03-04 | Delta method inputs for M4a |
-| 1.12 | CUPED covariate computation | Agent-3 | 🔵 | PR #9 | — | In review |
-| 1.13 | Guardrail breach detection → guardrail_alerts topic | Agent-3 | ⚪ | — | — | Agent-5 (auto-pause) |
+| 1.12 | CUPED covariate computation | Agent-3 | 🟢 | PR #9 | 2026-03-04 | Merged |
+| 1.13 | Guardrail breach detection → guardrail_alerts topic | Agent-3 | 🟢 | PR #16 | 2026-03-04 | Merged. Unblocks Agent-5 auto-pause. |
 | **1.14** | **Welch t-test + SRM check (golden-file validated)** | Agent-4 | 🔵 | PR #2 | — | Agent-6 (results page). In review. |
 | 1.15 | CUPED variance reduction | Agent-4 | ⚪ | — | — | — |
 | 1.16 | mSPRT sequential testing | Agent-4 | ⚪ | — | — | — |
@@ -91,7 +91,7 @@
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | ⚪ | — |
-| 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption) | Agent-3 | ⚪ | — |
+| 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption) | Agent-3 | 🔵 | Agent-4 (interference, novelty), Agent-6 (QoE dashboard) |
 
 ### Phase 3: SVOD-Native + Bandits (Weeks 10–17)
 

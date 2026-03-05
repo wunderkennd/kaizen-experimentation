@@ -1,0 +1,19 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+qoe_data AS (
+    SELECT qe.user_id, eu.variant_id, qe.{{.QoEField}} AS value
+    FROM delta.qoe_events qe
+    INNER JOIN exposed_users eu ON qe.user_id = eu.user_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    qoe_data.user_id,
+    qoe_data.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    AVG(qoe_data.value) AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM qoe_data
+GROUP BY qoe_data.user_id, qoe_data.variant_id

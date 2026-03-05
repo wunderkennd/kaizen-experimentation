@@ -62,6 +62,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 	const defaultCupedLookbackDays = 7
 
+	controlVariantID := exp.ControlVariantID()
+
 	for _, m := range metrics {
 		params := spark.TemplateParams{
 			ExperimentID:         exp.ExperimentID,
@@ -72,11 +74,26 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			DenominatorEventType: m.DenominatorEventType,
 		}
 
-		sql, err := j.renderer.RenderForType(m.Type, params)
-		if err != nil {
-			slog.Warn("skipping unsupported metric type",
-				"metric_id", m.MetricID, "type", m.Type, "error", err)
-			continue
+		// QoE metrics use a separate template reading from delta.qoe_events.
+		var sql string
+		var jobType string
+		if m.IsQoEMetric {
+			params.QoEField = m.QoEField
+			rendered, err := j.renderer.RenderQoEMetric(params)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: render QoE metric %s: %w", m.MetricID, err)
+			}
+			sql = rendered
+			jobType = "qoe_metric"
+		} else {
+			rendered, err := j.renderer.RenderForType(m.Type, params)
+			if err != nil {
+				slog.Warn("skipping unsupported metric type",
+					"metric_id", m.MetricID, "type", m.Type, "error", err)
+				continue
+			}
+			sql = rendered
+			jobType = "daily_metric"
 		}
 
 		result, err := j.executor.ExecuteAndWrite(ctx, sql, "delta.metric_summaries")
@@ -90,7 +107,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			SQLText:      sql,
 			RowCount:     result.RowCount,
 			DurationMs:   result.Duration.Milliseconds(),
-			JobType:      "daily_metric",
+			JobType:      jobType,
 		}); err != nil {
 			return nil, fmt.Errorf("jobs: log query for metric %s: %w", m.MetricID, err)
 		}
@@ -172,6 +189,39 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			)
 		}
 
+		// Lifecycle segmentation: if enabled, also compute per-lifecycle-segment metrics.
+		if exp.LifecycleStratificationEnabled && !m.IsQoEMetric {
+			lcParams := params
+			lcParams.LifecycleEnabled = true
+
+			lcSQL, err := j.renderer.RenderLifecycleMean(lcParams)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: render lifecycle metric for %s: %w", m.MetricID, err)
+			}
+
+			lcResult, err := j.executor.ExecuteAndWrite(ctx, lcSQL, "delta.metric_summaries")
+			if err != nil {
+				return nil, fmt.Errorf("jobs: execute lifecycle metric for %s: %w", m.MetricID, err)
+			}
+
+			if err := j.queryLog.Log(ctx, querylog.Entry{
+				ExperimentID: experimentID,
+				MetricID:     m.MetricID,
+				SQLText:      lcSQL,
+				RowCount:     lcResult.RowCount,
+				DurationMs:   lcResult.Duration.Milliseconds(),
+				JobType:      "lifecycle_metric",
+			}); err != nil {
+				return nil, fmt.Errorf("jobs: log lifecycle metric query for %s: %w", m.MetricID, err)
+			}
+
+			slog.Info("computed lifecycle metric",
+				"experiment_id", experimentID,
+				"metric_id", m.MetricID,
+				"rows", lcResult.RowCount,
+			)
+		}
+
 		slog.Info("computed metric",
 			"experiment_id", experimentID,
 			"metric_id", m.MetricID,
@@ -179,6 +229,45 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			"rows", result.RowCount,
 			"duration_ms", result.Duration.Milliseconds(),
 		)
+	}
+
+	// Post-processing: compute daily treatment effects for each metric.
+	if controlVariantID != "" {
+		for _, m := range metrics {
+			teParams := spark.TemplateParams{
+				ExperimentID:     exp.ExperimentID,
+				MetricID:         m.MetricID,
+				ComputationDate:  computationDate,
+				ControlVariantID: controlVariantID,
+			}
+
+			teSQL, err := j.renderer.RenderDailyTreatmentEffect(teParams)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: render daily treatment effect for %s: %w", m.MetricID, err)
+			}
+
+			teResult, err := j.executor.ExecuteAndWrite(ctx, teSQL, "delta.daily_treatment_effects")
+			if err != nil {
+				return nil, fmt.Errorf("jobs: execute daily treatment effect for %s: %w", m.MetricID, err)
+			}
+
+			if err := j.queryLog.Log(ctx, querylog.Entry{
+				ExperimentID: experimentID,
+				MetricID:     m.MetricID,
+				SQLText:      teSQL,
+				RowCount:     teResult.RowCount,
+				DurationMs:   teResult.Duration.Milliseconds(),
+				JobType:      "daily_treatment_effect",
+			}); err != nil {
+				return nil, fmt.Errorf("jobs: log daily treatment effect query for %s: %w", m.MetricID, err)
+			}
+
+			slog.Info("computed daily treatment effect",
+				"experiment_id", experimentID,
+				"metric_id", m.MetricID,
+				"rows", teResult.RowCount,
+			)
+		}
 	}
 
 	return &JobResult{

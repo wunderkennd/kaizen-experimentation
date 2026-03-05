@@ -39,7 +39,8 @@ func setupTestServer(t *testing.T) (metricsv1connect.MetricComputationServiceCli
 	vp.SetVariantValue("error_rate", "f0000000-0000-0000-0000-000000000001", 0.005)
 	vp.SetVariantValue("error_rate", "f0000000-0000-0000-0000-000000000002", 0.008)
 	gj := jobs.NewGuardrailJob(cfgStore, renderer, executor, qlWriter, publisher, tracker, vp)
-	h := NewMetricsHandler(stdJob, gj, qlWriter)
+	ccj := jobs.NewContentConsumptionJob(cfgStore, renderer, executor, qlWriter)
+	h := NewMetricsHandler(stdJob, gj, ccj, qlWriter)
 	mux := http.NewServeMux()
 	path, handler := metricsv1connect.NewMetricComputationServiceHandler(h)
 	mux.Handle(path, handler)
@@ -54,7 +55,8 @@ func TestComputeMetrics(t *testing.T) {
 	resp, err := client.ComputeMetrics(context.Background(), connect.NewRequest(&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
 	require.NoError(t, err)
 	assert.Equal(t, int32(4), resp.Msg.GetMetricsComputed())
-	assert.Len(t, qlWriter.AllEntries(), 7)
+	// 4 daily_metric + 1 delta_method + 2 cuped_covariate + 4 daily_treatment_effect + 1 content_consumption = 12
+	assert.Len(t, qlWriter.AllEntries(), 12)
 }
 
 func TestComputeMetrics_EmptyID(t *testing.T) {
@@ -76,7 +78,8 @@ func TestGetQueryLog(t *testing.T) {
 	_, _ = client.ComputeMetrics(ctx, connect.NewRequest(&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
 	resp, err := client.GetQueryLog(ctx, connect.NewRequest(&metricsv1.GetQueryLogRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
 	require.NoError(t, err)
-	assert.Len(t, resp.Msg.GetEntries(), 7)
+	// 4 daily_metric + 1 delta_method + 2 cuped_covariate + 4 daily_treatment_effect + 1 content_consumption = 12
+	assert.Len(t, resp.Msg.GetEntries(), 12)
 }
 
 func TestGetQueryLog_FilterByMetric(t *testing.T) {
@@ -85,7 +88,8 @@ func TestGetQueryLog_FilterByMetric(t *testing.T) {
 	_, _ = client.ComputeMetrics(ctx, connect.NewRequest(&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
 	resp, err := client.GetQueryLog(ctx, connect.NewRequest(&metricsv1.GetQueryLogRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001", MetricId: "watch_time_minutes"}))
 	require.NoError(t, err)
-	assert.Len(t, resp.Msg.GetEntries(), 2)
+	// daily_metric + cuped_covariate + daily_treatment_effect = 3
+	assert.Len(t, resp.Msg.GetEntries(), 3)
 }
 
 func TestExportNotebook(t *testing.T) {
@@ -99,7 +103,8 @@ func TestExportNotebook(t *testing.T) {
 	err = json.Unmarshal(resp.Msg.GetNotebookContent(), &nb)
 	require.NoError(t, err)
 	assert.Equal(t, 4, nb.NBFormat)
-	assert.Equal(t, 16, len(nb.Cells))
+	// 2 header cells + 2 * 12 query entries = 26 cells
+	assert.Equal(t, 26, len(nb.Cells))
 }
 
 func TestExportNotebook_NoLogs(t *testing.T) {

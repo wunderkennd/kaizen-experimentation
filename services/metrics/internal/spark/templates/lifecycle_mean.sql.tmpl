@@ -1,0 +1,21 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id, lifecycle_segment
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+metric_data AS (
+    SELECT me.user_id, eu.variant_id, eu.lifecycle_segment, me.value
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    metric_data.user_id,
+    metric_data.variant_id,
+    metric_data.lifecycle_segment,
+    '{{.MetricID}}' AS metric_id,
+    AVG(metric_data.value) AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM metric_data
+GROUP BY metric_data.user_id, metric_data.variant_id, metric_data.lifecycle_segment

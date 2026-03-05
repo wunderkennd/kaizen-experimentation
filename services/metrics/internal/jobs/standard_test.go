@@ -42,19 +42,20 @@ func TestStandardJob_Run(t *testing.T) {
 	assert.Equal(t, 4, result.MetricsComputed)
 	assert.False(t, result.CompletedAt.IsZero())
 
-	// Verify SQL executor was called for each metric + CUPED + delta method:
-	// 4 metric value queries + 1 RATIO delta method + 2 CUPED covariates = 7 calls
+	// Verify SQL executor was called for each metric + CUPED + delta method + daily treatment effects:
+	// 4 metric value queries + 1 RATIO delta method + 2 CUPED covariates + 4 daily treatment effects = 11 calls
 	// (ctr_recommendation has CUPED, watch_time_minutes has CUPED)
 	calls := executor.GetCalls()
-	assert.Len(t, calls, 7)
+	assert.Len(t, calls, 11)
 
-	// Verify query log: 4 daily_metric + 1 delta_method + 2 cuped_covariate = 7
+	// Verify query log: 4 daily_metric + 1 delta_method + 2 cuped_covariate + 4 daily_treatment_effect = 11
 	entries := qlWriter.AllEntries()
-	assert.Len(t, entries, 7)
+	assert.Len(t, entries, 11)
 
 	dailyMetricCount := 0
 	deltaMethodCount := 0
 	cupedCovariateCount := 0
+	dailyTreatmentEffectCount := 0
 	for _, entry := range entries {
 		assert.Equal(t, "e0000000-0000-0000-0000-000000000001", entry.ExperimentID)
 		assert.NotEmpty(t, entry.SQLText)
@@ -65,11 +66,14 @@ func TestStandardJob_Run(t *testing.T) {
 			deltaMethodCount++
 		case "cuped_covariate":
 			cupedCovariateCount++
+		case "daily_treatment_effect":
+			dailyTreatmentEffectCount++
 		}
 	}
 	assert.Equal(t, 4, dailyMetricCount)
 	assert.Equal(t, 1, deltaMethodCount)
 	assert.Equal(t, 2, cupedCovariateCount)
+	assert.Equal(t, 4, dailyTreatmentEffectCount)
 }
 
 func TestStandardJob_Run_CorrectSQLTypes(t *testing.T) {
@@ -80,8 +84,8 @@ func TestStandardJob_Run_CorrectSQLTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := executor.GetCalls()
-	// 4 metric values + 1 delta method + 2 CUPED covariates = 7
-	require.Len(t, calls, 7)
+	// 4 metric values + 1 delta method + 2 CUPED covariates + 4 daily treatment effects = 11
+	require.Len(t, calls, 11)
 
 	// ctr_recommendation is PROPORTION
 	assert.True(t, strings.Contains(calls[0].SQL, "CASE WHEN COUNT"),
@@ -161,6 +165,41 @@ func TestStandardJob_Run_NotFound(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestStandardJob_Run_DailyTreatmentEffects(t *testing.T) {
+	job, executor, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
+	require.NoError(t, err)
+
+	// Find daily_treatment_effect queries
+	var teCalls []spark.MockCall
+	for _, c := range executor.GetCalls() {
+		if strings.Contains(c.SQL, "absolute_effect") {
+			teCalls = append(teCalls, c)
+		}
+	}
+	require.Len(t, teCalls, 4, "Should compute daily treatment effects for all 4 metrics")
+
+	for _, c := range teCalls {
+		assert.Equal(t, "delta.daily_treatment_effects", c.TargetTable)
+		assert.Contains(t, c.SQL, "delta.metric_summaries")
+		assert.Contains(t, c.SQL, "control_mean")
+		assert.Contains(t, c.SQL, "treatment_mean")
+		// Should reference the control variant ID
+		assert.Contains(t, c.SQL, "f0000000-0000-0000-0000-000000000001")
+	}
+
+	// Verify query log
+	teEntries := 0
+	for _, e := range qlWriter.AllEntries() {
+		if e.JobType == "daily_treatment_effect" {
+			teEntries++
+		}
+	}
+	assert.Equal(t, 4, teEntries)
+}
+
 func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 	job, executor, _ := setupTestJob(t)
 	ctx := context.Background()
@@ -175,11 +214,15 @@ func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 	calls := executor.GetCalls()
 	// search_success_rate: 1 metric query
 	// ctr_recommendation: 1 metric query + 1 CUPED = 2
-	// Total: 3
-	assert.Len(t, calls, 3)
+	// daily_treatment_effect: 2 (one per metric)
+	// Total: 5
+	assert.Len(t, calls, 5)
 
-	// All metric value queries should have exposure join
+	// All queries should reference delta.exposures or delta.metric_summaries
 	for _, call := range calls {
-		assert.Contains(t, call.SQL, "delta.exposures")
+		hasExposures := strings.Contains(call.SQL, "delta.exposures")
+		hasSummaries := strings.Contains(call.SQL, "delta.metric_summaries")
+		assert.True(t, hasExposures || hasSummaries,
+			"Query should reference delta.exposures or delta.metric_summaries")
 	}
 }
