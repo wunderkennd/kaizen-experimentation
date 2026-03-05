@@ -24,10 +24,10 @@ pub mod ttest;
 pub mod srm;
 pub mod cuped;
 pub mod sequential;
-// Stubs — implement in Phase 1/2:
+pub mod bootstrap;
+pub mod multiple_comparison;
+// Stubs — implement in Phase 2/3:
 // pub mod delta_method;
-// pub mod bootstrap;
-// pub mod multiple_comparison;
 // pub mod novelty;
 // pub mod interference;
 // pub mod clustering;

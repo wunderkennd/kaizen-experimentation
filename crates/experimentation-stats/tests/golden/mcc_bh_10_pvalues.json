@@ -1,0 +1,11 @@
+{
+  "test_name": "bh_10_pvalues",
+  "reference_command": "p.adjust(c(0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.10, 0.20, 0.50, 0.80), method='BH')",
+  "method": "BenjaminiHochberg",
+  "p_values": [0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.10, 0.20, 0.50, 0.80],
+  "threshold": 0.05,
+  "expected": {
+    "p_values_adjusted": [0.01, 0.025, 0.03333333333333333, 0.05, 0.06, 0.06666666666666667, 0.14285714285714285, 0.25, 0.5555555555555556, 0.80],
+    "rejected": [true, true, true, true, false, false, false, false, false, false]
+  }
+}

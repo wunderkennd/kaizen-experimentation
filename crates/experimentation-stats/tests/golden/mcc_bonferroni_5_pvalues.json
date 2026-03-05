@@ -1,0 +1,11 @@
+{
+  "test_name": "bonferroni_5_pvalues",
+  "reference_command": "p.adjust(c(0.005, 0.01, 0.04, 0.20, 0.50), method='bonferroni')",
+  "method": "Bonferroni",
+  "p_values": [0.005, 0.01, 0.04, 0.20, 0.50],
+  "threshold": 0.05,
+  "expected": {
+    "p_values_adjusted": [0.025, 0.05, 0.2, 1.0, 1.0],
+    "rejected": [true, true, false, false, false]
+  }
+}
