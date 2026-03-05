@@ -33,6 +33,27 @@ pub struct ExperimentConfig {
     pub layer_id: String,
     pub variants: Vec<VariantConfig>,
     pub allocation: AllocationConfig,
+    #[serde(default)]
+    pub targeting_rule: Option<TargetingRule>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TargetingRule {
+    #[serde(default)]
+    pub groups: Vec<TargetingGroup>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TargetingGroup {
+    pub predicates: Vec<TargetingPredicate>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TargetingPredicate {
+    pub attribute_key: String,
+    pub operator: String,
+    #[serde(default)]
+    pub values: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
