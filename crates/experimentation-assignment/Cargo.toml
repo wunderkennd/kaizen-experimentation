@@ -3,9 +3,17 @@ name = "experimentation-assignment"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "experimentation_assignment"
+path = "src/lib.rs"
+
 [[bin]]
 name = "experimentation-assignment"
 path = "src/main.rs"
+
+[[bench]]
+name = "assignment_bench"
+harness = false
 
 [dependencies]
 experimentation-core = { path = "../experimentation-core" }
@@ -13,7 +21,13 @@ experimentation-proto = { path = "../experimentation-proto" }
 experimentation-hash = { path = "../experimentation-hash" }
 experimentation-interleaving = { path = "../experimentation-interleaving" }
 tokio = { workspace = true }
+tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-web = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
