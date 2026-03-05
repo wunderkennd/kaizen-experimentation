@@ -147,6 +147,13 @@ jobs:
     needs: schema
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure lockfile exists for cache key
+        run: |
+          if [ ! -f ui/package-lock.json ]; then
+            echo "package-lock.json missing; generating from package.json"
+            cd ui && npm install --package-lock-only
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
