@@ -1,0 +1,13 @@
+{
+  "test_name": "msprt_small_sample",
+  "z_stat": 1.96,
+  "n": 30.0,
+  "sigma_sq": 2.0,
+  "tau_sq": 0.5,
+  "alpha": 0.05,
+  "expected": {
+    "lambda": 1.8678545031434401,
+    "p_value": 0.535373605554975,
+    "boundary_crossed": false
+  }
+}

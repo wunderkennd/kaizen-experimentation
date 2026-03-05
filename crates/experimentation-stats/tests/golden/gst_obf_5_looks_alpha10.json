@@ -1,0 +1,43 @@
+{
+  "test_name": "gst_obf_5_looks_alpha10",
+  "spending_function": "OBrienFleming",
+  "planned_looks": 5,
+  "overall_alpha": 0.1,
+  "boundaries": [
+    {
+      "look": 1,
+      "information_fraction": 0.2,
+      "cumulative_alpha": 0.00023506579258536497,
+      "incremental_alpha": 0.00023506579258536497,
+      "critical_value": 3.6780045229005793
+    },
+    {
+      "look": 2,
+      "information_fraction": 0.4,
+      "cumulative_alpha": 0.009302239997693196,
+      "incremental_alpha": 0.00906717420510783,
+      "critical_value": 2.6095109578682845
+    },
+    {
+      "look": 3,
+      "information_fraction": 0.6,
+      "cumulative_alpha": 0.033712234877398384,
+      "incremental_alpha": 0.024409994879705188,
+      "critical_value": 2.2506140165772104
+    },
+    {
+      "look": 4,
+      "information_fraction": 0.8,
+      "cumulative_alpha": 0.06591485344808312,
+      "incremental_alpha": 0.03220261857068474,
+      "critical_value": 2.1418864738275065
+    },
+    {
+      "look": 5,
+      "information_fraction": 1.0,
+      "cumulative_alpha": 0.10000000000000009,
+      "incremental_alpha": 0.03408514655191697,
+      "critical_value": 2.119062959192151
+    }
+  ]
+}

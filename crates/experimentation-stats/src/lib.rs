@@ -23,10 +23,10 @@
 pub mod ttest;
 pub mod srm;
 pub mod cuped;
+pub mod sequential;
 // Stubs — implement in Phase 1/2:
 // pub mod delta_method;
 // pub mod bootstrap;
-// pub mod sequential;
 // pub mod multiple_comparison;
 // pub mod novelty;
 // pub mod interference;

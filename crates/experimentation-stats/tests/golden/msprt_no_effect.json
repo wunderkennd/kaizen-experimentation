@@ -1,0 +1,13 @@
+{
+  "test_name": "msprt_no_effect",
+  "z_stat": 0.0,
+  "n": 100.0,
+  "sigma_sq": 1.0,
+  "tau_sq": 0.1,
+  "alpha": 0.05,
+  "expected": {
+    "lambda": 0.30151134457776363,
+    "p_value": 1.0,
+    "boundary_crossed": false
+  }
+}

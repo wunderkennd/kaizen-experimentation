@@ -1,0 +1,13 @@
+{
+  "test_name": "msprt_large_tau",
+  "z_stat": 3.0,
+  "n": 500.0,
+  "sigma_sq": 1.0,
+  "tau_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "lambda": 3.985707803981263,
+    "p_value": 0.25089646536585425,
+    "boundary_crossed": false
+  }
+}
