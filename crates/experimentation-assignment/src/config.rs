@@ -78,6 +78,27 @@ pub struct LayerConfig {
 }
 
 impl Config {
+    /// Build config from pre-validated experiments and layers (for cache rebuilds).
+    pub fn from_experiments_and_layers(
+        experiments: Vec<ExperimentConfig>,
+        layers: Vec<LayerConfig>,
+    ) -> Self {
+        let experiments_by_id = experiments
+            .iter()
+            .map(|e| (e.experiment_id.clone(), e.clone()))
+            .collect();
+        let layers_by_id = layers
+            .iter()
+            .map(|l| (l.layer_id.clone(), l.clone()))
+            .collect();
+        Config {
+            experiments,
+            layers,
+            experiments_by_id,
+            layers_by_id,
+        }
+    }
+
     /// Load config from a JSON file path.
     pub fn from_file(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;

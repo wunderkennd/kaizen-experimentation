@@ -1,8 +1,11 @@
 use std::path::Path;
-use std::sync::Arc;
+
+use tokio_util::sync::CancellationToken;
 
 use experimentation_assignment::config::Config;
+use experimentation_assignment::config_cache::ConfigCache;
 use experimentation_assignment::service::AssignmentServiceImpl;
+use experimentation_assignment::stream_client::StreamClient;
 use experimentation_proto::experimentation::assignment::v1::assignment_service_server::AssignmentServiceServer;
 
 #[tokio::main]
@@ -23,12 +26,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config_path,
     );
 
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let (cache, handle) = ConfigCache::new(config);
+    let shutdown = CancellationToken::new();
+
+    if let Ok(m5_addr) = std::env::var("M5_ADDR") {
+        let client = StreamClient::new(m5_addr.clone(), cache);
+        let shutdown_clone = shutdown.clone();
+        tokio::spawn(async move {
+            client.run(shutdown_clone).await;
+        });
+        tracing::info!(m5_addr = %m5_addr, "M5 config stream task spawned");
+    } else {
+        tracing::warn!("M5_ADDR not set, running with static local config");
+    }
+
+    let svc = AssignmentServiceImpl::new(handle);
 
     tracing::info!(%grpc_addr, "starting gRPC server");
     tonic::transport::Server::builder()
         .add_service(AssignmentServiceServer::new(svc))
-        .serve(grpc_addr)
+        .serve_with_shutdown(grpc_addr, async move {
+            tokio::signal::ctrl_c().await.ok();
+            tracing::info!("shutdown signal received");
+            shutdown.cancel();
+        })
         .await?;
 
     Ok(())

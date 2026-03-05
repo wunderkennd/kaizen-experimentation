@@ -13,10 +13,10 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/targeting-rules | Targeting rule evaluation (1.4) | — | M1.1–1.2 merged. PR #21 open for 1.4. M1.3 unblocked by M5 StreamConfigUpdates (PR #15). |
+| Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/config-cache | Config cache (1.3) | — | M1.1–1.2 merged. M1.4 merged (PR #21). M1.3 live config cache complete. |
 | Agent-2 | M2 Pipeline | 🟢 Phase 1 Complete | — | Phase 2: Operational hardening | — | M1.6–1.9 all merged (PRs #1, #8). All Phase 1 milestones done. |
 | Agent-3 | M3 Metrics | 🟢 Phase 1 Complete | — | Phase 2: Surrogate metrics / SVOD (2.10–2.11) | — | M1.10–1.13 all merged (PRs #3, #5, #9, #16). All Phase 1 milestones done. |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | — | mSPRT sequential testing (1.16) | — | M1.14–1.15, 1.17–1.19 merged (PRs #2, #14). Only 1.16 remains in Phase 1. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | agent-4/feat/bootstrap-multiple-comparison | Bootstrap CI + MCC (2.2, 2.3) | — | Phase 1 complete. Phase 2: 2.1 done (in PR #25), 2.2+2.3 in progress. |
 | Agent-5 | M5 Management | 🔵 In Progress | — | Metric definition CRUD (1.24) | — | M1.20–1.23 all merged (PRs #7, #10, #15, #18). Next: 1.24. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
 | Agent-7 | M7 Flags | 🟢 Phase 1 Complete | — | Integration: PromoteToExperiment live wiring | — | M1.28–1.30 merged (PR #13). Agent-5 CRUD now available for real PromoteToExperiment. |
@@ -46,7 +46,7 @@
 |---|-----------|-------|--------|-----|--------|----------|
 | **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟢 | PR #4 | 2026-03-04 | Agent-7 (CGo bridge), SDKs |
 | 1.2 | GetAssignment RPC (static bucketing) | Agent-1 | 🟢 | PR #11 | 2026-03-05 | SDKs, Agent-6 (debug view) |
-| 1.3 | Config cache (subscribe to M5 StreamConfigUpdates) | Agent-1 | 🟡 | — | — | Unblocked by M5 PR #15. Agent-1 can subscribe to live config stream. |
+| 1.3 | Config cache (subscribe to M5 StreamConfigUpdates) | Agent-1 | 🟢 | — | 2026-03-05 | Live config cache with watch channel. Background M5 stream client with backoff. |
 | 1.4 | Targeting rule evaluation | Agent-1 | 🔵 | PR #21 | — | In review. |
 | 1.5 | Layer-aware + session-level assignment | Agent-1 | 🟡 | — | — | — |
 | **1.6** | **IngestExposure + IngestMetricEvent RPCs** | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-3 (events to compute) |
@@ -59,7 +59,7 @@
 | 1.13 | Guardrail breach detection → guardrail_alerts topic | Agent-3 | 🟢 | PR #16 | 2026-03-05 | Agent-5 (auto-pause). Breach tracker + Kafka publisher stub. |
 | **1.14** | **Welch t-test + SRM check (golden-file validated)** | Agent-4 | 🟢 | PR #2 | 2026-03-05 | Agent-6 (results page) |
 | 1.15 | CUPED variance reduction | Agent-4 | 🟢 | PR #14 | 2026-03-05 | Golden-file validated against R. |
-| 1.16 | mSPRT sequential testing | Agent-4 | 🟡 | — | — | Unblocked. Last remaining Phase 1 milestone for Agent-4. |
+| 1.16 | mSPRT + GST sequential testing | Agent-4 | 🔵 | PR #25 | — | mSPRT + GST with golden-file validation. PR open. |
 | 1.17 | Thompson Sampling with Beta-Bernoulli (M4b) | Agent-4 | 🟢 | PR #2 | 2026-03-05 | Agent-1 (SelectArm) |
 | 1.18 | LMAX single-threaded policy core (M4b) | Agent-4 | 🟢 | PR #2 | 2026-03-05 | Bandit policy serving |
 | 1.19 | RocksDB policy snapshots (M4b) | Agent-4 | 🟢 | PR #2 | 2026-03-05 | Crash recovery |
@@ -77,15 +77,15 @@
 
 **Bold** = critical path milestones that unblock downstream agents.
 
-**Phase 1 remaining**: 1.3 (Agent-1), 1.4 (Agent-1, in review), 1.5 (Agent-1), 1.16 (Agent-4), 1.24 (Agent-5), 1.25–1.27 (Agent-6)
+**Phase 1 remaining**: 1.3 (Agent-1), 1.4 (Agent-1, in review), 1.5 (Agent-1), 1.16 (Agent-4, PR #25 open), 1.24 (Agent-5), 1.25–1.27 (Agent-6)
 
 ### Phase 2: Analysis & UI (Weeks 6–11)
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | ⚪ | — |
-| 2.2 | Bootstrap CI | Agent-4 | ⚪ | — |
-| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | ⚪ | — |
+| 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | 🟢 | — | Implemented as part of M1.16 (PR #25) |
+| 2.2 | Bootstrap CI | Agent-4 | 🔵 | Agent-6 (CI charts on results dashboard) |
+| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | 🔵 | Agent-6 (corrected p-values on results dashboard) |
 | 2.4 | Novelty/primacy analysis | Agent-4 | ⚪ | Agent-6 (novelty tab) |
 | 2.5 | Interference analysis | Agent-4 | ⚪ | Agent-6 (interference tab) |
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | ⚪ | Agent-6 (interleaving tab) |
