@@ -41,7 +41,8 @@ func setupTestServer(t *testing.T) (testEnv, func()) {
 	as := store.NewAuditStore(pool)
 	ls := store.NewLayerStore(pool)
 	ms := store.NewMetricStore(pool)
-	svc := handlers.NewExperimentService(es, as, ls, ms, nil)
+	ts := store.NewTargetingStore(pool)
+	svc := handlers.NewExperimentService(es, as, ls, ms, ts, nil)
 
 	mux := http.NewServeMux()
 	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc)
@@ -473,6 +474,211 @@ func TestConcurrentBucketAllocation(t *testing.T) {
 
 	// Both are 100% so only 1 can succeed.
 	assert.Equal(t, int32(1), successes.Load(), "exactly 1 goroutine should succeed with 100% allocation")
+}
+
+// --- Pause/Resume Tests ---
+
+func TestPauseExperiment_Running(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("pause-running-test"),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	paused, err := client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+		ExperimentId: id,
+		Reason:       "testing pause",
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, paused.Msg.State,
+		"experiment should remain RUNNING after pause (per ADR-005)")
+
+	// Verify audit trail has a "pause" entry.
+	var action string
+	err = env.pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'pause'`, id,
+	).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "pause", action)
+}
+
+func TestResumeExperiment_AfterPause(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("resume-after-pause-test"),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	_, err = client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+		ExperimentId: id,
+		Reason:       "testing",
+	}))
+	require.NoError(t, err)
+
+	resumed, err := client.ResumeExperiment(ctx, connect.NewRequest(&mgmtv1.ResumeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, resumed.Msg.State)
+
+	// Verify audit trail has a "resume" entry.
+	var action string
+	err = env.pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'resume'`, id,
+	).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "resume", action)
+}
+
+func TestPauseExperiment_NonRunning(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("pause-draft-test"),
+	}))
+	require.NoError(t, err)
+
+	_, err = client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+		Reason:       "should fail",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+func TestResumeExperiment_NonRunning(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("resume-draft-test"),
+	}))
+	require.NoError(t, err)
+
+	_, err = client.ResumeExperiment(ctx, connect.NewRequest(&mgmtv1.ResumeExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+func TestPauseExperiment_GuardrailAutoPause(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("guardrail-auto-pause-test"),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	_, err = client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+		ExperimentId:         id,
+		Reason:               "guardrail breach detected",
+		IsGuardrailAutoPause: true,
+	}))
+	require.NoError(t, err)
+
+	// Verify audit action is "guardrail_auto_pause".
+	var action string
+	err = env.pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_auto_pause'`, id,
+	).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "guardrail_auto_pause", action)
+}
+
+// --- STARTING Validation Gate Tests ---
+
+func TestStartExperiment_BadPrimaryMetric(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	exp := newABExperiment("bad-primary-metric-test")
+	exp.PrimaryMetricId = "nonexistent_metric_xyz"
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "nonexistent_metric_xyz")
+
+	// Verify rolled back to DRAFT.
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT, got.Msg.State)
+}
+
+func TestStartExperiment_BadGuardrailMetric(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	exp := newABExperiment("bad-guardrail-metric-test")
+	exp.Guardrails = []*commonv1.GuardrailConfig{
+		{
+			MetricId:                    "nonexistent_guardrail_metric",
+			Threshold:                   0.05,
+			ConsecutiveBreachesRequired: 3,
+		},
+	}
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "nonexistent_guardrail_metric")
 }
 
 func TestLayerCRUD(t *testing.T) {
