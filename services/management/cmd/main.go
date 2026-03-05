@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/org/experimentation/gen/go/experimentation/assignment/v1/assignmentv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
+	"github.com/org/experimentation-platform/services/management/internal/guardrail"
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
@@ -53,6 +55,17 @@ func main() {
 	notifier := streaming.NewNotifier(pool, dsn)
 	notifier.Start(ctx)
 	defer notifier.Stop()
+
+	// Guardrail alert consumer (Kafka → auto-pause).
+	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
+		processor := guardrail.NewProcessor(experimentStore, auditStore, notifier)
+		consumer := guardrail.NewConsumer(strings.Split(brokers, ","), processor)
+		consumer.Start(ctx)
+		defer consumer.Stop()
+		slog.Info("guardrail consumer started", "brokers", brokers)
+	} else {
+		slog.Info("guardrail consumer disabled (KAFKA_BROKERS not set)")
+	}
 
 	// Service handlers.
 	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, notifier)
