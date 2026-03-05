@@ -75,6 +75,9 @@ mockall = "0.13"
 
 # Build
 tonic-build = "0.12"
+walkdir = "2"
+tokio-stream = "0.1"
+prometheus = "0.13"
 
 [profile.release]
 opt-level = 3
