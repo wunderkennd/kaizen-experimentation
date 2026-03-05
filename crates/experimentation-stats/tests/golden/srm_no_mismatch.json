@@ -1,0 +1,18 @@
+{
+  "test_name": "no_mismatch",
+  "r_command": "chisq.test(c(4980, 5020), p=c(0.5, 0.5))",
+  "observed": {
+    "control": 4980,
+    "treatment": 5020
+  },
+  "expected_fractions": {
+    "control": 0.5,
+    "treatment": 0.5
+  },
+  "alpha": 0.001,
+  "expected": {
+    "chi_squared": 0.16,
+    "p_value": 0.6891565167793516,
+    "is_mismatch": false
+  }
+}
