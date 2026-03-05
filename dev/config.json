@@ -13,6 +13,33 @@
         { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"feature\": true}" }
       ],
       "allocation": { "start_bucket": 0, "end_bucket": 9999 }
+    },
+    {
+      "experiment_id": "exp_dev_002",
+      "name": "Targeted Premium US/UK",
+      "state": "RUNNING",
+      "type": "AB",
+      "hash_salt": "dev_salt_002",
+      "layer_id": "layer_default",
+      "variants": [
+        { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"premium_feature\": true}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "targeting_rule": {
+        "groups": [
+          {
+            "predicates": [
+              { "attribute_key": "country", "operator": "IN", "values": ["US", "UK"] }
+            ]
+          },
+          {
+            "predicates": [
+              { "attribute_key": "tier", "operator": "IN", "values": ["premium", "platinum"] }
+            ]
+          }
+        ]
+      }
     }
   ],
   "layers": [
