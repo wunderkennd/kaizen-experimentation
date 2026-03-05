@@ -22,8 +22,8 @@
 
 pub mod ttest;
 pub mod srm;
+pub mod cuped;
 // Stubs — implement in Phase 1/2:
-// pub mod cuped;
 // pub mod delta_method;
 // pub mod bootstrap;
 // pub mod sequential;
