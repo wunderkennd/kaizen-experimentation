@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-5 (M1.23 guardrail alert consumer PR #18)
+> **Last updated**: 2026-03-05 by Agent-5 (M1.24 metric definition CRUD PR #24)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -17,7 +17,7 @@
 | Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/go-orchestration-querylog | Go orchestration + SQL query logging (1.9) | — | M1.6+1.7+1.8 merged (PR #1). PR #8 open for M1.9. |
 | Agent-3 | M3 Metrics | 🔵 In Progress | agent-3/feat/cuped-covariate | CUPED covariate computation (1.12) | — | M1.10 (PR #3), M1.11 (PR #5) merged. PR #9 open for M1.12. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | agent-4/feat/golden-validation-lmax-core | t-test + SRM + Thompson + LMAX + RocksDB (1.14–1.19) | — | PR #2 open. CI unblocked by PR #6 merge. |
-| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/guardrail-alert-consumer | Metric definition CRUD (1.24) | — | M1.20–1.23 complete. PRs #7, #10, #15, #18. Next: metric definition CRUD. |
+| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/metric-definition-crud | Metric definition CRUD (1.24) | — | M1.20–1.23 merged. PR #24 open for 1.24. All Phase 1 milestones addressed. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20 merge. Can start with MSW mocks. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-service | PR open: CRUD + eval + CGo bridge + audit (1.28–1.30) | — | Phase 1+2 complete. 10K hash vectors pass. CGo bridge parity confirmed. |
 
@@ -66,8 +66,8 @@
 | **1.20** | **Experiment CRUD + state machine enforcement** | Agent-5 | 🟢 | agent-5/feat/experiment-crud-handlers | 2026-03-04 | Agent-6 (list/detail), Agent-1 (configs), Agent-3 (experiment list) |
 | 1.21 | Layer allocation + bucket reuse | Agent-5 | 🟢 | PR #7, #10 | 2026-03-04 | Merged |
 | 1.22 | StreamConfigUpdates RPC | Agent-5 | 🟢 | PR #15 | 2026-03-04 | Merged. Unblocks Agent-1 config cache. |
-| 1.23 | Guardrail alert consumer → auto-pause | Agent-5 | 🔵 | PR #18 | — | In review. Kafka consumer + processor per ADR-008. |
-| 1.24 | Metric definition CRUD | Agent-5 | 🟡 | — | — | Agent-3 |
+| 1.23 | Guardrail alert consumer → auto-pause | Agent-5 | 🟢 | PR #18 | 2026-03-05 | Merged. Kafka consumer + processor per ADR-008. |
+| 1.24 | Metric definition CRUD | Agent-5 | 🔵 | PR #24 | — | Create/Get/List RPCs. 14 unit + 12 integration tests. |
 | **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20. Ready to start. |
 | 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | ⚪ | — | — | — |
 | 1.27 | View SQL page (query log from M3) | Agent-6 | ⚪ | — | — | — |
