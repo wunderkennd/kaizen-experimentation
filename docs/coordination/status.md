@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-7 (M7 Flag Service Phase 1+2 complete — PR pending)
+> **Last updated**: 2026-03-04 by Agent-7 (M7 Flag Service Phase 1+2 complete — PR #13)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -71,9 +71,9 @@
 | **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20. Ready to start. |
 | 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | ⚪ | — | — | — |
 | 1.27 | View SQL page (query log from M3) | Agent-6 | ⚪ | — | — | — |
-| **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | 🟢 | PR (pending) | — | CRUD + EvaluateFlag + CGo bridge. 10K hash vectors match. |
-| 1.29 | Percentage rollout (monotonic) | Agent-7 | 🟢 | PR (pending) | — | Monotonic rollout via hash bucketing. Tests confirm no user eviction. |
-| 1.30 | PromoteToExperiment → M5 CreateExperiment | Agent-7 | 🟢 | PR (pending) | — | Mocked — awaiting Agent-5 CRUD API. Audit trail included. |
+| **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | 🟢 | PR #13 | — | CRUD + EvaluateFlag + CGo bridge. 10K hash vectors match. |
+| 1.29 | Percentage rollout (monotonic) | Agent-7 | 🟢 | PR #13 | — | Monotonic rollout via hash bucketing. Tests confirm no user eviction. |
+| 1.30 | PromoteToExperiment → M5 CreateExperiment | Agent-7 | 🟢 | PR #13 | — | Mocked — awaiting Agent-5 CRUD API. Audit trail included. |
 
 **Bold** = critical path milestones that unblock downstream agents.
 
