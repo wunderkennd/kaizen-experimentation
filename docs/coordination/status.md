@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-04 by Agent-5 (M1.21 layer allocation + bucket reuse — PR #7)
+> **Last updated**: 2026-03-04 by Agent-4 (comprehensive status sync — PR #6 buf.yaml fix merged)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -13,13 +13,13 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/wasm-ffi-hash-bindings | Hash crate + WASM/FFI bindings | — | M1.1 complete, next: M1.2 GetAssignment RPC |
-| Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/event-pipeline | Bloom filter dedup optimization (1.8) | — | M1.6+1.7 complete (PR #1). Rotating Bloom filter + Prometheus metrics implemented. |
-| Agent-3 | M3 Metrics | 🔵 In Progress | — | RATIO metric with delta method inputs (1.11) | Agent-2 (events on Kafka) | M1.10 merged (PR #3). Advancing to RATIO + delta method. |
-| Agent-4 | M4a Analysis + M4b Bandit | 🟡 Not Started | — | Welch t-test + SRM (M4a); Thompson Sampling (M4b) | Agent-2 (reward events) for M4b | M4a partially unblocked: metric_summaries now available from M3. Algorithm crates can start. |
-| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/layer-allocation-bucket-reuse | Layer allocation + bucket reuse (1.21) | — | M1.20 merged. M1.21 in PR #7: allocation, bucket reuse, layer CRUD |
-| Agent-6 | M6 UI | ⚪ Waiting | — | Experiment list + detail shell | Agent-5 (CRUD APIs) | Use MSW mocks until M5 delivers |
-| Agent-7 | M7 Flags | ⚪ Waiting | — | Boolean flag CRUD + CGo hash bridge | Agent-1 (hash crate + FFI headers) | Can start Go scaffolding; CGo bridge waits |
+| Agent-1 | M1 Assignment | 🔵 In Progress | agent-1/feat/get-assignment-rpc | GetAssignment RPC (1.2) | — | M1.1 merged (PR #4). Advancing to static bucketing. |
+| Agent-2 | M2 Pipeline | 🔵 In Progress | agent-2/feat/go-orchestration-querylog | Go orchestration + SQL query logging (1.9) | — | M1.6+1.7+1.8 merged (PR #1). PR #8 open for M1.9. |
+| Agent-3 | M3 Metrics | 🔵 In Progress | agent-3/feat/cuped-covariate | CUPED covariate computation (1.12) | — | M1.10 (PR #3), M1.11 (PR #5) merged. PR #9 open for M1.12. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 In Progress | agent-4/feat/golden-validation-lmax-core | t-test + SRM + Thompson + LMAX + RocksDB (1.14–1.19) | — | PR #2 open. CI unblocked by PR #6 merge. |
+| Agent-5 | M5 Management | 🔵 In Progress | agent-5/feat/layer-allocation-bucket-reuse | Layer allocation + bucket reuse (1.21) | — | M1.20 merged. PR #7 open for M1.21. |
+| Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20 merge. Can start with MSW mocks. |
+| Agent-7 | M7 Flags | 🟡 Not Started | agent-7/feat/boolean-flag-crud | Boolean flag CRUD + CGo hash bridge (1.28) | — | Unblocked by M1.1 merge (PR #4). FFI headers available. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
@@ -44,34 +44,34 @@
 
 | # | Milestone | Owner | Status | PR | Merged | Unblocks |
 |---|-----------|-------|--------|-----|--------|----------|
-| **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟢 | agent-1/feat/wasm-ffi-hash-bindings | — | Agent-7 (CGo bridge), SDKs |
-| 1.2 | GetAssignment RPC (static bucketing) | Agent-1 | 🟡 | — | — | SDKs, Agent-6 (debug view) |
+| **1.1** | **Hash crate: WASM + FFI bindings** | Agent-1 | 🟢 | PR #4 | 2026-03-04 | Agent-7 (CGo bridge), SDKs |
+| 1.2 | GetAssignment RPC (static bucketing) | Agent-1 | 🔵 | — | — | SDKs, Agent-6 (debug view) |
 | 1.3 | Config cache (subscribe to M5 StreamConfigUpdates) | Agent-1 | ⚪ | — | — | — |
 | 1.4 | Targeting rule evaluation | Agent-1 | 🟡 | — | — | — |
 | 1.5 | Layer-aware + session-level assignment | Agent-1 | 🟡 | — | — | — |
 | **1.6** | **IngestExposure + IngestMetricEvent RPCs** | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-3 (events to compute) |
 | 1.7 | IngestRewardEvent + IngestQoEEvent RPCs | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Agent-4 M4b (rewards) |
-| 1.8 | Bloom filter dedup (0.1% FPR at 100M/day) | Agent-2 | 🔵 | — | — | Rotating filter + Prometheus metrics |
-| 1.9 | Go orchestration + SQL query logging | Agent-2 | 🟡 | — | — | — |
+| 1.8 | Bloom filter dedup (0.1% FPR at 100M/day) | Agent-2 | 🟢 | PR #1 | 2026-03-04 | Rotating filter + Prometheus metrics |
+| 1.9 | Go orchestration + SQL query logging | Agent-2 | 🔵 | PR #8 | — | In review |
 | **1.10** | **Standard metric computation (MEAN, PROPORTION, COUNT)** | Agent-3 | 🟢 | PR #3 | 2026-03-04 | Agent-4 M4a |
-| 1.11 | RATIO metric with delta method inputs | Agent-3 | ⚪ | — | — | — |
-| 1.12 | CUPED covariate computation | Agent-3 | ⚪ | — | — | — |
+| 1.11 | RATIO metric with delta method inputs | Agent-3 | 🟢 | PR #5 | 2026-03-04 | Delta method inputs for M4a |
+| 1.12 | CUPED covariate computation | Agent-3 | 🔵 | PR #9 | — | In review |
 | 1.13 | Guardrail breach detection → guardrail_alerts topic | Agent-3 | ⚪ | — | — | Agent-5 (auto-pause) |
-| **1.14** | **Welch t-test + SRM check (golden-file validated)** | Agent-4 | 🟡 | — | — | Agent-6 (results page) |
+| **1.14** | **Welch t-test + SRM check (golden-file validated)** | Agent-4 | 🔵 | PR #2 | — | Agent-6 (results page). In review. |
 | 1.15 | CUPED variance reduction | Agent-4 | ⚪ | — | — | — |
 | 1.16 | mSPRT sequential testing | Agent-4 | ⚪ | — | — | — |
-| 1.17 | Thompson Sampling with Beta-Bernoulli (M4b) | Agent-4 | 🟡 | — | — | Agent-1 (SelectArm) |
-| 1.18 | LMAX single-threaded policy core (M4b) | Agent-4 | 🟡 | — | — | — |
-| 1.19 | RocksDB policy snapshots (M4b) | Agent-4 | 🟡 | — | — | — |
+| 1.17 | Thompson Sampling with Beta-Bernoulli (M4b) | Agent-4 | 🔵 | PR #2 | — | Agent-1 (SelectArm). In review. |
+| 1.18 | LMAX single-threaded policy core (M4b) | Agent-4 | 🔵 | PR #2 | — | In review. |
+| 1.19 | RocksDB policy snapshots (M4b) | Agent-4 | 🔵 | PR #2 | — | In review. |
 | **1.20** | **Experiment CRUD + state machine enforcement** | Agent-5 | 🟢 | agent-5/feat/experiment-crud-handlers | 2026-03-04 | Agent-6 (list/detail), Agent-1 (configs), Agent-3 (experiment list) |
 | 1.21 | Layer allocation + bucket reuse | Agent-5 | 🔵 | PR #7 | — | In review |
 | 1.22 | StreamConfigUpdates RPC | Agent-5 | 🟡 | — | — | Agent-1 (config cache) |
 | 1.23 | Guardrail alert consumer → auto-pause | Agent-5 | ⚪ | — | — | — |
 | 1.24 | Metric definition CRUD | Agent-5 | 🟡 | — | — | Agent-3 |
-| **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20 |
+| **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20. Ready to start. |
 | 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | ⚪ | — | — | — |
 | 1.27 | View SQL page (query log from M3) | Agent-6 | ⚪ | — | — | — |
-| **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | ⚪ | — | — | — |
+| **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | 🟡 | — | — | Unblocked by M1.1 (PR #4). FFI headers available. |
 | 1.29 | Percentage rollout (monotonic) | Agent-7 | ⚪ | — | — | — |
 | 1.30 | PromoteToExperiment → M5 CreateExperiment | Agent-7 | ⚪ | — | — | — |
 
