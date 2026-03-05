@@ -4,6 +4,7 @@
 //! Keep it minimal — only truly cross-cutting concerns belong here.
 
 pub mod error;
+pub mod telemetry;
 pub mod time;
 
 /// Re-export commonly used types.

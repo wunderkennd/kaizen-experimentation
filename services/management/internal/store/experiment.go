@@ -51,10 +51,10 @@ type VariantRow struct {
 
 // GuardrailConfigRow mirrors the guardrail_configs table.
 type GuardrailConfigRow struct {
-	GuardrailID                string
-	ExperimentID               string
-	MetricID                   string
-	Threshold                  float64
+	GuardrailID                 string
+	ExperimentID                string
+	MetricID                    string
+	Threshold                   float64
 	ConsecutiveBreachesRequired int32
 }
 
@@ -423,4 +423,44 @@ func (s *ExperimentStore) GetVariantsByExperiment(ctx context.Context, experimen
 // GetGuardrailsByExperiment returns guardrails for a given experiment (using pool, no tx).
 func (s *ExperimentStore) GetGuardrailsByExperiment(ctx context.Context, experimentID string) ([]GuardrailConfigRow, error) {
 	return s.getGuardrails(ctx, s.pool, experimentID)
+}
+
+// ListRunning returns all experiments in RUNNING state with their variants and guardrails.
+func (s *ExperimentStore) ListRunning(ctx context.Context) ([]ExperimentRow, [][]VariantRow, [][]GuardrailConfigRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+experimentCols+` FROM experiments WHERE state = 'RUNNING' ORDER BY started_at`)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer rows.Close()
+
+	var experiments []ExperimentRow
+	for rows.Next() {
+		r, scanErr := scanExperimentRows(rows)
+		if scanErr != nil {
+			return nil, nil, nil, scanErr
+		}
+		experiments = append(experiments, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	allVariants := make([][]VariantRow, len(experiments))
+	allGuardrails := make([][]GuardrailConfigRow, len(experiments))
+	for i, exp := range experiments {
+		v, err := s.getVariants(ctx, s.pool, exp.ExperimentID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("variants for %s: %w", exp.ExperimentID, err)
+		}
+		allVariants[i] = v
+
+		g, err := s.getGuardrails(ctx, s.pool, exp.ExperimentID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("guardrails for %s: %w", exp.ExperimentID, err)
+		}
+		allGuardrails[i] = g
+	}
+
+	return experiments, allVariants, allGuardrails, nil
 }

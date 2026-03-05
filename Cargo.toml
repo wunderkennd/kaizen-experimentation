@@ -56,6 +56,8 @@ criterion = { version = "0.5", features = ["html_reports"] }
 byteorder = "1.5"
 # FFI
 cbindgen = "0.27"
+# Directory walking
+walkdir = "2.5"
 # WASM
 wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
@@ -71,16 +73,18 @@ tch = "0.17"
 bloomfilter = "1.0"
 # Metrics
 prometheus = "0.13"
+# Async streams
+tokio-stream = "0.1"
 # Testing
 tokio-test = "0.4"
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 # UUID
 uuid = { version = "1.7", features = ["v4", "serde"] }
-# File walking
-walkdir = "2"
 # Stream utilities
 tokio-stream = "0.1"
+# File walking (build-time proto discovery)
+walkdir = "2.5"
 
 [profile.release]
 lto = "thin"
