@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -25,9 +29,8 @@ jobs:
 
       - name: Check breaking changes
         if: github.event_name == 'pull_request'
-        run: |
-          cd proto
-          buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main,subdir=proto'
+        working-directory: proto
+        run: buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main,subdir=proto'
 
       - name: Generate code
         run: cd proto && buf generate
@@ -125,9 +128,11 @@ jobs:
       - name: Integration tests
         working-directory: services
         run: |
-          docker compose -f ../docker-compose.test.yml up -d
-          CGO_ENABLED=1 go test -tags=integration -race ./...
+          docker compose -f ../docker-compose.test.yml up -d --wait
+          test_exit=0
+          CGO_ENABLED=1 go test -tags=integration -race ./... || test_exit=$?
           docker compose -f ../docker-compose.test.yml down
+          exit $test_exit
 
   # ───────── Stage 4: TypeScript Build & Test ─────────
   typescript:
