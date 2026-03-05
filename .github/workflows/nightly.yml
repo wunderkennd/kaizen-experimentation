@@ -5,6 +5,10 @@ on:
     - cron: "0 3 * * *"  # 3 AM UTC
   workflow_dispatch: {}
 
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
 jobs:
   stats-validation:
     runs-on: ubuntu-latest

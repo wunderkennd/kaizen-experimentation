@@ -45,17 +45,38 @@ experimentation-platform/
 └── .github/workflows/              # GitHub Actions
 ```
 
+## Error Handling
+
+All workflows set `bash -euo pipefail` as the default shell:
+
+```yaml
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+```
+
+- **`-e`**: Any command failure immediately fails the step
+- **`-u`**: Unset variable references fail the step (catches typos)
+- **`-o pipefail`**: Pipe failures propagate (e.g., `cmd | tee` fails if `cmd` fails)
+
+This applies to all `run` steps across the CI, nightly, and weekly chaos workflows.
+
 ## Pipeline Stages
 
 ### Stage 1: Schema Validation (proto/)
 **Trigger**: Any change to `proto/` directory.
 **Runtime**: ~30 seconds.
 
+`proto/buf.yaml` uses v2 config format with the `STANDARD` lint category, which
+requires buf CLI v2.x. The setup action uses `version: "latest"` to stay current.
+
 ```yaml
 schema-lint:
   runs-on: ubuntu-latest
   steps:
     - uses: bufbuild/buf-setup-action@v1
+      with:
+        version: "latest"  # v2+ required for STANDARD lint category
     - run: buf lint
     - run: buf breaking --against 'https://github.com/org/experimentation-platform.git#branch=main,subdir=proto'
     # Ensures no backward-incompatible changes to published protos.
@@ -128,14 +149,18 @@ go-build:
       with: { name: generated-code, path: gen/ }
 
     - run: go vet ./...
-    - run: go test -race -cover ./...
-      env:
-        CGO_ENABLED: 1  # Required for experimentation-hash CGo bridge
+    - run: CGO_ENABLED=1 go test -race -cover ./...
 
     # Integration tests (require PostgreSQL + Kafka).
-    - uses: docker/compose-action@v2
-      with: { compose-file: docker-compose.test.yml }
-    - run: go test -tags=integration -race ./...
+    # Uses --wait to ensure services are healthy before tests start.
+    # Captures test exit code so cleanup always runs, then propagates
+    # the original error.
+    - run: |
+        docker compose -f docker-compose.test.yml up -d --wait
+        test_exit=0
+        CGO_ENABLED=1 go test -tags=integration -race ./... || test_exit=$?
+        docker compose -f docker-compose.test.yml down
+        exit $test_exit
 ```
 
 ### Stage 4: TypeScript Build & Test (ui/)
