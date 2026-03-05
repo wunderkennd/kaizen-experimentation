@@ -129,7 +129,7 @@ impl DedupConfig {
 
     /// Compute the memory usage per filter in bytes.
     pub fn filter_size_bytes(&self) -> u64 {
-        (self.optimal_bits() + 7) / 8
+        self.optimal_bits().div_ceil(8)
     }
 }
 
