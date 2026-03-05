@@ -83,7 +83,11 @@ func (s *ExperimentService) StartExperiment(
 		return nil, internalError("commit tx1", err)
 	}
 
-	// TODO(M5): Validate metrics availability, check power, warm bandit policy.
+	// Validate that all referenced metrics exist before allocating buckets.
+	if err := s.validateMetricsForStart(ctx, id); err != nil {
+		s.rollbackToDraft(ctx, id, "metric validation failed")
+		return nil, err
+	}
 	slog.Info("starting experiment: validation passed", "id", id)
 
 	// Transition 2: STARTING -> RUNNING (with bucket allocation)
@@ -431,6 +435,32 @@ func (s *ExperimentService) ResumeExperiment(
 
 	slog.Info("experiment resumed", "id", id)
 	return connect.NewResponse(store.RowToExperiment(expRow, variants, guardrails)), nil
+}
+
+// validateMetricsForStart checks that the experiment's primary, secondary, and
+// guardrail metrics all exist in the metric_definitions table.
+func (s *ExperimentService) validateMetricsForStart(ctx context.Context, experimentID string) error {
+	expRow, _, guardrails, err := s.store.GetByID(ctx, experimentID)
+	if err != nil {
+		return internalError("read experiment for metric validation", err)
+	}
+
+	var metricIDs []string
+	metricIDs = append(metricIDs, expRow.PrimaryMetricID)
+	metricIDs = append(metricIDs, expRow.SecondaryMetricIDs...)
+	for _, g := range guardrails {
+		metricIDs = append(metricIDs, g.MetricID)
+	}
+
+	missing, err := s.metrics.ExistAll(ctx, metricIDs)
+	if err != nil {
+		return internalError("check metric existence", err)
+	}
+	if missing != "" {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("metric %q does not exist", missing))
+	}
+	return nil
 }
 
 // extractTrafficPercentage reads traffic_percentage from the experiment's
