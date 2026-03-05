@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🟢 Phase 1 Complete | — | Phase 2: GST, Bootstrap CI | — | M1.14–1.19 all merged (PRs #2, #14, #25). All Phase 1 milestones done. |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
-| Agent-7 | M7 Flags | 🟢 Phase 1 Complete | — | Integration: PromoteToExperiment live wiring | — | M1.28–1.30 merged (PR #13). Agent-5 CRUD now available for real PromoteToExperiment. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/production-wiring | PostgreSQL wiring + integration tests | — | M1.28–1.30 merged (PR #13). Production wiring: DATABASE_URL → pgxpool → PostgresStore + audit. Integration tests for full CRUD + audit against real DB. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
