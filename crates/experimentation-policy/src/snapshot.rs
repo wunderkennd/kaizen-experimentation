@@ -1,6 +1,6 @@
 //! RocksDB snapshot store for bandit policy state (ADR-003).
 //!
-//! Key format: `{experiment_id}:{timestamp_millis:020}` (zero-padded for lexicographic order).
+//! Key format: `{experiment_id}\0{timestamp_millis:020}` (null-byte separator, zero-padded for lexicographic order).
 //! Value: JSON-encoded `SnapshotEnvelope`.
 
 use chrono::Utc;
@@ -44,8 +44,11 @@ impl SnapshotStore {
     }
 
     /// Load the latest snapshot for a specific experiment.
-    pub fn load_latest(&self, experiment_id: &str) -> Result<Option<SnapshotEnvelope>, rocksdb::Error> {
-        let prefix = format!("{experiment_id}:");
+    pub fn load_latest(
+        &self,
+        experiment_id: &str,
+    ) -> Result<Option<SnapshotEnvelope>, rocksdb::Error> {
+        let prefix = format!("{experiment_id}{}", KEY_SEP);
         // Scan keys with this prefix in reverse to find the latest.
         let iter = self.db.iterator(IteratorMode::End);
         for item in iter {
@@ -56,8 +59,6 @@ impl SnapshotStore {
                     .expect("snapshot deserialization should not fail");
                 return Ok(Some(envelope));
             }
-            // Since keys are lexicographically ordered and we're iterating in reverse,
-            // once we pass the prefix range, we can stop.
             if key_str.as_ref() < prefix.as_str() {
                 break;
             }
@@ -75,8 +76,6 @@ impl SnapshotStore {
             let (_key, value) = item?;
             let envelope: SnapshotEnvelope = serde_json::from_slice(&value)
                 .expect("snapshot deserialization should not fail");
-            // Keep replacing — since keys are lexicographically ordered,
-            // the last one for each experiment_id is the latest.
             latest.insert(envelope.experiment_id.clone(), envelope);
         }
 
@@ -84,11 +83,14 @@ impl SnapshotStore {
     }
 
     /// Prune old snapshots, keeping only the `keep` most recent per experiment.
-    pub fn prune_old_snapshots(&self, experiment_id: &str, keep: usize) -> Result<usize, rocksdb::Error> {
-        let prefix = format!("{experiment_id}:");
+    pub fn prune_old_snapshots(
+        &self,
+        experiment_id: &str,
+        keep: usize,
+    ) -> Result<usize, rocksdb::Error> {
+        let prefix = format!("{experiment_id}{}", KEY_SEP);
         let mut keys: Vec<String> = Vec::new();
 
-        // Start iteration from the experiment prefix and stop once keys no longer match it.
         let iter = self
             .db
             .iterator(IteratorMode::From(prefix.as_bytes(), rocksdb::Direction::Forward));
@@ -105,8 +107,6 @@ impl SnapshotStore {
             return Ok(0);
         }
 
-        // Keys are lexicographically sorted (timestamp is zero-padded).
-        // Delete the oldest ones, keeping the last `keep`.
         let to_delete = keys.len() - keep;
         for key in &keys[..to_delete] {
             self.db.delete(key.as_bytes())?;
@@ -132,16 +132,23 @@ impl SnapshotStore {
     }
 }
 
+/// Separator used in snapshot keys.  Must not appear in experiment IDs.
+const KEY_SEP: char = '\0';
+
 /// Build a lexicographically sortable snapshot key.
+///
+/// Panics if `experiment_id` contains the key separator (null byte).
 fn snapshot_key(experiment_id: &str, timestamp_millis: i64) -> String {
-    // Ensure the timestamp used in the key is non-negative so that the key
-    // format remains zero-padded digits only and preserves lexicographic order.
+    assert!(
+        !experiment_id.contains(KEY_SEP),
+        "experiment_id must not contain the null byte separator"
+    );
     let clamped: u64 = if timestamp_millis < 0 {
         0
     } else {
         timestamp_millis as u64
     };
-    format!("{experiment_id}:{clamped:020}")
+    format!("{experiment_id}{KEY_SEP}{clamped:020}")
 }
 
 #[cfg(test)]
@@ -150,7 +157,8 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_db_path(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("test-snapshot-{name}-{}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("test-snapshot-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         path
     }
@@ -182,7 +190,6 @@ mod tests {
         assert_eq!(latest.total_rewards_processed, 200);
         assert_eq!(latest.policy_state, b"state-v2");
 
-        // Non-existent experiment
         assert!(store.load_latest("exp-999").unwrap().is_none());
 
         let _ = std::fs::remove_dir_all(&path);
@@ -194,13 +201,15 @@ mod tests {
         let store = SnapshotStore::open(&path).unwrap();
 
         for (exp, ts) in [("exp-1", 1000), ("exp-1", 2000), ("exp-2", 1500)] {
-            store.write_snapshot(&SnapshotEnvelope {
-                experiment_id: exp.into(),
-                policy_state: vec![],
-                total_rewards_processed: ts as u64,
-                kafka_offset: 0,
-                snapshot_at_epoch_ms: ts,
-            }).unwrap();
+            store
+                .write_snapshot(&SnapshotEnvelope {
+                    experiment_id: exp.into(),
+                    policy_state: vec![],
+                    total_rewards_processed: ts as u64,
+                    kafka_offset: 0,
+                    snapshot_at_epoch_ms: ts,
+                })
+                .unwrap();
         }
 
         let all = store.load_all_latest().unwrap();
@@ -218,19 +227,20 @@ mod tests {
         let store = SnapshotStore::open(&path).unwrap();
 
         for ts in [1000, 2000, 3000, 4000, 5000] {
-            store.write_snapshot(&SnapshotEnvelope {
-                experiment_id: "exp-1".into(),
-                policy_state: vec![],
-                total_rewards_processed: ts as u64,
-                kafka_offset: 0,
-                snapshot_at_epoch_ms: ts,
-            }).unwrap();
+            store
+                .write_snapshot(&SnapshotEnvelope {
+                    experiment_id: "exp-1".into(),
+                    policy_state: vec![],
+                    total_rewards_processed: ts as u64,
+                    kafka_offset: 0,
+                    snapshot_at_epoch_ms: ts,
+                })
+                .unwrap();
         }
 
         let deleted = store.prune_old_snapshots("exp-1", 2).unwrap();
         assert_eq!(deleted, 3);
 
-        // Verify only 2 remain
         let mut count = 0;
         let iter = store.db.iterator(IteratorMode::Start);
         for item in iter {
@@ -238,6 +248,34 @@ mod tests {
             count += 1;
         }
         assert_eq!(count, 2);
+
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_prefix_ids_do_not_collide() {
+        let path = temp_db_path("prefix-collide");
+        let store = SnapshotStore::open(&path).unwrap();
+
+        for (exp, ts) in [("exp", 1000i64), ("exp:sub", 2000)] {
+            store
+                .write_snapshot(&SnapshotEnvelope {
+                    experiment_id: exp.into(),
+                    policy_state: vec![],
+                    total_rewards_processed: ts as u64,
+                    kafka_offset: 0,
+                    snapshot_at_epoch_ms: ts,
+                })
+                .unwrap();
+        }
+
+        let latest_exp = store.load_latest("exp").unwrap().unwrap();
+        assert_eq!(latest_exp.experiment_id, "exp");
+        assert_eq!(latest_exp.total_rewards_processed, 1000);
+
+        let latest_sub = store.load_latest("exp:sub").unwrap().unwrap();
+        assert_eq!(latest_sub.experiment_id, "exp:sub");
+        assert_eq!(latest_sub.total_rewards_processed, 2000);
 
         let _ = std::fs::remove_dir_all(&path);
     }
