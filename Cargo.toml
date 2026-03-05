@@ -71,17 +71,8 @@ tch = "0.17"
 bloomfilter = "1.0"
 # Metrics
 prometheus = "0.13"
-# WASM testing
-wasm-bindgen-test = "0.3"
-# Python
-pyo3 = { version = "0.22", features = ["extension-module"] }
 # Testing
-assert_approx_eq = "1.1"
 tokio-test = "0.4"
-# gRPC web
-tonic-web = "0.12"
-# ML (optional, for bandit gpu feature)
-tch = "0.17"
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 # UUID
