@@ -77,9 +77,32 @@ func TestLoadFromFile(t *testing.T) {
 		assert.False(t, m3.LowerIsBetter)
 	})
 
+	t.Run("qoe metric", func(t *testing.T) {
+		m, err := cs.GetMetric("ttff_mean")
+		require.NoError(t, err)
+		assert.True(t, m.IsQoEMetric)
+		assert.Equal(t, "time_to_first_frame_ms", m.QoEField)
+		assert.True(t, m.LowerIsBetter)
+	})
+
+	t.Run("lifecycle stratification", func(t *testing.T) {
+		exp, err := cs.GetExperiment("e0000000-0000-0000-0000-000000000004")
+		require.NoError(t, err)
+		assert.True(t, exp.LifecycleStratificationEnabled)
+		assert.Len(t, exp.LifecycleSegments, 6)
+		assert.Contains(t, exp.LifecycleSegments, "TRIAL")
+		assert.Contains(t, exp.LifecycleSegments, "WINBACK")
+	})
+
+	t.Run("control variant id", func(t *testing.T) {
+		exp, err := cs.GetExperiment("e0000000-0000-0000-0000-000000000001")
+		require.NoError(t, err)
+		assert.Equal(t, "f0000000-0000-0000-0000-000000000001", exp.ControlVariantID())
+	})
+
 	t.Run("running experiments", func(t *testing.T) {
 		ids := cs.RunningExperimentIDs()
-		assert.Len(t, ids, 2)
+		assert.Len(t, ids, 3)
 	})
 
 	t.Run("not found", func(t *testing.T) {

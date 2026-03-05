@@ -160,3 +160,86 @@ func TestRenderGuardrailMetric_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "GROUP BY eu.variant_id")
 	assert.Contains(t, sql, "current_value")
 }
+
+func TestRenderQoEMetric(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "ttff_mean"
+	p.QoEField = "time_to_first_frame_ms"
+	sql, err := r.RenderQoEMetric(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "qoe_metric_expected.sql"), sql)
+}
+
+func TestRenderQoEMetric_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-qoe", MetricID: "rebuffer_ratio_mean", QoEField: "rebuffer_ratio", ComputationDate: "2024-06-01"}
+	sql, _ := r.RenderQoEMetric(p)
+	assert.Contains(t, sql, "delta.qoe_events")
+	assert.Contains(t, sql, "rebuffer_ratio")
+	assert.Contains(t, sql, "AVG(qoe_data.value)")
+	assert.NotContains(t, sql, "delta.metric_events", "QoE metric should NOT read from metric_events")
+}
+
+func TestRenderContentConsumption(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.ContentIDField = "content_id"
+	sql, err := r.RenderContentConsumption(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "content_consumption_expected.sql"), sql)
+}
+
+func TestRenderContentConsumption_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-cc", ComputationDate: "2024-06-01", ContentIDField: "content_id"}
+	sql, _ := r.RenderContentConsumption(p)
+	assert.Contains(t, sql, "watch_time_seconds")
+	assert.Contains(t, sql, "view_count")
+	assert.Contains(t, sql, "unique_viewers")
+	assert.Contains(t, sql, "GROUP BY content_events.variant_id, content_events.content_id")
+}
+
+func TestRenderDailyTreatmentEffect(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "watch_time_minutes"
+	p.ControlVariantID = "ctrl-001"
+	sql, err := r.RenderDailyTreatmentEffect(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "daily_treatment_effect_expected.sql"), sql)
+}
+
+func TestRenderDailyTreatmentEffect_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-te", MetricID: "my_metric", ComputationDate: "2024-06-01", ControlVariantID: "ctrl-variant"}
+	sql, _ := r.RenderDailyTreatmentEffect(p)
+	assert.Contains(t, sql, "delta.metric_summaries")
+	assert.Contains(t, sql, "control_mean")
+	assert.Contains(t, sql, "treatment_mean")
+	assert.Contains(t, sql, "absolute_effect")
+	assert.Contains(t, sql, "ctrl-variant")
+}
+
+func TestRenderLifecycleMean(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "watch_time_minutes"
+	p.SourceEventType = "heartbeat"
+	p.LifecycleEnabled = true
+	sql, err := r.RenderLifecycleMean(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "lifecycle_mean_expected.sql"), sql)
+}
+
+func TestRenderLifecycleMean_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-lc", MetricID: "my_metric", SourceEventType: "heartbeat", ComputationDate: "2024-06-01", LifecycleEnabled: true}
+	sql, _ := r.RenderLifecycleMean(p)
+	assert.Contains(t, sql, "lifecycle_segment")
+	assert.Contains(t, sql, "GROUP BY metric_data.user_id, metric_data.variant_id, metric_data.lifecycle_segment")
+}

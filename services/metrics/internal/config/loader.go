@@ -21,16 +21,18 @@ type GuardrailConfig struct {
 }
 
 type ExperimentConfig struct {
-	ExperimentID       string            `json:"experiment_id"`
-	Name               string            `json:"name"`
-	Type               string            `json:"type"`
-	State              string            `json:"state"`
-	StartedAt          string            `json:"started_at,omitempty"`
-	PrimaryMetricID    string            `json:"primary_metric_id"`
-	SecondaryMetricIDs []string          `json:"secondary_metric_ids"`
-	Variants           []VariantConfig   `json:"variants"`
-	GuardrailConfigs   []GuardrailConfig `json:"guardrail_configs,omitempty"`
-	GuardrailAction    string            `json:"guardrail_action,omitempty"`
+	ExperimentID                 string            `json:"experiment_id"`
+	Name                         string            `json:"name"`
+	Type                         string            `json:"type"`
+	State                        string            `json:"state"`
+	StartedAt                    string            `json:"started_at,omitempty"`
+	PrimaryMetricID              string            `json:"primary_metric_id"`
+	SecondaryMetricIDs           []string          `json:"secondary_metric_ids"`
+	Variants                     []VariantConfig   `json:"variants"`
+	GuardrailConfigs             []GuardrailConfig `json:"guardrail_configs,omitempty"`
+	GuardrailAction              string            `json:"guardrail_action,omitempty"`
+	LifecycleStratificationEnabled bool            `json:"lifecycle_stratification_enabled,omitempty"`
+	LifecycleSegments            []string          `json:"lifecycle_segments,omitempty"`
 }
 
 type MetricConfig struct {
@@ -42,6 +44,8 @@ type MetricConfig struct {
 	DenominatorEventType string `json:"denominator_event_type,omitempty"`
 	CupedCovariateMetricID string `json:"cuped_covariate_metric_id,omitempty"`
 	LowerIsBetter        bool   `json:"lower_is_better,omitempty"`
+	IsQoEMetric          bool   `json:"is_qoe_metric,omitempty"`
+	QoEField             string `json:"qoe_field,omitempty"`
 }
 
 type seedFile struct {
@@ -131,6 +135,16 @@ func (c *ConfigStore) GetGuardrailsForExperiment(id string) ([]GuardrailConfig, 
 		return nil, fmt.Errorf("config: experiment %q not found", id)
 	}
 	return e.GuardrailConfigs, nil
+}
+
+// ControlVariantID returns the variant_id of the control variant, or empty string if none.
+func (e *ExperimentConfig) ControlVariantID() string {
+	for _, v := range e.Variants {
+		if v.IsControl {
+			return v.VariantID
+		}
+	}
+	return ""
 }
 
 func (c *ConfigStore) RunningExperimentIDs() []string {

@@ -64,6 +64,33 @@
           "is_control": false
         }
       ]
+    },
+    {
+      "experiment_id": "e0000000-0000-0000-0000-000000000004",
+      "name": "playback_qoe_test",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-01-12",
+      "primary_metric_id": "ttff_mean",
+      "secondary_metric_ids": [
+        "rebuffer_ratio_mean"
+      ],
+      "lifecycle_stratification_enabled": true,
+      "lifecycle_segments": ["TRIAL", "NEW", "ESTABLISHED", "MATURE", "AT_RISK", "WINBACK"],
+      "variants": [
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000007",
+          "name": "control",
+          "traffic_fraction": 0.5,
+          "is_control": true
+        },
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000008",
+          "name": "adaptive_bitrate_v2",
+          "traffic_fraction": 0.5,
+          "is_control": false
+        }
+      ]
     }
   ],
   "metrics": [
@@ -131,6 +158,24 @@
       "name": "Error Rate",
       "type": "PROPORTION",
       "source_event_type": "playback_error",
+      "lower_is_better": true
+    },
+    {
+      "metric_id": "ttff_mean",
+      "name": "Time to First Frame (mean)",
+      "type": "MEAN",
+      "source_event_type": "qoe_playback",
+      "is_qoe_metric": true,
+      "qoe_field": "time_to_first_frame_ms",
+      "lower_is_better": true
+    },
+    {
+      "metric_id": "rebuffer_ratio_mean",
+      "name": "Rebuffer Ratio (mean)",
+      "type": "MEAN",
+      "source_event_type": "qoe_playback",
+      "is_qoe_metric": true,
+      "qoe_field": "rebuffer_ratio",
       "lower_is_better": true
     }
   ]
