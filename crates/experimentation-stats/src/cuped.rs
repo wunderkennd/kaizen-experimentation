@@ -233,8 +233,8 @@ mod tests {
 
     #[test]
     fn test_cuped_validation_errors() {
-        assert!(cuped_adjust(&[1.0], &[2.0, 3.0], &[1.0], &[2.0, 3.0]).is_err());
-        assert!(cuped_adjust(&[1.0, 2.0], &[3.0], &[1.0, 2.0], &[3.0]).is_err());
-        assert!(cuped_adjust(&[1.0, 2.0], &[3.0, 4.0], &[1.0], &[3.0, 4.0]).is_err());
+        assert!(cuped_adjust(&[1.0], &[2.0, 3.0], &[1.0], &[2.0, 3.0], 0.05).is_err());
+        assert!(cuped_adjust(&[1.0, 2.0], &[3.0], &[1.0, 2.0], &[3.0], 0.05).is_err());
+        assert!(cuped_adjust(&[1.0, 2.0], &[3.0, 4.0], &[1.0], &[3.0, 4.0], 0.05).is_err());
     }
 }
