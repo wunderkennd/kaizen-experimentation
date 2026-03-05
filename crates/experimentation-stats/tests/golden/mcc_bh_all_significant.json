@@ -1,0 +1,11 @@
+{
+  "test_name": "bh_all_significant",
+  "reference_command": "p.adjust(c(0.001, 0.002, 0.003, 0.004, 0.005), method='BH')",
+  "method": "BenjaminiHochberg",
+  "p_values": [0.001, 0.002, 0.003, 0.004, 0.005],
+  "threshold": 0.05,
+  "expected": {
+    "p_values_adjusted": [0.005, 0.005, 0.005, 0.005, 0.005],
+    "rejected": [true, true, true, true, true]
+  }
+}
