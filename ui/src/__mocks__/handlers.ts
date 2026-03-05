@@ -1,8 +1,9 @@
 import { http, HttpResponse } from 'msw';
-import { SEED_EXPERIMENTS, SEED_QUERY_LOG } from './seed-data';
+import { SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS } from './seed-data';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
+const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
 
 export const handlers = [
   // ListExperiments
@@ -131,6 +132,30 @@ export const handlers = [
       state: 'ARCHIVED',
     };
     return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
+  }),
+
+  // GetAnalysisResult
+  http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId?: string };
+    const experimentId = body.experimentId;
+
+    if (!experimentId) {
+      return HttpResponse.json(
+        { error: 'experimentId is required' },
+        { status: 400 },
+      );
+    }
+
+    const result = SEED_ANALYSIS_RESULTS.find((r) => r.experimentId === experimentId);
+
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No analysis result for experiment ${experimentId}` },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json(result);
   }),
 
   // GetQueryLog

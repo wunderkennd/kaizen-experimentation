@@ -87,3 +87,15 @@ export function truncateJson(json: string, maxLength = 60): string {
   if (json.length <= maxLength) return json;
   return json.slice(0, maxLength) + '…';
 }
+
+export function formatPValue(p: number): string {
+  if (p < 0.001) return '< 0.001';
+  if (p < 0.01) return p.toFixed(3);
+  return p.toFixed(2);
+}
+
+export function formatEffect(effect: number, isPercent = false): string {
+  const prefix = effect > 0 ? '+' : '';
+  if (isPercent) return `${prefix}${(effect * 100).toFixed(2)}%`;
+  return `${prefix}${effect.toFixed(4)}`;
+}

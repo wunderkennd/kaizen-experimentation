@@ -1,4 +1,4 @@
-import type { Experiment, QueryLogEntry } from '@/lib/types';
+import type { AnalysisResult, Experiment, QueryLogEntry } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
   {
@@ -285,12 +285,144 @@ const INITIAL_QUERY_LOG: Record<string, QueryLogEntry[]> = {
   ],
 };
 
+const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
+  {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    metricResults: [
+      {
+        metricId: 'click_through_rate',
+        variantId: 'v1-treatment',
+        controlMean: 0.124,
+        treatmentMean: 0.138,
+        absoluteEffect: 0.014,
+        relativeEffect: 0.1129,
+        ciLower: 0.003,
+        ciUpper: 0.025,
+        pValue: 0.008,
+        isSignificant: true,
+        cupedAdjustedEffect: 0.013,
+        cupedCiLower: 0.005,
+        cupedCiUpper: 0.021,
+        varianceReductionPct: 32,
+        sequentialResult: {
+          boundaryCrossed: true,
+          alphaSpent: 0.032,
+          alphaRemaining: 0.018,
+          currentLook: 3,
+          adjustedPValue: 0.012,
+        },
+      },
+      {
+        metricId: 'watch_time_per_session',
+        variantId: 'v1-treatment',
+        controlMean: 1842,
+        treatmentMean: 1956,
+        absoluteEffect: 114,
+        relativeEffect: 0.0619,
+        ciLower: 28,
+        ciUpper: 200,
+        pValue: 0.009,
+        isSignificant: true,
+        cupedAdjustedEffect: 108,
+        cupedCiLower: 42,
+        cupedCiUpper: 174,
+        varianceReductionPct: 28,
+        sequentialResult: {
+          boundaryCrossed: false,
+          alphaSpent: 0.019,
+          alphaRemaining: 0.031,
+          currentLook: 3,
+          adjustedPValue: 0.041,
+        },
+      },
+      {
+        metricId: 'content_diversity_score',
+        variantId: 'v1-treatment',
+        controlMean: 0.72,
+        treatmentMean: 0.74,
+        absoluteEffect: 0.02,
+        relativeEffect: 0.0278,
+        ciLower: -0.01,
+        ciUpper: 0.05,
+        pValue: 0.19,
+        isSignificant: false,
+        cupedAdjustedEffect: 0.018,
+        cupedCiLower: -0.005,
+        cupedCiUpper: 0.041,
+        varianceReductionPct: 18,
+        sequentialResult: {
+          boundaryCrossed: false,
+          alphaSpent: 0.008,
+          alphaRemaining: 0.042,
+          currentLook: 3,
+          adjustedPValue: 0.22,
+        },
+      },
+    ],
+    srmResult: {
+      chiSquared: 0.42,
+      pValue: 0.517,
+      isMismatch: false,
+      observedCounts: { 'v1-control': 50102, 'v1-treatment': 49898 },
+      expectedCounts: { 'v1-control': 50000, 'v1-treatment': 50000 },
+    },
+    computedAt: '2026-03-05T12:00:00Z',
+  },
+  {
+    experimentId: '66666666-6666-6666-6666-666666666666',
+    metricResults: [
+      {
+        metricId: 'click_through_rate',
+        variantId: 'v6-treatment',
+        controlMean: 0.089,
+        treatmentMean: 0.102,
+        absoluteEffect: 0.013,
+        relativeEffect: 0.1461,
+        ciLower: 0.002,
+        ciUpper: 0.024,
+        pValue: 0.02,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+      },
+      {
+        metricId: 'watch_time_per_session',
+        variantId: 'v6-treatment',
+        controlMean: 2100,
+        treatmentMean: 2145,
+        absoluteEffect: 45,
+        relativeEffect: 0.0214,
+        ciLower: -30,
+        ciUpper: 120,
+        pValue: 0.24,
+        isSignificant: false,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+      },
+    ],
+    srmResult: {
+      chiSquared: 14.82,
+      pValue: 0.0001,
+      isMismatch: true,
+      observedCounts: { 'v6-control': 52300, 'v6-treatment': 47700 },
+      expectedCounts: { 'v6-control': 50000, 'v6-treatment': 50000 },
+    },
+    computedAt: '2026-03-04T18:30:00Z',
+  },
+];
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
+export let SEED_ANALYSIS_RESULTS: AnalysisResult[] = structuredClone(INITIAL_ANALYSIS_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
   SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
+  SEED_ANALYSIS_RESULTS = structuredClone(INITIAL_ANALYSIS_RESULTS);
 }
