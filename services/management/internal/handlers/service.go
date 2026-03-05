@@ -22,27 +22,16 @@ type ExperimentService struct {
 	store    *store.ExperimentStore
 	audit    *store.AuditStore
 	layers   *store.LayerStore
+	metrics  *store.MetricStore
 	notifier *streaming.Notifier
 }
 
 // NewExperimentService creates a new handler with the given stores and notifier.
-func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, n *streaming.Notifier) *ExperimentService {
-	return &ExperimentService{store: es, audit: as, layers: ls, notifier: n}
+func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, n *streaming.Notifier) *ExperimentService {
+	return &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, notifier: n}
 }
 
-// --- Unimplemented stubs for metric/layer/targeting/surrogate RPCs ---
-
-func (s *ExperimentService) CreateMetricDefinition(_ context.Context, _ *connect.Request[mgmtv1.CreateMetricDefinitionRequest]) (*connect.Response[commonv1.MetricDefinition], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, nil)
-}
-
-func (s *ExperimentService) GetMetricDefinition(_ context.Context, _ *connect.Request[mgmtv1.GetMetricDefinitionRequest]) (*connect.Response[commonv1.MetricDefinition], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, nil)
-}
-
-func (s *ExperimentService) ListMetricDefinitions(_ context.Context, _ *connect.Request[mgmtv1.ListMetricDefinitionsRequest]) (*connect.Response[mgmtv1.ListMetricDefinitionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, nil)
-}
+// --- Unimplemented stubs for targeting/surrogate RPCs ---
 
 func (s *ExperimentService) CreateTargetingRule(_ context.Context, _ *connect.Request[mgmtv1.CreateTargetingRuleRequest]) (*connect.Response[commonv1.TargetingRule], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, nil)
