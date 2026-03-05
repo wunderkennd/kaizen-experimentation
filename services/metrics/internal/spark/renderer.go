@@ -1,4 +1,3 @@
-// Package spark provides SQL template rendering and execution for Spark SQL jobs.
 package spark
 
 import (
@@ -12,28 +11,23 @@ import (
 //go:embed templates/*.sql.tmpl
 var templateFS embed.FS
 
-// TemplateParams holds the values substituted into SQL templates.
 type TemplateParams struct {
-	ExperimentID    string
-	MetricID        string
-	SourceEventType string
-	ComputationDate string // YYYY-MM-DD
-	// NumeratorEventType and DenominatorEventType are used for RATIO metrics.
+	ExperimentID         string
+	MetricID             string
+	SourceEventType      string
+	ComputationDate      string
 	NumeratorEventType   string
 	DenominatorEventType string
-	// CUPED covariate fields.
 	CupedEnabled             bool
-	CupedCovariateEventType  string // Source event type of the covariate metric
-	ExperimentStartDate      string // YYYY-MM-DD, used to bound pre-experiment window
-	CupedLookbackDays        int    // Default 7
+	CupedCovariateEventType  string
+	ExperimentStartDate      string
+	CupedLookbackDays        int
 }
 
-// SQLRenderer renders Spark SQL from embedded templates.
 type SQLRenderer struct {
 	templates *template.Template
 }
 
-// NewSQLRenderer parses all embedded SQL templates and returns a renderer.
 func NewSQLRenderer() (*SQLRenderer, error) {
 	tmpl, err := template.ParseFS(templateFS, "templates/*.sql.tmpl")
 	if err != nil {
@@ -42,7 +36,6 @@ func NewSQLRenderer() (*SQLRenderer, error) {
 	return &SQLRenderer{templates: tmpl}, nil
 }
 
-// Render renders a named template (e.g., "mean.sql.tmpl") with the given params.
 func (r *SQLRenderer) Render(templateName string, p TemplateParams) (string, error) {
 	var buf bytes.Buffer
 	if err := r.templates.ExecuteTemplate(&buf, templateName, p); err != nil {
@@ -51,40 +44,14 @@ func (r *SQLRenderer) Render(templateName string, p TemplateParams) (string, err
 	return strings.TrimSpace(buf.String()), nil
 }
 
-// RenderMean renders the MEAN metric SQL template.
-func (r *SQLRenderer) RenderMean(p TemplateParams) (string, error) {
-	return r.Render("mean.sql.tmpl", p)
-}
+func (r *SQLRenderer) RenderMean(p TemplateParams) (string, error)            { return r.Render("mean.sql.tmpl", p) }
+func (r *SQLRenderer) RenderProportion(p TemplateParams) (string, error)      { return r.Render("proportion.sql.tmpl", p) }
+func (r *SQLRenderer) RenderCount(p TemplateParams) (string, error)           { return r.Render("count.sql.tmpl", p) }
+func (r *SQLRenderer) RenderRatio(p TemplateParams) (string, error)           { return r.Render("ratio.sql.tmpl", p) }
+func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) { return r.Render("ratio_delta_method.sql.tmpl", p) }
+func (r *SQLRenderer) RenderCupedCovariate(p TemplateParams) (string, error)  { return r.Render("cuped_covariate.sql.tmpl", p) }
+func (r *SQLRenderer) RenderGuardrailMetric(p TemplateParams) (string, error) { return r.Render("guardrail_metric.sql.tmpl", p) }
 
-// RenderProportion renders the PROPORTION metric SQL template.
-func (r *SQLRenderer) RenderProportion(p TemplateParams) (string, error) {
-	return r.Render("proportion.sql.tmpl", p)
-}
-
-// RenderCount renders the COUNT metric SQL template.
-func (r *SQLRenderer) RenderCount(p TemplateParams) (string, error) {
-	return r.Render("count.sql.tmpl", p)
-}
-
-// RenderRatio renders the RATIO metric SQL template (per-user ratio value).
-func (r *SQLRenderer) RenderRatio(p TemplateParams) (string, error) {
-	return r.Render("ratio.sql.tmpl", p)
-}
-
-// RenderRatioDeltaMethod renders the delta method variance components SQL for RATIO metrics.
-// This produces per-variant Var(N), Var(D), Cov(N,D) needed by M4a for delta method CI.
-func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) {
-	return r.Render("ratio_delta_method.sql.tmpl", p)
-}
-
-// RenderCupedCovariate renders the CUPED covariate SQL template.
-// This computes the pre-experiment metric value per user for use as a CUPED covariate.
-// The result is merged into metric_summaries.cuped_covariate by the job orchestrator.
-func (r *SQLRenderer) RenderCupedCovariate(p TemplateParams) (string, error) {
-	return r.Render("cuped_covariate.sql.tmpl", p)
-}
-
-// RenderForType dispatches to the correct template based on metric type string.
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {
 	case "MEAN":

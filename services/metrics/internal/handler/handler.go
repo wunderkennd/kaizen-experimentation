@@ -1,4 +1,3 @@
-// Package handler implements the ConnectRPC MetricComputationServiceHandler.
 package handler
 
 import (
@@ -17,114 +16,84 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 )
 
-// Ensure MetricsHandler satisfies the generated interface at compile time.
 var _ metricsv1connect.MetricComputationServiceHandler = (*MetricsHandler)(nil)
 
-// MetricsHandler implements the MetricComputationService RPC methods.
 type MetricsHandler struct {
-	job      *jobs.StandardJob
-	queryLog querylog.Writer
+	job          *jobs.StandardJob
+	guardrailJob *jobs.GuardrailJob
+	queryLog     querylog.Writer
 }
 
-// NewMetricsHandler creates a new handler with the given dependencies.
-func NewMetricsHandler(job *jobs.StandardJob, ql querylog.Writer) *MetricsHandler {
-	return &MetricsHandler{
-		job:      job,
-		queryLog: ql,
-	}
+func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ql querylog.Writer) *MetricsHandler {
+	return &MetricsHandler{job: job, guardrailJob: gj, queryLog: ql}
 }
 
-func (h *MetricsHandler) ComputeMetrics(
-	ctx context.Context,
-	req *connect.Request[metricsv1.ComputeMetricsRequest],
-) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
-	experimentID := req.Msg.GetExperimentId()
-	if experimentID == "" {
+func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Request[metricsv1.ComputeMetricsRequest]) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
+	id := req.Msg.GetExperimentId()
+	if id == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("experiment_id is required"))
 	}
-
-	result, err := h.job.Run(ctx, experimentID)
+	result, err := h.job.Run(ctx, id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
-	resp := &metricsv1.ComputeMetricsResponse{
-		ExperimentId:    result.ExperimentID,
-		MetricsComputed: int32(result.MetricsComputed),
-		UsersProcessed:  int32(result.UsersProcessed),
-		CompletedAt:     timestamppb.New(result.CompletedAt),
-	}
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(&metricsv1.ComputeMetricsResponse{
+		ExperimentId: result.ExperimentID, MetricsComputed: int32(result.MetricsComputed),
+		UsersProcessed: int32(result.UsersProcessed), CompletedAt: timestamppb.New(result.CompletedAt),
+	}), nil
 }
 
-func (h *MetricsHandler) ComputeGuardrailMetrics(
-	ctx context.Context,
-	req *connect.Request[metricsv1.ComputeGuardrailMetricsRequest],
-) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
-	// Stub — Milestone 1.13.
-	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("guardrail metrics not yet implemented"))
-}
-
-func (h *MetricsHandler) ExportNotebook(
-	ctx context.Context,
-	req *connect.Request[metricsv1.ExportNotebookRequest],
-) (*connect.Response[metricsv1.ExportNotebookResponse], error) {
-	experimentID := req.Msg.GetExperimentId()
-	if experimentID == "" {
+func (h *MetricsHandler) ComputeGuardrailMetrics(ctx context.Context, req *connect.Request[metricsv1.ComputeGuardrailMetricsRequest]) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
+	id := req.Msg.GetExperimentId()
+	if id == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("experiment_id is required"))
 	}
-
-	entries, err := h.queryLog.GetLogs(ctx, experimentID, "")
+	result, err := h.guardrailJob.Run(ctx, id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	return connect.NewResponse(&metricsv1.ComputeMetricsResponse{
+		ExperimentId: result.ExperimentID, MetricsComputed: int32(result.GuardrailsChecked),
+		CompletedAt: timestamppb.New(result.CompletedAt),
+	}), nil
+}
 
+func (h *MetricsHandler) ExportNotebook(ctx context.Context, req *connect.Request[metricsv1.ExportNotebookRequest]) (*connect.Response[metricsv1.ExportNotebookResponse], error) {
+	id := req.Msg.GetExperimentId()
+	if id == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("experiment_id is required"))
+	}
+	entries, err := h.queryLog.GetLogs(ctx, id, "")
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	if len(entries) == 0 {
-		return nil, connect.NewError(connect.CodeNotFound,
-			fmt.Errorf("no query logs found for experiment %s", experimentID))
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no query logs found for experiment %s", id))
 	}
-
-	nbBytes, err := export.GenerateNotebook(experimentID, entries)
+	nbBytes, err := export.GenerateNotebook(id, entries)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
-	filename := fmt.Sprintf("experiment_%s_%s.ipynb",
-		experimentID, time.Now().Format("20060102"))
-
-	resp := &metricsv1.ExportNotebookResponse{
-		NotebookContent: nbBytes,
-		Filename:        filename,
-	}
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(&metricsv1.ExportNotebookResponse{
+		NotebookContent: nbBytes, Filename: fmt.Sprintf("experiment_%s_%s.ipynb", id, time.Now().Format("20060102")),
+	}), nil
 }
 
-func (h *MetricsHandler) GetQueryLog(
-	ctx context.Context,
-	req *connect.Request[metricsv1.GetQueryLogRequest],
-) (*connect.Response[metricsv1.GetQueryLogResponse], error) {
-	experimentID := req.Msg.GetExperimentId()
-	if experimentID == "" {
+func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[metricsv1.GetQueryLogRequest]) (*connect.Response[metricsv1.GetQueryLogResponse], error) {
+	id := req.Msg.GetExperimentId()
+	if id == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("experiment_id is required"))
 	}
-
-	entries, err := h.queryLog.GetLogs(ctx, experimentID, req.Msg.GetMetricId())
+	entries, err := h.queryLog.GetLogs(ctx, id, req.Msg.GetMetricId())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
-	protoEntries := make([]*metricsv1.QueryLogEntry, len(entries))
+	pe := make([]*metricsv1.QueryLogEntry, len(entries))
 	for i, e := range entries {
-		protoEntries[i] = &metricsv1.QueryLogEntry{
-			ExperimentId: e.ExperimentID,
-			MetricId:     e.MetricID,
-			SqlText:      e.SQLText,
-			RowCount:     e.RowCount,
-			DurationMs:   e.DurationMs,
-			ComputedAt:   timestamppb.New(e.ComputedAt),
+		pe[i] = &metricsv1.QueryLogEntry{
+			ExperimentId: e.ExperimentID, MetricId: e.MetricID, SqlText: e.SQLText,
+			RowCount: e.RowCount, DurationMs: e.DurationMs, ComputedAt: timestamppb.New(e.ComputedAt),
 		}
 	}
-
-	resp := &metricsv1.GetQueryLogResponse{Entries: protoEntries}
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(&metricsv1.GetQueryLogResponse{Entries: pe}), nil
 }
