@@ -1,0 +1,41 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = 'exp-001'
+),
+qoe_data AS (
+    SELECT qe.user_id, eu.variant_id, AVG(qe.time_to_first_frame_ms) AS qoe_value
+    FROM delta.qoe_events qe
+    INNER JOIN exposed_users eu ON qe.user_id = eu.user_id
+    GROUP BY qe.user_id, eu.variant_id
+),
+engagement_data AS (
+    SELECT me.user_id, eu.variant_id, AVG(me.value) AS engagement_value
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = 'heartbeat'
+    GROUP BY me.user_id, eu.variant_id
+),
+joined AS (
+    SELECT
+        qd.user_id,
+        qd.variant_id,
+        qd.qoe_value,
+        ed.engagement_value
+    FROM qoe_data qd
+    INNER JOIN engagement_data ed ON qd.user_id = ed.user_id AND qd.variant_id = ed.variant_id
+)
+SELECT
+    'exp-001' AS experiment_id,
+    'time_to_first_frame_ms' AS qoe_metric,
+    'heartbeat' AS engagement_metric,
+    joined.variant_id,
+    CORR(joined.qoe_value, joined.engagement_value) AS pearson_correlation,
+    COUNT(*) AS sample_size,
+    AVG(joined.qoe_value) AS avg_qoe_value,
+    AVG(joined.engagement_value) AS avg_engagement_value,
+    STDDEV_SAMP(joined.qoe_value) AS stddev_qoe,
+    STDDEV_SAMP(joined.engagement_value) AS stddev_engagement,
+    CAST('2024-01-15' AS DATE) AS computation_date
+FROM joined
+GROUP BY joined.variant_id

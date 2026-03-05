@@ -23,11 +23,12 @@ type MetricsHandler struct {
 	guardrailJob        *jobs.GuardrailJob
 	contentConsumption  *jobs.ContentConsumptionJob
 	surrogateJob        *jobs.SurrogateJob
+	interleavingJob     *jobs.InterleavingJob
 	queryLog            querylog.Writer
 }
 
-func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ql querylog.Writer) *MetricsHandler {
-	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, queryLog: ql}
+func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ilj *jobs.InterleavingJob, ql querylog.Writer) *MetricsHandler {
+	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, interleavingJob: ilj, queryLog: ql}
 }
 
 func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Request[metricsv1.ComputeMetricsRequest]) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
@@ -48,6 +49,12 @@ func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Reques
 	// Compute surrogate projections if a model is linked.
 	if h.surrogateJob != nil {
 		if _, err := h.surrogateJob.Run(ctx, id); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+	// Compute interleaving scores for INTERLEAVING experiments.
+	if h.interleavingJob != nil {
+		if _, err := h.interleavingJob.Run(ctx, id); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}

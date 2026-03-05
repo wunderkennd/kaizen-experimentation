@@ -1,0 +1,70 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id, interleaving_provenance
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+      AND interleaving_provenance IS NOT NULL
+),
+engagement_events AS (
+    SELECT me.user_id, me.content_id, me.value
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.EngagementEventType}}'
+      AND me.content_id IS NOT NULL
+),
+user_item_credit AS (
+    SELECT
+        eu.user_id,
+        ee.content_id,
+        eu.interleaving_provenance[ee.content_id] AS source_algorithm_id,
+        ee.value AS engagement_value
+    FROM exposed_users eu
+    INNER JOIN engagement_events ee ON eu.user_id = ee.user_id
+    WHERE eu.interleaving_provenance[ee.content_id] IS NOT NULL
+),
+{{- if eq .CreditAssignment "binary_win"}}
+per_user_scores AS (
+    SELECT
+        user_id,
+        source_algorithm_id,
+        CASE WHEN SUM(engagement_value) > 0 THEN 1.0 ELSE 0.0 END AS credit
+    FROM user_item_credit
+    GROUP BY user_id, source_algorithm_id
+)
+{{- else if eq .CreditAssignment "weighted"}}
+per_user_scores AS (
+    SELECT
+        user_id,
+        source_algorithm_id,
+        SUM(engagement_value) AS credit
+    FROM user_item_credit
+    GROUP BY user_id, source_algorithm_id
+)
+{{- else}}
+per_user_scores AS (
+    SELECT
+        user_id,
+        source_algorithm_id,
+        CAST(COUNT(*) AS DOUBLE) AS credit
+    FROM user_item_credit
+    GROUP BY user_id, source_algorithm_id
+)
+{{- end}}
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    pus.user_id,
+    MAP_FROM_ARRAYS(
+        COLLECT_LIST(pus.source_algorithm_id),
+        COLLECT_LIST(pus.credit)
+    ) AS algorithm_scores,
+    FIRST(
+        CASE WHEN pus.credit = max_scores.max_credit THEN pus.source_algorithm_id END
+    ) AS winning_algorithm_id,
+    SUM(CAST(pus.credit AS INT)) AS total_engagements,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM per_user_scores pus
+INNER JOIN (
+    SELECT user_id, MAX(credit) AS max_credit
+    FROM per_user_scores
+    GROUP BY user_id
+) max_scores ON pus.user_id = max_scores.user_id
+GROUP BY pus.user_id

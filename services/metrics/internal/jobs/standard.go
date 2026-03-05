@@ -189,6 +189,39 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			)
 		}
 
+		// Session-level aggregation: if enabled, also compute per-session metrics.
+		if exp.SessionLevel && !m.IsQoEMetric {
+			slParams := params
+			slParams.SessionLevel = true
+
+			slSQL, err := j.renderer.RenderSessionLevelMean(slParams)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: render session-level metric for %s: %w", m.MetricID, err)
+			}
+
+			slResult, err := j.executor.ExecuteAndWrite(ctx, slSQL, "delta.metric_summaries")
+			if err != nil {
+				return nil, fmt.Errorf("jobs: execute session-level metric for %s: %w", m.MetricID, err)
+			}
+
+			if err := j.queryLog.Log(ctx, querylog.Entry{
+				ExperimentID: experimentID,
+				MetricID:     m.MetricID,
+				SQLText:      slSQL,
+				RowCount:     slResult.RowCount,
+				DurationMs:   slResult.Duration.Milliseconds(),
+				JobType:      "session_level_metric",
+			}); err != nil {
+				return nil, fmt.Errorf("jobs: log session-level metric query for %s: %w", m.MetricID, err)
+			}
+
+			slog.Info("computed session-level metric",
+				"experiment_id", experimentID,
+				"metric_id", m.MetricID,
+				"rows", slResult.RowCount,
+			)
+		}
+
 		// Lifecycle segmentation: if enabled, also compute per-lifecycle-segment metrics.
 		if exp.LifecycleStratificationEnabled && !m.IsQoEMetric {
 			lcParams := params
@@ -267,6 +300,57 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 				"metric_id", m.MetricID,
 				"rows", teResult.RowCount,
 			)
+		}
+	}
+
+	// Post-processing: compute QoE-engagement correlation for experiments with QoE metrics.
+	var qoeMetrics []config.MetricConfig
+	var engagementMetrics []config.MetricConfig
+	for _, m := range metrics {
+		if m.IsQoEMetric {
+			qoeMetrics = append(qoeMetrics, m)
+		} else if !m.IsQoEMetric && m.Type != "RATIO" {
+			engagementMetrics = append(engagementMetrics, m)
+		}
+	}
+	if len(qoeMetrics) > 0 && len(engagementMetrics) > 0 {
+		for _, qm := range qoeMetrics {
+			for _, em := range engagementMetrics {
+				corrParams := spark.TemplateParams{
+					ExperimentID:       exp.ExperimentID,
+					ComputationDate:    computationDate,
+					QoEFieldA:          qm.QoEField,
+					EngagementSourceType: em.SourceEventType,
+				}
+
+				corrSQL, err := j.renderer.RenderQoEEngagementCorrelation(corrParams)
+				if err != nil {
+					return nil, fmt.Errorf("jobs: render QoE-engagement correlation (%s × %s): %w", qm.MetricID, em.MetricID, err)
+				}
+
+				corrResult, err := j.executor.ExecuteAndWrite(ctx, corrSQL, "delta.daily_treatment_effects")
+				if err != nil {
+					return nil, fmt.Errorf("jobs: execute QoE-engagement correlation (%s × %s): %w", qm.MetricID, em.MetricID, err)
+				}
+
+				if err := j.queryLog.Log(ctx, querylog.Entry{
+					ExperimentID: experimentID,
+					MetricID:     qm.MetricID + "×" + em.MetricID,
+					SQLText:      corrSQL,
+					RowCount:     corrResult.RowCount,
+					DurationMs:   corrResult.Duration.Milliseconds(),
+					JobType:      "qoe_engagement_correlation",
+				}); err != nil {
+					return nil, fmt.Errorf("jobs: log QoE-engagement correlation query: %w", err)
+				}
+
+				slog.Info("computed QoE-engagement correlation",
+					"experiment_id", experimentID,
+					"qoe_metric", qm.MetricID,
+					"engagement_metric", em.MetricID,
+					"rows", corrResult.RowCount,
+				)
+			}
 		}
 	}
 

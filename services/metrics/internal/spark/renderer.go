@@ -30,6 +30,15 @@ type TemplateParams struct {
 	// Surrogate metric fields
 	InputMetricIDs        []string // list of metric_ids to aggregate for surrogate input
 	ObservationWindowDays int      // how many days of recent data to aggregate
+	// Interleaving-specific fields
+	CreditAssignment    string // "binary_win", "proportional", or "weighted"
+	EngagementEventType string // event_type for engagement events to join with provenance
+	// Session-level fields
+	SessionLevel bool // whether to aggregate by session_id instead of user_id
+	// QoE-engagement correlation fields
+	QoEFieldA            string // first QoE field for correlation (e.g. "time_to_first_frame_ms")
+	QoEFieldB            string // engagement field for correlation (e.g. "watch_time")
+	EngagementSourceType string // event_type for engagement metric
 }
 
 type SQLRenderer struct {
@@ -64,6 +73,9 @@ func (r *SQLRenderer) RenderContentConsumption(p TemplateParams) (string, error)
 func (r *SQLRenderer) RenderDailyTreatmentEffect(p TemplateParams) (string, error) { return r.Render("daily_treatment_effect.sql.tmpl", p) }
 func (r *SQLRenderer) RenderLifecycleMean(p TemplateParams) (string, error)  { return r.Render("lifecycle_mean.sql.tmpl", p) }
 func (r *SQLRenderer) RenderSurrogateInput(p TemplateParams) (string, error) { return r.Render("surrogate_input.sql.tmpl", p) }
+func (r *SQLRenderer) RenderInterleavingScore(p TemplateParams) (string, error) { return r.Render("interleaving_score.sql.tmpl", p) }
+func (r *SQLRenderer) RenderSessionLevelMean(p TemplateParams) (string, error) { return r.Render("session_level_mean.sql.tmpl", p) }
+func (r *SQLRenderer) RenderQoEEngagementCorrelation(p TemplateParams) (string, error) { return r.Render("qoe_engagement_correlation.sql.tmpl", p) }
 
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {

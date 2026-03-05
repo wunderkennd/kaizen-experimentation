@@ -271,3 +271,88 @@ func TestRenderSurrogateInput_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "GROUP BY ms.variant_id, ms.metric_id")
 	assert.Contains(t, sql, "avg_value")
 }
+
+func TestRenderInterleavingScore(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.EngagementEventType = "click"
+	p.CreditAssignment = "proportional"
+	sql, err := r.RenderInterleavingScore(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "interleaving_score_expected.sql"), sql)
+}
+
+func TestRenderInterleavingScore_BinaryWin(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-il", ComputationDate: "2024-06-01", EngagementEventType: "click", CreditAssignment: "binary_win"}
+	sql, err := r.RenderInterleavingScore(p)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "CASE WHEN SUM(engagement_value) > 0 THEN 1.0 ELSE 0.0 END AS credit")
+	assert.Contains(t, sql, "interleaving_provenance")
+}
+
+func TestRenderInterleavingScore_Weighted(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-il", ComputationDate: "2024-06-01", EngagementEventType: "click", CreditAssignment: "weighted"}
+	sql, err := r.RenderInterleavingScore(p)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "SUM(engagement_value) AS credit")
+	assert.Contains(t, sql, "interleaving_provenance")
+}
+
+func TestRenderInterleavingScore_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-il", ComputationDate: "2024-06-01", EngagementEventType: "click", CreditAssignment: "proportional"}
+	sql, _ := r.RenderInterleavingScore(p)
+	assert.Contains(t, sql, "delta.exposures")
+	assert.Contains(t, sql, "interleaving_provenance")
+	assert.Contains(t, sql, "algorithm_scores")
+	assert.Contains(t, sql, "winning_algorithm_id")
+	assert.Contains(t, sql, "total_engagements")
+	assert.Contains(t, sql, "MAP_FROM_ARRAYS")
+	assert.Contains(t, sql, "source_algorithm_id", "Interleaving scores should derive credit from source_algorithm_id")
+}
+
+func TestRenderSessionLevelMean(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "watch_time_minutes"
+	p.SourceEventType = "heartbeat"
+	p.SessionLevel = true
+	sql, err := r.RenderSessionLevelMean(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "session_level_mean_expected.sql"), sql)
+}
+
+func TestRenderSessionLevelMean_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-sl", MetricID: "my_metric", SourceEventType: "heartbeat", ComputationDate: "2024-06-01", SessionLevel: true}
+	sql, _ := r.RenderSessionLevelMean(p)
+	assert.Contains(t, sql, "session_id")
+	assert.Contains(t, sql, "me.session_id")
+	assert.Contains(t, sql, "GROUP BY metric_data.user_id, metric_data.session_id, metric_data.variant_id")
+}
+
+func TestRenderQoEEngagementCorrelation(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.QoEFieldA = "time_to_first_frame_ms"
+	p.EngagementSourceType = "heartbeat"
+	sql, err := r.RenderQoEEngagementCorrelation(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "qoe_engagement_correlation_expected.sql"), sql)
+}
+
+func TestRenderQoEEngagementCorrelation_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-corr", QoEFieldA: "rebuffer_ratio", EngagementSourceType: "stream_end", ComputationDate: "2024-06-01"}
+	sql, _ := r.RenderQoEEngagementCorrelation(p)
+	assert.Contains(t, sql, "delta.qoe_events")
+	assert.Contains(t, sql, "delta.metric_events")
+	assert.Contains(t, sql, "CORR(joined.qoe_value, joined.engagement_value)")
+	assert.Contains(t, sql, "pearson_correlation")
+	assert.Contains(t, sql, "STDDEV_SAMP")
+}
