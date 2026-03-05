@@ -33,12 +33,14 @@ jobs:
         run: buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main,subdir=proto'
 
       - name: Generate code
-        run: cd proto && buf generate
+        run: |
+          cd proto && buf generate
+          test -d gen || { echo "::error::buf generate did not produce proto/gen/"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
           name: generated-code
-          path: gen/
+          path: proto/gen/
 
   # ───────── Stage 2: Rust Build & Test ─────────
   rust:
