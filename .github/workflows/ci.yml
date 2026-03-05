@@ -55,6 +55,13 @@ jobs:
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
+      - name: Ensure sccache is working
+        run: |
+          if ! sccache --show-stats > /dev/null 2>&1; then
+            echo "sccache is not available; disabling RUSTC_WRAPPER"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          fi
+
       - name: Clippy (all features)
         working-directory: crates
         run: cargo clippy --workspace --all-features -- -D warnings
