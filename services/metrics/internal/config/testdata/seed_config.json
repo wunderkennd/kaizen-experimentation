@@ -5,6 +5,7 @@
       "name": "homepage_recs_v2",
       "type": "AB",
       "state": "RUNNING",
+      "started_at": "2024-01-08",
       "primary_metric_id": "ctr_recommendation",
       "secondary_metric_ids": ["watch_time_minutes", "stream_start_rate", "rebuffer_rate"],
       "variants": [
@@ -17,6 +18,7 @@
       "name": "search_ranking_interleave",
       "type": "INTERLEAVING",
       "state": "RUNNING",
+      "started_at": "2024-01-10",
       "primary_metric_id": "search_success_rate",
       "secondary_metric_ids": ["ctr_recommendation"],
       "variants": [
@@ -27,11 +29,11 @@
   ],
   "metrics": [
     {"metric_id": "stream_start_rate",   "name": "Stream Start Rate",          "type": "PROPORTION", "source_event_type": "stream_start"},
-    {"metric_id": "watch_time_minutes",  "name": "Watch Time (minutes)",       "type": "MEAN",       "source_event_type": "heartbeat"},
+    {"metric_id": "watch_time_minutes",  "name": "Watch Time (minutes)",       "type": "MEAN",       "source_event_type": "heartbeat", "cuped_covariate_metric_id": "watch_time_minutes"},
     {"metric_id": "completion_rate",     "name": "Content Completion Rate",    "type": "PROPORTION", "source_event_type": "stream_end"},
     {"metric_id": "rebuffer_rate",       "name": "Rebuffer Rate",              "type": "RATIO",      "source_event_type": "qoe_rebuffer", "numerator_event_type": "rebuffer_event", "denominator_event_type": "playback_minute"},
     {"metric_id": "search_success_rate", "name": "Search Success Rate",        "type": "PROPORTION", "source_event_type": "search"},
-    {"metric_id": "ctr_recommendation",  "name": "Recommendation CTR",         "type": "PROPORTION", "source_event_type": "impression"},
+    {"metric_id": "ctr_recommendation",  "name": "Recommendation CTR",         "type": "PROPORTION", "source_event_type": "impression", "cuped_covariate_metric_id": "ctr_recommendation"},
     {"metric_id": "revenue_per_user",    "name": "Revenue per User",           "type": "MEAN",       "source_event_type": "revenue"},
     {"metric_id": "churn_7d",            "name": "Churn (7-day)",              "type": "PROPORTION", "source_event_type": "session"},
     {"metric_id": "latency_p50_ms",      "name": "Playback Start Latency p50", "type": "PERCENTILE", "source_event_type": "playback_start"},
