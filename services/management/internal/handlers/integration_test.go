@@ -697,6 +697,133 @@ func TestStartExperiment_BadGuardrailMetric(t *testing.T) {
 	assert.Contains(t, err.Error(), "nonexistent_guardrail_metric")
 }
 
+// --- Type-Specific Experiment Helpers ---
+
+func newInterleavingExperiment(name, layerID string) *commonv1.Experiment {
+	return &commonv1.Experiment{
+		Name:            name,
+		OwnerEmail:      "test@example.com",
+		LayerId:         layerID,
+		PrimaryMetricId: "watch_time_minutes",
+		Type:            commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING,
+		Variants: []*commonv1.Variant{
+			{Name: "control", TrafficFraction: 0.5, IsControl: true},
+			{Name: "treatment", TrafficFraction: 0.5, IsControl: false},
+		},
+		InterleavingConfig: &commonv1.InterleavingConfig{
+			Method:       commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT,
+			AlgorithmIds: []string{"algo-a", "algo-b"},
+		},
+	}
+}
+
+func newBanditExperiment(name, layerID string) *commonv1.Experiment {
+	return &commonv1.Experiment{
+		Name:            name,
+		OwnerEmail:      "test@example.com",
+		LayerId:         layerID,
+		PrimaryMetricId: "watch_time_minutes",
+		Type:            commonv1.ExperimentType_EXPERIMENT_TYPE_MAB,
+		Variants: []*commonv1.Variant{
+			{Name: "arm-a", TrafficFraction: 0.5, IsControl: false},
+			{Name: "arm-b", TrafficFraction: 0.5, IsControl: false},
+		},
+		BanditConfig: &commonv1.BanditConfig{
+			Algorithm:      commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+			RewardMetricId: "watch_time_minutes",
+		},
+	}
+}
+
+func newSessionExperiment(name, layerID string) *commonv1.Experiment {
+	return &commonv1.Experiment{
+		Name:            name,
+		OwnerEmail:      "test@example.com",
+		LayerId:         layerID,
+		PrimaryMetricId: "watch_time_minutes",
+		Type:            commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL,
+		Variants: []*commonv1.Variant{
+			{Name: "control", TrafficFraction: 0.5, IsControl: true},
+			{Name: "treatment", TrafficFraction: 0.5, IsControl: false},
+		},
+		SessionConfig: &commonv1.SessionConfig{
+			SessionIdAttribute: "session_id",
+		},
+	}
+}
+
+// --- Type-Specific Start Validation Tests ---
+
+func TestStartExperiment_BanditBadRewardMetric(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	exp := newBanditExperiment("bandit-bad-reward-metric", "a0000000-0000-0000-0000-000000000001")
+	exp.BanditConfig.RewardMetricId = "nonexistent_reward_metric_xyz"
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "nonexistent_reward_metric_xyz")
+
+	// Verify rolled back to DRAFT.
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT, got.Msg.State)
+}
+
+func TestStartExperiment_InterleavingValid(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	exp := newInterleavingExperiment("interleaving-start-valid", "a0000000-0000-0000-0000-000000000001")
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+
+	started, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, started.Msg.State)
+}
+
+func TestStartExperiment_SessionValid(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	exp := newSessionExperiment("session-start-valid", "a0000000-0000-0000-0000-000000000001")
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+
+	started, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, started.Msg.State)
+}
+
 func TestLayerCRUD(t *testing.T) {
 	env, cleanup := setupTestServer(t)
 	defer cleanup()
