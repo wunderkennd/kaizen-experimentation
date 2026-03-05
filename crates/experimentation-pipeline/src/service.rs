@@ -1,13 +1,14 @@
 //! gRPC EventIngestionService implementation.
 //!
 //! Pattern: validate → dedup → serialize → publish to Kafka.
+//! If Kafka is unreachable (not queue-full), buffer to local disk.
 //! Crash-only: no graceful shutdown. Bloom filter resets on restart (brief dedup gap accepted).
 
 use std::sync::Mutex;
 
 use prost::Message;
 use tonic::{Request, Response, Status};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use experimentation_ingest::dedup::EventDedup;
 use experimentation_ingest::validation;
@@ -19,39 +20,98 @@ use experimentation_proto::pipeline::{
     IngestQoEEventResponse, IngestRewardEventRequest, IngestRewardEventResponse,
 };
 
+use crate::buffer::{BufferedEvent, DiskBuffer};
 use crate::kafka::{
     EventProducer, ProduceError, TOPIC_EXPOSURES, TOPIC_METRIC_EVENTS, TOPIC_QOE_EVENTS,
     TOPIC_REWARD_EVENTS,
 };
+use crate::metrics::PipelineMetrics;
 
 pub struct IngestionServiceImpl {
     producer: EventProducer,
     dedup: Mutex<EventDedup>,
+    metrics: PipelineMetrics,
+    buffer: Mutex<DiskBuffer>,
 }
 
 impl IngestionServiceImpl {
-    pub fn new(producer: EventProducer, dedup: EventDedup) -> Self {
+    pub fn new(
+        producer: EventProducer,
+        dedup: EventDedup,
+        metrics: PipelineMetrics,
+        buffer: DiskBuffer,
+    ) -> Self {
         Self {
             producer,
             dedup: Mutex::new(dedup),
+            metrics,
+            buffer: Mutex::new(buffer),
         }
+    }
+
+    /// Replay any buffered events from a previous crash. Call once at startup.
+    pub async fn replay_buffer(&self) {
+        let events = {
+            let buf = self.buffer.lock().unwrap();
+            if !buf.has_pending() {
+                return;
+            }
+            match buf.read_all() {
+                Ok(events) => events,
+                Err(e) => {
+                    warn!(error = %e, "Failed to read buffer file for replay");
+                    return;
+                }
+            }
+        };
+
+        info!(count = events.len(), "Replaying buffered events to Kafka");
+        let mut replayed = 0;
+        let mut failed = 0;
+
+        for event in &events {
+            let histogram = self.metrics.publish_latency(&event.topic);
+            match self
+                .producer
+                .publish(&event.topic, &event.key, &event.payload, Some(&histogram))
+                .await
+            {
+                Ok(()) => replayed += 1,
+                Err(e) => {
+                    warn!(error = %e, topic = %event.topic, "Failed to replay buffered event");
+                    failed += 1;
+                    // If Kafka is still down, stop replay — events stay buffered
+                    if e.is_broker_unreachable() {
+                        warn!("Kafka still unreachable during replay, aborting. Events remain buffered.");
+                        return;
+                    }
+                }
+            }
+        }
+
+        if failed == 0 {
+            if let Err(e) = self.buffer.lock().unwrap().clear() {
+                warn!(error = %e, "Failed to clear buffer after replay");
+            }
+        }
+
+        info!(replayed, failed, "Buffer replay complete");
     }
 
     /// Check dedup filter. Returns true if duplicate.
     fn is_duplicate(&self, event_id: &str) -> bool {
         self.dedup.lock().unwrap().is_duplicate(event_id)
     }
-}
 
-fn map_produce_error(e: ProduceError) -> Status {
-    match e {
-        ProduceError::QueueFull => {
-            warn!("Kafka queue full, returning RESOURCE_EXHAUSTED");
-            Status::resource_exhausted("Kafka producer queue full, retry later")
-        }
-        ProduceError::Kafka(msg) => {
-            warn!(error = %msg, "Kafka produce failed");
-            Status::internal(format!("Kafka error: {msg}"))
+    /// Buffer an event to disk when Kafka is unreachable.
+    fn buffer_event(&self, topic: &str, key: &str, payload: &[u8]) {
+        let event = BufferedEvent {
+            topic: topic.to_string(),
+            key: key.to_string(),
+            payload: payload.to_vec(),
+        };
+        if let Err(e) = self.buffer.lock().unwrap().append(&event) {
+            warn!(error = %e, "Failed to buffer event to disk");
         }
     }
 }
@@ -65,25 +125,99 @@ fn map_validation_error(e: experimentation_core::Error) -> Status {
 async fn process_event<E: Message>(
     svc: &IngestionServiceImpl,
     event_id: &str,
+    event_type: &str,
     topic: &str,
     key: &str,
     event: &E,
     validate: impl FnOnce() -> experimentation_core::Result<()>,
 ) -> Result<bool, Status> {
-    validate().map_err(map_validation_error)?;
+    // Validate
+    if let Err(e) = validate() {
+        svc.metrics.rejected(event_type).inc();
+        return Err(map_validation_error(e));
+    }
 
+    // Dedup
     if svc.is_duplicate(event_id) {
         debug!(event_id, "Duplicate event rejected by Bloom filter");
+        svc.metrics.deduplicated(event_type).inc();
         return Ok(false);
     }
 
+    // Publish
     let payload = event.encode_to_vec();
-    svc.producer
-        .publish(topic, key, &payload)
+    let histogram = svc.metrics.publish_latency(topic);
+    match svc
+        .producer
+        .publish(topic, key, &payload, Some(&histogram))
         .await
-        .map_err(map_produce_error)?;
+    {
+        Ok(()) => {
+            svc.metrics.accepted(event_type).inc();
+            Ok(true)
+        }
+        Err(ProduceError::QueueFull) => {
+            warn!("Kafka queue full, returning RESOURCE_EXHAUSTED");
+            svc.metrics.backpressure(event_type).inc();
+            Err(Status::resource_exhausted(
+                "Kafka producer queue full, retry later",
+            ))
+        }
+        Err(ProduceError::Kafka(msg)) => {
+            warn!(error = %msg, "Kafka produce failed, buffering to disk");
+            svc.buffer_event(topic, key, &payload);
+            // Event is buffered — tell the client it was accepted.
+            // It will be replayed to Kafka when the broker comes back.
+            svc.metrics.accepted(event_type).inc();
+            Ok(true)
+        }
+    }
+}
 
-    Ok(true)
+/// Process a batch event through validate → dedup → publish.
+/// Returns (accepted_delta, duplicate_delta, invalid_delta).
+async fn process_batch_event<E: Message>(
+    svc: &IngestionServiceImpl,
+    event_id: &str,
+    event_type: &str,
+    topic: &str,
+    key: &str,
+    event: &E,
+    validate_result: Result<(), experimentation_core::Error>,
+) -> Result<(i32, i32, i32), Status> {
+    if validate_result.is_err() {
+        svc.metrics.rejected(event_type).inc();
+        return Ok((0, 0, 1));
+    }
+    if svc.is_duplicate(event_id) {
+        svc.metrics.deduplicated(event_type).inc();
+        return Ok((0, 1, 0));
+    }
+
+    let payload = event.encode_to_vec();
+    let histogram = svc.metrics.publish_latency(topic);
+    match svc
+        .producer
+        .publish(topic, key, &payload, Some(&histogram))
+        .await
+    {
+        Ok(()) => {
+            svc.metrics.accepted(event_type).inc();
+            Ok((1, 0, 0))
+        }
+        Err(ProduceError::QueueFull) => {
+            svc.metrics.backpressure(event_type).inc();
+            Err(Status::resource_exhausted(
+                "Kafka producer queue full, retry later",
+            ))
+        }
+        Err(ProduceError::Kafka(msg)) => {
+            warn!(error = %msg, "Kafka produce failed in batch, buffering");
+            svc.buffer_event(topic, key, &payload);
+            svc.metrics.accepted(event_type).inc();
+            Ok((1, 0, 0))
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -100,6 +234,7 @@ impl EventIngestionService for IngestionServiceImpl {
         let accepted = process_event(
             self,
             &event.event_id,
+            crate::metrics::EVENT_TYPE_EXPOSURE,
             TOPIC_EXPOSURES,
             &event.experiment_id,
             &event,
@@ -120,20 +255,19 @@ impl EventIngestionService for IngestionServiceImpl {
         let mut invalid = 0i32;
 
         for event in &events {
-            if validation::validate_exposure(event).is_err() {
-                invalid += 1;
-                continue;
-            }
-            if self.is_duplicate(&event.event_id) {
-                duplicate += 1;
-                continue;
-            }
-            let payload = event.encode_to_vec();
-            self.producer
-                .publish(TOPIC_EXPOSURES, &event.experiment_id, &payload)
-                .await
-                .map_err(map_produce_error)?;
-            accepted += 1;
+            let (a, d, i) = process_batch_event(
+                self,
+                &event.event_id,
+                crate::metrics::EVENT_TYPE_EXPOSURE,
+                TOPIC_EXPOSURES,
+                &event.experiment_id,
+                event,
+                validation::validate_exposure(event),
+            )
+            .await?;
+            accepted += a;
+            duplicate += d;
+            invalid += i;
         }
 
         Ok(Response::new(IngestBatchResponse {
@@ -155,6 +289,7 @@ impl EventIngestionService for IngestionServiceImpl {
         let accepted = process_event(
             self,
             &event.event_id,
+            crate::metrics::EVENT_TYPE_METRIC,
             TOPIC_METRIC_EVENTS,
             &event.user_id,
             &event,
@@ -175,20 +310,19 @@ impl EventIngestionService for IngestionServiceImpl {
         let mut invalid = 0i32;
 
         for event in &events {
-            if validation::validate_metric_event(event).is_err() {
-                invalid += 1;
-                continue;
-            }
-            if self.is_duplicate(&event.event_id) {
-                duplicate += 1;
-                continue;
-            }
-            let payload = event.encode_to_vec();
-            self.producer
-                .publish(TOPIC_METRIC_EVENTS, &event.user_id, &payload)
-                .await
-                .map_err(map_produce_error)?;
-            accepted += 1;
+            let (a, d, i) = process_batch_event(
+                self,
+                &event.event_id,
+                crate::metrics::EVENT_TYPE_METRIC,
+                TOPIC_METRIC_EVENTS,
+                &event.user_id,
+                event,
+                validation::validate_metric_event(event),
+            )
+            .await?;
+            accepted += a;
+            duplicate += d;
+            invalid += i;
         }
 
         Ok(Response::new(IngestBatchResponse {
@@ -210,6 +344,7 @@ impl EventIngestionService for IngestionServiceImpl {
         let accepted = process_event(
             self,
             &event.event_id,
+            crate::metrics::EVENT_TYPE_REWARD,
             TOPIC_REWARD_EVENTS,
             &event.experiment_id,
             &event,
@@ -232,6 +367,7 @@ impl EventIngestionService for IngestionServiceImpl {
         let accepted = process_event(
             self,
             &event.event_id,
+            crate::metrics::EVENT_TYPE_QOE,
             TOPIC_QOE_EVENTS,
             &event.session_id,
             &event,
@@ -252,20 +388,19 @@ impl EventIngestionService for IngestionServiceImpl {
         let mut invalid = 0i32;
 
         for event in &events {
-            if validation::validate_qoe_event(event).is_err() {
-                invalid += 1;
-                continue;
-            }
-            if self.is_duplicate(&event.event_id) {
-                duplicate += 1;
-                continue;
-            }
-            let payload = event.encode_to_vec();
-            self.producer
-                .publish(TOPIC_QOE_EVENTS, &event.session_id, &payload)
-                .await
-                .map_err(map_produce_error)?;
-            accepted += 1;
+            let (a, d, i) = process_batch_event(
+                self,
+                &event.event_id,
+                crate::metrics::EVENT_TYPE_QOE,
+                TOPIC_QOE_EVENTS,
+                &event.session_id,
+                event,
+                validation::validate_qoe_event(event),
+            )
+            .await?;
+            accepted += a;
+            duplicate += d;
+            invalid += i;
         }
 
         Ok(Response::new(IngestBatchResponse {
