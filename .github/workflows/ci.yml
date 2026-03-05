@@ -51,14 +51,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: wasm32-unknown-unknown
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
       - name: Ensure sccache is working
         run: |
-          if ! sccache --show-stats > /dev/null 2>&1; then
-            echo "sccache is not available; disabling RUSTC_WRAPPER"
+          if ! sccache --start-server 2>/dev/null && ! sccache --show-stats 2>/dev/null; then
+            echo "::warning::sccache is not available; disabling RUSTC_WRAPPER"
             echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
@@ -147,6 +148,13 @@ jobs:
     needs: schema
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure lockfile exists for cache key
+        run: |
+          if [ ! -f ui/package-lock.json ]; then
+            echo "package-lock.json missing; generating from package.json"
+            cd ui && npm install --package-lock-only
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
