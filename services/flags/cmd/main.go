@@ -9,6 +9,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/org/experimentation-platform/services/flags/internal/handlers"
+	"github.com/org/experimentation/gen/go/experimentation/flags/v1/flagsv1connect"
+	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 )
 
 func main() {
@@ -28,10 +32,28 @@ func main() {
 		fmt.Fprint(w, "ok")
 	})
 
-	// TODO: Register ConnectRPC service handlers here.
-	// Example:
-	//   path, handler := mgmtv1connect.NewExperimentManagementServiceHandler(svc)
-	//   mux.Handle(path, handler)
+	// Build FlagService with optional management client.
+	// TODO: Add pgxpool.Pool for PostgreSQL store when DATABASE_URL is configured.
+	var svc *handlers.FlagService
+
+	mgmtURL := os.Getenv("MANAGEMENT_SERVICE_URL")
+	if mgmtURL != "" {
+		mgmtClient := managementv1connect.NewExperimentManagementServiceClient(
+			http.DefaultClient,
+			mgmtURL,
+		)
+		svc = handlers.NewFlagServiceFull(nil, nil, mgmtClient)
+		slog.Info("management client configured", "url", mgmtURL)
+	} else {
+		svc = handlers.NewFlagService(nil)
+		slog.Warn("no MANAGEMENT_SERVICE_URL set — PromoteToExperiment will use mock mode")
+	}
+
+	path, handler := flagsv1connect.NewFeatureFlagServiceHandler(svc)
+	mux.Handle(path, handler)
+
+	// Register audit endpoints.
+	svc.RegisterAuditRoutes(mux)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
