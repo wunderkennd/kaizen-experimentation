@@ -3,11 +3,15 @@
 //! Crash-only design: no SIGTERM handler, no graceful shutdown.
 //! On restart, the Bloom filter resets (brief dedup gap accepted per design doc).
 //! Kafka idempotent producer ensures no duplicates on the broker side.
+//! If buffer file exists from a previous crash, replay events before accepting new ones.
 
+mod buffer;
 mod kafka;
+mod metrics;
 mod service;
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 use experimentation_ingest::dedup::{DedupConfig, DedupMetrics, EventDedup};
 use experimentation_proto::pipeline::event_ingestion_service_server::EventIngestionServiceServer;
@@ -15,7 +19,9 @@ use prometheus::Registry;
 use tracing::info;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crate::buffer::{BufferConfig, DiskBuffer};
 use crate::kafka::{EventProducer, KafkaConfig};
+use crate::metrics::PipelineMetrics;
 use crate::service::IngestionServiceImpl;
 
 fn env_or(name: &str, default: &str) -> String {
@@ -88,6 +94,10 @@ async fn main() {
     let bloom_rotation_secs: u64 = env_or("BLOOM_ROTATION_SECS", "3600")
         .parse()
         .expect("BLOOM_ROTATION_SECS must be u64");
+    let buffer_dir = env_or("BUFFER_DIR", "/tmp/experimentation-pipeline-buffer");
+    let buffer_max_mb: u64 = env_or("BUFFER_MAX_MB", "100")
+        .parse()
+        .expect("BUFFER_MAX_MB must be u64");
 
     info!(
         port,
@@ -96,6 +106,8 @@ async fn main() {
         bloom_daily,
         bloom_fp,
         bloom_rotation_secs,
+        buffer_dir = %buffer_dir,
+        buffer_max_mb,
         "Starting M2 Event Pipeline"
     );
 
@@ -117,7 +129,19 @@ async fn main() {
     };
     let dedup_metrics = DedupMetrics::new(&registry);
     let dedup = EventDedup::with_config(dedup_config, dedup_metrics);
-    let service = IngestionServiceImpl::new(producer, dedup);
+
+    let pipeline_metrics = PipelineMetrics::new(&registry);
+
+    let buffer_config = BufferConfig {
+        dir: PathBuf::from(buffer_dir),
+        max_size_bytes: buffer_max_mb * 1024 * 1024,
+    };
+    let disk_buffer = DiskBuffer::new(buffer_config).expect("Failed to initialize disk buffer");
+
+    let service = IngestionServiceImpl::new(producer, dedup, pipeline_metrics, disk_buffer);
+
+    // Crash-only: replay any buffered events from previous run before accepting traffic
+    service.replay_buffer().await;
 
     // Spawn Prometheus metrics server
     let metrics_addr: SocketAddr = ([0, 0, 0, 0], metrics_port).into();
