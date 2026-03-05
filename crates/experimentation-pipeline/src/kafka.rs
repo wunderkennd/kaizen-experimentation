@@ -1,9 +1,10 @@
 //! Kafka producer wrapper with idempotent delivery and backpressure handling.
 
+use prometheus::Histogram;
 use rdkafka::config::ClientConfig;
 use rdkafka::error::KafkaError;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::info;
 
 /// Kafka topic names matching topic_configs.sh.
@@ -39,7 +40,7 @@ pub struct EventProducer {
 pub enum ProduceError {
     /// Kafka internal queue is full — client should back off.
     QueueFull,
-    /// Other Kafka error.
+    /// Other Kafka error (broker unreachable, serialization, etc.).
     Kafka(String),
 }
 
@@ -49,6 +50,14 @@ impl std::fmt::Display for ProduceError {
             ProduceError::QueueFull => write!(f, "Kafka producer queue full"),
             ProduceError::Kafka(msg) => write!(f, "Kafka error: {msg}"),
         }
+    }
+}
+
+impl ProduceError {
+    /// Returns true if this error indicates Kafka broker is unreachable
+    /// (as opposed to a transient queue-full condition).
+    pub fn is_broker_unreachable(&self) -> bool {
+        matches!(self, ProduceError::Kafka(_))
     }
 }
 
@@ -80,21 +89,31 @@ impl EventProducer {
     ///
     /// `key` determines the Kafka partition (e.g. experiment_id for exposures,
     /// user_id for metric_events).
+    ///
+    /// If a `latency_histogram` is provided, the publish duration is observed.
     pub async fn publish(
         &self,
         topic: &str,
         key: &str,
         payload: &[u8],
+        latency_histogram: Option<&Histogram>,
     ) -> Result<(), ProduceError> {
         let record = FutureRecord::to(topic).key(key).payload(payload);
 
-        match self.producer.send(record, Duration::from_secs(0)).await {
+        let start = Instant::now();
+        let result = match self.producer.send(record, Duration::from_secs(0)).await {
             Ok(_) => Ok(()),
             Err((
                 KafkaError::MessageProduction(rdkafka::types::RDKafkaErrorCode::QueueFull),
                 _,
             )) => Err(ProduceError::QueueFull),
             Err((e, _)) => Err(ProduceError::Kafka(e.to_string())),
+        };
+
+        if let Some(histogram) = latency_histogram {
+            histogram.observe(start.elapsed().as_secs_f64());
         }
+
+        result
     }
 }

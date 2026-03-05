@@ -81,10 +81,6 @@ tokio-test = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 # UUID
 uuid = { version = "1.7", features = ["v4", "serde"] }
-# Stream utilities
-tokio-stream = "0.1"
-# File walking (build-time proto discovery)
-walkdir = "2.5"
 
 [profile.release]
 lto = "thin"
