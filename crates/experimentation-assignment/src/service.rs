@@ -3,6 +3,7 @@
 //! Core logic: deterministic hash-based bucketing using experimentation-hash.
 //! Config is loaded once at startup as `Arc<Config>` (read-only, no locks).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tokio_stream::wrappers::ReceiverStream;
@@ -15,6 +16,7 @@ use experimentation_proto::experimentation::assignment::v1::{
 };
 
 use crate::config::{Config, ExperimentConfig};
+use crate::targeting;
 
 /// gRPC service implementation backed by a static config snapshot.
 pub struct AssignmentServiceImpl {
@@ -33,6 +35,7 @@ impl AssignmentServiceImpl {
         &self,
         experiment_id: &str,
         user_id: &str,
+        attributes: &HashMap<String, String>,
     ) -> Result<GetAssignmentResponse, Status> {
         // 1. Look up experiment.
         let exp = self
@@ -52,7 +55,18 @@ impl AssignmentServiceImpl {
             });
         }
 
-        // 3. Get layer total_buckets.
+        // 3. Evaluate targeting rule — user must match to be eligible.
+        if let Some(ref rule) = exp.targeting_rule {
+            if !targeting::evaluate(rule, attributes) {
+                return Ok(GetAssignmentResponse {
+                    experiment_id: experiment_id.to_string(),
+                    is_active: true,
+                    ..Default::default()
+                });
+            }
+        }
+
+        // 4. Get layer total_buckets.
         let layer = self
             .config
             .layers_by_id
@@ -61,11 +75,11 @@ impl AssignmentServiceImpl {
                 Status::internal(format!("layer not found: {}", exp.layer_id))
             })?;
 
-        // 4. Hash user into a bucket.
+        // 5. Hash user into a bucket.
         let bucket =
             experimentation_hash::bucket(user_id, &exp.hash_salt, layer.total_buckets);
 
-        // 5. Check allocation range.
+        // 6. Check allocation range.
         if !experimentation_hash::is_in_allocation(
             bucket,
             exp.allocation.start_bucket,
@@ -78,7 +92,7 @@ impl AssignmentServiceImpl {
             });
         }
 
-        // 6. Map bucket to variant.
+        // 7. Map bucket to variant.
         let variant = select_variant(exp, bucket);
 
         Ok(GetAssignmentResponse {
@@ -122,7 +136,7 @@ impl AssignmentService for AssignmentServiceImpl {
         request: Request<GetAssignmentRequest>,
     ) -> Result<Response<GetAssignmentResponse>, Status> {
         let req = request.into_inner();
-        let resp = self.assign(&req.experiment_id, &req.user_id)?;
+        let resp = self.assign(&req.experiment_id, &req.user_id, &req.attributes)?;
         Ok(Response::new(resp))
     }
 
@@ -135,7 +149,7 @@ impl AssignmentService for AssignmentServiceImpl {
 
         for exp in &self.config.experiments {
             // Best-effort: skip experiments that fail assignment.
-            if let Ok(resp) = self.assign(&exp.experiment_id, &req.user_id) {
+            if let Ok(resp) = self.assign(&exp.experiment_id, &req.user_id, &req.attributes) {
                 assignments.push(resp);
             }
         }

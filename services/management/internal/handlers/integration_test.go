@@ -40,7 +40,8 @@ func setupTestServer(t *testing.T) (testEnv, func()) {
 	es := store.NewExperimentStore(pool)
 	as := store.NewAuditStore(pool)
 	ls := store.NewLayerStore(pool)
-	svc := handlers.NewExperimentService(es, as, ls, nil)
+	ms := store.NewMetricStore(pool)
+	svc := handlers.NewExperimentService(es, as, ls, ms, nil)
 
 	mux := http.NewServeMux()
 	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc)
