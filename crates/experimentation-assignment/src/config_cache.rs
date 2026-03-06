@@ -178,6 +178,7 @@ pub fn experiment_from_proto(
         variants,
         allocation,
         targeting_rule,
+        session_config: existing.and_then(|e| e.session_config.clone()),
     }
 }
 
