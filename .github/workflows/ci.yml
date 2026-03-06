@@ -100,9 +100,10 @@ jobs:
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
       - name: WASM test vectors (10K via wasm-pack)
+        working-directory: crates/experimentation-hash
         run: |
           cargo install wasm-pack --locked
-          wasm-pack test --node --features wasm crates/experimentation-hash
+          wasm-pack test --node --features wasm .
 
       - name: FFI build
         working-directory: crates
