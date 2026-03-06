@@ -75,9 +75,13 @@ jobs:
             echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
-      - name: Clippy (all features)
+      - name: Clippy (all features, excluding gpu)
         working-directory: crates
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: |
+          # The gpu feature (tch/libtorch) requires a local PyTorch install.
+          # Check all other crates with --all-features, then bandit with default features only.
+          cargo clippy --workspace --exclude experimentation-bandit --all-features -- -D warnings
+          cargo clippy --package experimentation-bandit -- -D warnings
 
       - name: Unit tests
         working-directory: crates
