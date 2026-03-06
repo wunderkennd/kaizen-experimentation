@@ -48,7 +48,8 @@ func setupStreamTest(t *testing.T) (
 	notifier.Start(ctx)
 
 	ms := store.NewMetricStore(pool)
-	expSvc := handlers.NewExperimentService(es, as, ls, ms, notifier)
+	ts := store.NewTargetingStore(pool)
+	expSvc := handlers.NewExperimentService(es, as, ls, ms, ts, notifier)
 	streamSvc := handlers.NewConfigStreamService(es, notifier)
 
 	mux := http.NewServeMux()

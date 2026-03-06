@@ -98,6 +98,7 @@ pub fn msprt_normal(
 /// Compute the mSPRT statistic directly from sample statistics.
 ///
 /// Convenience wrapper that computes the z-statistic internally.
+#[allow(clippy::too_many_arguments)]
 pub fn msprt_from_samples(
     control_mean: f64,
     treatment_mean: f64,

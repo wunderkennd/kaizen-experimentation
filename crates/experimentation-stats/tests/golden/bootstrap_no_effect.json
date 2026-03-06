@@ -1,0 +1,47 @@
+{
+  "test_name": "no_effect",
+  "description": "Both groups from same distribution, CI should contain 0",
+  "control": [
+    5.1,
+    4.8,
+    5.3,
+    4.9,
+    5.2,
+    5.0,
+    4.7,
+    5.4,
+    5.1,
+    4.6,
+    5.3,
+    4.8
+  ],
+  "treatment": [
+    5.0,
+    5.2,
+    4.7,
+    5.1,
+    4.9,
+    5.3,
+    4.8,
+    5.0,
+    5.2,
+    4.6,
+    5.1,
+    5.4
+  ],
+  "alpha": 0.05,
+  "n_resamples": 10000,
+  "seed": 42,
+  "expected_percentile": {
+    "effect": 0.008333333333333748,
+    "ci_lower": -0.18333333333333268,
+    "ci_upper": 0.1999999999999984,
+    "bias": -0.0010625000000001042
+  },
+  "expected_bca": {
+    "effect": 0.008333333333333748,
+    "ci_lower": -0.18333333333333268,
+    "ci_upper": 0.1916666666666682,
+    "bias": -0.0010625000000001042
+  }
+}

@@ -19,23 +19,20 @@ var _ managementv1connect.ExperimentManagementServiceHandler = (*ExperimentServi
 
 // ExperimentService implements the ExperimentManagementService ConnectRPC handler.
 type ExperimentService struct {
-	store    *store.ExperimentStore
-	audit    *store.AuditStore
-	layers   *store.LayerStore
-	metrics  *store.MetricStore
-	notifier *streaming.Notifier
+	store     *store.ExperimentStore
+	audit     *store.AuditStore
+	layers    *store.LayerStore
+	metrics   *store.MetricStore
+	targeting *store.TargetingStore
+	notifier  *streaming.Notifier
 }
 
 // NewExperimentService creates a new handler with the given stores and notifier.
-func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, n *streaming.Notifier) *ExperimentService {
-	return &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, notifier: n}
+func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, ts *store.TargetingStore, n *streaming.Notifier) *ExperimentService {
+	return &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, targeting: ts, notifier: n}
 }
 
-// --- Unimplemented stubs for targeting/surrogate RPCs ---
-
-func (s *ExperimentService) CreateTargetingRule(_ context.Context, _ *connect.Request[mgmtv1.CreateTargetingRuleRequest]) (*connect.Response[commonv1.TargetingRule], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, nil)
-}
+// --- Unimplemented stubs for surrogate RPCs ---
 
 func (s *ExperimentService) CreateSurrogateModel(_ context.Context, _ *connect.Request[mgmtv1.CreateSurrogateModelRequest]) (*connect.Response[commonv1.SurrogateModelConfig], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, nil)

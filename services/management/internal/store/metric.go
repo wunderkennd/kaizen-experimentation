@@ -160,8 +160,19 @@ func (s *MetricStore) Exists(ctx context.Context, metricID string) (bool, error)
 	return exists, err
 }
 
-// scanMetricRow is unused currently but provided for symmetry with experiment store.
-var _ = (*MetricStore)(nil) // ensure MetricStore is used by the compiler even if Exists is unused
+// ExistAll checks that all given metric IDs exist. Returns the first missing ID, or "" if all exist.
+func (s *MetricStore) ExistAll(ctx context.Context, metricIDs []string) (string, error) {
+	for _, id := range metricIDs {
+		exists, err := s.Exists(ctx, id)
+		if err != nil {
+			return id, err
+		}
+		if !exists {
+			return id, nil
+		}
+	}
+	return "", nil
+}
 
 // GetByIDTx retrieves a metric definition within a transaction (for future use).
 func (s *MetricStore) GetByIDTx(ctx context.Context, tx pgx.Tx, metricID string) (MetricDefinitionRow, error) {
