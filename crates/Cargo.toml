@@ -67,6 +67,9 @@ uniffi = "0.28"
 cbindgen = "0.27"
 pyo3 = { version = "0.22", features = ["extension-module"] }
 
+# Async utilities (CancellationToken, backoff)
+tokio-util = "0.7"
+
 # Testing
 criterion = { version = "0.5", features = ["html_reports"] }
 tokio-test = "0.4"
