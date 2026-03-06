@@ -170,6 +170,18 @@ test-hash:
     @echo "  Validating hash parity..."
     python3 scripts/verify_hash_parity.py
 
+# Run pure-Go flag service tests (no FFI dependency)
+test-flags:
+    @echo "  Running flag service tests..."
+    cd {{ services_dir }} && {{ go }} test -race -cover ./flags/...
+
+# Build Rust FFI + run Go CGo parity tests (10K vectors)
+test-flags-cgo:
+    @echo "  Building Rust FFI library..."
+    cd {{ crates_dir }} && {{ cargo }} build --package experimentation-ffi
+    @echo "  Running CGo parity tests..."
+    cd {{ services_dir }} && CGO_ENABLED=1 {{ go }} test -v -tags='has_ffi' -run 'TestCGoBridge' ./flags/internal/hash/...
+
 # Run integration tests against local infra
 test-integration: infra
     @echo "  Running integration tests..."

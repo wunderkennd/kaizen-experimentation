@@ -83,9 +83,9 @@
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | ⚪ | — |
-| 2.2 | Bootstrap CI | Agent-4 | ⚪ | — |
-| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | ⚪ | — |
+| 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | 🟢 | — | Implemented as part of M1.16 (PR #25) |
+| 2.2 | Bootstrap CI | Agent-4 | 🔵 | Agent-6 (CI charts on results dashboard) |
+| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | 🔵 | Agent-6 (corrected p-values on results dashboard) |
 | 2.4 | Novelty/primacy analysis | Agent-4 | ⚪ | Agent-6 (novelty tab) |
 | 2.5 | Interference analysis | Agent-4 | ⚪ | Agent-6 (interference tab) |
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | ⚪ | Agent-6 (interleaving tab) |
@@ -125,7 +125,7 @@ Track integration test results between agent pairs.
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
 | 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | ⚪ | — |
-| 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | ⚪ | — |
+| 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | ⚪ | — |

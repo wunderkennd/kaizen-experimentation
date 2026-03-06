@@ -1,80 +1,73 @@
 import { http, HttpResponse } from 'msw';
-import { SEED_EXPERIMENTS } from './seed-data';
+import { SEED_EXPERIMENTS, SEED_QUERY_LOG } from './seed-data';
+
+const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
+const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
 
 export const handlers = [
-  http.get('*/api/experiments', ({ request }) => {
-    const url = new URL(request.url);
-    const stateFilter = url.searchParams.get('state');
-    const typeFilter = url.searchParams.get('type');
-
-    let experiments = [...SEED_EXPERIMENTS];
-
-    if (stateFilter) {
-      experiments = experiments.filter((e) => e.state === stateFilter);
-    }
-    if (typeFilter) {
-      experiments = experiments.filter((e) => e.type === typeFilter);
-    }
-
+  // ListExperiments
+  http.post(`${MGMT_SVC}/ListExperiments`, async () => {
     return HttpResponse.json({
-      experiments,
-      totalCount: experiments.length,
+      experiments: SEED_EXPERIMENTS,
+      nextPageToken: '',
     });
   }),
 
-  http.get('*/api/experiments/:id', ({ params }) => {
-    const { id } = params;
-    const experiment = SEED_EXPERIMENTS.find((e) => e.experimentId === id);
+  // GetExperiment
+  http.post(`${MGMT_SVC}/GetExperiment`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const experiment = SEED_EXPERIMENTS.find((e) => e.experimentId === body.experimentId);
 
     if (!experiment) {
       return HttpResponse.json(
-        { error: `Experiment ${id} not found` },
+        { code: 'not_found', message: `Experiment ${body.experimentId} not found` },
         { status: 404 },
       );
     }
 
-    return HttpResponse.json(experiment);
+    return HttpResponse.json({ experiment });
   }),
 
-  // Update experiment (DRAFT only)
-  http.put('*/api/experiments/:id', async ({ params, request }) => {
-    const { id } = params;
+  // UpdateExperiment
+  http.post(`${MGMT_SVC}/UpdateExperiment`, async ({ request }) => {
+    const body = await request.json() as { experiment: Record<string, unknown> };
+    const exp = body.experiment;
+    const id = exp.experimentId as string;
     const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === id);
 
     if (idx === -1) {
       return HttpResponse.json(
-        { error: `Experiment ${id} not found` },
+        { code: 'not_found', message: `Experiment ${id} not found` },
         { status: 404 },
       );
     }
 
     if (SEED_EXPERIMENTS[idx].state !== 'DRAFT') {
       return HttpResponse.json(
-        { error: 'Only DRAFT experiments can be updated' },
+        { code: 'failed_precondition', message: 'Only DRAFT experiments can be updated' },
         { status: 400 },
       );
     }
 
-    const body = await request.json() as Record<string, unknown>;
-    SEED_EXPERIMENTS[idx] = { ...SEED_EXPERIMENTS[idx], ...body } as typeof SEED_EXPERIMENTS[number];
-    return HttpResponse.json(SEED_EXPERIMENTS[idx]);
+    SEED_EXPERIMENTS[idx] = { ...SEED_EXPERIMENTS[idx], ...exp } as typeof SEED_EXPERIMENTS[number];
+    return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
   }),
 
-  // Start experiment: DRAFT → RUNNING (mock skips STARTING)
-  http.post('*/api/experiments/:id/start', ({ params }) => {
-    const { id } = params;
-    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === id);
+  // StartExperiment: DRAFT → RUNNING (mock skips STARTING)
+  http.post(`${MGMT_SVC}/StartExperiment`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
 
     if (idx === -1) {
       return HttpResponse.json(
-        { error: `Experiment ${id} not found` },
+        { code: 'not_found', message: `Experiment ${body.experimentId} not found` },
         { status: 404 },
       );
     }
 
     if (SEED_EXPERIMENTS[idx].state !== 'DRAFT') {
       return HttpResponse.json(
-        { error: 'Only DRAFT experiments can be started' },
+        { code: 'failed_precondition', message: 'Only DRAFT experiments can be started' },
         { status: 400 },
       );
     }
@@ -84,24 +77,24 @@ export const handlers = [
       state: 'RUNNING',
       startedAt: new Date().toISOString(),
     };
-    return HttpResponse.json(SEED_EXPERIMENTS[idx]);
+    return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
   }),
 
-  // Conclude experiment: RUNNING → CONCLUDED (mock skips CONCLUDING)
-  http.post('*/api/experiments/:id/conclude', ({ params }) => {
-    const { id } = params;
-    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === id);
+  // ConcludeExperiment: RUNNING → CONCLUDED (mock skips CONCLUDING)
+  http.post(`${MGMT_SVC}/ConcludeExperiment`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
 
     if (idx === -1) {
       return HttpResponse.json(
-        { error: `Experiment ${id} not found` },
+        { code: 'not_found', message: `Experiment ${body.experimentId} not found` },
         { status: 404 },
       );
     }
 
     if (SEED_EXPERIMENTS[idx].state !== 'RUNNING') {
       return HttpResponse.json(
-        { error: 'Only RUNNING experiments can be concluded' },
+        { code: 'failed_precondition', message: 'Only RUNNING experiments can be concluded' },
         { status: 400 },
       );
     }
@@ -111,24 +104,24 @@ export const handlers = [
       state: 'CONCLUDED',
       concludedAt: new Date().toISOString(),
     };
-    return HttpResponse.json(SEED_EXPERIMENTS[idx]);
+    return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
   }),
 
-  // Archive experiment: CONCLUDED → ARCHIVED
-  http.post('*/api/experiments/:id/archive', ({ params }) => {
-    const { id } = params;
-    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === id);
+  // ArchiveExperiment: CONCLUDED → ARCHIVED
+  http.post(`${MGMT_SVC}/ArchiveExperiment`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
 
     if (idx === -1) {
       return HttpResponse.json(
-        { error: `Experiment ${id} not found` },
+        { code: 'not_found', message: `Experiment ${body.experimentId} not found` },
         { status: 404 },
       );
     }
 
     if (SEED_EXPERIMENTS[idx].state !== 'CONCLUDED') {
       return HttpResponse.json(
-        { error: 'Only CONCLUDED experiments can be archived' },
+        { code: 'failed_precondition', message: 'Only CONCLUDED experiments can be archived' },
         { status: 400 },
       );
     }
@@ -137,6 +130,30 @@ export const handlers = [
       ...SEED_EXPERIMENTS[idx],
       state: 'ARCHIVED',
     };
-    return HttpResponse.json(SEED_EXPERIMENTS[idx]);
+    return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
+  }),
+
+  // GetQueryLog
+  http.post(`${METRICS_SVC}/GetQueryLog`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string; metricId?: string };
+    let entries = SEED_QUERY_LOG[body.experimentId] || [];
+
+    if (body.metricId) {
+      entries = entries.filter((e) => e.metricId === body.metricId);
+    }
+
+    return HttpResponse.json({ entries });
+  }),
+
+  // ExportNotebook
+  http.post(`${METRICS_SVC}/ExportNotebook`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const experiment = SEED_EXPERIMENTS.find((e) => e.experimentId === body.experimentId);
+    const name = experiment?.name || 'experiment';
+
+    return HttpResponse.json({
+      content: btoa(`{"cells": [], "metadata": {"experiment_id": "${body.experimentId}"}}`),
+      filename: `${name}_analysis.ipynb`,
+    });
   }),
 ];
