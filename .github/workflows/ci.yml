@@ -58,11 +58,10 @@ jobs:
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
-      - name: Install protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler libcurl4-openssl-dev libssl-dev pkg-config
 
       - name: Ensure sccache is working
         run: |
