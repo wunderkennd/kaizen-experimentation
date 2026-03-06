@@ -38,7 +38,8 @@
           "consecutive_breaches_required": 2
         }
       ],
-      "guardrail_action": "AUTO_PAUSE"
+      "guardrail_action": "AUTO_PAUSE",
+      "surrogate_model_id": "sm-churn-predictor-001"
     },
     {
       "experiment_id": "e0000000-0000-0000-0000-000000000003",
@@ -177,6 +178,22 @@
       "is_qoe_metric": true,
       "qoe_field": "rebuffer_ratio",
       "lower_is_better": true
+    }
+  ],
+  "surrogate_models": [
+    {
+      "model_id": "sm-churn-predictor-001",
+      "target_metric_id": "churn_7d",
+      "input_metric_ids": ["watch_time_minutes", "stream_start_rate"],
+      "observation_window_days": 7,
+      "prediction_horizon_days": 90,
+      "model_type": "LINEAR",
+      "calibration_r_squared": 0.72,
+      "coefficients": {
+        "watch_time_minutes": -0.015,
+        "stream_start_rate": -0.25
+      },
+      "intercept": 0.35
     }
   ]
 }

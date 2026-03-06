@@ -27,6 +27,9 @@ type TemplateParams struct {
 	ControlVariantID string // variant_id of the control variant
 	LifecycleEnabled bool   // whether to include lifecycle_segment in GROUP BY
 	ContentIDField   string // field name for content identifier (default: "content_id")
+	// Surrogate metric fields
+	InputMetricIDs        []string // list of metric_ids to aggregate for surrogate input
+	ObservationWindowDays int      // how many days of recent data to aggregate
 }
 
 type SQLRenderer struct {
@@ -60,6 +63,7 @@ func (r *SQLRenderer) RenderQoEMetric(p TemplateParams) (string, error)      { r
 func (r *SQLRenderer) RenderContentConsumption(p TemplateParams) (string, error) { return r.Render("content_consumption.sql.tmpl", p) }
 func (r *SQLRenderer) RenderDailyTreatmentEffect(p TemplateParams) (string, error) { return r.Render("daily_treatment_effect.sql.tmpl", p) }
 func (r *SQLRenderer) RenderLifecycleMean(p TemplateParams) (string, error)  { return r.Render("lifecycle_mean.sql.tmpl", p) }
+func (r *SQLRenderer) RenderSurrogateInput(p TemplateParams) (string, error) { return r.Render("surrogate_input.sql.tmpl", p) }
 
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {

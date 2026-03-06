@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🟢 Phase 1 Complete | agent-1/feat/layer-session-assignment | Phase 2: GetInterleavedList (2.7) | — | M1.1–1.5 all complete. Session-level bucketing + layer exclusivity. |
 | Agent-2 | M2 Pipeline | 🟢 Phase 1 Complete | — | Phase 2: Operational hardening | — | M1.6–1.9 all merged (PRs #1, #8). All Phase 1 milestones done. |
-| Agent-3 | M3 Metrics | 🟢 Phase 1 Complete | — | Phase 2: Surrogate metrics / SVOD (2.10–2.11) | — | M1.10–1.13 all merged (PRs #3, #5, #9, #16). All Phase 1 milestones done. |
+| Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟢 Phase 1 Complete | — | Phase 2: GST, Bootstrap CI | — | M1.14–1.19 all merged (PRs #2, #14, #25). All Phase 1 milestones done. |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
@@ -92,7 +92,7 @@
 | 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | ⚪ | — |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
-| 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | ⚪ | — |
+| 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 (model loading, projection, SQL transparency). Agent-4 part pending. |
 | 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption) | Agent-3 | 🟢 | Agent-4 (interference, novelty), Agent-6 (QoE dashboard) |
 
 ### Phase 3: SVOD-Native + Bandits (Weeks 10–17)
@@ -157,8 +157,10 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 - [x] M1.20–1.24 Management service complete (Agent-5, PRs #7, #10, #15, #18, #24)
 - [x] M1.28–1.30 Flag service complete (Agent-7, PR #13)
 - [x] M2.11 SVOD-specific metrics (Agent-3, PR #26)
+- [x] M2.10 Surrogate metric framework — Agent-3 part (PR #35): model loading, projection, SQL transparency
 
 **In progress:**
+- Agent-3: M2.10 surrogate metric framework (Agent-3 part complete in PR #35, Agent-4 part pending)
 - Agent-5: Phase 1 polish — STARTING validation gate, targeting rule CRUD, integration tests
 - Agent-6: experiment list + detail shell (1.25, not started)
 

@@ -33,6 +33,21 @@ type ExperimentConfig struct {
 	GuardrailAction              string            `json:"guardrail_action,omitempty"`
 	LifecycleStratificationEnabled bool            `json:"lifecycle_stratification_enabled,omitempty"`
 	LifecycleSegments            []string          `json:"lifecycle_segments,omitempty"`
+	SurrogateModelID             string            `json:"surrogate_model_id,omitempty"`
+}
+
+type SurrogateModelConfig struct {
+	ModelID               string   `json:"model_id"`
+	TargetMetricID        string   `json:"target_metric_id"`
+	InputMetricIDs        []string `json:"input_metric_ids"`
+	ObservationWindowDays int      `json:"observation_window_days"`
+	PredictionHorizonDays int      `json:"prediction_horizon_days"`
+	ModelType             string   `json:"model_type"` // LINEAR, GRADIENT_BOOSTED, NEURAL
+	CalibrationRSquared   float64  `json:"calibration_r_squared"`
+	MLflowModelURI        string   `json:"mlflow_model_uri,omitempty"`
+	// For mock linear models: coefficients per input metric
+	Coefficients          map[string]float64 `json:"coefficients,omitempty"`
+	Intercept             float64            `json:"intercept,omitempty"`
 }
 
 type MetricConfig struct {
@@ -49,15 +64,17 @@ type MetricConfig struct {
 }
 
 type seedFile struct {
-	Experiments []ExperimentConfig `json:"experiments"`
-	Metrics     []MetricConfig     `json:"metrics"`
+	Experiments     []ExperimentConfig     `json:"experiments"`
+	Metrics         []MetricConfig         `json:"metrics"`
+	SurrogateModels []SurrogateModelConfig `json:"surrogate_models,omitempty"`
 }
 
 type ConfigStore struct {
-	mu          sync.RWMutex
-	experiments map[string]*ExperimentConfig
-	metrics     map[string]*MetricConfig
-	expMetrics  map[string][]string
+	mu              sync.RWMutex
+	experiments     map[string]*ExperimentConfig
+	metrics         map[string]*MetricConfig
+	expMetrics      map[string][]string
+	surrogateModels map[string]*SurrogateModelConfig
 }
 
 func LoadFromFile(path string) (*ConfigStore, error) {
@@ -70,13 +87,18 @@ func LoadFromFile(path string) (*ConfigStore, error) {
 		return nil, fmt.Errorf("config: parse JSON: %w", err)
 	}
 	cs := &ConfigStore{
-		experiments: make(map[string]*ExperimentConfig, len(sf.Experiments)),
-		metrics:     make(map[string]*MetricConfig, len(sf.Metrics)),
-		expMetrics:  make(map[string][]string, len(sf.Experiments)),
+		experiments:     make(map[string]*ExperimentConfig, len(sf.Experiments)),
+		metrics:         make(map[string]*MetricConfig, len(sf.Metrics)),
+		expMetrics:      make(map[string][]string, len(sf.Experiments)),
+		surrogateModels: make(map[string]*SurrogateModelConfig, len(sf.SurrogateModels)),
 	}
 	for i := range sf.Metrics {
 		m := sf.Metrics[i]
 		cs.metrics[m.MetricID] = &m
+	}
+	for i := range sf.SurrogateModels {
+		sm := sf.SurrogateModels[i]
+		cs.surrogateModels[sm.ModelID] = &sm
 	}
 	for i := range sf.Experiments {
 		e := sf.Experiments[i]
@@ -145,6 +167,31 @@ func (e *ExperimentConfig) ControlVariantID() string {
 		}
 	}
 	return ""
+}
+
+func (c *ConfigStore) GetSurrogateModel(id string) (*SurrogateModelConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	sm, ok := c.surrogateModels[id]
+	if !ok {
+		return nil, fmt.Errorf("config: surrogate model %q not found", id)
+	}
+	return sm, nil
+}
+
+// GetSurrogateModelForExperiment returns the surrogate model linked to an experiment, or nil if none.
+func (c *ConfigStore) GetSurrogateModelForExperiment(experimentID string) *SurrogateModelConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	e, ok := c.experiments[experimentID]
+	if !ok || e.SurrogateModelID == "" {
+		return nil
+	}
+	sm, ok := c.surrogateModels[e.SurrogateModelID]
+	if !ok {
+		return nil
+	}
+	return sm
 }
 
 func (c *ConfigStore) RunningExperimentIDs() []string {
