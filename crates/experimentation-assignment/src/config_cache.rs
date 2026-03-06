@@ -154,7 +154,7 @@ pub fn experiment_from_proto(
     let variants: Vec<VariantConfig> = proto
         .variants
         .iter()
-        .map(|v| variant_from_proto(v))
+        .map(variant_from_proto)
         .collect();
 
     // Preserve allocation from existing config, or default to full range.
@@ -178,6 +178,7 @@ pub fn experiment_from_proto(
         variants,
         allocation,
         targeting_rule,
+        session_config: existing.and_then(|e| e.session_config.clone()),
     }
 }
 
@@ -261,6 +262,7 @@ mod tests {
                 end_bucket: 500,
             },
             targeting_rule: None,
+            session_config: None,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

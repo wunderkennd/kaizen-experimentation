@@ -93,7 +93,7 @@
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 (model loading, projection, SQL transparency). Agent-4 part pending. |
-| 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption) | Agent-3 | 🟢 | Agent-4 (interference, novelty), Agent-6 (QoE dashboard) |
+| 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption, interleaving scoring, session-level, QoE-engagement correlation) | Agent-3 | 🟢 | Agent-4 (interference, novelty, interleaving analysis M2.6), Agent-6 (QoE dashboard) |
 
 ### Phase 3: SVOD-Native + Bandits (Weeks 10–17)
 

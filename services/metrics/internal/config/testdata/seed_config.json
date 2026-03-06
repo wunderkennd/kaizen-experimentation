@@ -51,6 +51,8 @@
       "secondary_metric_ids": [
         "ctr_recommendation"
       ],
+      "credit_assignment": "proportional",
+      "engagement_event_type": "click",
       "variants": [
         {
           "variant_id": "f0000000-0000-0000-0000-000000000005",
@@ -76,6 +78,7 @@
       "secondary_metric_ids": [
         "rebuffer_ratio_mean"
       ],
+      "session_level": true,
       "lifecycle_stratification_enabled": true,
       "lifecycle_segments": ["TRIAL", "NEW", "ESTABLISHED", "MATURE", "AT_RISK", "WINBACK"],
       "variants": [

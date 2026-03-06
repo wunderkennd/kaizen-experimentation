@@ -34,6 +34,10 @@ type ExperimentConfig struct {
 	LifecycleStratificationEnabled bool            `json:"lifecycle_stratification_enabled,omitempty"`
 	LifecycleSegments            []string          `json:"lifecycle_segments,omitempty"`
 	SurrogateModelID             string            `json:"surrogate_model_id,omitempty"`
+	// Interleaving-specific fields
+	CreditAssignment             string            `json:"credit_assignment,omitempty"`       // "binary_win", "proportional", or "weighted"
+	EngagementEventType          string            `json:"engagement_event_type,omitempty"`   // event_type to join for engagement
+	SessionLevel                 bool              `json:"session_level,omitempty"`           // whether metrics are session-level
 }
 
 type SurrogateModelConfig struct {

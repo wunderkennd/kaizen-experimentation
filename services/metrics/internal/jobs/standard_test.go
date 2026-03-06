@@ -200,6 +200,78 @@ func TestStandardJob_Run_DailyTreatmentEffects(t *testing.T) {
 	assert.Equal(t, 4, teEntries)
 }
 
+func TestStandardJob_Run_SessionLevelMetrics(t *testing.T) {
+	job, executor, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	// playback_qoe_test has session_level: true
+	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000004")
+	require.NoError(t, err)
+
+	// Find session-level metric queries
+	var sessionCalls []spark.MockCall
+	for _, c := range executor.GetCalls() {
+		if strings.Contains(c.SQL, "me.session_id") && strings.Contains(c.SQL, "GROUP BY metric_data.user_id, metric_data.session_id") {
+			sessionCalls = append(sessionCalls, c)
+		}
+	}
+	// session_level applies to non-QoE metrics only — there are no non-QoE metrics
+	// in the playback_qoe_test experiment (both ttff_mean and rebuffer_ratio_mean are QoE)
+	assert.Len(t, sessionCalls, 0, "QoE metrics should not get session-level treatment")
+
+	// Verify session_level_metric entries
+	slCount := 0
+	for _, e := range qlWriter.AllEntries() {
+		if e.JobType == "session_level_metric" {
+			slCount++
+		}
+	}
+	assert.Equal(t, 0, slCount, "QoE metrics are excluded from session-level aggregation")
+}
+
+func TestStandardJob_Run_QoEEngagementCorrelation(t *testing.T) {
+	job, executor, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	// playback_qoe_test: ttff_mean (QoE) + rebuffer_ratio_mean (QoE), no engagement metrics
+	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000004")
+	require.NoError(t, err)
+
+	// Both metrics are QoE, so no QoE-engagement correlation (needs at least one non-QoE metric)
+	corrCount := 0
+	for _, e := range qlWriter.AllEntries() {
+		if e.JobType == "qoe_engagement_correlation" {
+			corrCount++
+		}
+	}
+	assert.Equal(t, 0, corrCount, "No correlation without engagement metrics")
+
+	// Verify no CORR calls were made
+	for _, c := range executor.GetCalls() {
+		assert.NotContains(t, c.SQL, "CORR(", "No correlation should be computed when all metrics are QoE")
+	}
+}
+
+func TestStandardJob_Run_MixedQoEAndEngagement(t *testing.T) {
+	// Test QoE-engagement correlation when an experiment has both QoE and non-QoE metrics.
+	// We use homepage_recs_v2 which has 4 metrics: ctr (PROPORTION), watch_time (MEAN),
+	// stream_start (PROPORTION), rebuffer_rate (RATIO). None are QoE, so no correlation.
+	// This test verifies the "no QoE metrics" path.
+	job, _, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
+	require.NoError(t, err)
+
+	corrCount := 0
+	for _, e := range qlWriter.AllEntries() {
+		if e.JobType == "qoe_engagement_correlation" {
+			corrCount++
+		}
+	}
+	assert.Equal(t, 0, corrCount, "No QoE metrics means no correlation computation")
+}
+
 func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 	job, executor, _ := setupTestJob(t)
 	ctx := context.Background()

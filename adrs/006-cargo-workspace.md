@@ -13,7 +13,7 @@ NautilusTrader organizes its Rust codebase into focused crates with explicit dep
 Structure all Rust code as a single Cargo workspace with 13 crates across four layers:
 
 - **Foundation**: `experimentation-core` (timestamps, errors, tracing), `experimentation-hash` (MurmurHash3, features: wasm/uniffi/ffi/python), `experimentation-proto` (tonic-build generated types).
-- **Algorithms**: `experimentation-stats` (bootstrap, CUPED, mSPRT, GST, novelty, interference; features: simd/python), `experimentation-bandit` (Thompson, LinUCB, Neural; features: gpu), `experimentation-interleaving` (Team Draft, Optimized).
+- **Algorithms**: `experimentation-stats` (bootstrap, CUPED, mSPRT, GST, novelty, interference; features: simd/python), `experimentation-bandit` (Thompson, LinUCB, Neural; features: neural), `experimentation-interleaving` (Team Draft, Optimized).
 - **Infrastructure**: `experimentation-ingest` (event validation, dedup), `experimentation-ffi` (cbindgen C headers for Go CGo bridge).
 - **Services**: `experimentation-assignment`, `experimentation-analysis`, `experimentation-pipeline`, `experimentation-policy` (thin binary shells wrapping algorithm crates).
 

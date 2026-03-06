@@ -119,7 +119,7 @@ crates/experimentation-stats/
 - [ ] proptest invariants: p-values ∈ [0,1], CIs contain point estimate, bootstrap CI ⊆ analytical CI
 
 **M4b**:
-- [ ] Neural contextual bandit (tch-rs, 2-layer MLP with dropout)
+- [ ] Neural contextual bandit (Candle, 2-layer MLP with dropout — see ADR-011)
 - [ ] Cold-start bandit: auto-create experiment, begin exploration, export affinity scores
 - [ ] Policy rollback RPC
 

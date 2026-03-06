@@ -50,7 +50,8 @@ func setupTestServer(t *testing.T) (metricsv1connect.MetricComputationServiceCli
 	modelLoader := surrogate.NewMockModelLoader()
 	projWriter := surrogate.NewMemProjectionWriter()
 	sj := jobs.NewSurrogateJob(cfgStore, renderer, surrInputProvider, qlWriter, modelLoader, projWriter)
-	h := NewMetricsHandler(stdJob, gj, ccj, sj, qlWriter)
+	ilj := jobs.NewInterleavingJob(cfgStore, renderer, executor, qlWriter)
+	h := NewMetricsHandler(stdJob, gj, ccj, sj, ilj, qlWriter)
 	mux := http.NewServeMux()
 	path, handler := metricsv1connect.NewMetricComputationServiceHandler(h)
 	mux.Handle(path, handler)
@@ -148,4 +149,22 @@ func TestComputeGuardrailMetrics_NoGuardrails(t *testing.T) {
 	resp, err := client.ComputeGuardrailMetrics(context.Background(), connect.NewRequest(&metricsv1.ComputeGuardrailMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000003"}))
 	require.NoError(t, err)
 	assert.Equal(t, int32(0), resp.Msg.GetMetricsComputed())
+}
+
+func TestComputeMetrics_InterleavingExperiment(t *testing.T) {
+	client, qlWriter := setupTestServer(t)
+	resp, err := client.ComputeMetrics(context.Background(), connect.NewRequest(&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000003"}))
+	require.NoError(t, err)
+	// search_ranking_interleave has search_success_rate (PROPORTION) + ctr_recommendation (PROPORTION + CUPED) = 2 metrics
+	assert.Equal(t, int32(2), resp.Msg.GetMetricsComputed())
+
+	// Verify interleaving score query was logged
+	entries := qlWriter.AllEntries()
+	interleavingCount := 0
+	for _, e := range entries {
+		if e.JobType == "interleaving_score" {
+			interleavingCount++
+		}
+	}
+	assert.Equal(t, 1, interleavingCount, "Should have 1 interleaving_score query log entry")
 }

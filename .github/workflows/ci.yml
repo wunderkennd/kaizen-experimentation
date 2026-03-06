@@ -58,6 +58,11 @@ jobs:
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler libcurl4-openssl-dev libssl-dev pkg-config
+
       - name: Ensure sccache is working
         run: |
           if ! sccache --start-server 2>/dev/null; then
@@ -69,9 +74,13 @@ jobs:
             echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
-      - name: Clippy (all features)
+      - name: Clippy (all features, excluding gpu)
         working-directory: crates
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: |
+          # The gpu feature (tch/libtorch) requires a local PyTorch install.
+          # Check all other crates with --all-features, then bandit with default features only.
+          cargo clippy --workspace --exclude experimentation-bandit --all-features -- -D warnings
+          cargo clippy --package experimentation-bandit -- -D warnings
 
       - name: Unit tests
         working-directory: crates
@@ -91,9 +100,10 @@ jobs:
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
       - name: WASM test vectors (10K via wasm-pack)
+        working-directory: crates/experimentation-hash
         run: |
           cargo install wasm-pack --locked
-          wasm-pack test --node --features wasm crates/experimentation-hash
+          wasm-pack test --node --features wasm
 
       - name: FFI build
         working-directory: crates
