@@ -318,7 +318,7 @@ fn layer_exclusive_allocation() {
     }"#;
 
     let config = Config::from_json(json).unwrap();
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
 
     for i in 0..500 {
         let user = format!("excl_user_{i}");
