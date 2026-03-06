@@ -103,7 +103,7 @@ jobs:
         working-directory: crates/experimentation-hash
         run: |
           cargo install wasm-pack --locked
-          wasm-pack test --node --features wasm .
+          wasm-pack test --node --features wasm
 
       - name: FFI build
         working-directory: crates
