@@ -83,9 +83,9 @@
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | ⚪ | — |
-| 2.2 | Bootstrap CI | Agent-4 | ⚪ | — |
-| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | ⚪ | — |
+| 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | 🟢 | — | Implemented as part of M1.16 (PR #25) |
+| 2.2 | Bootstrap CI | Agent-4 | 🔵 | Agent-6 (CI charts on results dashboard) |
+| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | 🔵 | Agent-6 (corrected p-values on results dashboard) |
 | 2.4 | Novelty/primacy analysis | Agent-4 | ⚪ | Agent-6 (novelty tab) |
 | 2.5 | Interference analysis | Agent-4 | ⚪ | Agent-6 (interference tab) |
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | ⚪ | Agent-6 (interleaving tab) |

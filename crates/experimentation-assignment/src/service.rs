@@ -1,7 +1,7 @@
 //! Assignment service implementation.
 //!
 //! Core logic: deterministic hash-based bucketing using experimentation-hash.
-//! Config is loaded once at startup as `Arc<Config>` (read-only, no locks).
+//! Config is read from a live cache backed by `tokio::sync::watch`.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,16 +16,24 @@ use experimentation_proto::experimentation::assignment::v1::{
 };
 
 use crate::config::{Config, ExperimentConfig};
+use crate::config_cache::ConfigCacheHandle;
 use crate::targeting;
 
-/// gRPC service implementation backed by a static config snapshot.
+/// gRPC service implementation backed by a live config cache.
 pub struct AssignmentServiceImpl {
-    config: Arc<Config>,
+    config: ConfigCacheHandle,
 }
 
 impl AssignmentServiceImpl {
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(config: ConfigCacheHandle) -> Self {
         Self { config }
+    }
+
+    /// Wrap a static `Arc<Config>` for tests and backward compatibility.
+    pub fn from_config(config: Arc<Config>) -> Self {
+        Self {
+            config: ConfigCacheHandle::from_static(config),
+        }
     }
 
     /// Core assignment logic — pure CPU, no async needed.
@@ -37,9 +45,10 @@ impl AssignmentServiceImpl {
         user_id: &str,
         attributes: &HashMap<String, String>,
     ) -> Result<GetAssignmentResponse, Status> {
+        let config = self.config.snapshot();
+
         // 1. Look up experiment.
-        let exp = self
-            .config
+        let exp = config
             .experiments_by_id
             .get(experiment_id)
             .ok_or_else(|| {
@@ -67,8 +76,7 @@ impl AssignmentServiceImpl {
         }
 
         // 4. Get layer total_buckets.
-        let layer = self
-            .config
+        let layer = config
             .layers_by_id
             .get(&exp.layer_id)
             .ok_or_else(|| {
@@ -145,9 +153,10 @@ impl AssignmentService for AssignmentServiceImpl {
         request: Request<GetAssignmentsRequest>,
     ) -> Result<Response<GetAssignmentsResponse>, Status> {
         let req = request.into_inner();
+        let config = self.config.snapshot();
         let mut assignments = Vec::new();
 
-        for exp in &self.config.experiments {
+        for exp in &config.experiments {
             // Best-effort: skip experiments that fail assignment.
             if let Ok(resp) = self.assign(&exp.experiment_id, &req.user_id, &req.attributes) {
                 assignments.push(resp);

@@ -9,7 +9,7 @@ const DEV_CONFIG: &str = include_str!("../../../dev/config.json");
 
 fn bench_get_assignment(c: &mut Criterion) {
     let config = Config::from_json(DEV_CONFIG).unwrap();
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
     let no_attrs = HashMap::new();
 
     c.bench_function("get_assignment_single", |b| {

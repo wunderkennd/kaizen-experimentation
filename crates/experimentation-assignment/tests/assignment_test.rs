@@ -9,7 +9,7 @@ const DEV_CONFIG: &str = include_str!("../../../dev/config.json");
 
 fn make_service() -> AssignmentServiceImpl {
     let config = Config::from_json(DEV_CONFIG).expect("dev config must parse");
-    AssignmentServiceImpl::new(Arc::new(config))
+    AssignmentServiceImpl::from_config(Arc::new(config))
 }
 
 fn no_attrs() -> HashMap<String, String> {
@@ -84,7 +84,7 @@ fn empty_assignment_outside_allocation() {
     }"#;
 
     let config = Config::from_json(json).unwrap();
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
 
     let mut outside_count = 0;
     for i in 0..1000 {
@@ -118,7 +118,7 @@ fn inactive_experiment_returns_is_active_false() {
     }"#;
 
     let config = Config::from_json(json).unwrap();
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
 
     let resp = svc.assign("draft_exp", "user_1", &no_attrs()).unwrap();
     assert!(!resp.is_active, "DRAFT experiment must return is_active=false");
@@ -172,7 +172,7 @@ fn targeting_no_rule_matches_all() {
     }"#;
 
     let config = Config::from_json(json).unwrap();
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
 
     let resp = svc.assign("no_target_exp", "user_1", &no_attrs()).unwrap();
     assert!(resp.is_active);
@@ -213,7 +213,7 @@ fn targeting_gt_numeric() {
     }"#;
 
     let config = Config::from_json(json).unwrap();
-    let svc = AssignmentServiceImpl::new(Arc::new(config));
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
 
     let resp = svc.assign("age_exp", "user_1", &attrs(&[("age", "25")])).unwrap();
     assert!(!resp.variant_id.is_empty(), "age 25 > 18 should match");
