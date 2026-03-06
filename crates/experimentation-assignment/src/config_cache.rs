@@ -262,6 +262,7 @@ mod tests {
                 end_bucket: 500,
             },
             targeting_rule: None,
+            session_config: None,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

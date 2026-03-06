@@ -40,6 +40,7 @@ fn make_test_config() -> Config {
                 end_bucket: 9999,
             },
             targeting_rule: None,
+            session_config: None,
         }],
         vec![LayerConfig {
             layer_id: "layer_default".to_string(),
@@ -263,6 +264,7 @@ fn test_layers_preserved() {
                 end_bucket: 4999,
             },
             targeting_rule: None,
+            session_config: None,
         }],
         vec![
             LayerConfig {
