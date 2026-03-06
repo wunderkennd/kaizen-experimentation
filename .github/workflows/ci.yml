@@ -58,6 +58,12 @@ jobs:
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Ensure sccache is working
         run: |
           if ! sccache --start-server 2>/dev/null; then
