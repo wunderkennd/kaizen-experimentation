@@ -35,6 +35,8 @@ pub struct ExperimentConfig {
     pub allocation: AllocationConfig,
     #[serde(default)]
     pub targeting_rule: Option<TargetingRule>,
+    #[serde(default)]
+    pub session_config: Option<SessionConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +56,14 @@ pub struct TargetingPredicate {
     pub operator: String,
     #[serde(default)]
     pub values: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SessionConfig {
+    #[serde(default)]
+    pub session_id_attribute: String,
+    #[serde(default)]
+    pub allow_cross_session_variation: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
