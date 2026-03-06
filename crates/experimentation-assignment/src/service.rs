@@ -6,13 +6,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 use experimentation_proto::experimentation::assignment::v1::{
     assignment_service_server::AssignmentService, ConfigUpdate, GetAssignmentRequest,
     GetAssignmentResponse, GetAssignmentsRequest, GetAssignmentsResponse,
-    GetInterleavedListRequest, GetInterleavedListResponse, StreamConfigUpdatesRequest,
+    GetInterleavedListRequest, GetInterleavedListResponse, RankedList,
+    StreamConfigUpdatesRequest,
 };
 
 use crate::config::{Config, ExperimentConfig};
@@ -123,6 +126,105 @@ impl AssignmentServiceImpl {
             is_active: true,
         })
     }
+
+    /// Produce an interleaved list for a given experiment and user.
+    ///
+    /// Validates config, derives a deterministic RNG seed from (user_id, experiment_id),
+    /// then delegates to the Team Draft algorithm.
+    #[allow(clippy::result_large_err)]
+    pub fn interleave(
+        &self,
+        experiment_id: &str,
+        user_id: &str,
+        algorithm_lists: &HashMap<String, RankedList>,
+    ) -> Result<GetInterleavedListResponse, Status> {
+        let config = self.config.snapshot();
+
+        // 1. Look up experiment.
+        let exp = config
+            .experiments_by_id
+            .get(experiment_id)
+            .ok_or_else(|| {
+                Status::not_found(format!("experiment not found: {experiment_id}"))
+            })?;
+
+        // 2. Experiment must be RUNNING.
+        if exp.state != "RUNNING" {
+            return Err(Status::failed_precondition(format!(
+                "experiment {experiment_id} is not RUNNING (state: {})",
+                exp.state,
+            )));
+        }
+
+        // 3. Must have interleaving_config.
+        let il_config = exp.interleaving_config.as_ref().ok_or_else(|| {
+            Status::failed_precondition(format!(
+                "experiment {experiment_id} has no interleaving_config",
+            ))
+        })?;
+
+        // 4. Request must contain exactly 2 algorithm lists (Team Draft is pairwise).
+        if algorithm_lists.len() != 2 {
+            return Err(Status::invalid_argument(format!(
+                "expected exactly 2 algorithm lists, got {}",
+                algorithm_lists.len(),
+            )));
+        }
+
+        // 5. Extract lists ordered by config algorithm_ids.
+        if il_config.algorithm_ids.len() != 2 {
+            return Err(Status::failed_precondition(format!(
+                "interleaving_config.algorithm_ids must have exactly 2 entries, got {}",
+                il_config.algorithm_ids.len(),
+            )));
+        }
+        let algo_a_id = &il_config.algorithm_ids[0];
+        let algo_b_id = &il_config.algorithm_ids[1];
+
+        let list_a = algorithm_lists.get(algo_a_id).ok_or_else(|| {
+            Status::invalid_argument(format!(
+                "missing algorithm list for '{algo_a_id}'",
+            ))
+        })?;
+        let list_b = algorithm_lists.get(algo_b_id).ok_or_else(|| {
+            Status::invalid_argument(format!(
+                "missing algorithm list for '{algo_b_id}'",
+            ))
+        })?;
+
+        // 6. Derive deterministic 64-bit seed from (user_id, experiment_id).
+        let seed_input = format!("{user_id}\x00{experiment_id}");
+        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(
+            seed_input.as_bytes(),
+            0,
+        ) as u64;
+        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(
+            seed_input.as_bytes(),
+            1,
+        ) as u64;
+        let seed = (hi << 32) | lo;
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        // 7. Compute k = min(max_list_size, total available items).
+        let k = il_config
+            .max_list_size
+            .min(list_a.item_ids.len() + list_b.item_ids.len());
+
+        // 8. Delegate to Team Draft.
+        let result = experimentation_interleaving::team_draft::team_draft(
+            &list_a.item_ids,
+            &list_b.item_ids,
+            algo_a_id,
+            algo_b_id,
+            k,
+            &mut rng,
+        );
+
+        Ok(GetInterleavedListResponse {
+            merged_list: result.merged_list,
+            provenance: result.provenance,
+        })
+    }
 }
 
 /// Select a variant based on the user's bucket within the allocation range.
@@ -180,11 +282,11 @@ impl AssignmentService for AssignmentServiceImpl {
 
     async fn get_interleaved_list(
         &self,
-        _request: Request<GetInterleavedListRequest>,
+        request: Request<GetInterleavedListRequest>,
     ) -> Result<Response<GetInterleavedListResponse>, Status> {
-        Err(Status::unimplemented(
-            "GetInterleavedList not yet implemented (Phase 2)",
-        ))
+        let req = request.into_inner();
+        let resp = self.interleave(&req.experiment_id, &req.user_id, &req.algorithm_lists)?;
+        Ok(Response::new(resp))
     }
 
     type StreamConfigUpdatesStream =

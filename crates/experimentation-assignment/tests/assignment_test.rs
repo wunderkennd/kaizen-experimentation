@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use experimentation_assignment::config::Config;
 use experimentation_assignment::service::AssignmentServiceImpl;
+use experimentation_proto::experimentation::assignment::v1::RankedList;
 
 /// Compile-time embed of dev config — avoids path issues in tests.
 const DEV_CONFIG: &str = include_str!("../../../dev/config.json");
@@ -338,4 +339,177 @@ fn layer_exclusive_allocation() {
             "user {user} matched neither — should match exactly one"
         );
     }
+}
+
+// ── M2.7 Tests (GetInterleavedList / Team Draft) ──
+
+fn make_algo_lists(a_items: &[&str], b_items: &[&str]) -> HashMap<String, RankedList> {
+    let mut m = HashMap::new();
+    m.insert(
+        "algo_a".to_string(),
+        RankedList { item_ids: a_items.iter().map(|s| s.to_string()).collect() },
+    );
+    m.insert(
+        "algo_b".to_string(),
+        RankedList { item_ids: b_items.iter().map(|s| s.to_string()).collect() },
+    );
+    m
+}
+
+#[test]
+fn interleaving_basic() {
+    let svc = make_service();
+    let lists = make_algo_lists(
+        &["i1", "i2", "i3", "i4", "i5"],
+        &["i6", "i7", "i8", "i9", "i10"],
+    );
+    let resp = svc.interleave("exp_dev_004", "user_1", &lists).unwrap();
+
+    assert!(!resp.merged_list.is_empty(), "merged list should not be empty");
+    assert!(resp.merged_list.len() <= 10, "should not exceed max_list_size");
+    // Every item has provenance.
+    for item in &resp.merged_list {
+        assert!(
+            resp.provenance.contains_key(item),
+            "missing provenance for {item}"
+        );
+        let algo = &resp.provenance[item];
+        assert!(
+            algo == "algo_a" || algo == "algo_b",
+            "unexpected provenance: {algo}"
+        );
+    }
+}
+
+#[test]
+fn interleaving_deterministic() {
+    let svc = make_service();
+    let lists = make_algo_lists(
+        &["x1", "x2", "x3", "x4"],
+        &["y1", "y2", "y3", "y4"],
+    );
+    let r1 = svc.interleave("exp_dev_004", "user_42", &lists).unwrap();
+    let r2 = svc.interleave("exp_dev_004", "user_42", &lists).unwrap();
+    assert_eq!(r1.merged_list, r2.merged_list, "same inputs must produce same output");
+    assert_eq!(r1.provenance, r2.provenance);
+}
+
+#[test]
+fn interleaving_respects_max_list_size() {
+    // exp_dev_004 has max_list_size=10. Provide 20 items total.
+    let svc = make_service();
+    let a: Vec<&str> = (0..10).map(|i| ["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9"][i]).collect();
+    let b: Vec<&str> = (0..10).map(|i| ["b0","b1","b2","b3","b4","b5","b6","b7","b8","b9"][i]).collect();
+    let lists = make_algo_lists(&a, &b);
+    let resp = svc.interleave("exp_dev_004", "user_1", &lists).unwrap();
+    assert!(
+        resp.merged_list.len() <= 10,
+        "merged list length {} exceeds max_list_size 10",
+        resp.merged_list.len(),
+    );
+}
+
+#[test]
+fn interleaving_unknown_experiment() {
+    let svc = make_service();
+    let lists = make_algo_lists(&["a"], &["b"]);
+    let err = svc.interleave("nonexistent_exp", "user_1", &lists).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::NotFound);
+}
+
+#[test]
+fn interleaving_missing_config() {
+    // exp_dev_001 is an AB experiment with no interleaving_config.
+    let svc = make_service();
+    let lists = make_algo_lists(&["a"], &["b"]);
+    let err = svc.interleave("exp_dev_001", "user_1", &lists).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+}
+
+#[test]
+fn interleaving_wrong_algo_count() {
+    let svc = make_service();
+
+    // 1 algorithm
+    let mut one = HashMap::new();
+    one.insert("algo_a".to_string(), RankedList { item_ids: vec!["x".to_string()] });
+    let err = svc.interleave("exp_dev_004", "user_1", &one).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+    // 3 algorithms
+    let mut three = HashMap::new();
+    three.insert("algo_a".to_string(), RankedList { item_ids: vec!["x".to_string()] });
+    three.insert("algo_b".to_string(), RankedList { item_ids: vec!["y".to_string()] });
+    three.insert("algo_c".to_string(), RankedList { item_ids: vec!["z".to_string()] });
+    let err = svc.interleave("exp_dev_004", "user_1", &three).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+}
+
+#[test]
+fn interleaving_empty_lists() {
+    let svc = make_service();
+    let lists = make_algo_lists(&[], &[]);
+    let resp = svc.interleave("exp_dev_004", "user_1", &lists).unwrap();
+    assert!(resp.merged_list.is_empty(), "both empty → empty merged");
+    assert!(resp.provenance.is_empty());
+}
+
+#[test]
+fn interleaving_disjoint_lists() {
+    let svc = make_service();
+    let lists = make_algo_lists(&["a", "b", "c"], &["d", "e", "f"]);
+    let resp = svc.interleave("exp_dev_004", "user_1", &lists).unwrap();
+    // All 6 items should appear.
+    assert_eq!(resp.merged_list.len(), 6, "all disjoint items should appear");
+    let set: std::collections::HashSet<_> = resp.merged_list.iter().collect();
+    for item in &["a", "b", "c", "d", "e", "f"] {
+        assert!(set.contains(&item.to_string()), "missing item {item}");
+    }
+}
+
+#[test]
+fn interleaving_duplicate_items() {
+    // Both lists share some items — should be deduped in merged output.
+    let svc = make_service();
+    let lists = make_algo_lists(&["shared", "a_only"], &["shared", "b_only"]);
+    let resp = svc.interleave("exp_dev_004", "user_1", &lists).unwrap();
+
+    let count_shared = resp.merged_list.iter().filter(|i| *i == "shared").count();
+    assert_eq!(count_shared, 1, "shared item should appear exactly once");
+
+    // "shared" should have provenance from whichever team picked first.
+    assert!(resp.provenance.contains_key("shared"));
+    // All unique items present.
+    assert_eq!(resp.merged_list.len(), 3);
+}
+
+#[test]
+fn interleaving_balance() {
+    // Over many users, both algorithms should contribute ~equally.
+    let svc = make_service();
+    let mut algo_a_count = 0u64;
+    let mut algo_b_count = 0u64;
+
+    for i in 0..1000 {
+        let user_id = format!("balance_user_{i}");
+        let lists = make_algo_lists(
+            &["i1", "i2", "i3", "i4"],
+            &["i5", "i6", "i7", "i8"],
+        );
+        let resp = svc.interleave("exp_dev_004", &user_id, &lists).unwrap();
+        for algo in resp.provenance.values() {
+            match algo.as_str() {
+                "algo_a" => algo_a_count += 1,
+                "algo_b" => algo_b_count += 1,
+                _ => panic!("unexpected algo: {algo}"),
+            }
+        }
+    }
+
+    let total = (algo_a_count + algo_b_count) as f64;
+    let frac_a = algo_a_count as f64 / total;
+    assert!(
+        (0.40..=0.60).contains(&frac_a),
+        "algo_a fraction {frac_a:.3} is outside [0.40, 0.60] — balance is off"
+    );
 }

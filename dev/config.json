@@ -54,10 +54,29 @@
       ],
       "allocation": { "start_bucket": 0, "end_bucket": 9999 },
       "session_config": { "session_id_attribute": "session_id", "allow_cross_session_variation": true }
+    },
+    {
+      "experiment_id": "exp_dev_004",
+      "name": "Interleaving Ranker Test",
+      "state": "RUNNING",
+      "type": "INTERLEAVING",
+      "hash_salt": "dev_salt_004",
+      "layer_id": "layer_interleave",
+      "variants": [
+        { "variant_id": "algo_a", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "algo_b", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "interleaving_config": {
+        "method": "TEAM_DRAFT",
+        "algorithm_ids": ["algo_a", "algo_b"],
+        "max_list_size": 10
+      }
     }
   ],
   "layers": [
     { "layer_id": "layer_default", "total_buckets": 10000 },
-    { "layer_id": "layer_session", "total_buckets": 10000 }
+    { "layer_id": "layer_session", "total_buckets": 10000 },
+    { "layer_id": "layer_interleave", "total_buckets": 10000 }
   ]
 }

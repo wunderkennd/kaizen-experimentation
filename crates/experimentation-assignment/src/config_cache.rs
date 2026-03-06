@@ -168,6 +168,12 @@ pub fn experiment_from_proto(
     // Preserve targeting rule from existing config (stream has only targeting_rule_id).
     let targeting_rule = existing.and_then(|e| e.targeting_rule.clone());
 
+    // Preserve session_config from existing config.
+    let session_config = existing.and_then(|e| e.session_config.clone());
+
+    // Preserve interleaving_config from existing config.
+    let interleaving_config = existing.and_then(|e| e.interleaving_config.clone());
+
     ExperimentConfig {
         experiment_id: proto.experiment_id.clone(),
         name: proto.name.clone(),
@@ -178,7 +184,8 @@ pub fn experiment_from_proto(
         variants,
         allocation,
         targeting_rule,
-        session_config: existing.and_then(|e| e.session_config.clone()),
+        session_config,
+        interleaving_config,
     }
 }
 
@@ -263,6 +270,7 @@ mod tests {
             },
             targeting_rule: None,
             session_config: None,
+            interleaving_config: None,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

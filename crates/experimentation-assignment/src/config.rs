@@ -37,6 +37,8 @@ pub struct ExperimentConfig {
     pub targeting_rule: Option<TargetingRule>,
     #[serde(default)]
     pub session_config: Option<SessionConfig>,
+    #[serde(default)]
+    pub interleaving_config: Option<InterleavingConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -64,6 +66,20 @@ pub struct SessionConfig {
     pub session_id_attribute: String,
     #[serde(default)]
     pub allow_cross_session_variation: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct InterleavingConfig {
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub algorithm_ids: Vec<String>,
+    #[serde(default = "default_max_list_size")]
+    pub max_list_size: usize,
+}
+
+fn default_max_list_size() -> usize {
+    50
 }
 
 #[derive(Debug, Clone, Deserialize)]

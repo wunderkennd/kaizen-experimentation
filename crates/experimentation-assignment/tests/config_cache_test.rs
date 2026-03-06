@@ -41,6 +41,7 @@ fn make_test_config() -> Config {
             },
             targeting_rule: None,
             session_config: None,
+            interleaving_config: None,
         }],
         vec![LayerConfig {
             layer_id: "layer_default".to_string(),
@@ -265,6 +266,7 @@ fn test_layers_preserved() {
             },
             targeting_rule: None,
             session_config: None,
+            interleaving_config: None,
         }],
         vec![
             LayerConfig {

@@ -13,7 +13,7 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🟢 Phase 1 Complete | agent-1/feat/layer-session-assignment | Phase 2: GetInterleavedList (2.7) | — | M1.1–1.5 all complete. Session-level bucketing + layer exclusivity. |
+| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/interleaved-list-rpc | M2.7 GetInterleavedList complete | — | M1.1–1.5 + M2.7 complete. Team Draft interleaving RPC wired with deterministic seeding. |
 | Agent-2 | M2 Pipeline | 🔵 Phase 3 In Progress | agent-2/feat/qoe-interleaving-validation | Phase 3: QoE enrichment + interleaving provenance | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3: QoE upper bounds + interleaving provenance validation. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/novelty-interference-interleaving | Phase 2: Novelty, Interference, Interleaving | — | M2.4–2.6 in progress. M2.1–2.3 done (PRs #25, #29). |
@@ -89,7 +89,7 @@
 | 2.4 | Novelty/primacy analysis | Agent-4 | 🟢 | Agent-6 (novelty tab) | Gauss-Newton with LM damping, golden-file validated |
 | 2.5 | Interference analysis | Agent-4 | 🟢 | Agent-6 (interference tab) | JSD, Jaccard, Gini, title spillover with BH correction |
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | Sign test, Bradley-Terry MM, position analysis |
-| 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | ⚪ | — |
+| 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | 🟢 | Agent-4 (interleaving analysis) |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 (model loading, projection, SQL transparency). Agent-4 part pending. |
