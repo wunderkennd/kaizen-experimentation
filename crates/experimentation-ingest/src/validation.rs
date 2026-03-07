@@ -48,7 +48,7 @@ pub fn require_timestamp(
     Ok(dt)
 }
 
-/// Validate an ExposureEvent: required fields + timestamp + finite floats.
+/// Validate an ExposureEvent: required fields + timestamp + finite floats + provenance.
 pub fn validate_exposure(event: &ExposureEvent) -> Result<()> {
     validate_required(&event.event_id, "event_id")?;
     validate_required(&event.experiment_id, "experiment_id")?;
@@ -63,6 +63,30 @@ pub fn validate_exposure(event: &ExposureEvent) -> Result<()> {
         );
     }
 
+    validate_interleaving_provenance(&event.interleaving_provenance)?;
+
+    Ok(())
+}
+
+/// Validate interleaving provenance map: no empty keys or values.
+///
+/// An empty map is valid (non-interleaving experiment). When present,
+/// each entry must have a non-empty item_id (key) and algorithm_id (value).
+pub fn validate_interleaving_provenance(
+    provenance: &std::collections::HashMap<String, String>,
+) -> Result<()> {
+    for (item_id, algorithm_id) in provenance {
+        if item_id.is_empty() {
+            return Err(Error::Validation(
+                "interleaving_provenance key (item_id) must not be empty".to_string(),
+            ));
+        }
+        if algorithm_id.is_empty() {
+            return Err(Error::Validation(format!(
+                "interleaving_provenance value (algorithm_id) must not be empty for item_id '{item_id}'"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -130,34 +154,40 @@ pub fn validate_playback_metrics(m: &PlaybackMetrics) -> Result<()> {
         )));
     }
 
-    if m.time_to_first_frame_ms < 0 {
+    if m.time_to_first_frame_ms < 0 || m.time_to_first_frame_ms > 120_000 {
         return Err(Error::Validation(format!(
-            "time_to_first_frame_ms must be non-negative, got {}",
+            "time_to_first_frame_ms must be in [0, 120000], got {}",
             m.time_to_first_frame_ms
         )));
     }
-    if m.rebuffer_count < 0 {
+    if m.rebuffer_count < 0 || m.rebuffer_count > 10_000 {
         return Err(Error::Validation(format!(
-            "rebuffer_count must be non-negative, got {}",
+            "rebuffer_count must be in [0, 10000], got {}",
             m.rebuffer_count
         )));
     }
-    if m.avg_bitrate_kbps < 0 {
+    if m.avg_bitrate_kbps < 0 || m.avg_bitrate_kbps > 200_000 {
         return Err(Error::Validation(format!(
-            "avg_bitrate_kbps must be non-negative, got {}",
+            "avg_bitrate_kbps must be in [0, 200000], got {}",
             m.avg_bitrate_kbps
         )));
     }
-    if m.resolution_switches < 0 {
+    if m.resolution_switches < 0 || m.resolution_switches > 10_000 {
         return Err(Error::Validation(format!(
-            "resolution_switches must be non-negative, got {}",
+            "resolution_switches must be in [0, 10000], got {}",
             m.resolution_switches
         )));
     }
-    if m.playback_duration_ms < 0 {
+    if m.playback_duration_ms < 0 || m.playback_duration_ms > 86_400_000 {
         return Err(Error::Validation(format!(
-            "playback_duration_ms must be non-negative, got {}",
+            "playback_duration_ms must be in [0, 86400000], got {}",
             m.playback_duration_ms
+        )));
+    }
+    if m.peak_resolution_height < 0 || m.peak_resolution_height > 8640 {
+        return Err(Error::Validation(format!(
+            "peak_resolution_height must be in [0, 8640], got {}",
+            m.peak_resolution_height
         )));
     }
 
@@ -367,5 +397,122 @@ mod tests {
         let mut m = valid_playback_metrics();
         m.rebuffer_ratio = f64::NAN;
         let _ = validate_playback_metrics(&m);
+    }
+
+    // --- QoE upper-bound tests ---
+
+    #[test]
+    fn test_qoe_peak_resolution_height_zero_accepted() {
+        let mut m = valid_playback_metrics();
+        m.peak_resolution_height = 0; // audio-only
+        assert!(validate_playback_metrics(&m).is_ok());
+    }
+
+    #[test]
+    fn test_qoe_peak_resolution_height_negative_rejected() {
+        let mut m = valid_playback_metrics();
+        m.peak_resolution_height = -1;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("peak_resolution_height"));
+    }
+
+    #[test]
+    fn test_qoe_peak_resolution_height_too_large_rejected() {
+        let mut m = valid_playback_metrics();
+        m.peak_resolution_height = 8641;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("peak_resolution_height"));
+    }
+
+    #[test]
+    fn test_qoe_time_to_first_frame_too_large_rejected() {
+        let mut m = valid_playback_metrics();
+        m.time_to_first_frame_ms = 120_001;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("time_to_first_frame_ms"));
+    }
+
+    #[test]
+    fn test_qoe_playback_duration_too_large_rejected() {
+        let mut m = valid_playback_metrics();
+        m.playback_duration_ms = 86_400_001;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("playback_duration_ms"));
+    }
+
+    #[test]
+    fn test_qoe_avg_bitrate_too_large_rejected() {
+        let mut m = valid_playback_metrics();
+        m.avg_bitrate_kbps = 200_001;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("avg_bitrate_kbps"));
+    }
+
+    #[test]
+    fn test_qoe_rebuffer_count_too_large_rejected() {
+        let mut m = valid_playback_metrics();
+        m.rebuffer_count = 10_001;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("rebuffer_count"));
+    }
+
+    #[test]
+    fn test_qoe_resolution_switches_too_large_rejected() {
+        let mut m = valid_playback_metrics();
+        m.resolution_switches = 10_001;
+        let err = validate_playback_metrics(&m).unwrap_err();
+        assert!(err.to_string().contains("resolution_switches"));
+    }
+
+    #[test]
+    fn test_qoe_boundary_values_accepted() {
+        let m = PlaybackMetrics {
+            time_to_first_frame_ms: 120_000,
+            rebuffer_count: 10_000,
+            rebuffer_ratio: 1.0,
+            avg_bitrate_kbps: 200_000,
+            resolution_switches: 10_000,
+            peak_resolution_height: 8640,
+            startup_failure_rate: 1.0,
+            playback_duration_ms: 86_400_000,
+        };
+        assert!(validate_playback_metrics(&m).is_ok());
+    }
+
+    // --- Interleaving provenance tests ---
+
+    #[test]
+    fn test_exposure_no_provenance_accepted() {
+        let e = valid_exposure(); // empty map by default
+        assert!(validate_exposure(&e).is_ok());
+    }
+
+    #[test]
+    fn test_exposure_valid_provenance_accepted() {
+        let mut e = valid_exposure();
+        e.interleaving_provenance
+            .insert("item-1".into(), "algo-a".into());
+        e.interleaving_provenance
+            .insert("item-2".into(), "algo-b".into());
+        assert!(validate_exposure(&e).is_ok());
+    }
+
+    #[test]
+    fn test_exposure_provenance_empty_item_id_rejected() {
+        let mut provenance = std::collections::HashMap::new();
+        provenance.insert(String::new(), "algo-a".into());
+        let err = validate_interleaving_provenance(&provenance).unwrap_err();
+        assert!(err.to_string().contains("item_id) must not be empty"));
+    }
+
+    #[test]
+    fn test_exposure_provenance_empty_algorithm_id_rejected() {
+        let mut e = valid_exposure();
+        e.interleaving_provenance
+            .insert("item-1".into(), String::new());
+        let err = validate_exposure(&e).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("algorithm_id) must not be empty"));
     }
 }

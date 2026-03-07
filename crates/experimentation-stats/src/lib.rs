@@ -26,9 +26,10 @@ pub mod cuped;
 pub mod sequential;
 pub mod bootstrap;
 pub mod multiple_comparison;
+pub mod novelty;
+pub mod interference;
+pub mod interleaving;
 pub mod surrogate;
 // Stubs — implement in Phase 3:
 // pub mod delta_method;
-// pub mod novelty;
-// pub mod interference;
 // pub mod clustering;

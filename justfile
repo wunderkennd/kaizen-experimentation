@@ -67,7 +67,7 @@ dev: infra seed
 # Tear down infra, remove generated code and build artifacts
 clean: infra-down monitoring-down
     rm -rf {{ gen_go_dir }} {{ gen_ts_dir }}
-    rm -rf {{ crates_dir }}/target
+    rm -rf target
     rm -rf {{ ui_dir }}/node_modules {{ ui_dir }}/.next
     @echo "  Cleaned."
 
@@ -129,7 +129,7 @@ deps: deps-rust deps-go deps-ts
 # Fetch Rust dependencies and check workspace compiles
 deps-rust:
     @echo "  Checking Rust toolchain..."
-    cd {{ crates_dir }} && {{ cargo }} check --workspace 2>/dev/null || {{ cargo }} fetch --manifest-path {{ crates_dir }}/Cargo.toml
+    {{ cargo }} check --workspace 2>/dev/null || {{ cargo }} fetch
 
 # Download Go module dependencies
 deps-go:
@@ -153,7 +153,7 @@ test: test-rust test-go test-ts test-hash
 # Run Rust workspace tests
 test-rust:
     @echo "  Running Rust tests..."
-    cd {{ crates_dir }} && {{ cargo }} test --workspace
+    {{ cargo }} test --workspace
 
 # Run Go tests with race detection
 test-go:
@@ -178,7 +178,7 @@ test-flags:
 # Build Rust FFI + run Go CGo parity tests (10K vectors)
 test-flags-cgo:
     @echo "  Building Rust FFI library..."
-    cd {{ crates_dir }} && {{ cargo }} build --package experimentation-ffi
+    {{ cargo }} build --package experimentation-ffi
     @echo "  Running CGo parity tests..."
     cd {{ services_dir }} && CGO_ENABLED=1 {{ go }} test -v -tags='has_ffi' -run 'TestCGoBridge' ./flags/internal/hash/...
 
@@ -190,7 +190,7 @@ test-integration: infra
 # Run a specific Rust crate's tests (e.g., just test-crate experimentation-hash)
 test-crate crate:
     @echo "  Running tests for {{ crate }}..."
-    cd {{ crates_dir }} && {{ cargo }} test -p {{ crate }}
+    {{ cargo }} test -p {{ crate }}
 
 # ==============================================================================
 # Linting
@@ -201,7 +201,7 @@ lint: lint-proto lint-rust lint-go lint-ts
 
 # Run Rust clippy with all features
 lint-rust:
-    cd {{ crates_dir }} && {{ cargo }} clippy --workspace --all-features -- -D warnings
+    {{ cargo }} clippy --workspace --all-features -- -D warnings
 
 # Run Go vet
 lint-go:
@@ -213,11 +213,11 @@ lint-ts:
 
 # Format all Rust code
 fmt:
-    cd {{ crates_dir }} && {{ cargo }} fmt --all
+    {{ cargo }} fmt --all
 
 # Check Rust formatting without modifying
 fmt-check:
-    cd {{ crates_dir }} && {{ cargo }} fmt --all -- --check
+    {{ cargo }} fmt --all -- --check
 
 # ==============================================================================
 # Benchmarks
@@ -226,12 +226,12 @@ fmt-check:
 # Run Rust benchmarks (hash + stats)
 bench:
     @echo "  Running benchmarks..."
-    cd {{ crates_dir }} && {{ cargo }} bench --workspace
+    {{ cargo }} bench --workspace
 
 # Run benchmarks for a specific crate (e.g., just bench-crate experimentation-hash)
 bench-crate crate:
     @echo "  Running benchmarks for {{ crate }}..."
-    cd {{ crates_dir }} && {{ cargo }} bench -p {{ crate }}
+    {{ cargo }} bench -p {{ crate }}
 
 # ==============================================================================
 # Seed Data
@@ -351,7 +351,7 @@ status:
 
 # Watch Rust workspace for changes and re-run tests
 watch:
-    cd {{ crates_dir }} && {{ cargo }} watch -x "test --workspace"
+    {{ cargo }} watch -x "test --workspace"
 
 # Run a single experiment through the full local pipeline (smoke test)
 smoke-test: infra seed

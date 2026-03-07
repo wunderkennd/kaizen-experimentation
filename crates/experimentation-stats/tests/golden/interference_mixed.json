@@ -1,0 +1,96 @@
+{
+  "alpha": 0.05,
+  "description": "Moderate interference, partially overlapping catalogs",
+  "expected": {
+    "control_catalog_coverage": 0.8571428571428571,
+    "control_gini_coefficient": 0.2536231884057971,
+    "interference_detected": true,
+    "jaccard_similarity_top_100": 0.7142857142857143,
+    "jensen_shannon_divergence": 0.05235774114226295,
+    "spillover_count": 1,
+    "treatment_catalog_coverage": 0.8571428571428571,
+    "treatment_gini_coefficient": 0.28888888888888875
+  },
+  "input": {
+    "control": [
+      {
+        "content_id": "c0",
+        "unique_viewers": 200,
+        "view_count": 250,
+        "watch_time_seconds": 2500.0
+      },
+      {
+        "content_id": "c1",
+        "unique_viewers": 190,
+        "view_count": 220,
+        "watch_time_seconds": 2200.0
+      },
+      {
+        "content_id": "c2",
+        "unique_viewers": 150,
+        "view_count": 180,
+        "watch_time_seconds": 1800.0
+      },
+      {
+        "content_id": "c3",
+        "unique_viewers": 100,
+        "view_count": 120,
+        "watch_time_seconds": 1200.0
+      },
+      {
+        "content_id": "c4",
+        "unique_viewers": 70,
+        "view_count": 90,
+        "watch_time_seconds": 900.0
+      },
+      {
+        "content_id": "c_only",
+        "unique_viewers": 45,
+        "view_count": 60,
+        "watch_time_seconds": 600.0
+      }
+    ],
+    "total_control_viewers": 1000,
+    "total_treatment_viewers": 1000,
+    "treatment": [
+      {
+        "content_id": "c0",
+        "unique_viewers": 250,
+        "view_count": 300,
+        "watch_time_seconds": 3000.0
+      },
+      {
+        "content_id": "c1",
+        "unique_viewers": 180,
+        "view_count": 200,
+        "watch_time_seconds": 2000.0
+      },
+      {
+        "content_id": "c2",
+        "unique_viewers": 120,
+        "view_count": 150,
+        "watch_time_seconds": 1500.0
+      },
+      {
+        "content_id": "c3",
+        "unique_viewers": 80,
+        "view_count": 100,
+        "watch_time_seconds": 1000.0
+      },
+      {
+        "content_id": "c4",
+        "unique_viewers": 60,
+        "view_count": 80,
+        "watch_time_seconds": 800.0
+      },
+      {
+        "content_id": "t_only",
+        "unique_viewers": 50,
+        "view_count": 70,
+        "watch_time_seconds": 700.0
+      }
+    ]
+  },
+  "js_threshold": 0.05,
+  "test_name": "interference_mixed"
+}

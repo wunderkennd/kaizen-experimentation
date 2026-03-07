@@ -1,0 +1,1235 @@
+{
+  "alpha": 0.05,
+  "description": "3-way multileave with unequal win rates",
+  "expected": {
+    "algorithm_strengths": [
+      {
+        "algorithm_id": "algo_a",
+        "ci_lower": 0.43053960368344674,
+        "ci_upper": 0.5758973495891051,
+        "strength": 0.49794238286617126
+      },
+      {
+        "algorithm_id": "algo_b",
+        "ci_lower": 0.2408064601753072,
+        "ci_upper": 0.374770197484475,
+        "strength": 0.3004115254703741
+      },
+      {
+        "algorithm_id": "algo_c",
+        "ci_lower": 0.14648628415553355,
+        "ci_upper": 0.2775764742586678,
+        "strength": 0.20164609166345465
+      }
+    ],
+    "algorithm_win_rates": {
+      "algo_a": 0.5,
+      "algo_b": 0.3,
+      "algo_c": 0.2
+    },
+    "sign_test_p_value": 0.0002248673241788124
+  },
+  "scores": [
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u0",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u1",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u2",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u3",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u4",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u5",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u6",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u7",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u8",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u9",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u10",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u11",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u12",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u13",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u14",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u15",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u16",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u17",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u18",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u19",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u20",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u21",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u22",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u23",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u24",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u25",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u26",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u27",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u28",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u29",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u30",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u31",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u32",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u33",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u34",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u35",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u36",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u37",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u38",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u39",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u40",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u41",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u42",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u43",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u44",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u45",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u46",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u47",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u48",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u49",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u50",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u51",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u52",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u53",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u54",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u55",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u56",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u57",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u58",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u59",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u60",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u61",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u62",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u63",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u64",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u65",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u66",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u67",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u68",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u69",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u70",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u71",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u72",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u73",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u74",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u75",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u76",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u77",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u78",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u79",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u80",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u81",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u82",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u83",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u84",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u85",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u86",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u87",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u88",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u89",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u90",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u91",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u92",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u93",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u94",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u95",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u96",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u97",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u98",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u99",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u100",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u101",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u102",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u103",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u104",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u105",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u106",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u107",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u108",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u109",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u110",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u111",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u112",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u113",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u114",
+      "winning_algorithm_id": "algo_a"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u115",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u116",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u117",
+      "winning_algorithm_id": "algo_b"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u118",
+      "winning_algorithm_id": "algo_c"
+    },
+    {
+      "algorithm_scores": {
+        "algo_a": 3.0,
+        "algo_b": 2.0,
+        "algo_c": 1.0
+      },
+      "total_engagements": 6,
+      "user_id": "u119",
+      "winning_algorithm_id": "algo_c"
+    }
+  ],
+  "test_name": "interleaving_three_algorithms"
+}
