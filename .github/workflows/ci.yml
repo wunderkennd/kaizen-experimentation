@@ -129,8 +129,24 @@ jobs:
           name: generated-code
           path: gen/
 
-      - name: Restore gen/go module files
-        run: git checkout -- gen/go/go.mod gen/go/go.sum
+      - name: Create gen/go module files
+        run: |
+          cat > gen/go/go.mod << 'GOMOD'
+          module github.com/org/experimentation/gen/go
+
+          go 1.22
+
+          require (
+          	connectrpc.com/connect v1.17.0
+          	google.golang.org/protobuf v1.35.0
+          )
+
+          require (
+          	github.com/google/go-cmp v0.6.0 // indirect
+          	golang.org/x/net v0.29.0 // indirect
+          )
+          GOMOD
+          cd gen/go && go mod download
 
       - uses: actions/download-artifact@v4
         with:
