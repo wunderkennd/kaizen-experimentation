@@ -48,6 +48,7 @@ func main() {
 	layerStore := store.NewLayerStore(pool)
 	metricStore := store.NewMetricStore(pool)
 	targetingStore := store.NewTargetingStore(pool)
+	surrogateStore := store.NewSurrogateStore(pool)
 
 	// Notifier for streaming config updates.
 	dsn := os.Getenv("DATABASE_URL")
@@ -70,7 +71,7 @@ func main() {
 	}
 
 	// Service handlers.
-	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, notifier)
+	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, surrogateStore, notifier)
 	streamSvc := handlers.NewConfigStreamService(experimentStore, notifier)
 
 	// Register ConnectRPC handlers on mux.

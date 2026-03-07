@@ -42,7 +42,8 @@ func setupTestServer(t *testing.T) (testEnv, func()) {
 	ls := store.NewLayerStore(pool)
 	ms := store.NewMetricStore(pool)
 	ts := store.NewTargetingStore(pool)
-	svc := handlers.NewExperimentService(es, as, ls, ms, ts, nil)
+	ss := store.NewSurrogateStore(pool)
+	svc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, nil)
 
 	mux := http.NewServeMux()
 	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc)
@@ -854,4 +855,156 @@ func TestLayerCRUD(t *testing.T) {
 	}))
 	require.NoError(t, err)
 	assert.Len(t, allocs.Msg.Allocations, 0)
+}
+
+// --- Surrogate Model Tests ---
+
+func newSurrogateModel() *commonv1.SurrogateModelConfig {
+	return &commonv1.SurrogateModelConfig{
+		TargetMetricId:        "90_day_churn_rate",
+		InputMetricIds:        []string{"7d_watch_time", "7d_session_freq"},
+		ModelType:             commonv1.SurrogateModelType_SURROGATE_MODEL_TYPE_LINEAR,
+		ObservationWindowDays: 7,
+		PredictionHorizonDays: 90,
+	}
+}
+
+func TestSurrogateCRUD(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	// Create
+	created, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+		Model: newSurrogateModel(),
+	}))
+	require.NoError(t, err)
+	model := created.Msg
+	assert.NotEmpty(t, model.ModelId)
+	assert.Equal(t, "90_day_churn_rate", model.TargetMetricId)
+	assert.Equal(t, []string{"7d_watch_time", "7d_session_freq"}, model.InputMetricIds)
+	assert.Equal(t, commonv1.SurrogateModelType_SURROGATE_MODEL_TYPE_LINEAR, model.ModelType)
+	assert.Equal(t, int32(7), model.ObservationWindowDays)
+	assert.Equal(t, int32(90), model.PredictionHorizonDays)
+	assert.NotNil(t, model.CreatedAt)
+
+	// Get by ID
+	got, err := client.GetSurrogateCalibration(ctx, connect.NewRequest(&mgmtv1.GetSurrogateCalibrationRequest{
+		ModelId: model.ModelId,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, model.ModelId, got.Msg.ModelId)
+	assert.Equal(t, model.TargetMetricId, got.Msg.TargetMetricId)
+
+	// Create a second model for pagination testing.
+	_, err = client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+		Model: &commonv1.SurrogateModelConfig{
+			TargetMetricId:        "ltv_180d",
+			InputMetricIds:        []string{"7d_revenue"},
+			ModelType:             commonv1.SurrogateModelType_SURROGATE_MODEL_TYPE_GRADIENT_BOOSTED,
+			ObservationWindowDays: 14,
+			PredictionHorizonDays: 180,
+		},
+	}))
+	require.NoError(t, err)
+
+	// List
+	list, err := client.ListSurrogateModels(ctx, connect.NewRequest(&mgmtv1.ListSurrogateModelsRequest{
+		PageSize: 1,
+	}))
+	require.NoError(t, err)
+	assert.Len(t, list.Msg.Models, 1)
+	assert.NotEmpty(t, list.Msg.NextPageToken)
+
+	// Second page
+	list2, err := client.ListSurrogateModels(ctx, connect.NewRequest(&mgmtv1.ListSurrogateModelsRequest{
+		PageSize:  1,
+		PageToken: list.Msg.NextPageToken,
+	}))
+	require.NoError(t, err)
+	assert.Len(t, list2.Msg.Models, 1)
+}
+
+func TestTriggerSurrogateRecalibration(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	// Create a model first.
+	created, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+		Model: newSurrogateModel(),
+	}))
+	require.NoError(t, err)
+	modelID := created.Msg.ModelId
+
+	// Trigger recalibration → success.
+	_, err = client.TriggerSurrogateRecalibration(ctx, connect.NewRequest(&mgmtv1.TriggerSurrogateRecalibrationRequest{
+		ModelId: modelID,
+	}))
+	require.NoError(t, err)
+
+	// Verify audit trail has a "trigger_surrogate_recalibration" entry.
+	var action string
+	err = env.pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'trigger_surrogate_recalibration'`, modelID,
+	).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "trigger_surrogate_recalibration", action)
+
+	// Trigger on non-existent model → NOT_FOUND.
+	_, err = client.TriggerSurrogateRecalibration(ctx, connect.NewRequest(&mgmtv1.TriggerSurrogateRecalibrationRequest{
+		ModelId: "00000000-0000-0000-0000-000000000000",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+func TestCreateSurrogateModel_Validation(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	t.Run("missing target_metric_id", func(t *testing.T) {
+		m := newSurrogateModel()
+		m.TargetMetricId = ""
+		_, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+			Model: m,
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	})
+
+	t.Run("empty input_metric_ids", func(t *testing.T) {
+		m := newSurrogateModel()
+		m.InputMetricIds = nil
+		_, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+			Model: m,
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	})
+
+	t.Run("unspecified model_type", func(t *testing.T) {
+		m := newSurrogateModel()
+		m.ModelType = commonv1.SurrogateModelType_SURROGATE_MODEL_TYPE_UNSPECIFIED
+		_, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+			Model: m,
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	})
+
+	t.Run("prediction_horizon <= observation_window", func(t *testing.T) {
+		m := newSurrogateModel()
+		m.ObservationWindowDays = 30
+		m.PredictionHorizonDays = 30
+		_, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+			Model: m,
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	})
 }
