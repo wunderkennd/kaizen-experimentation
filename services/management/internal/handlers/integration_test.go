@@ -659,7 +659,7 @@ func TestStartExperiment_BadGuardrailMetric(t *testing.T) {
 	ctx := context.Background()
 
 	exp := newABExperiment("bad-guardrail-metric-test")
-	exp.Guardrails = []*commonv1.GuardrailConfig{
+	exp.GuardrailConfigs = []*commonv1.GuardrailConfig{
 		{
 			MetricId:                    "nonexistent_guardrail_metric",
 			Threshold:                   0.05,
