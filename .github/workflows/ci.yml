@@ -75,7 +75,6 @@ jobs:
           fi
 
       - name: Clippy (all features, excluding gpu)
-        working-directory: crates
         run: |
           # The gpu feature (tch/libtorch) requires a local PyTorch install.
           # Check all other crates with --all-features, then bandit with default features only.
@@ -83,20 +82,16 @@ jobs:
           cargo clippy --package experimentation-bandit -- -D warnings
 
       - name: Unit tests
-        working-directory: crates
         run: cargo test --workspace
 
       - name: Hash determinism vectors
-        working-directory: crates
         run: cargo test --package experimentation-hash -- hash_vectors
 
       - name: Property tests (stats)
-        working-directory: crates
         run: cargo test --package experimentation-stats --features simd
         timeout-minutes: 15
 
       - name: WASM build
-        working-directory: crates
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
       - name: WASM test vectors (10K via wasm-pack)
@@ -106,11 +101,9 @@ jobs:
           wasm-pack test --node --features wasm
 
       - name: FFI build
-        working-directory: crates
         run: cargo build --package experimentation-ffi --features ffi
 
       - name: FFI test vectors (10K through C ABI)
-        working-directory: crates
         run: cargo test --package experimentation-ffi
 
       - uses: actions/upload-artifact@v4
