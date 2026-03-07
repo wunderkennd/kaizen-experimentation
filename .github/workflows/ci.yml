@@ -187,7 +187,7 @@ jobs:
           # volume mounts and scripts/init-test-db.sh).
 
           test_exit=0
-          CGO_ENABLED=1 go test -tags=integration -race ./... || test_exit=$?
+          CGO_ENABLED=1 go test -tags=integration -race -timeout 2m ./... || test_exit=$?
           docker compose -f ../docker-compose.test.yml down
           exit $test_exit
 

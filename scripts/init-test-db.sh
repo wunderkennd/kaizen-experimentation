@@ -5,10 +5,13 @@
 set -uo pipefail
 
 echo "=== Applying schema migrations (two-pass for FK ordering) ==="
-for pass in 1 2; do
-  for f in /sql/migrations/*.sql; do
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$f" 2>/dev/null || true
-  done
+# Pass 1: suppress errors (FK-dependent tables fail, expected)
+for f in /sql/migrations/*.sql; do
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$f" 2>/dev/null || true
+done
+# Pass 2: show errors (everything should succeed now)
+for f in /sql/migrations/*.sql; do
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$f" || true
 done
 
 echo "=== Seeding reference data ==="

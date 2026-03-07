@@ -84,7 +84,7 @@ func createAndStartExperiment(t *testing.T, mgmt managementv1connect.ExperimentM
 			OwnerEmail:      "stream-test@example.com",
 			Type:            commonv1.ExperimentType_EXPERIMENT_TYPE_AB,
 			LayerId:         defaultLayerID,
-			PrimaryMetricId: "metric-1",
+			PrimaryMetricId: "watch_time_minutes",
 			GuardrailAction: commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY,
 			Variants: []*commonv1.Variant{
 				{Name: "control", TrafficFraction: 0.5, IsControl: true},
