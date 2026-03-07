@@ -11,6 +11,55 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- SCHEMA: config (owned by M5 Experiment Management Service)
 -- ============================================================================
 
+-- Tables referenced by experiments must be created first.
+
+CREATE TABLE layers (
+    layer_id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name            TEXT NOT NULL UNIQUE,
+    description     TEXT,
+    total_buckets   INT NOT NULL DEFAULT 10000,
+    bucket_reuse_cooldown_seconds INT NOT NULL DEFAULT 86400, -- 24 hours
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE targeting_rules (
+    rule_id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name            TEXT NOT NULL,
+    -- Predicate tree stored as JSONB. Schema: {groups: [{predicates: [{attribute_key, operator, values}]}]}
+    rule_definition JSONB NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE metric_definitions (
+    metric_id       TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    description     TEXT,
+    type            TEXT NOT NULL CHECK (type IN ('MEAN', 'PROPORTION', 'RATIO', 'COUNT', 'PERCENTILE', 'CUSTOM')),
+    source_event_type       TEXT,
+    numerator_event_type    TEXT,
+    denominator_event_type  TEXT,
+    percentile              DOUBLE PRECISION,
+    custom_sql              TEXT,
+    lower_is_better         BOOLEAN NOT NULL DEFAULT FALSE,
+    is_qoe_metric           BOOLEAN NOT NULL DEFAULT FALSE,
+    cuped_covariate_metric_id TEXT,
+    minimum_detectable_effect DOUBLE PRECISION,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE surrogate_models (
+    model_id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    target_metric_id    TEXT NOT NULL,
+    input_metric_ids    TEXT[] NOT NULL,
+    observation_window_days INT NOT NULL,
+    prediction_horizon_days INT NOT NULL,
+    model_type          TEXT NOT NULL CHECK (model_type IN ('LINEAR', 'GRADIENT_BOOSTED', 'NEURAL')),
+    calibration_r_squared   DOUBLE PRECISION,
+    mlflow_model_uri    TEXT,
+    last_calibrated_at  TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE experiments (
     experiment_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name            TEXT NOT NULL,
@@ -70,15 +119,6 @@ CREATE INDEX idx_variants_experiment ON variants(experiment_id);
 -- Enforce exactly one control per experiment via partial unique index.
 CREATE UNIQUE INDEX idx_variants_one_control ON variants(experiment_id) WHERE is_control = TRUE;
 
-CREATE TABLE layers (
-    layer_id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name            TEXT NOT NULL UNIQUE,
-    description     TEXT,
-    total_buckets   INT NOT NULL DEFAULT 10000,
-    bucket_reuse_cooldown_seconds INT NOT NULL DEFAULT 86400, -- 24 hours
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE layer_allocations (
     allocation_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     layer_id        UUID NOT NULL REFERENCES layers(layer_id),
@@ -103,44 +143,6 @@ CREATE TABLE guardrail_configs (
 );
 
 CREATE INDEX idx_guardrails_experiment ON guardrail_configs(experiment_id);
-
-CREATE TABLE targeting_rules (
-    rule_id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name            TEXT NOT NULL,
-    -- Predicate tree stored as JSONB. Schema: {groups: [{predicates: [{attribute_key, operator, values}]}]}
-    rule_definition JSONB NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE metric_definitions (
-    metric_id       TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    description     TEXT,
-    type            TEXT NOT NULL CHECK (type IN ('MEAN', 'PROPORTION', 'RATIO', 'COUNT', 'PERCENTILE', 'CUSTOM')),
-    source_event_type       TEXT,
-    numerator_event_type    TEXT,
-    denominator_event_type  TEXT,
-    percentile              DOUBLE PRECISION,
-    custom_sql              TEXT,
-    lower_is_better         BOOLEAN NOT NULL DEFAULT FALSE,
-    is_qoe_metric           BOOLEAN NOT NULL DEFAULT FALSE,
-    cuped_covariate_metric_id TEXT,
-    minimum_detectable_effect DOUBLE PRECISION,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE surrogate_models (
-    model_id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    target_metric_id    TEXT NOT NULL,
-    input_metric_ids    TEXT[] NOT NULL,
-    observation_window_days INT NOT NULL,
-    prediction_horizon_days INT NOT NULL,
-    model_type          TEXT NOT NULL CHECK (model_type IN ('LINEAR', 'GRADIENT_BOOSTED', 'NEURAL')),
-    calibration_r_squared   DOUBLE PRECISION,
-    mlflow_model_uri    TEXT,
-    last_calibrated_at  TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
 -- ============================================================================
 -- SCHEMA: results (written by M4a Analysis Engine, read by M6 UI)

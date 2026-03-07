@@ -89,9 +89,11 @@ func TestFullLifecycle(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	layer := createTestLayer(t, client, "lifecycle-layer-"+t.Name(), 0)
+
 	// Create
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperiment("lifecycle-test"),
+		Experiment: newABExperimentInLayer("lifecycle-test", layer.LayerId),
 	}))
 	require.NoError(t, err)
 	exp := created.Msg
@@ -137,8 +139,10 @@ func TestConcurrentStart(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	layer := createTestLayer(t, client, "concurrent-start-layer-"+t.Name(), 0)
+
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperiment("concurrent-start-test"),
+		Experiment: newABExperimentInLayer("concurrent-start-test", layer.LayerId),
 	}))
 	require.NoError(t, err)
 	id := created.Msg.ExperimentId
@@ -211,8 +215,10 @@ func TestUpdateOnNonDraft(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	layer := createTestLayer(t, client, "update-nondraft-layer-"+t.Name(), 0)
+
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperiment("update-on-running-test"),
+		Experiment: newABExperimentInLayer("update-on-running-test", layer.LayerId),
 	}))
 	require.NoError(t, err)
 
@@ -226,7 +232,7 @@ func TestUpdateOnNonDraft(t *testing.T) {
 			ExperimentId:    created.Msg.ExperimentId,
 			Name:            "updated-name",
 			OwnerEmail:      "test@example.com",
-			LayerId:         "a0000000-0000-0000-0000-000000000001",
+			LayerId:         layer.LayerId,
 			PrimaryMetricId: "watch_time_minutes",
 			Type:            commonv1.ExperimentType_EXPERIMENT_TYPE_AB,
 			Variants: []*commonv1.Variant{
@@ -484,8 +490,10 @@ func TestPauseExperiment_Running(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	layer := createTestLayer(t, client, "pause-running-layer-"+t.Name(), 0)
+
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperiment("pause-running-test"),
+		Experiment: newABExperimentInLayer("pause-running-test", layer.LayerId),
 	}))
 	require.NoError(t, err)
 	id := created.Msg.ExperimentId
@@ -518,8 +526,10 @@ func TestResumeExperiment_AfterPause(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	layer := createTestLayer(t, client, "resume-pause-layer-"+t.Name(), 0)
+
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperiment("resume-after-pause-test"),
+		Experiment: newABExperimentInLayer("resume-after-pause-test", layer.LayerId),
 	}))
 	require.NoError(t, err)
 	id := created.Msg.ExperimentId
@@ -593,8 +603,10 @@ func TestPauseExperiment_GuardrailAutoPause(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	layer := createTestLayer(t, client, "guardrail-autopause-layer-"+t.Name(), 0)
+
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperiment("guardrail-auto-pause-test"),
+		Experiment: newABExperimentInLayer("guardrail-auto-pause-test", layer.LayerId),
 	}))
 	require.NoError(t, err)
 	id := created.Msg.ExperimentId
@@ -628,7 +640,9 @@ func TestStartExperiment_BadPrimaryMetric(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
-	exp := newABExperiment("bad-primary-metric-test")
+	layer := createTestLayer(t, client, "bad-primary-layer-"+t.Name(), 0)
+
+	exp := newABExperimentInLayer("bad-primary-metric-test", layer.LayerId)
 	exp.PrimaryMetricId = "nonexistent_metric_xyz"
 
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
@@ -658,7 +672,9 @@ func TestStartExperiment_BadGuardrailMetric(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
-	exp := newABExperiment("bad-guardrail-metric-test")
+	layer := createTestLayer(t, client, "bad-guardrail-layer-"+t.Name(), 0)
+
+	exp := newABExperimentInLayer("bad-guardrail-metric-test", layer.LayerId)
 	exp.GuardrailConfigs = []*commonv1.GuardrailConfig{
 		{
 			MetricId:                    "nonexistent_guardrail_metric",

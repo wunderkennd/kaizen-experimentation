@@ -40,6 +40,18 @@ func setupProcessor(t *testing.T) (*guardrail.Processor, *pgxpool.Pool) {
 	return proc, pool
 }
 
+// createTestLayerForGuardrail creates an isolated layer for each test to avoid bucket exhaustion.
+func createTestLayerForGuardrail(t *testing.T, pool *pgxpool.Pool, name string) string {
+	t.Helper()
+	var layerID string
+	err := pool.QueryRow(context.Background(),
+		`INSERT INTO layers (name, description, total_buckets) VALUES ($1, $2, 10000) RETURNING layer_id`,
+		name, "guardrail test layer",
+	).Scan(&layerID)
+	require.NoError(t, err)
+	return layerID
+}
+
 // createRunningExperiment creates a DRAFT experiment and transitions it to RUNNING.
 func createRunningExperiment(t *testing.T, pool *pgxpool.Pool, name, guardrailAction string) string {
 	t.Helper()
@@ -49,8 +61,8 @@ func createRunningExperiment(t *testing.T, pool *pgxpool.Pool, name, guardrailAc
 	as := store.NewAuditStore(pool)
 	ls := store.NewLayerStore(pool)
 
-	// Use default layer from seed data.
-	layerID := "a0000000-0000-0000-0000-000000000001"
+	// Create a per-test layer to avoid bucket exhaustion across tests.
+	layerID := createTestLayerForGuardrail(t, pool, "guardrail-layer-"+name)
 
 	tx, err := es.BeginTx(ctx)
 	require.NoError(t, err)
