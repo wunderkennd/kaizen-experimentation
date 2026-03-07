@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🟢 Phase 1 Complete | — | Phase 2: GST, Bootstrap CI | — | M1.14–1.19 all merged (PRs #2, #14, #25). All Phase 1 milestones done. |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/production-wiring | PostgreSQL wiring + integration tests | — | M1.28–1.30 merged (PR #13). Production wiring: DATABASE_URL → pgxpool → PostgresStore + audit. Integration tests for full CRUD + audit against real DB. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/production-wiring | Phase 2+3: Production wiring + all-types promotion | — | M1.28–1.30 merged (PR #13). PR #36: PostgreSQL wiring + integration tests. PromoteToExperiment now supports all 8 experiment types with type-specific defaults. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
@@ -125,7 +125,7 @@ Track integration test results between agent pairs.
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
 | 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | ⚪ | — |
-| 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | ⚪ | — |
+| 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | ⚪ | — |
