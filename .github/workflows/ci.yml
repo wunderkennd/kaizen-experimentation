@@ -176,7 +176,11 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/debug
         run: |
-          docker compose -f ../docker-compose.test.yml up -d --wait
+          docker compose -f ../docker-compose.test.yml up -d --wait || {
+            echo "::error::docker compose up failed — dumping container logs"
+            docker compose -f ../docker-compose.test.yml logs
+            exit 1
+          }
           test_exit=0
           CGO_ENABLED=1 go test -tags=integration -race ./... || test_exit=$?
           docker compose -f ../docker-compose.test.yml down
