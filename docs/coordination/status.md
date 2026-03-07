@@ -102,8 +102,8 @@
 | 3.1 | LinUCB contextual bandit | Agent-4 | ⚪ | — |
 | 3.2 | Content cold-start bandit | Agent-4 | ⚪ | — |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | ⚪ | — |
-| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | ⚪ | — |
-| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | ⚪ | — |
+| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🔵 | — | Agent-2 part done (session_id passthrough). Agent-1 part done (session hashing). Agent-3 part done (session SQL). Integration test pending. |
+| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🔵 | — | Agent-2 part done (QoE validation + upper bounds, PR #40). Agent-3 part done (QoE SQL templates). Integration test pending. |
 | 3.6 | Cumulative holdout support | Agent-5 | ⚪ | — |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
@@ -124,7 +124,7 @@ Track integration test results between agent pairs.
 |------|------|--------|-------|
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
-| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | ⚪ | — |
+| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟡 | Agent-2 synthetic event generator ready (`scripts/generate_synthetic_events.py`). Both sides ready for Kafka integration test. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
@@ -171,3 +171,18 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 
 **Risks:**
 - Agent-6 has not started Phase 1 work — may become critical path for stakeholder demo
+
+### Week 2 — 2026-03-06
+
+**Completed this week:**
+- [x] Agent-2 Phase 2: Operational hardening (PR #23) — Prometheus metrics, backpressure, disk buffer
+- [x] Agent-2 Phase 3: QoE upper-bound validation + interleaving provenance (PR #40)
+- [x] Agent-2: Synthetic event generator (`scripts/generate_synthetic_events.py`)
+- [x] Agent-1 M2.7: GetInterleavedList RPC (Team Draft) — 59 tests, 6 benchmarks
+
+**In progress:**
+- Agent-2 ↔ Agent-3: Integration test preparation (synthetic events ready, Kafka test pending)
+- Agent-3: M2.10 surrogate metric framework (Agent-4 part pending)
+- Agent-4: Bootstrap CI + multiple comparison correction
+
+**Agent-2 status:** Phases 1–3 complete. Available for integration testing (Agent-2 ↔ Agent-3) and Phase 4 chaos engineering.
