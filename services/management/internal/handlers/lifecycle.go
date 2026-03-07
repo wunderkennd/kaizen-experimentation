@@ -100,6 +100,7 @@ func (s *ExperimentService) StartExperiment(
 	// Re-read experiment under lock to get layer_id and type_config.
 	expRow, err := s.store.GetByIDForUpdate(ctx, tx2, id)
 	if err != nil {
+		tx2.Rollback(ctx) // release FOR UPDATE lock before rollback to avoid self-deadlock
 		s.rollbackToDraft(ctx, id, "failed to read experiment")
 		return nil, internalError("read experiment for allocation", err)
 	}
@@ -107,6 +108,7 @@ func (s *ExperimentService) StartExperiment(
 	// Lock the layer to serialize allocation attempts.
 	layer, err := s.layers.GetLayerByIDForUpdate(ctx, tx2, expRow.LayerID)
 	if err != nil {
+		tx2.Rollback(ctx)
 		s.rollbackToDraft(ctx, id, "layer not found")
 		return nil, internalError("lock layer", err)
 	}
@@ -114,6 +116,7 @@ func (s *ExperimentService) StartExperiment(
 	// Get occupied ranges (active + cooling down).
 	activeAllocs, err := s.layers.GetActiveAllocations(ctx, tx2, layer.LayerID)
 	if err != nil {
+		tx2.Rollback(ctx)
 		s.rollbackToDraft(ctx, id, "failed to read allocations")
 		return nil, internalError("get active allocations", err)
 	}
@@ -132,6 +135,7 @@ func (s *ExperimentService) StartExperiment(
 	// Find a contiguous gap.
 	gap, err := allocation.FindContiguousGap(layer.TotalBuckets, occupied, bucketsNeeded)
 	if err != nil {
+		tx2.Rollback(ctx) // release FOR UPDATE locks before rollback to avoid self-deadlock
 		if errors.Is(err, allocation.ErrInsufficientCapacity) {
 			s.rollbackToDraft(ctx, id, "insufficient bucket capacity")
 			return nil, connect.NewError(connect.CodeResourceExhausted,
@@ -149,6 +153,7 @@ func (s *ExperimentService) StartExperiment(
 		EndBucket:    gap.End,
 	})
 	if err != nil {
+		tx2.Rollback(ctx)
 		s.rollbackToDraft(ctx, id, "failed to insert allocation")
 		return nil, internalError("insert allocation", err)
 	}
@@ -156,6 +161,7 @@ func (s *ExperimentService) StartExperiment(
 	// Transition to RUNNING.
 	_, err = s.store.TransitionState(ctx, tx2, id, "STARTING", "RUNNING", "started_at")
 	if err != nil {
+		tx2.Rollback(ctx)
 		s.rollbackToDraft(ctx, id, "transition_failed")
 		return nil, internalError("transition to RUNNING", err)
 	}
