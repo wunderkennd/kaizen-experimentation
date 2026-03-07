@@ -1,0 +1,114 @@
+{
+  "test_name": "biased_surrogate_model",
+  "description": "Surrogate model with consistent positive bias of ~1.0. R² moderate. Reference: manual computation.",
+  "calibration": {
+    "points": [
+      {
+        "experiment_id": "exp_0",
+        "predicted_effect": 2.0,
+        "actual_effect": 1.0
+      },
+      {
+        "experiment_id": "exp_1",
+        "predicted_effect": 3.0,
+        "actual_effect": 2.0
+      },
+      {
+        "experiment_id": "exp_2",
+        "predicted_effect": 4.2,
+        "actual_effect": 3.0
+      },
+      {
+        "experiment_id": "exp_3",
+        "predicted_effect": 4.8,
+        "actual_effect": 4.0
+      },
+      {
+        "experiment_id": "exp_4",
+        "predicted_effect": 6.1,
+        "actual_effect": 5.0
+      },
+      {
+        "experiment_id": "exp_5",
+        "predicted_effect": 7.0,
+        "actual_effect": 6.0
+      }
+    ],
+    "expected": {
+      "r_squared": 0.6405714285714286,
+      "rmse": 1.023881503560511,
+      "mean_bias": 1.0166666666666666,
+      "badge": "Yellow"
+    }
+  },
+  "backtest": {
+    "points": [
+      {
+        "experiment_id": "bt_0",
+        "projected_effect": 2.0,
+        "projection_ci_lower": 0.5,
+        "projection_ci_upper": 3.5,
+        "actual_effect": 1.0
+      },
+      {
+        "experiment_id": "bt_1",
+        "projected_effect": 3.0,
+        "projection_ci_lower": 1.5,
+        "projection_ci_upper": 4.5,
+        "actual_effect": 2.0
+      },
+      {
+        "experiment_id": "bt_2",
+        "projected_effect": 4.2,
+        "projection_ci_lower": 2.7,
+        "projection_ci_upper": 5.7,
+        "actual_effect": 3.0
+      },
+      {
+        "experiment_id": "bt_3",
+        "projected_effect": 4.8,
+        "projection_ci_lower": 3.3,
+        "projection_ci_upper": 6.3,
+        "actual_effect": 4.0
+      },
+      {
+        "experiment_id": "bt_4",
+        "projected_effect": 6.1,
+        "projection_ci_lower": 4.6,
+        "projection_ci_upper": 7.6,
+        "actual_effect": 5.0
+      },
+      {
+        "experiment_id": "bt_5",
+        "projected_effect": 7.0,
+        "projection_ci_lower": 5.5,
+        "projection_ci_upper": 8.5,
+        "actual_effect": 6.0
+      }
+    ],
+    "expected": {
+      "coverage_rate": 1.0,
+      "mae": 1.0166666666666666,
+      "within_25_pct": 0.5,
+      "passes_acceptance": false
+    }
+  },
+  "projection": {
+    "input": {
+      "observed_effect": 3.0,
+      "observed_se": 0.3,
+      "projected_effect": 5.0,
+      "projection_ci_lower": 4.0,
+      "projection_ci_upper": 6.0,
+      "calibration_r_squared": 0.6
+    },
+    "alpha": 0.05,
+    "expected": {
+      "adjusted_effect": 3.9833333333333334,
+      "ci_lower": 2.949957422786291,
+      "ci_upper": 5.016709243880376,
+      "badge": "Yellow",
+      "ci_inflation_factor": 1.0333759105470428
+    }
+  }
+}
