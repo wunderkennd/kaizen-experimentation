@@ -93,6 +93,9 @@ func main() {
 	// Register audit endpoints.
 	svc.RegisterAuditRoutes(mux)
 
+	// Register linkage + dependency tracking endpoints.
+	svc.RegisterLinkageRoutes(mux)
+
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,

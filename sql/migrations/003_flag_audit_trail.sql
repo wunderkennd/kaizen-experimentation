@@ -8,7 +8,7 @@ CREATE TABLE flag_audit_trail (
     flag_id         UUID NOT NULL REFERENCES feature_flags(flag_id) ON DELETE CASCADE,
     action          TEXT NOT NULL CHECK (action IN (
         'create', 'update', 'delete', 'enable', 'disable',
-        'rollout_change', 'promote_to_experiment'
+        'rollout_change', 'promote_to_experiment', 'resolve_experiment'
     )),
     actor_email     TEXT NOT NULL DEFAULT 'system',
     previous_value  JSONB DEFAULT '{}',
