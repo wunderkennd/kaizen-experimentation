@@ -72,11 +72,38 @@
         "algorithm_ids": ["algo_a", "algo_b"],
         "max_list_size": 10
       }
+    },
+    {
+      "experiment_id": "exp_dev_005",
+      "name": "MAB Recommendation Placement",
+      "state": "RUNNING",
+      "type": "MAB",
+      "hash_salt": "dev_salt_005",
+      "layer_id": "layer_bandit",
+      "variants": [
+        { "variant_id": "arm_hero", "traffic_fraction": 0.33, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "arm_carousel", "traffic_fraction": 0.33, "is_control": false, "payload_json": "{}" },
+        { "variant_id": "arm_spotlight", "traffic_fraction": 0.34, "is_control": false, "payload_json": "{}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "bandit_config": {
+        "algorithm": "THOMPSON_SAMPLING",
+        "arms": [
+          { "arm_id": "arm_hero", "name": "Hero Banner", "payload_json": "{\"placement\": \"hero\"}" },
+          { "arm_id": "arm_carousel", "name": "Carousel", "payload_json": "{\"placement\": \"carousel\"}" },
+          { "arm_id": "arm_spotlight", "name": "Spotlight", "payload_json": "{\"placement\": \"spotlight\"}" }
+        ],
+        "reward_metric_id": "clicks",
+        "context_feature_keys": [],
+        "min_exploration_fraction": 0.1,
+        "warmup_observations": 1000
+      }
     }
   ],
   "layers": [
     { "layer_id": "layer_default", "total_buckets": 10000 },
     { "layer_id": "layer_session", "total_buckets": 10000 },
-    { "layer_id": "layer_interleave", "total_buckets": 10000 }
+    { "layer_id": "layer_interleave", "total_buckets": 10000 },
+    { "layer_id": "layer_bandit", "total_buckets": 10000 }
   ]
 }

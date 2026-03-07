@@ -94,5 +94,43 @@ fn bench_get_interleaved_list(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_get_assignment, bench_get_interleaved_list);
+fn bench_bandit_assignment(c: &mut Criterion) {
+    let config = Config::from_json(DEV_CONFIG).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+    let no_attrs = HashMap::new();
+
+    c.bench_function("get_assignment_mab_single", |b| {
+        b.iter(|| {
+            svc.assign(
+                black_box("exp_dev_005"),
+                black_box("user_42"),
+                black_box(""),
+                black_box(&no_attrs),
+            )
+            .unwrap()
+        })
+    });
+
+    c.bench_function("get_assignment_mab_1000_users", |b| {
+        b.iter(|| {
+            for i in 0..1000 {
+                let user_id = format!("user_{i}");
+                svc.assign(
+                    black_box("exp_dev_005"),
+                    black_box(&user_id),
+                    black_box(""),
+                    black_box(&no_attrs),
+                )
+                .unwrap();
+            }
+        })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_get_assignment,
+    bench_get_interleaved_list,
+    bench_bandit_assignment,
+);
 criterion_main!(benches);

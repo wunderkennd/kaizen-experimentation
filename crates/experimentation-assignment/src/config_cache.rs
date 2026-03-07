@@ -174,6 +174,9 @@ pub fn experiment_from_proto(
     // Preserve interleaving_config from existing config.
     let interleaving_config = existing.and_then(|e| e.interleaving_config.clone());
 
+    // Preserve bandit_config from existing config.
+    let bandit_config = existing.and_then(|e| e.bandit_config.clone());
+
     ExperimentConfig {
         experiment_id: proto.experiment_id.clone(),
         name: proto.name.clone(),
@@ -186,6 +189,7 @@ pub fn experiment_from_proto(
         targeting_rule,
         session_config,
         interleaving_config,
+        bandit_config,
     }
 }
 
@@ -271,6 +275,7 @@ mod tests {
             targeting_rule: None,
             session_config: None,
             interleaving_config: None,
+            bandit_config: None,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

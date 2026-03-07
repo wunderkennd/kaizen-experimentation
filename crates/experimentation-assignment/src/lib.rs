@@ -1,3 +1,4 @@
+pub mod bandit_client;
 pub mod config;
 pub mod config_cache;
 pub mod service;

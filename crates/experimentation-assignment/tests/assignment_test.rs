@@ -513,3 +513,241 @@ fn interleaving_balance() {
         "algo_a fraction {frac_a:.3} is outside [0.40, 0.60] — balance is off"
     );
 }
+
+// ── Bandit Delegation Tests (MAB / CONTEXTUAL_BANDIT) ──
+
+#[test]
+fn bandit_mab_basic_assignment() {
+    let svc = make_service();
+    let resp = svc.assign("exp_dev_005", "user_1", "", &no_attrs()).unwrap();
+    assert!(resp.is_active);
+    assert!(!resp.variant_id.is_empty(), "MAB experiment should assign an arm");
+    // Arm should be one of the configured arms.
+    assert!(
+        ["arm_hero", "arm_carousel", "arm_spotlight"].contains(&resp.variant_id.as_str()),
+        "unexpected arm: {}",
+        resp.variant_id
+    );
+    // Assignment probability should be 1/3 (uniform mock).
+    assert!(
+        (resp.assignment_probability - 1.0 / 3.0).abs() < 1e-9,
+        "expected ~0.333, got {}",
+        resp.assignment_probability
+    );
+}
+
+#[test]
+fn bandit_mab_deterministic() {
+    let svc = make_service();
+    let r1 = svc.assign("exp_dev_005", "user_42", "", &no_attrs()).unwrap();
+    let r2 = svc.assign("exp_dev_005", "user_42", "", &no_attrs()).unwrap();
+    assert_eq!(r1.variant_id, r2.variant_id, "same user must get same arm");
+    assert!(
+        (r1.assignment_probability - r2.assignment_probability).abs() < f64::EPSILON
+    );
+}
+
+#[test]
+fn bandit_mab_balance() {
+    let svc = make_service();
+    let mut counts: HashMap<String, u64> = HashMap::new();
+
+    for i in 0..3000 {
+        let user = format!("bandit_user_{i}");
+        let resp = svc.assign("exp_dev_005", &user, "", &no_attrs()).unwrap();
+        *counts.entry(resp.variant_id).or_insert(0) += 1;
+    }
+
+    // Each of 3 arms should get ~1000 ± 150 (uniform).
+    assert_eq!(counts.len(), 3, "should see all 3 arms");
+    for (arm, count) in &counts {
+        let frac = *count as f64 / 3000.0;
+        assert!(
+            (0.25..=0.42).contains(&frac),
+            "arm {arm} fraction {frac:.3} outside [0.25, 0.42]"
+        );
+    }
+}
+
+#[test]
+fn bandit_mab_payload_propagated() {
+    let svc = make_service();
+    let resp = svc.assign("exp_dev_005", "user_1", "", &no_attrs()).unwrap();
+    // Payload should contain the arm's payload_json from bandit_config.
+    assert!(
+        resp.payload_json.contains("placement"),
+        "payload should contain placement config: {}",
+        resp.payload_json
+    );
+}
+
+#[test]
+fn bandit_missing_config_fails() {
+    // AB experiment used as MAB type — no bandit_config.
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "bad_mab",
+            "state": "RUNNING",
+            "type": "MAB",
+            "hash_salt": "salt",
+            "layer_id": "layer_default",
+            "variants": [
+                { "variant_id": "ctrl", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{}" }
+            ],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let err = svc.assign("bad_mab", "user_1", "", &no_attrs()).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(err.message().contains("bandit_config"));
+}
+
+#[test]
+fn bandit_empty_arms_fails() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "empty_arms_mab",
+            "state": "RUNNING",
+            "type": "MAB",
+            "hash_salt": "salt",
+            "layer_id": "layer_default",
+            "variants": [
+                { "variant_id": "ctrl", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{}" }
+            ],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [],
+                "reward_metric_id": "clicks"
+            }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let err = svc.assign("empty_arms_mab", "user_1", "", &no_attrs()).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(err.message().contains("no arms"));
+}
+
+#[test]
+fn bandit_contextual_type_also_delegates() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "ctx_bandit",
+            "state": "RUNNING",
+            "type": "CONTEXTUAL_BANDIT",
+            "hash_salt": "ctx_salt",
+            "layer_id": "layer_default",
+            "variants": [
+                { "variant_id": "arm_a", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+                { "variant_id": "arm_b", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{}" }
+            ],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "bandit_config": {
+                "algorithm": "LINEAR_UCB",
+                "arms": [
+                    { "arm_id": "arm_a", "name": "Arm A", "payload_json": "{\"a\":1}" },
+                    { "arm_id": "arm_b", "name": "Arm B", "payload_json": "{\"b\":2}" }
+                ],
+                "reward_metric_id": "engagement",
+                "context_feature_keys": ["age", "tenure"]
+            }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let resp = svc.assign("ctx_bandit", "user_1", "", &no_attrs()).unwrap();
+    assert!(resp.is_active);
+    assert!(
+        resp.variant_id == "arm_a" || resp.variant_id == "arm_b",
+        "unexpected arm: {}",
+        resp.variant_id
+    );
+    // 2 arms → 0.5 probability each.
+    assert!(
+        (resp.assignment_probability - 0.5).abs() < 1e-9,
+        "expected 0.5, got {}",
+        resp.assignment_probability
+    );
+}
+
+#[test]
+fn bandit_not_running_returns_inactive() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "draft_mab",
+            "state": "DRAFT",
+            "type": "MAB",
+            "hash_salt": "salt",
+            "layer_id": "layer_default",
+            "variants": [],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [
+                    { "arm_id": "arm_1", "name": "Arm 1", "payload_json": "{}" }
+                ],
+                "reward_metric_id": "clicks"
+            }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let resp = svc.assign("draft_mab", "user_1", "", &no_attrs()).unwrap();
+    assert!(!resp.is_active, "DRAFT MAB should return is_active=false");
+    assert!(resp.variant_id.is_empty());
+}
+
+#[test]
+fn bandit_targeting_still_applies() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "targeted_mab",
+            "state": "RUNNING",
+            "type": "MAB",
+            "hash_salt": "salt",
+            "layer_id": "layer_default",
+            "variants": [],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "targeting_rule": {
+                "groups": [{
+                    "predicates": [{ "attribute_key": "country", "operator": "IN", "values": ["US"] }]
+                }]
+            },
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [
+                    { "arm_id": "arm_1", "name": "Arm 1", "payload_json": "{}" },
+                    { "arm_id": "arm_2", "name": "Arm 2", "payload_json": "{}" }
+                ],
+                "reward_metric_id": "clicks"
+            }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    // User with US country → should get arm
+    let resp = svc.assign("targeted_mab", "user_1", "", &attrs(&[("country", "US")])).unwrap();
+    assert!(!resp.variant_id.is_empty(), "US user should get an arm");
+
+    // User with FR country → targeting miss
+    let resp2 = svc.assign("targeted_mab", "user_2", "", &attrs(&[("country", "FR")])).unwrap();
+    assert!(resp2.variant_id.is_empty(), "FR user should not match targeting");
+}

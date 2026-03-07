@@ -88,7 +88,12 @@ impl AssignmentServiceImpl {
                 Status::internal(format!("layer not found: {}", exp.layer_id))
             })?;
 
-        // 5. Hash entity into a bucket (user_id for AB, session_id for SESSION_LEVEL).
+        // 5. Bandit delegation: MAB / CONTEXTUAL_BANDIT use arm selection, not bucketing.
+        if exp.r#type == "MAB" || exp.r#type == "CONTEXTUAL_BANDIT" {
+            return self.assign_bandit(exp, user_id, experiment_id);
+        }
+
+        // 6. Hash entity into a bucket (user_id for AB, session_id for SESSION_LEVEL).
         let hash_input = if exp.r#type == "SESSION_LEVEL" {
             if session_id.is_empty() {
                 return Err(Status::invalid_argument(
@@ -102,7 +107,7 @@ impl AssignmentServiceImpl {
         let bucket =
             experimentation_hash::bucket(hash_input, &exp.hash_salt, layer.total_buckets);
 
-        // 6. Check allocation range.
+        // 7. Check allocation range.
         if !experimentation_hash::is_in_allocation(
             bucket,
             exp.allocation.start_bucket,
@@ -115,7 +120,7 @@ impl AssignmentServiceImpl {
             });
         }
 
-        // 7. Map bucket to variant.
+        // 8. Map bucket to variant.
         let variant = select_variant(exp, bucket);
 
         Ok(GetAssignmentResponse {
@@ -123,6 +128,54 @@ impl AssignmentServiceImpl {
             variant_id: variant.variant_id.clone(),
             payload_json: variant.payload_json.clone(),
             assignment_probability: variant.traffic_fraction,
+            is_active: true,
+        })
+    }
+
+    /// Bandit arm selection for MAB / CONTEXTUAL_BANDIT experiments.
+    ///
+    /// Derives a deterministic RNG seed from (user_id, experiment_id),
+    /// then delegates to the bandit client (currently mock uniform random).
+    /// When M4b is live, this will call `SelectArm` gRPC instead.
+    #[allow(clippy::result_large_err)]
+    fn assign_bandit(
+        &self,
+        exp: &ExperimentConfig,
+        user_id: &str,
+        experiment_id: &str,
+    ) -> Result<GetAssignmentResponse, Status> {
+        let bandit_config = exp.bandit_config.as_ref().ok_or_else(|| {
+            Status::failed_precondition(format!(
+                "experiment {experiment_id} is MAB/CONTEXTUAL_BANDIT but has no bandit_config",
+            ))
+        })?;
+
+        // Deterministic seed from (user_id, experiment_id).
+        let seed_input = format!("{user_id}\x00{experiment_id}");
+        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(
+            seed_input.as_bytes(),
+            0,
+        ) as u64;
+        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(
+            seed_input.as_bytes(),
+            1,
+        ) as u64;
+        let seed = (hi << 32) | lo;
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        // TODO(m4b): Replace with gRPC call to M4b SelectArm when available.
+        let selection = crate::bandit_client::select_arm_uniform(bandit_config, &mut rng)
+            .ok_or_else(|| {
+                Status::failed_precondition(format!(
+                    "experiment {experiment_id} bandit_config has no arms",
+                ))
+            })?;
+
+        Ok(GetAssignmentResponse {
+            experiment_id: experiment_id.to_string(),
+            variant_id: selection.arm_id,
+            payload_json: selection.payload_json,
+            assignment_probability: selection.assignment_probability,
             is_active: true,
         })
     }
