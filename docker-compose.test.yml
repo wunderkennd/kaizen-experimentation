@@ -6,12 +6,16 @@ services:
     image: postgres:16-alpine
     ports: ["5432:5432"]
     environment:
-      POSTGRES_DB: experimentation_test
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
+      POSTGRES_DB: experimentation
+      POSTGRES_USER: experimentation
+      POSTGRES_PASSWORD: localdev
     tmpfs: /var/lib/postgresql/data
+    volumes:
+      - ./sql/migrations:/sql/migrations:ro
+      - ./scripts/seed_dev.sql:/sql/seed_dev.sql:ro
+      - ./scripts/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test"]
+      test: ["CMD-SHELL", "pg_isready -U experimentation -d experimentation"]
       interval: 2s
       timeout: 2s
       retries: 10
@@ -28,7 +32,8 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      CLUSTER_ID: "ci-test-cluster-id-00001"
+      CLUSTER_ID: "Y2ktdGVzdC1rYWZrYS0wMD"
+    user: "0:0"
     tmpfs: /var/lib/kafka/data
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]

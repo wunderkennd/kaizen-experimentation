@@ -4,6 +4,7 @@ package handlers_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"connectrpc.com/connect"

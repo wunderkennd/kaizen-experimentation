@@ -204,7 +204,7 @@ ON CONFLICT (variant_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- Sample Audit Trail Entries
 -- ---------------------------------------------------------------------------
-INSERT INTO audit_trail (experiment_id, action, actor, details)
+INSERT INTO audit_trail (experiment_id, action, actor_email, details_json)
 VALUES
     ('e0000000-0000-0000-0000-000000000001', 'CREATED',  'data-science@example.com',  '{"source": "api"}'),
     ('e0000000-0000-0000-0000-000000000001', 'STARTED',  'data-science@example.com',  '{"allocation": "0-9999", "layer": "recommendations"}'),

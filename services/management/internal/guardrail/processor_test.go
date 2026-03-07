@@ -20,7 +20,18 @@ func setupProcessor(t *testing.T) (*guardrail.Processor, *pgxpool.Pool) {
 	ctx := context.Background()
 	pool, err := store.NewPool(ctx)
 	require.NoError(t, err)
-	t.Cleanup(func() { pool.Close() })
+	t.Cleanup(func() {
+		done := make(chan struct{})
+		go func() {
+			pool.Close()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Log("pool.Close() timed out after 5s — possible connection leak")
+		}
+	})
 
 	es := store.NewExperimentStore(pool)
 	as := store.NewAuditStore(pool)
