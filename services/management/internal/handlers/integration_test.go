@@ -22,6 +22,7 @@ import (
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
+	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 )
 
@@ -1007,4 +1008,75 @@ func TestCreateSurrogateModel_Validation(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 	})
+}
+
+// --- Sequential Auto-Conclude Tests ---
+
+func TestSequentialAutoConclude_ViaConcludeByID(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	// Create and start an AB experiment.
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("seq-auto-conclude-test"),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// Set sequential_method directly in DB (simulates a sequential experiment).
+	_, err = env.pool.Exec(ctx,
+		`UPDATE experiments SET sequential_method = 'MSPRT' WHERE experiment_id = $1`, id)
+	require.NoError(t, err)
+
+	// Use the sequential processor with the real expSvc as Concluder.
+	es := store.NewExperimentStore(env.pool)
+	as := store.NewAuditStore(env.pool)
+	ss := store.NewSurrogateStore(env.pool)
+	ls := store.NewLayerStore(env.pool)
+	ms := store.NewMetricStore(env.pool)
+	ts := store.NewTargetingStore(env.pool)
+	expSvc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, nil)
+
+	proc := sequential.NewProcessor(es, as, nil, expSvc)
+
+	alert := sequential.BoundaryAlert{
+		ExperimentID: id,
+		MetricID:     "watch_time_minutes",
+		CurrentLook:  5,
+		AlphaSpent:   0.045,
+	}
+
+	result, procErr := proc.ProcessAlert(ctx, alert)
+	require.NoError(t, procErr)
+	assert.Equal(t, sequential.ResultConcluded, result)
+
+	// Verify experiment is CONCLUDED.
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_CONCLUDED, got.Msg.State)
+
+	// Verify audit trail has sequential_boundary_crossed entry.
+	var action string
+	err = env.pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'sequential_boundary_crossed'`, id,
+	).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "sequential_boundary_crossed", action)
+
+	// Verify the conclude audit entries have the sequential actor.
+	var actor string
+	err = env.pool.QueryRow(ctx,
+		`SELECT actor_email FROM audit_trail WHERE experiment_id = $1 AND action = 'conclude' AND new_state = 'CONCLUDED'`, id,
+	).Scan(&actor)
+	require.NoError(t, err)
+	assert.Equal(t, "sequential_auto_conclude", actor)
 }

@@ -222,6 +222,20 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
+	exp, err := s.concludeByID(ctx, id, "system", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(exp), nil
+}
+
+// concludeByID performs the full RUNNING → CONCLUDING → CONCLUDED transition
+// with allocation release. Used by both the ConcludeExperiment RPC and the
+// sequential auto-conclude consumer. The actor identifies who triggered the
+// conclude (e.g., "system" for manual, "sequential_auto_conclude" for auto).
+// extraDetails are merged into the audit trail entries.
+func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, extraDetails map[string]any) (*commonv1.Experiment, error) {
 	// Transition 1: RUNNING -> CONCLUDING
 	tx1, err := s.store.BeginTx(ctx)
 	if err != nil {
@@ -235,13 +249,19 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, preconditionError("experiment must be in RUNNING state to conclude")
 	}
 
+	concludePhase1 := map[string]any{"phase": "final_analysis_begin"}
+	for k, v := range extraDetails {
+		concludePhase1[k] = v
+	}
+	phase1JSON, _ := json.Marshal(concludePhase1)
+
 	if err := s.audit.Insert(ctx, tx1, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "conclude",
-		ActorEmail:    "system",
+		ActorEmail:    actor,
 		PreviousState: "RUNNING",
 		NewState:      "CONCLUDING",
-		DetailsJSON:   json.RawMessage(`{"phase":"final_analysis_begin"}`),
+		DetailsJSON:   phase1JSON,
 	}); err != nil {
 		return nil, internalError("audit conclude-1", err)
 	}
@@ -282,18 +302,22 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, internalError("transition to CONCLUDED", err)
 	}
 
-	releaseDetails, _ := json.Marshal(map[string]any{
+	releaseDetails := map[string]any{
 		"phase":               "analysis_complete",
 		"allocation_released": true,
 		"cooldown_seconds":    layer.BucketReuseCooldownSeconds,
-	})
+	}
+	for k, v := range extraDetails {
+		releaseDetails[k] = v
+	}
+	releaseJSON, _ := json.Marshal(releaseDetails)
 	if err := s.audit.Insert(ctx, tx2, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "conclude",
-		ActorEmail:    "system",
+		ActorEmail:    actor,
 		PreviousState: "CONCLUDING",
 		NewState:      "CONCLUDED",
-		DetailsJSON:   releaseDetails,
+		DetailsJSON:   releaseJSON,
 	}); err != nil {
 		return nil, internalError("audit conclude-2", err)
 	}
@@ -312,8 +336,8 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, internalError("read back experiment", err)
 	}
 
-	slog.Info("experiment concluded", "id", id)
-	return connect.NewResponse(store.RowToExperiment(finalRow, variants, guardrails)), nil
+	slog.Info("experiment concluded", "id", id, "actor", actor)
+	return store.RowToExperiment(finalRow, variants, guardrails), nil
 }
 
 // ArchiveExperiment transitions CONCLUDED -> ARCHIVED.

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
 	"github.com/org/experimentation-platform/services/management/internal/store"
@@ -24,5 +26,12 @@ type ExperimentService struct {
 // NewExperimentService creates a new handler with the given stores and notifier.
 func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, ts *store.TargetingStore, ss *store.SurrogateStore, n *streaming.Notifier) *ExperimentService {
 	return &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, targeting: ts, surrogates: ss, notifier: n}
+}
+
+// ConcludeByID implements the sequential.Concluder interface, exposing the
+// internal concludeByID method for the auto-conclude consumer.
+func (s *ExperimentService) ConcludeByID(ctx context.Context, id, actor string, extraDetails map[string]any) error {
+	_, err := s.concludeByID(ctx, id, actor, extraDetails)
+	return err
 }
 
