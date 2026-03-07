@@ -70,6 +70,14 @@ func (s *FlagService) PromoteToExperiment(ctx context.Context, req *connect.Requ
 		result = s.createExperimentMock(experiment, f)
 	}
 
+	// Link the flag to the created experiment for lifecycle tracking.
+	if experimentID := result.GetExperimentId(); experimentID != "" {
+		if linkErr := s.store.LinkFlagToExperiment(ctx, flagID, experimentID); linkErr != nil {
+			slog.Error("failed to link flag to experiment (non-fatal)",
+				"error", linkErr, "flag_id", flagID, "experiment_id", experimentID)
+		}
+	}
+
 	s.recordAudit(ctx, flagID, "promote_to_experiment", f, f)
 
 	return connect.NewResponse(result), nil

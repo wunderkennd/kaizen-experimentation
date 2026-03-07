@@ -60,7 +60,7 @@ dev: infra seed
 ## clean: Tear down infra, remove generated code and build artifacts
 clean: infra-down monitoring-down
 	rm -rf $(GEN_GO_DIR) $(GEN_TS_DIR)
-	rm -rf $(CRATES_DIR)/target
+	rm -rf target
 	rm -rf $(UI_DIR)/node_modules $(UI_DIR)/.next
 	@echo "  Cleaned."
 
@@ -120,7 +120,7 @@ deps: deps-rust deps-go deps-ts
 
 deps-rust:
 	@echo "  Checking Rust toolchain..."
-	@cd $(CRATES_DIR) && $(CARGO) check --workspace 2>/dev/null || $(CARGO) fetch --manifest-path $(CRATES_DIR)/Cargo.toml
+	@$(CARGO) check --workspace 2>/dev/null || $(CARGO) fetch
 
 deps-go:
 	@echo "  Installing Go dependencies..."
@@ -142,7 +142,7 @@ test: test-rust test-go test-ts test-hash
 ## test-rust: Run Rust workspace tests
 test-rust:
 	@echo "  Running Rust tests..."
-	cd $(CRATES_DIR) && $(CARGO) test --workspace
+	$(CARGO) test --workspace
 
 ## test-go: Run Go tests with race detection
 test-go:
@@ -172,7 +172,7 @@ test-integration: infra
 lint: lint-proto lint-rust lint-go lint-ts
 
 lint-rust:
-	cd $(CRATES_DIR) && $(CARGO) clippy --workspace --all-features -- -D warnings
+	$(CARGO) clippy --workspace --all-features -- -D warnings
 
 lint-go:
 	cd $(SERVICES_DIR) && $(GO) vet ./...
@@ -187,7 +187,7 @@ lint-ts:
 ## bench: Run Rust benchmarks (hash + stats)
 bench:
 	@echo "  Running benchmarks..."
-	cd $(CRATES_DIR) && $(CARGO) bench --workspace
+	$(CARGO) bench --workspace
 
 # ------------------------------------------------------------------------------
 # Seed Data

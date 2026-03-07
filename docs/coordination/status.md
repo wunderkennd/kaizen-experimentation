@@ -16,10 +16,10 @@
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/bandit-delegation | Bandit delegation (MAB/CONTEXTUAL_BANDIT) | — | M1.1–1.5 + M2.7 complete. Bandit delegation: MAB/CONTEXTUAL_BANDIT experiments use mock uniform arm selection (until M4b SelectArm is live). |
 | Agent-2 | M2 Pipeline | 🔵 Phase 3 In Progress | agent-2/feat/qoe-interleaving-validation | Phase 3: QoE enrichment + interleaving provenance | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3: QoE upper bounds + interleaving provenance validation. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/novelty-interference-interleaving | Phase 2: Novelty, Interference, Interleaving | — | M2.4–2.6 in progress. M2.1–2.3 done (PRs #25, #29). |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/surrogate-validation | M2.10 Surrogate Validation | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/production-wiring | PostgreSQL wiring + integration tests | — | M1.28–1.30 merged (PR #13). Production wiring: DATABASE_URL → pgxpool → PostgresStore + audit. Integration tests for full CRUD + audit against real DB. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
@@ -84,15 +84,15 @@
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
 | 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | 🟢 | — | Implemented as part of M1.16 (PR #25) |
-| 2.2 | Bootstrap CI | Agent-4 | 🔵 | Agent-6 (CI charts on results dashboard) |
-| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | 🔵 | Agent-6 (corrected p-values on results dashboard) |
-| 2.4 | Novelty/primacy analysis | Agent-4 | 🟢 | Agent-6 (novelty tab) | Gauss-Newton with LM damping, golden-file validated |
-| 2.5 | Interference analysis | Agent-4 | 🟢 | Agent-6 (interference tab) | JSD, Jaccard, Gini, title spillover with BH correction |
-| 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | Sign test, Bradley-Terry MM, position analysis |
+| 2.2 | Bootstrap CI | Agent-4 | 🟢 | Agent-6 (CI charts on results dashboard) | PR #29 |
+| 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | 🟢 | Agent-6 (corrected p-values on results dashboard) | PR #29 |
+| 2.4 | Novelty/primacy analysis | Agent-4 | 🟢 | Agent-6 (novelty tab) | PR #38 — Gauss-Newton with LM damping, golden-file validated |
+| 2.5 | Interference analysis | Agent-4 | 🟢 | Agent-6 (interference tab) | PR #38 — JSD, Jaccard, Gini, title spillover with BH correction |
+| 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | PR #38 — Sign test, Bradley-Terry MM, position analysis |
 | 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | 🟢 | Agent-4 (interleaving analysis) |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
-| 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 (model loading, projection, SQL transparency). Agent-4 part pending. |
+| 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 complete. Agent-4 part: surrogate validation in progress. |
 | 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption, interleaving scoring, session-level, QoE-engagement correlation) | Agent-3 | 🟢 | Agent-4 (interference, novelty, interleaving analysis M2.6), Agent-6 (QoE dashboard) |
 
 ### Phase 3: SVOD-Native + Bandits (Weeks 10–17)

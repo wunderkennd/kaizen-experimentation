@@ -68,6 +68,7 @@ mod tests {
         assert_eq!(b1, b2, "same inputs must produce same bucket");
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_range() {
         for _ in 0..1000 {
