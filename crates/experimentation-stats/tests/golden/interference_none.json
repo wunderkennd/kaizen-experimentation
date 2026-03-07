@@ -1,0 +1,264 @@
+{
+  "alpha": 0.05,
+  "description": "Identical content distributions, no interference",
+  "expected": {
+    "control_catalog_coverage": 1.0,
+    "control_gini_coefficient": 0.11271186440677972,
+    "interference_detected": false,
+    "jaccard_similarity_top_100": 1.0,
+    "jensen_shannon_divergence": 0.0,
+    "spillover_count": 0,
+    "treatment_catalog_coverage": 1.0,
+    "treatment_gini_coefficient": 0.11271186440677972
+  },
+  "input": {
+    "control": [
+      {
+        "content_id": "c0",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1000.0
+      },
+      {
+        "content_id": "c1",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1050.0
+      },
+      {
+        "content_id": "c2",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1100.0
+      },
+      {
+        "content_id": "c3",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1150.0
+      },
+      {
+        "content_id": "c4",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1200.0
+      },
+      {
+        "content_id": "c5",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1250.0
+      },
+      {
+        "content_id": "c6",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1300.0
+      },
+      {
+        "content_id": "c7",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1350.0
+      },
+      {
+        "content_id": "c8",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1400.0
+      },
+      {
+        "content_id": "c9",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1450.0
+      },
+      {
+        "content_id": "c10",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1500.0
+      },
+      {
+        "content_id": "c11",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1550.0
+      },
+      {
+        "content_id": "c12",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1600.0
+      },
+      {
+        "content_id": "c13",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1650.0
+      },
+      {
+        "content_id": "c14",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1700.0
+      },
+      {
+        "content_id": "c15",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1750.0
+      },
+      {
+        "content_id": "c16",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1800.0
+      },
+      {
+        "content_id": "c17",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1850.0
+      },
+      {
+        "content_id": "c18",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1900.0
+      },
+      {
+        "content_id": "c19",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1950.0
+      }
+    ],
+    "total_control_viewers": 1000,
+    "total_treatment_viewers": 1000,
+    "treatment": [
+      {
+        "content_id": "c0",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1000.0
+      },
+      {
+        "content_id": "c1",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1050.0
+      },
+      {
+        "content_id": "c2",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1100.0
+      },
+      {
+        "content_id": "c3",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1150.0
+      },
+      {
+        "content_id": "c4",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1200.0
+      },
+      {
+        "content_id": "c5",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1250.0
+      },
+      {
+        "content_id": "c6",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1300.0
+      },
+      {
+        "content_id": "c7",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1350.0
+      },
+      {
+        "content_id": "c8",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1400.0
+      },
+      {
+        "content_id": "c9",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1450.0
+      },
+      {
+        "content_id": "c10",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1500.0
+      },
+      {
+        "content_id": "c11",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1550.0
+      },
+      {
+        "content_id": "c12",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1600.0
+      },
+      {
+        "content_id": "c13",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1650.0
+      },
+      {
+        "content_id": "c14",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1700.0
+      },
+      {
+        "content_id": "c15",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1750.0
+      },
+      {
+        "content_id": "c16",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1800.0
+      },
+      {
+        "content_id": "c17",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1850.0
+      },
+      {
+        "content_id": "c18",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1900.0
+      },
+      {
+        "content_id": "c19",
+        "unique_viewers": 50,
+        "view_count": 100,
+        "watch_time_seconds": 1950.0
+      }
+    ]
+  },
+  "js_threshold": 0.05,
+  "test_name": "interference_none"
+}

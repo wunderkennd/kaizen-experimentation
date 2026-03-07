@@ -1,0 +1,172 @@
+{
+  "alpha": 0.05,
+  "daily_effects": [
+    {
+      "day": 0,
+      "effect": 3.035386959884598,
+      "sample_size": 1000
+    },
+    {
+      "day": 1,
+      "effect": 3.3917932781378375,
+      "sample_size": 1000
+    },
+    {
+      "day": 2,
+      "effect": 3.486405338516121,
+      "sample_size": 1000
+    },
+    {
+      "day": 3,
+      "effect": 3.852953921169872,
+      "sample_size": 1000
+    },
+    {
+      "day": 4,
+      "effect": 4.080261087736311,
+      "sample_size": 1000
+    },
+    {
+      "day": 5,
+      "effect": 4.079319110317915,
+      "sample_size": 1000
+    },
+    {
+      "day": 6,
+      "effect": 4.208124033452309,
+      "sample_size": 1000
+    },
+    {
+      "day": 7,
+      "effect": 4.4914863190695,
+      "sample_size": 1000
+    },
+    {
+      "day": 8,
+      "effect": 4.560825418813601,
+      "sample_size": 1000
+    },
+    {
+      "day": 9,
+      "effect": 4.634076456781457,
+      "sample_size": 1000
+    },
+    {
+      "day": 10,
+      "effect": 4.351684886100235,
+      "sample_size": 1000
+    },
+    {
+      "day": 11,
+      "effect": 4.74146337556294,
+      "sample_size": 1000
+    },
+    {
+      "day": 12,
+      "effect": 4.504893149073159,
+      "sample_size": 1000
+    },
+    {
+      "day": 13,
+      "effect": 4.716622780536614,
+      "sample_size": 1000
+    },
+    {
+      "day": 14,
+      "effect": 4.600697145772458,
+      "sample_size": 1000
+    },
+    {
+      "day": 15,
+      "effect": 4.801881427849239,
+      "sample_size": 1000
+    },
+    {
+      "day": 16,
+      "effect": 4.831700220870646,
+      "sample_size": 1000
+    },
+    {
+      "day": 17,
+      "effect": 4.912025672515447,
+      "sample_size": 1000
+    },
+    {
+      "day": 18,
+      "effect": 4.729746046592629,
+      "sample_size": 1000
+    },
+    {
+      "day": 19,
+      "effect": 4.811151233777723,
+      "sample_size": 1000
+    },
+    {
+      "day": 20,
+      "effect": 5.101876207456678,
+      "sample_size": 1000
+    },
+    {
+      "day": 21,
+      "effect": 4.992717990890404,
+      "sample_size": 1000
+    },
+    {
+      "day": 22,
+      "effect": 4.851840040786828,
+      "sample_size": 1000
+    },
+    {
+      "day": 23,
+      "effect": 5.005966104513216,
+      "sample_size": 1000
+    },
+    {
+      "day": 24,
+      "effect": 5.046207151477009,
+      "sample_size": 1000
+    },
+    {
+      "day": 25,
+      "effect": 5.069375243414679,
+      "sample_size": 1000
+    },
+    {
+      "day": 26,
+      "effect": 5.032438885488838,
+      "sample_size": 1000
+    },
+    {
+      "day": 27,
+      "effect": 5.179557710270406,
+      "sample_size": 1000
+    },
+    {
+      "day": 28,
+      "effect": 5.091028713656064,
+      "sample_size": 1000
+    },
+    {
+      "day": 29,
+      "effect": 5.01449368959984,
+      "sample_size": 1000
+    }
+  ],
+  "description": "f(t) = 5.0 - 2.0·exp(-t/6.0) + N(0,0.1), seed=99 — primacy effect",
+  "expected": {
+    "amplitude_ci_lower": -2.1097459204836633,
+    "amplitude_ci_upper": -1.7994807234269588,
+    "decay_constant_days": 7.0,
+    "is_stabilized": true,
+    "novelty_amplitude": -1.954613321955311,
+    "novelty_detected": true,
+    "projected_steady_state_effect": 5.056292301326174,
+    "r_squared": 0.9586810944276968
+  },
+  "test_name": "novelty_primacy",
+  "true_params": {
+    "a": -2.0,
+    "d": 6.0,
+    "s": 5.0
+  }
+}

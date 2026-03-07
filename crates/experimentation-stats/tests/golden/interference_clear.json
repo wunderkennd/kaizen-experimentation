@@ -1,0 +1,84 @@
+{
+  "alpha": 0.05,
+  "description": "Divergent content distributions with spillover",
+  "expected": {
+    "control_catalog_coverage": 0.625,
+    "control_gini_coefficient": 0.46839378238341967,
+    "interference_detected": true,
+    "jaccard_similarity_top_100": 0.25,
+    "jensen_shannon_divergence": 0.6726945514544941,
+    "spillover_count": 2,
+    "treatment_catalog_coverage": 0.625,
+    "treatment_gini_coefficient": 0.49896907216494846
+  },
+  "input": {
+    "control": [
+      {
+        "content_id": "c1",
+        "unique_viewers": 350,
+        "view_count": 400,
+        "watch_time_seconds": 4000.0
+      },
+      {
+        "content_id": "c2",
+        "unique_viewers": 300,
+        "view_count": 350,
+        "watch_time_seconds": 3500.0
+      },
+      {
+        "content_id": "c3",
+        "unique_viewers": 150,
+        "view_count": 200,
+        "watch_time_seconds": 2000.0
+      },
+      {
+        "content_id": "shared1",
+        "unique_viewers": 8,
+        "view_count": 10,
+        "watch_time_seconds": 100.0
+      },
+      {
+        "content_id": "shared2",
+        "unique_viewers": 4,
+        "view_count": 5,
+        "watch_time_seconds": 50.0
+      }
+    ],
+    "total_control_viewers": 1000,
+    "total_treatment_viewers": 1000,
+    "treatment": [
+      {
+        "content_id": "t1",
+        "unique_viewers": 400,
+        "view_count": 500,
+        "watch_time_seconds": 5000.0
+      },
+      {
+        "content_id": "t2",
+        "unique_viewers": 250,
+        "view_count": 300,
+        "watch_time_seconds": 3000.0
+      },
+      {
+        "content_id": "t3",
+        "unique_viewers": 80,
+        "view_count": 100,
+        "watch_time_seconds": 1000.0
+      },
+      {
+        "content_id": "shared1",
+        "unique_viewers": 45,
+        "view_count": 50,
+        "watch_time_seconds": 500.0
+      },
+      {
+        "content_id": "shared2",
+        "unique_viewers": 18,
+        "view_count": 20,
+        "watch_time_seconds": 200.0
+      }
+    ]
+  },
+  "js_threshold": 0.05,
+  "test_name": "interference_clear"
+}
