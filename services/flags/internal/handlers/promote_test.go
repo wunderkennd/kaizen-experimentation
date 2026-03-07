@@ -33,17 +33,21 @@ func (m *mockManagementHandler) CreateExperiment(ctx context.Context, req *conne
 	// Simulate M5 behavior: copy input, assign ID, set state to DRAFT, generate salt.
 	exp := req.Msg.GetExperiment()
 	result := &commonv1.Experiment{
-		ExperimentId:       "exp-from-m5-001",
-		Name:               exp.GetName(),
-		Description:        exp.GetDescription(),
-		OwnerEmail:         exp.GetOwnerEmail(),
-		Type:               exp.GetType(),
-		State:              commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT,
-		Variants:           exp.GetVariants(),
-		PrimaryMetricId:    exp.GetPrimaryMetricId(),
-		SecondaryMetricIds: exp.GetSecondaryMetricIds(),
-		TargetingRuleId:    exp.GetTargetingRuleId(),
-		HashSalt:           "m5-generated-salt",
+		ExperimentId:        "exp-from-m5-001",
+		Name:                exp.GetName(),
+		Description:         exp.GetDescription(),
+		OwnerEmail:          exp.GetOwnerEmail(),
+		Type:                exp.GetType(),
+		State:               commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT,
+		Variants:            exp.GetVariants(),
+		PrimaryMetricId:     exp.GetPrimaryMetricId(),
+		SecondaryMetricIds:  exp.GetSecondaryMetricIds(),
+		TargetingRuleId:     exp.GetTargetingRuleId(),
+		HashSalt:            "m5-generated-salt",
+		SessionConfig:       exp.GetSessionConfig(),
+		InterleavingConfig:  exp.GetInterleavingConfig(),
+		BanditConfig:        exp.GetBanditConfig(),
+		IsCumulativeHoldout: exp.GetIsCumulativeHoldout(),
 	}
 
 	// M5 assigns variant IDs.
@@ -233,4 +237,246 @@ func TestPromoteToExperiment_WithVariants(t *testing.T) {
 	assert.InDelta(t, 0.34, variants[0].GetTrafficFraction(), 0.001)
 	assert.Equal(t, "variant_1", variants[1].GetName())
 	assert.False(t, variants[1].GetIsControl())
+}
+
+func TestPromoteToExperiment_SessionLevel(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-session",
+			Type:              flagsv1.FlagType_FLAG_TYPE_BOOLEAN,
+			DefaultValue:      "false",
+			Enabled:           true,
+			RolloutPercentage: 0.5,
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL,
+		PrimaryMetricId: "session_engagement",
+	}))
+	require.NoError(t, err)
+
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL, resp.Msg.GetType())
+
+	// Verify session_config defaults.
+	sc := mgmtHandler.lastRequest.GetSessionConfig()
+	require.NotNil(t, sc)
+	assert.Equal(t, "session_id", sc.GetSessionIdAttribute())
+	assert.True(t, sc.GetAllowCrossSessionVariation())
+	assert.Equal(t, int32(1), sc.GetMinSessionsPerUser())
+}
+
+func TestPromoteToExperiment_Interleaving(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	// Flag with 3 algorithm variants.
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-interleaving",
+			Type:              flagsv1.FlagType_FLAG_TYPE_STRING,
+			DefaultValue:      "algo_baseline",
+			Enabled:           true,
+			RolloutPercentage: 1.0,
+			Variants: []*flagsv1.FlagVariant{
+				{Value: "algo_baseline", TrafficFraction: 0.34},
+				{Value: "algo_candidate_1", TrafficFraction: 0.33},
+				{Value: "algo_candidate_2", TrafficFraction: 0.33},
+			},
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING,
+		PrimaryMetricId: "ndcg_at_10",
+	}))
+	require.NoError(t, err)
+
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING, resp.Msg.GetType())
+
+	// Verify interleaving_config defaults.
+	ic := mgmtHandler.lastRequest.GetInterleavingConfig()
+	require.NotNil(t, ic)
+	assert.Equal(t, commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT, ic.GetMethod())
+	assert.Equal(t, commonv1.CreditAssignment_CREDIT_ASSIGNMENT_BINARY_WIN, ic.GetCreditAssignment())
+	assert.Equal(t, int32(50), ic.GetMaxListSize())
+	// Algorithm IDs should be populated from flag variants.
+	require.Len(t, ic.GetAlgorithmIds(), 3)
+	assert.Equal(t, "algo_baseline", ic.GetAlgorithmIds()[0])
+	assert.Equal(t, "algo_candidate_1", ic.GetAlgorithmIds()[1])
+	assert.Equal(t, "algo_candidate_2", ic.GetAlgorithmIds()[2])
+}
+
+func TestPromoteToExperiment_InterleavingNoVariants(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	// Boolean flag with no explicit variants — should synthesize algorithm IDs.
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-interleaving-simple",
+			Type:              flagsv1.FlagType_FLAG_TYPE_BOOLEAN,
+			DefaultValue:      "false",
+			Enabled:           true,
+			RolloutPercentage: 0.5,
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING,
+		PrimaryMetricId: "clicks",
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING, resp.Msg.GetType())
+
+	ic := mgmtHandler.lastRequest.GetInterleavingConfig()
+	require.NotNil(t, ic)
+	assert.Len(t, ic.GetAlgorithmIds(), 2)
+	assert.Equal(t, "algorithm_control", ic.GetAlgorithmIds()[0])
+	assert.Equal(t, "algorithm_treatment", ic.GetAlgorithmIds()[1])
+}
+
+func TestPromoteToExperiment_MAB(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-mab",
+			Type:              flagsv1.FlagType_FLAG_TYPE_STRING,
+			DefaultValue:      "layout_a",
+			Enabled:           true,
+			RolloutPercentage: 1.0,
+			Variants: []*flagsv1.FlagVariant{
+				{Value: "layout_a", TrafficFraction: 0.5},
+				{Value: "layout_b", TrafficFraction: 0.5},
+			},
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_MAB,
+		PrimaryMetricId: "click_through_rate",
+	}))
+	require.NoError(t, err)
+
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_MAB, resp.Msg.GetType())
+
+	bc := mgmtHandler.lastRequest.GetBanditConfig()
+	require.NotNil(t, bc)
+	assert.Equal(t, commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING, bc.GetAlgorithm())
+	assert.Equal(t, "click_through_rate", bc.GetRewardMetricId())
+	assert.InDelta(t, 0.1, bc.GetMinExplorationFraction(), 0.001)
+	assert.Equal(t, int32(1000), bc.GetWarmupObservations())
+
+	// Arms from flag variants.
+	arms := bc.GetArms()
+	require.Len(t, arms, 2)
+	assert.Equal(t, "layout_a", arms[0].GetName())
+	assert.Equal(t, "layout_b", arms[1].GetName())
+}
+
+func TestPromoteToExperiment_ContextualBandit(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-contextual",
+			Type:              flagsv1.FlagType_FLAG_TYPE_STRING,
+			DefaultValue:      "model_v1",
+			Enabled:           true,
+			RolloutPercentage: 1.0,
+			Variants: []*flagsv1.FlagVariant{
+				{Value: "model_v1", TrafficFraction: 0.5},
+				{Value: "model_v2", TrafficFraction: 0.5},
+			},
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT,
+		PrimaryMetricId: "watch_time",
+	}))
+	require.NoError(t, err)
+
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT, resp.Msg.GetType())
+
+	bc := mgmtHandler.lastRequest.GetBanditConfig()
+	require.NotNil(t, bc)
+	// Contextual bandit defaults to LINEAR_UCB.
+	assert.Equal(t, commonv1.BanditAlgorithm_BANDIT_ALGORITHM_LINEAR_UCB, bc.GetAlgorithm())
+	assert.Equal(t, "watch_time", bc.GetRewardMetricId())
+	assert.Len(t, bc.GetArms(), 2)
+}
+
+func TestPromoteToExperiment_CumulativeHoldout(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-holdout",
+			Type:              flagsv1.FlagType_FLAG_TYPE_BOOLEAN,
+			DefaultValue:      "false",
+			Enabled:           true,
+			RolloutPercentage: 0.95,
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT,
+		PrimaryMetricId: "retention_d7",
+	}))
+	require.NoError(t, err)
+
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT, resp.Msg.GetType())
+	assert.True(t, resp.Msg.GetIsCumulativeHoldout())
+
+	// Verify M5 received is_cumulative_holdout = true.
+	assert.True(t, mgmtHandler.lastRequest.GetIsCumulativeHoldout())
+}
+
+func TestPromoteToExperiment_PlaybackQoE(t *testing.T) {
+	client, _, mgmtHandler := setupTestWithM5(t)
+	ctx := context.Background()
+
+	created, err := client.CreateFlag(ctx, connect.NewRequest(&flagsv1.CreateFlagRequest{
+		Flag: &flagsv1.Flag{
+			Name:              "promote-qoe",
+			Type:              flagsv1.FlagType_FLAG_TYPE_BOOLEAN,
+			DefaultValue:      "false",
+			Enabled:           true,
+			RolloutPercentage: 0.5,
+		},
+	}))
+	require.NoError(t, err)
+
+	resp, err := client.PromoteToExperiment(ctx, connect.NewRequest(&flagsv1.PromoteToExperimentRequest{
+		FlagId:          created.Msg.GetFlagId(),
+		ExperimentType:  commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE,
+		PrimaryMetricId: "rebuffer_rate",
+	}))
+	require.NoError(t, err)
+
+	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE, resp.Msg.GetType())
+	// No type-specific config for QoE — guardrails are added via UpdateExperiment.
+	assert.Nil(t, mgmtHandler.lastRequest.GetSessionConfig())
+	assert.Nil(t, mgmtHandler.lastRequest.GetInterleavingConfig())
+	assert.Nil(t, mgmtHandler.lastRequest.GetBanditConfig())
 }
