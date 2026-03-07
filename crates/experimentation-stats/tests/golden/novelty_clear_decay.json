@@ -1,0 +1,172 @@
+{
+  "alpha": 0.05,
+  "daily_effects": [
+    {
+      "day": 0,
+      "effect": 8.006942791836197,
+      "sample_size": 1000
+    },
+    {
+      "day": 1,
+      "effect": 7.349696161413627,
+      "sample_size": 1000
+    },
+    {
+      "day": 2,
+      "effect": 6.845849614875296,
+      "sample_size": 1000
+    },
+    {
+      "day": 3,
+      "effect": 6.394569570383945,
+      "sample_size": 1000
+    },
+    {
+      "day": 4,
+      "effect": 6.0372158389307735,
+      "sample_size": 1000
+    },
+    {
+      "day": 5,
+      "effect": 5.837975370063163,
+      "sample_size": 1000
+    },
+    {
+      "day": 6,
+      "effect": 5.688782791758973,
+      "sample_size": 1000
+    },
+    {
+      "day": 7,
+      "effect": 5.668963556087501,
+      "sample_size": 1000
+    },
+    {
+      "day": 8,
+      "effect": 5.275001857281116,
+      "sample_size": 1000
+    },
+    {
+      "day": 9,
+      "effect": 5.075108928764009,
+      "sample_size": 1000
+    },
+    {
+      "day": 10,
+      "effect": 5.428938918494031,
+      "sample_size": 1000
+    },
+    {
+      "day": 11,
+      "effect": 5.1953924807036,
+      "sample_size": 1000
+    },
+    {
+      "day": 12,
+      "effect": 5.1084624391187745,
+      "sample_size": 1000
+    },
+    {
+      "day": 13,
+      "effect": 5.052929163452421,
+      "sample_size": 1000
+    },
+    {
+      "day": 14,
+      "effect": 5.092320644288436,
+      "sample_size": 1000
+    },
+    {
+      "day": 15,
+      "effect": 4.990225219469716,
+      "sample_size": 1000
+    },
+    {
+      "day": 16,
+      "effect": 4.955587370144911,
+      "sample_size": 1000
+    },
+    {
+      "day": 17,
+      "effect": 5.045043327983098,
+      "sample_size": 1000
+    },
+    {
+      "day": 18,
+      "effect": 4.96293447557234,
+      "sample_size": 1000
+    },
+    {
+      "day": 19,
+      "effect": 5.096574059386475,
+      "sample_size": 1000
+    },
+    {
+      "day": 20,
+      "effect": 5.096532685557432,
+      "sample_size": 1000
+    },
+    {
+      "day": 21,
+      "effect": 5.014757479529747,
+      "sample_size": 1000
+    },
+    {
+      "day": 22,
+      "effect": 5.013543777644245,
+      "sample_size": 1000
+    },
+    {
+      "day": 23,
+      "effect": 4.804309509122494,
+      "sample_size": 1000
+    },
+    {
+      "day": 24,
+      "effect": 4.951227353018947,
+      "sample_size": 1000
+    },
+    {
+      "day": 25,
+      "effect": 4.986177844316836,
+      "sample_size": 1000
+    },
+    {
+      "day": 26,
+      "effect": 5.0591311082203,
+      "sample_size": 1000
+    },
+    {
+      "day": 27,
+      "effect": 4.940309338182725,
+      "sample_size": 1000
+    },
+    {
+      "day": 28,
+      "effect": 4.990919535206056,
+      "sample_size": 1000
+    },
+    {
+      "day": 29,
+      "effect": 5.031351854847588,
+      "sample_size": 1000
+    }
+  ],
+  "description": "f(t) = 5.0 + 3.0·exp(-t/4.0) + N(0,0.1), seed=42",
+  "expected": {
+    "amplitude_ci_lower": 2.896830749400469,
+    "amplitude_ci_upper": 3.177881409989315,
+    "decay_constant_days": 4.0,
+    "is_stabilized": true,
+    "novelty_amplitude": 3.037356079694892,
+    "novelty_detected": true,
+    "projected_steady_state_effect": 4.975768494929073,
+    "r_squared": 0.9875982232087027
+  },
+  "test_name": "novelty_clear_decay",
+  "true_params": {
+    "a": 3.0,
+    "d": 4.0,
+    "s": 5.0
+  }
+}

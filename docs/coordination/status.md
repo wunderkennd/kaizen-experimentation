@@ -16,7 +16,7 @@
 | Agent-1 | M1 Assignment | 🟢 Phase 1 Complete | agent-1/feat/layer-session-assignment | Phase 2: GetInterleavedList (2.7) | — | M1.1–1.5 all complete. Session-level bucketing + layer exclusivity. |
 | Agent-2 | M2 Pipeline | 🟢 Phase 1 Complete | — | Phase 2: Operational hardening | — | M1.6–1.9 all merged (PRs #1, #8). All Phase 1 milestones done. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🟢 Phase 1 Complete | — | Phase 2: GST, Bootstrap CI | — | M1.14–1.19 all merged (PRs #2, #14, #25). All Phase 1 milestones done. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/novelty-interference-interleaving | Phase 2: Novelty, Interference, Interleaving | — | M2.4–2.6 in progress. M2.1–2.3 done (PRs #25, #29). |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/production-wiring | PostgreSQL wiring + integration tests | — | M1.28–1.30 merged (PR #13). Production wiring: DATABASE_URL → pgxpool → PostgresStore + audit. Integration tests for full CRUD + audit against real DB. |
@@ -86,9 +86,9 @@
 | 2.1 | GST (O'Brien-Fleming + Pocock) | Agent-4 | 🟢 | — | Implemented as part of M1.16 (PR #25) |
 | 2.2 | Bootstrap CI | Agent-4 | 🔵 | Agent-6 (CI charts on results dashboard) |
 | 2.3 | Multiple comparison correction (BH-FDR) | Agent-4 | 🔵 | Agent-6 (corrected p-values on results dashboard) |
-| 2.4 | Novelty/primacy analysis | Agent-4 | ⚪ | Agent-6 (novelty tab) |
-| 2.5 | Interference analysis | Agent-4 | ⚪ | Agent-6 (interference tab) |
-| 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | ⚪ | Agent-6 (interleaving tab) |
+| 2.4 | Novelty/primacy analysis | Agent-4 | 🟢 | Agent-6 (novelty tab) | Gauss-Newton with LM damping, golden-file validated |
+| 2.5 | Interference analysis | Agent-4 | 🟢 | Agent-6 (interference tab) | JSD, Jaccard, Gini, title spillover with BH correction |
+| 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | Sign test, Bradley-Terry MM, position analysis |
 | 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | ⚪ | — |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |

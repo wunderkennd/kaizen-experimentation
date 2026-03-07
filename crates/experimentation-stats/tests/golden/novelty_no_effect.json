@@ -1,0 +1,167 @@
+{
+  "alpha": 0.05,
+  "daily_effects": [
+    {
+      "day": 0,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 1,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 2,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 3,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 4,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 5,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 6,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 7,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 8,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 9,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 10,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 11,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 12,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 13,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 14,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 15,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 16,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 17,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 18,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 19,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 20,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 21,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 22,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 23,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 24,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 25,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 26,
+      "effect": 2.01,
+      "sample_size": 1000
+    },
+    {
+      "day": 27,
+      "effect": 1.99,
+      "sample_size": 1000
+    },
+    {
+      "day": 28,
+      "effect": 2.0,
+      "sample_size": 1000
+    },
+    {
+      "day": 29,
+      "effect": 2.01,
+      "sample_size": 1000
+    }
+  ],
+  "description": "Flat at 2.0 with tiny oscillation — no novelty",
+  "expected": {
+    "amplitude_ci_lower": -0.026831461382140973,
+    "amplitude_ci_upper": 0.006625094185862317,
+    "decay_constant_days": 0.5,
+    "is_stabilized": true,
+    "novelty_amplitude": -0.010103183598139328,
+    "novelty_detected": false,
+    "projected_steady_state_effect": 2.000389483669306,
+    "r_squared": 0.04971391515404544
+  },
+  "test_name": "novelty_no_effect"
+}
