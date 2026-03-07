@@ -37,6 +37,10 @@ pub struct ExperimentConfig {
     pub targeting_rule: Option<TargetingRule>,
     #[serde(default)]
     pub session_config: Option<SessionConfig>,
+    #[serde(default)]
+    pub interleaving_config: Option<InterleavingConfig>,
+    #[serde(default)]
+    pub bandit_config: Option<BanditConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -64,6 +68,60 @@ pub struct SessionConfig {
     pub session_id_attribute: String,
     #[serde(default)]
     pub allow_cross_session_variation: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct InterleavingConfig {
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub algorithm_ids: Vec<String>,
+    #[serde(default = "default_max_list_size")]
+    pub max_list_size: usize,
+}
+
+fn default_max_list_size() -> usize {
+    50
+}
+
+/// Bandit experiment configuration (MAB / CONTEXTUAL_BANDIT types).
+#[derive(Debug, Clone, Deserialize)]
+pub struct BanditConfig {
+    /// Algorithm identifier (e.g., "THOMPSON_SAMPLING", "LINEAR_UCB").
+    #[serde(default)]
+    pub algorithm: String,
+    /// Arm definitions — each arm maps to a variant or content placement.
+    #[serde(default)]
+    pub arms: Vec<BanditArmConfig>,
+    /// Metric ID used as the reward signal.
+    #[serde(default)]
+    pub reward_metric_id: String,
+    /// Context feature keys for contextual bandits.
+    #[serde(default)]
+    pub context_feature_keys: Vec<String>,
+    /// Minimum fraction of traffic per arm (prevents starvation). Default 0.1.
+    #[serde(default = "default_min_exploration")]
+    pub min_exploration_fraction: f64,
+    /// Uniform-random observations before policy activates. Default 1000.
+    #[serde(default = "default_warmup_observations")]
+    pub warmup_observations: i32,
+}
+
+fn default_min_exploration() -> f64 {
+    0.1
+}
+
+fn default_warmup_observations() -> i32 {
+    1000
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BanditArmConfig {
+    pub arm_id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub payload_json: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

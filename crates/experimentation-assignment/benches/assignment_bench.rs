@@ -4,6 +4,7 @@ use std::sync::Arc;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use experimentation_assignment::config::Config;
 use experimentation_assignment::service::AssignmentServiceImpl;
+use experimentation_proto::experimentation::assignment::v1::RankedList;
 
 const DEV_CONFIG: &str = include_str!("../../../dev/config.json");
 
@@ -47,5 +48,89 @@ fn bench_get_assignment(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_get_assignment);
+fn make_interleave_lists(n: usize) -> HashMap<String, RankedList> {
+    let mut m = HashMap::new();
+    m.insert(
+        "algo_a".to_string(),
+        RankedList {
+            item_ids: (0..n).map(|i| format!("a_item_{i}")).collect(),
+        },
+    );
+    m.insert(
+        "algo_b".to_string(),
+        RankedList {
+            item_ids: (0..n).map(|i| format!("b_item_{i}")).collect(),
+        },
+    );
+    m
+}
+
+fn bench_get_interleaved_list(c: &mut Criterion) {
+    let config = Config::from_json(DEV_CONFIG).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let lists_10 = make_interleave_lists(10);
+    c.bench_function("get_interleaved_list_10_items", |b| {
+        b.iter(|| {
+            svc.interleave(
+                black_box("exp_dev_004"),
+                black_box("user_42"),
+                black_box(&lists_10),
+            )
+            .unwrap()
+        })
+    });
+
+    let lists_100 = make_interleave_lists(100);
+    c.bench_function("get_interleaved_list_100_items", |b| {
+        b.iter(|| {
+            svc.interleave(
+                black_box("exp_dev_004"),
+                black_box("user_42"),
+                black_box(&lists_100),
+            )
+            .unwrap()
+        })
+    });
+}
+
+fn bench_bandit_assignment(c: &mut Criterion) {
+    let config = Config::from_json(DEV_CONFIG).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+    let no_attrs = HashMap::new();
+
+    c.bench_function("get_assignment_mab_single", |b| {
+        b.iter(|| {
+            svc.assign(
+                black_box("exp_dev_005"),
+                black_box("user_42"),
+                black_box(""),
+                black_box(&no_attrs),
+            )
+            .unwrap()
+        })
+    });
+
+    c.bench_function("get_assignment_mab_1000_users", |b| {
+        b.iter(|| {
+            for i in 0..1000 {
+                let user_id = format!("user_{i}");
+                svc.assign(
+                    black_box("exp_dev_005"),
+                    black_box(&user_id),
+                    black_box(""),
+                    black_box(&no_attrs),
+                )
+                .unwrap();
+            }
+        })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_get_assignment,
+    bench_get_interleaved_list,
+    bench_bandit_assignment,
+);
 criterion_main!(benches);

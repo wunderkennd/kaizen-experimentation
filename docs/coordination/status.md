@@ -13,7 +13,7 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🟢 Phase 1 Complete | agent-1/feat/layer-session-assignment | Phase 2: GetInterleavedList (2.7) | — | M1.1–1.5 all complete. Session-level bucketing + layer exclusivity. |
+| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/bandit-delegation | Bandit delegation (MAB/CONTEXTUAL_BANDIT) | — | M1.1–1.5 + M2.7 complete. Bandit delegation: MAB/CONTEXTUAL_BANDIT experiments use mock uniform arm selection (until M4b SelectArm is live). |
 | Agent-2 | M2 Pipeline | 🔵 Phase 3 In Progress | agent-2/feat/qoe-interleaving-validation | Phase 3: QoE enrichment + interleaving provenance | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3: QoE upper bounds + interleaving provenance validation. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/surrogate-validation | M2.10 Surrogate Validation | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. |
@@ -89,7 +89,7 @@
 | 2.4 | Novelty/primacy analysis | Agent-4 | 🟢 | Agent-6 (novelty tab) | PR #38 — Gauss-Newton with LM damping, golden-file validated |
 | 2.5 | Interference analysis | Agent-4 | 🟢 | Agent-6 (interference tab) | PR #38 — JSD, Jaccard, Gini, title spillover with BH correction |
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | PR #38 — Sign test, Bradley-Terry MM, position analysis |
-| 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | ⚪ | — |
+| 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | 🟢 | Agent-4 (interleaving analysis) |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 complete. Agent-4 part: surrogate validation in progress. |
@@ -128,7 +128,7 @@ Track integration test results between agent pairs.
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
-| 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | ⚪ | — |
+| 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🟡 | M1 bandit delegation with mock uniform selection ready. Awaiting M4b SelectArm gRPC for live integration. |
 | 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | ⚪ | — |
 
 ## Contract Changes Log
