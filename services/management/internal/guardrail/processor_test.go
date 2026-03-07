@@ -4,6 +4,7 @@ package guardrail_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -59,6 +60,7 @@ func createRunningExperiment(t *testing.T, pool *pgxpool.Pool, name, guardrailAc
 		Description:     "guardrail test",
 		OwnerEmail:      "test@example.com",
 		Type:            "AB",
+		TypeConfig:      json.RawMessage("{}"),
 		State:           "DRAFT",
 		LayerID:         layerID,
 		PrimaryMetricID: "watch_time_minutes",
@@ -174,6 +176,7 @@ func TestProcessAlert_NotRunning(t *testing.T) {
 		Description:     "guardrail test",
 		OwnerEmail:      "test@example.com",
 		Type:            "AB",
+		TypeConfig:      json.RawMessage("{}"),
 		State:           "DRAFT",
 		LayerID:         "a0000000-0000-0000-0000-000000000001",
 		PrimaryMetricID: "watch_time_minutes",
