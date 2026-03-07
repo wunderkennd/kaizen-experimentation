@@ -25,7 +25,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const defaultLayerID = "a0000000-0000-0000-0000-000000000001"
+func createStreamTestLayer(t *testing.T, mgmt managementv1connect.ExperimentManagementServiceClient, name string) string {
+	t.Helper()
+	resp, err := mgmt.CreateLayer(context.Background(), connect.NewRequest(&mgmtv1.CreateLayerRequest{
+		Layer: &commonv1.Layer{
+			Name:         name,
+			Description:  "stream test layer",
+			TotalBuckets: 10000,
+		},
+	}))
+	require.NoError(t, err)
+	return resp.Msg.LayerId
+}
 
 func setupStreamTest(t *testing.T) (
 	mgmtClient managementv1connect.ExperimentManagementServiceClient,
@@ -74,7 +85,7 @@ func setupStreamTest(t *testing.T) (
 	return mgmtClient, streamClient, notifier, cleanup
 }
 
-func createAndStartExperiment(t *testing.T, mgmt managementv1connect.ExperimentManagementServiceClient, name string) string {
+func createAndStartExperiment(t *testing.T, mgmt managementv1connect.ExperimentManagementServiceClient, name, layerID string) string {
 	t.Helper()
 	ctx := context.Background()
 
@@ -83,7 +94,7 @@ func createAndStartExperiment(t *testing.T, mgmt managementv1connect.ExperimentM
 			Name:            name,
 			OwnerEmail:      "stream-test@example.com",
 			Type:            commonv1.ExperimentType_EXPERIMENT_TYPE_AB,
-			LayerId:         defaultLayerID,
+			LayerId:         layerID,
 			PrimaryMetricId: "watch_time_minutes",
 			GuardrailAction: commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY,
 			Variants: []*commonv1.Variant{
@@ -110,8 +121,10 @@ func TestStreamConfigUpdates_Snapshot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	layerID := createStreamTestLayer(t, mgmt, "stream-snapshot-layer-"+t.Name())
+
 	// Create and start an experiment so there's something to snapshot.
-	expID := createAndStartExperiment(t, mgmt, "stream-snapshot-test")
+	expID := createAndStartExperiment(t, mgmt, "stream-snapshot-test", layerID)
 
 	// Connect to stream.
 	stream, err := streamClient.StreamConfigUpdates(ctx, connect.NewRequest(
@@ -142,6 +155,8 @@ func TestStreamConfigUpdates_DeltaOnStart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	layerID := createStreamTestLayer(t, mgmt, "stream-delta-layer-"+t.Name())
+
 	// Connect to stream first (before starting experiment).
 	stream, err := streamClient.StreamConfigUpdates(ctx, connect.NewRequest(
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
@@ -154,7 +169,7 @@ func TestStreamConfigUpdates_DeltaOnStart(t *testing.T) {
 	// Give it a moment then start our experiment.
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		createAndStartExperiment(t, mgmt, "stream-delta-test")
+		createAndStartExperiment(t, mgmt, "stream-delta-test", layerID)
 	}()
 
 	// Read updates until we find our delta.
@@ -178,8 +193,10 @@ func TestStreamConfigUpdates_DeletionOnConclude(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	layerID := createStreamTestLayer(t, mgmt, "stream-deletion-layer-"+t.Name())
+
 	// Create and start an experiment.
-	expID := createAndStartExperiment(t, mgmt, "stream-deletion-test")
+	expID := createAndStartExperiment(t, mgmt, "stream-deletion-test", layerID)
 
 	// Connect to stream.
 	stream, err := streamClient.StreamConfigUpdates(ctx, connect.NewRequest(
