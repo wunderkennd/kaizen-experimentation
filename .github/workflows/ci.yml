@@ -182,18 +182,9 @@ jobs:
             exit 1
           }
 
-          # Apply SQL migrations. Two passes handle FK ordering in 001_schema.sql
-          # (experiments references layers/targeting_rules/surrogate_models defined
-          # later in the same file). Pass 1 creates independent tables; pass 2
-          # creates the FK-dependent ones that failed in pass 1.
-          for pass in 1 2; do
-            for f in ../sql/migrations/*.sql; do
-              PGPASSWORD=localdev psql -h localhost -U experimentation -d experimentation -f "$f" 2>/dev/null || true
-            done
-          done
-
-          # Seed reference data (layers, metrics, targeting rules) required by integration tests
-          PGPASSWORD=localdev psql -h localhost -U experimentation -d experimentation -f ../scripts/seed_dev.sql
+          # Schema migrations and seed data are applied inside the postgres
+          # container via docker-entrypoint-initdb.d (see docker-compose.test.yml
+          # volume mounts and scripts/init-test-db.sh).
 
           test_exit=0
           CGO_ENABLED=1 go test -tags=integration -race ./... || test_exit=$?
