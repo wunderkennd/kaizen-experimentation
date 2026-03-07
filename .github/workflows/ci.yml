@@ -129,6 +129,9 @@ jobs:
           name: generated-code
           path: gen/
 
+      - name: Restore gen/go module files
+        run: git checkout -- gen/go/go.mod gen/go/go.sum
+
       - uses: actions/download-artifact@v4
         with:
           name: rust-ffi-artifacts
