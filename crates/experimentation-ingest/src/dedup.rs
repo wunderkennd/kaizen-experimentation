@@ -426,7 +426,7 @@ mod tests {
         let hashes = config.optimal_hashes();
         // k = (m/n) * ln(2) ~ 10
         assert!(
-            hashes >= 8 && hashes <= 12,
+            (8..=12).contains(&hashes),
             "Expected 8-12 hashes, got {hashes}"
         );
     }
