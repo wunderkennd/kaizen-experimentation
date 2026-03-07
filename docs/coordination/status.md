@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/novelty-interference-interleaving | Phase 2: Novelty, Interference, Interleaving | — | M2.4–2.6 in progress. M2.1–2.3 done (PRs #25, #29). |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/production-wiring | PostgreSQL wiring + integration tests | — | M1.28–1.30 merged (PR #13). Production wiring: DATABASE_URL → pgxpool → PostgresStore + audit. Integration tests for full CRUD + audit against real DB. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 

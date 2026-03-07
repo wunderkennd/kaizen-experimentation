@@ -19,6 +19,10 @@ type Flag struct {
 	Variants          []FlagVariant
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+
+	// Flag-experiment linkage (Phase 3): set when PromoteToExperiment succeeds.
+	PromotedExperimentID string
+	PromotedAt           time.Time
 }
 
 // FlagVariant is a variant within a feature flag.
@@ -38,4 +42,14 @@ type Store interface {
 	DeleteFlag(ctx context.Context, flagID string) error
 	ListFlags(ctx context.Context, pageSize int, pageToken string) ([]*Flag, string, error)
 	GetAllEnabledFlags(ctx context.Context) ([]*Flag, error)
+
+	// Flag-experiment linkage: record which experiment a flag was promoted to.
+	LinkFlagToExperiment(ctx context.Context, flagID, experimentID string) error
+	// GetFlagByExperiment returns the flag that was promoted to a given experiment.
+	GetFlagByExperiment(ctx context.Context, experimentID string) (*Flag, error)
+
+	// Dependency tracking: find all flags using a targeting rule.
+	GetFlagsByTargetingRule(ctx context.Context, targetingRuleID string) ([]*Flag, error)
+	// GetPromotedFlags returns all flags that have been promoted to experiments.
+	GetPromotedFlags(ctx context.Context) ([]*Flag, error)
 }

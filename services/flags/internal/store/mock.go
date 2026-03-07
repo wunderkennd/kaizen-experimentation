@@ -189,6 +189,60 @@ func (m *MockStore) GetAllEnabledFlags(ctx context.Context) ([]*Flag, error) {
 	return result, nil
 }
 
+func (m *MockStore) LinkFlagToExperiment(ctx context.Context, flagID, experimentID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	f, ok := m.flags[flagID]
+	if !ok {
+		return fmt.Errorf("flag not found: %s", flagID)
+	}
+	f.PromotedExperimentID = experimentID
+	f.PromotedAt = time.Now()
+	f.UpdatedAt = time.Now()
+	return nil
+}
+
+func (m *MockStore) GetFlagByExperiment(ctx context.Context, experimentID string) (*Flag, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, f := range m.flags {
+		if f.PromotedExperimentID == experimentID {
+			return copyFlag(f), nil
+		}
+	}
+	return nil, fmt.Errorf("no flag found for experiment: %s", experimentID)
+}
+
+func (m *MockStore) GetFlagsByTargetingRule(ctx context.Context, targetingRuleID string) ([]*Flag, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*Flag
+	for _, f := range m.flags {
+		if f.TargetingRuleID == targetingRuleID {
+			result = append(result, copyFlag(f))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+func (m *MockStore) GetPromotedFlags(ctx context.Context) ([]*Flag, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*Flag
+	for _, f := range m.flags {
+		if f.PromotedExperimentID != "" {
+			result = append(result, copyFlag(f))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].PromotedAt.After(result[j].PromotedAt) })
+	return result, nil
+}
+
 // SetUpdatedAt sets the updated_at timestamp for a flag (for testing staleness).
 func (m *MockStore) SetUpdatedAt(flagID string, t time.Time) {
 	m.mu.Lock()
