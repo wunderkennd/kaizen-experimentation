@@ -192,6 +192,9 @@ jobs:
             done
           done
 
+          # Seed reference data (layers, metrics, targeting rules) required by integration tests
+          PGPASSWORD=localdev psql -h localhost -U experimentation -d experimentation -f ../scripts/seed_dev.sql
+
           test_exit=0
           CGO_ENABLED=1 go test -tags=integration -race ./... || test_exit=$?
           docker compose -f ../docker-compose.test.yml down
