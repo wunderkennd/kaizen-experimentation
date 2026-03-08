@@ -48,9 +48,9 @@ func createSequentialExperiment(t *testing.T, pool *pgxpool.Pool, name, seqMetho
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO experiments (
-			name, owner_email, type, layer_id, primary_metric_id,
+			name, description, owner_email, type, layer_id, primary_metric_id,
 			state, sequential_method, started_at
-		) VALUES ($1, 'test@example.com', 'AB', 'a0000000-0000-0000-0000-000000000001',
+		) VALUES ($1, '', 'test@example.com', 'AB', 'a0000000-0000-0000-0000-000000000001',
 			'watch_time_minutes', 'RUNNING', $2, NOW())
 		RETURNING experiment_id`,
 		name, seqMethod,
@@ -74,9 +74,9 @@ func createNonSequentialExperiment(t *testing.T, pool *pgxpool.Pool, name string
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO experiments (
-			name, owner_email, type, layer_id, primary_metric_id,
+			name, description, owner_email, type, layer_id, primary_metric_id,
 			state, started_at
-		) VALUES ($1, 'test@example.com', 'AB', 'a0000000-0000-0000-0000-000000000001',
+		) VALUES ($1, '', 'test@example.com', 'AB', 'a0000000-0000-0000-0000-000000000001',
 			'watch_time_minutes', 'RUNNING', NOW())
 		RETURNING experiment_id`, name,
 	).Scan(&id)
@@ -182,9 +182,9 @@ func TestProcessAlert_ExperimentNotRunning(t *testing.T) {
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO experiments (
-			name, owner_email, type, layer_id, primary_metric_id,
+			name, description, owner_email, type, layer_id, primary_metric_id,
 			state, sequential_method
-		) VALUES ('seq-draft-test', 'test@example.com', 'AB',
+		) VALUES ('seq-draft-test', '', 'test@example.com', 'AB',
 			'a0000000-0000-0000-0000-000000000001', 'watch_time_minutes',
 			'DRAFT', 'MSPRT')
 		RETURNING experiment_id`,
