@@ -14,7 +14,7 @@
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/bandit-delegation | Bandit delegation (MAB/CONTEXTUAL_BANDIT) | — | M1.1–1.5 + M2.7 complete. Bandit delegation: MAB/CONTEXTUAL_BANDIT experiments use mock uniform arm selection (until M4b SelectArm is live). |
-| Agent-2 | M2 Pipeline | 🔵 Phase 3 In Progress | agent-2/feat/qoe-interleaving-validation | Phase 3: QoE enrichment + interleaving provenance | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3: QoE upper bounds + interleaving provenance validation. |
+| Agent-2 | M2 Pipeline | 🔵 Phase 4 In Progress | agent-2/feat/phase4-chaos-engineering | Phase 4: Chaos engineering + crash recovery | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3 done (PR #40). Phase 4: chaos scripts, crash-recovery tests, synthetic event generator. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/surrogate-validation | M2.10 Surrogate Validation | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
@@ -102,8 +102,8 @@
 | 3.1 | LinUCB contextual bandit | Agent-4 | ⚪ | — |
 | 3.2 | Content cold-start bandit | Agent-4 | ⚪ | — |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | ⚪ | — |
-| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | ⚪ | — |
-| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | ⚪ | — |
+| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 part done (session_id keyed events). Agent-1/3 parts pending. |
+| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 part done (QoE validation + ingestion PR #40). Agent-3 part pending (Spark SQL). |
 | 3.6 | Cumulative holdout support | Agent-5 | ⚪ | — |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
@@ -114,7 +114,7 @@
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | ⚪ | — |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | ⚪ | — |
-| 4.5 | End-to-end chaos testing passing | All | ⚪ | Production readiness |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests in PR. Other agents pending. |
 
 ## Pair Integration Schedule
 
@@ -124,7 +124,7 @@ Track integration test results between agent pairs.
 |------|------|--------|-------|
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
-| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | ⚪ | — |
+| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟡 | Agent-2 has synthetic event generator + chaos scripts ready. Agent-3 needs Kafka consumer for live integration. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
