@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-08 by Agent-6 (M2.8–2.9 complete, create experiment form)
+> **Last updated**: 2026-03-08 by Agent-6 (analysis tabs M2.4–2.6 UI complete)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -18,7 +18,7 @@
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
 | Agent-5 | M5 Management | 🔵 Phase 2 | agent-5/feat/surrogate-crud | Sequential auto-conclude (Phase 2) | — | Surrogate CRUD + sequential auto-conclude. Unblocks Agent-4 (boundary crossing → auto-conclude integration). |
-| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/results-dashboard | Create experiment form + M2.8–2.9 complete | — | M1.25–1.27 done, M2.8–2.9 done. 87 tests pass. Create experiment form with full field coverage. |
+| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/analysis-tabs | Analysis tabs (M2.4–2.6 UI) complete, PR #56 | — | M1.25–1.27 done, M2.8–2.9 done. Analysis tabs: novelty, interference, interleaving. 104 tests pass. Next: bandit dashboard (M3.3, blocked on M3.1) or live API integration. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
@@ -162,7 +162,7 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 **In progress:**
 - Agent-3: M2.10 surrogate metric framework (Agent-3 part complete in PR #35, Agent-4 part pending)
 - Agent-5: Surrogate model CRUD (Phase 2) — CreateSurrogateModel, ListSurrogateModels, GetSurrogateCalibration, TriggerSurrogateRecalibration
-- Agent-6: M1.25–1.27 complete, M2.8–2.9 complete, create experiment form in progress
+- Agent-6: M1.25–1.27 complete, M2.8–2.9 complete, create experiment form done (PR #49 merged), analysis tabs M2.4–2.6 UI done (PR #56)
 
 **Unblocked this week:**
 - Agent-1 unblocked for 1.3 (config cache) by Agent-5 StreamConfigUpdates (PR #15)

@@ -1,4 +1,7 @@
-import type { AnalysisResult, Experiment, QueryLogEntry } from '@/lib/types';
+import type {
+  AnalysisResult, Experiment, QueryLogEntry,
+  NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
+} from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
   {
@@ -413,16 +416,124 @@ const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
     },
     computedAt: '2026-03-04T18:30:00Z',
   },
+  {
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    metricResults: [
+      {
+        metricId: 'search_success_rate',
+        variantId: 'v3-semantic',
+        controlMean: 0.62,
+        treatmentMean: 0.68,
+        absoluteEffect: 0.06,
+        relativeEffect: 0.0968,
+        ciLower: 0.02,
+        ciUpper: 0.10,
+        pValue: 0.004,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+      },
+      {
+        metricId: 'clicks_per_search',
+        variantId: 'v3-semantic',
+        controlMean: 1.8,
+        treatmentMean: 2.1,
+        absoluteEffect: 0.3,
+        relativeEffect: 0.1667,
+        ciLower: 0.05,
+        ciUpper: 0.55,
+        pValue: 0.019,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+      },
+    ],
+    srmResult: {
+      chiSquared: 0.18,
+      pValue: 0.671,
+      isMismatch: false,
+      observedCounts: { 'v3-bm25': 37650, 'v3-semantic': 37350 },
+      expectedCounts: { 'v3-bm25': 37500, 'v3-semantic': 37500 },
+    },
+    computedAt: '2026-03-05T14:35:00Z',
+  },
 ];
+
+/** Novelty analysis mock — homepage_recs_v2 shows novelty decay in CTR. */
+const INITIAL_NOVELTY_RESULTS: Record<string, NoveltyAnalysisResult> = {
+  '11111111-1111-1111-1111-111111111111': {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    metricId: 'click_through_rate',
+    noveltyDetected: true,
+    rawTreatmentEffect: 0.014,
+    projectedSteadyStateEffect: 0.009,
+    noveltyAmplitude: 0.018,
+    decayConstantDays: 4.2,
+    isStabilized: false,
+    daysUntilProjectedStability: 6,
+    computedAt: '2026-03-05T12:00:00Z',
+  },
+};
+
+/** Interference analysis mock — homepage_recs_v2 shows content consumption interference. */
+const INITIAL_INTERFERENCE_RESULTS: Record<string, InterferenceAnalysisResult> = {
+  '11111111-1111-1111-1111-111111111111': {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    interferenceDetected: true,
+    jensenShannonDivergence: 0.042,
+    jaccardSimilarityTop100: 0.73,
+    treatmentGiniCoefficient: 0.61,
+    controlGiniCoefficient: 0.58,
+    treatmentCatalogCoverage: 0.34,
+    controlCatalogCoverage: 0.31,
+    spilloverTitles: [
+      { contentId: 'title-1234', treatmentWatchRate: 0.082, controlWatchRate: 0.041, pValue: 0.002 },
+      { contentId: 'title-5678', treatmentWatchRate: 0.015, controlWatchRate: 0.044, pValue: 0.008 },
+      { contentId: 'title-9012', treatmentWatchRate: 0.063, controlWatchRate: 0.038, pValue: 0.031 },
+    ],
+    computedAt: '2026-03-05T12:00:00Z',
+  },
+};
+
+/** Interleaving analysis mock — search_ranking_interleave comparing BM25 vs semantic. */
+const INITIAL_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult> = {
+  '33333333-3333-3333-3333-333333333333': {
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    algorithmWinRates: { bm25_baseline: 0.42, semantic_search: 0.58 },
+    signTestPValue: 0.003,
+    algorithmStrengths: [
+      { algorithmId: 'bm25_baseline', strength: 0.45, ciLower: 0.39, ciUpper: 0.51 },
+      { algorithmId: 'semantic_search', strength: 0.55, ciLower: 0.49, ciUpper: 0.61 },
+    ],
+    positionAnalyses: [
+      { position: 1, algorithmEngagementRates: { bm25_baseline: 0.31, semantic_search: 0.38 } },
+      { position: 2, algorithmEngagementRates: { bm25_baseline: 0.24, semantic_search: 0.29 } },
+      { position: 3, algorithmEngagementRates: { bm25_baseline: 0.18, semantic_search: 0.23 } },
+      { position: 4, algorithmEngagementRates: { bm25_baseline: 0.12, semantic_search: 0.17 } },
+      { position: 5, algorithmEngagementRates: { bm25_baseline: 0.09, semantic_search: 0.14 } },
+    ],
+    computedAt: '2026-03-05T14:35:00Z',
+  },
+};
 
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
 export let SEED_ANALYSIS_RESULTS: AnalysisResult[] = structuredClone(INITIAL_ANALYSIS_RESULTS);
+export let SEED_NOVELTY_RESULTS: Record<string, NoveltyAnalysisResult> = structuredClone(INITIAL_NOVELTY_RESULTS);
+export let SEED_INTERFERENCE_RESULTS: Record<string, InterferenceAnalysisResult> = structuredClone(INITIAL_INTERFERENCE_RESULTS);
+export let SEED_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult> = structuredClone(INITIAL_INTERLEAVING_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
   SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
   SEED_ANALYSIS_RESULTS = structuredClone(INITIAL_ANALYSIS_RESULTS);
+  SEED_NOVELTY_RESULTS = structuredClone(INITIAL_NOVELTY_RESULTS);
+  SEED_INTERFERENCE_RESULTS = structuredClone(INITIAL_INTERFERENCE_RESULTS);
+  SEED_INTERLEAVING_RESULTS = structuredClone(INITIAL_INTERLEAVING_RESULTS);
 }

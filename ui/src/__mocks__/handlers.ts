@@ -1,5 +1,8 @@
 import { http, HttpResponse } from 'msw';
-import { SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS } from './seed-data';
+import {
+  SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS,
+  SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
+} from './seed-data';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
@@ -207,5 +210,44 @@ export const handlers = [
       content: btoa(`{"cells": [], "metadata": {"experiment_id": "${body.experimentId}"}}`),
       filename: `${name}_analysis.ipynb`,
     });
+  }),
+
+  // GetNoveltyAnalysis
+  http.post(`${ANALYSIS_SVC}/GetNoveltyAnalysis`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_NOVELTY_RESULTS[body.experimentId];
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No novelty analysis for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetInterferenceAnalysis
+  http.post(`${ANALYSIS_SVC}/GetInterferenceAnalysis`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_INTERFERENCE_RESULTS[body.experimentId];
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No interference analysis for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetInterleavingAnalysis
+  http.post(`${ANALYSIS_SVC}/GetInterleavingAnalysis`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_INTERLEAVING_RESULTS[body.experimentId];
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No interleaving analysis for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
   }),
 ];
