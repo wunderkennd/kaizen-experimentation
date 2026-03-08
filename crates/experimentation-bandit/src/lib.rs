@@ -8,9 +8,9 @@
 //! This crate provides pure functions — no threads, no channels.
 //! The threading model is the responsibility of experimentation-policy.
 
+pub mod linucb;
 pub mod policy;
 pub mod thompson;
-// Phase 2: pub mod linucb;
 // Phase 3: pub mod neural;
 
 use std::collections::HashMap;

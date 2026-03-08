@@ -11,6 +11,10 @@ use std::path::Path;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SnapshotEnvelope {
     pub experiment_id: String,
+    /// Algorithm type identifier (e.g., "thompson_sampling", "linucb").
+    /// Defaults to "thompson_sampling" for backwards compatibility with old snapshots.
+    #[serde(default = "default_policy_type")]
+    pub policy_type: String,
     /// Opaque policy state bytes (serialized by the Policy trait).
     pub policy_state: Vec<u8>,
     /// Total rewards processed at time of snapshot.
@@ -19,6 +23,10 @@ pub struct SnapshotEnvelope {
     pub kafka_offset: i64,
     /// Snapshot creation time (epoch milliseconds).
     pub snapshot_at_epoch_ms: i64,
+}
+
+fn default_policy_type() -> String {
+    "thompson_sampling".to_string()
 }
 
 /// Persistent snapshot store backed by RocksDB.
@@ -118,12 +126,14 @@ impl SnapshotStore {
     /// Create a snapshot envelope with the current timestamp.
     pub fn make_envelope(
         experiment_id: String,
+        policy_type: String,
         policy_state: Vec<u8>,
         total_rewards_processed: u64,
         kafka_offset: i64,
     ) -> SnapshotEnvelope {
         SnapshotEnvelope {
             experiment_id,
+            policy_type,
             policy_state,
             total_rewards_processed,
             kafka_offset,
@@ -170,6 +180,7 @@ mod tests {
 
         let env1 = SnapshotEnvelope {
             experiment_id: "exp-1".into(),
+            policy_type: "thompson_sampling".into(),
             policy_state: b"state-v1".to_vec(),
             total_rewards_processed: 100,
             kafka_offset: 42,
@@ -177,6 +188,7 @@ mod tests {
         };
         let env2 = SnapshotEnvelope {
             experiment_id: "exp-1".into(),
+            policy_type: "thompson_sampling".into(),
             policy_state: b"state-v2".to_vec(),
             total_rewards_processed: 200,
             kafka_offset: 84,
@@ -204,6 +216,7 @@ mod tests {
             store
                 .write_snapshot(&SnapshotEnvelope {
                     experiment_id: exp.into(),
+                    policy_type: "thompson_sampling".into(),
                     policy_state: vec![],
                     total_rewards_processed: ts as u64,
                     kafka_offset: 0,
@@ -230,6 +243,7 @@ mod tests {
             store
                 .write_snapshot(&SnapshotEnvelope {
                     experiment_id: "exp-1".into(),
+                    policy_type: "thompson_sampling".into(),
                     policy_state: vec![],
                     total_rewards_processed: ts as u64,
                     kafka_offset: 0,
@@ -261,6 +275,7 @@ mod tests {
             store
                 .write_snapshot(&SnapshotEnvelope {
                     experiment_id: exp.into(),
+                    policy_type: "thompson_sampling".into(),
                     policy_state: vec![],
                     total_rewards_processed: ts as u64,
                     kafka_offset: 0,
