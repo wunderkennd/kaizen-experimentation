@@ -1,4 +1,4 @@
-import type { AnalysisResult, Experiment, ListExperimentsResponse, QueryLogEntry } from './types';
+import type { AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse, QueryLogEntry } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
 const MGMT_URL = process.env.NEXT_PUBLIC_MANAGEMENT_URL || 'http://localhost:50055';
@@ -121,6 +121,13 @@ export async function exportNotebook(experimentId: string): Promise<{ content: s
     METRICS_URL, METRICS_SVC, 'ExportNotebook', { experimentId },
   );
   return raw;
+}
+
+export async function createExperiment(request: CreateExperimentRequest): Promise<Experiment> {
+  const raw = await callRpc<CreateExperimentRequest, { experiment?: Record<string, unknown> }>(
+    MGMT_URL, MGMT_SVC, 'CreateExperiment', request,
+  );
+  return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
 
 export async function getAnalysisResult(experimentId: string): Promise<AnalysisResult> {

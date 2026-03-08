@@ -29,6 +29,33 @@ export const handlers = [
     return HttpResponse.json({ experiment });
   }),
 
+  // CreateExperiment
+  http.post(`${MGMT_SVC}/CreateExperiment`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    const newExperiment = {
+      experimentId: crypto.randomUUID(),
+      name: body.name as string,
+      description: (body.description as string) || '',
+      ownerEmail: (body.ownerEmail as string) || '',
+      type: body.type as string,
+      state: 'DRAFT' as const,
+      variants: body.variants || [],
+      layerId: (body.layerId as string) || '',
+      hashSalt: `salt-${(body.name as string || '').replace(/\s+/g, '-').toLowerCase()}`,
+      primaryMetricId: (body.primaryMetricId as string) || '',
+      secondaryMetricIds: (body.secondaryMetricIds as string[]) || [],
+      guardrailConfigs: body.guardrailConfigs || [],
+      guardrailAction: (body.guardrailAction as string) || 'AUTO_PAUSE',
+      sequentialTestConfig: body.sequentialTestConfig,
+      targetingRuleId: body.targetingRuleId as string | undefined,
+      isCumulativeHoldout: (body.isCumulativeHoldout as boolean) || false,
+      createdAt: new Date().toISOString(),
+    };
+
+    SEED_EXPERIMENTS.push(newExperiment as typeof SEED_EXPERIMENTS[number]);
+    return HttpResponse.json({ experiment: newExperiment });
+  }),
+
   // UpdateExperiment
   http.post(`${MGMT_SVC}/UpdateExperiment`, async ({ request }) => {
     const body = await request.json() as { experiment: Record<string, unknown> };

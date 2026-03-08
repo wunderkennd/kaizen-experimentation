@@ -137,12 +137,3 @@ export interface AnalysisResult {
   srmResult: SrmResult;
   computedAt: string;
 }
-
-export interface QueryLogEntry {
-  experimentId: string;
-  metricId: string;
-  sqlText: string;
-  rowCount: number;
-  durationMs: number;
-  computedAt?: string;
-}
