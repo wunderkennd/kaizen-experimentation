@@ -16,7 +16,7 @@
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/bandit-delegation | Bandit delegation (MAB/CONTEXTUAL_BANDIT) | — | M1.1–1.5 + M2.7 complete. Bandit delegation: MAB/CONTEXTUAL_BANDIT experiments use mock uniform arm selection (until M4b SelectArm is live). |
 | Agent-2 | M2 Pipeline | 🔵 Phase 4 In Progress | agent-2/feat/phase4-chaos-engineering | Phase 4: Chaos engineering + crash recovery | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3 done (PR #40). Phase 4: chaos scripts, crash-recovery tests, synthetic event generator. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/surrogate-validation | M2.10 Surrogate Validation | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
 | Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/results-dashboard | Create experiment form + M2.8–2.9 complete | — | M1.25–1.27 done, M2.8–2.9 done. 87 tests pass. Create experiment form with full field coverage. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
@@ -99,7 +99,7 @@
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 3.1 | LinUCB contextual bandit | Agent-4 | ⚪ | — |
+| 3.1 | LinUCB contextual bandit | Agent-4 | 🔵 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) |
 | 3.2 | Content cold-start bandit | Agent-4 | ⚪ | — |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | ⚪ | — |
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 part done (session_id keyed events). Agent-1/3 parts pending. |
