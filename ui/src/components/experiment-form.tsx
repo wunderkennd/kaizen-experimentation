@@ -437,7 +437,7 @@ export function ExperimentForm({ onSubmit }: ExperimentFormProps) {
           </div>
         )}
         {guardrails.length === 0 && (
-          <p className="text-sm text-gray-500">No guardrails configured. Click "Add Guardrail" to add one.</p>
+          <p className="text-sm text-gray-500">No guardrails configured. Click &ldquo;Add Guardrail&rdquo; to add one.</p>
         )}
       </section>
 
