@@ -108,21 +108,99 @@ func validateVariants(exp *commonv1.Experiment) *connect.Error {
 func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 	switch exp.GetType() {
 	case commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING:
-		if exp.GetInterleavingConfig() == nil {
-			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("interleaving_config is required for INTERLEAVING type"))
+		if err := validateInterleavingConfig(exp); err != nil {
+			return err
 		}
-	case commonv1.ExperimentType_EXPERIMENT_TYPE_MAB,
-		commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT:
-		if exp.GetBanditConfig() == nil {
-			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("bandit_config is required for %s type", exp.GetType()))
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_MAB:
+		if err := validateBanditConfig(exp, false); err != nil {
+			return err
+		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT:
+		if err := validateBanditConfig(exp, true); err != nil {
+			return err
 		}
 	case commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL:
-		if exp.GetSessionConfig() == nil {
-			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("session_config is required for SESSION_LEVEL type"))
+		if err := validateSessionConfig(exp); err != nil {
+			return err
 		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT:
+		if !exp.GetIsCumulativeHoldout() {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("is_cumulative_holdout must be true for CUMULATIVE_HOLDOUT type"))
+		}
+	}
+	return nil
+}
+
+func validateInterleavingConfig(exp *commonv1.Experiment) *connect.Error {
+	cfg := exp.GetInterleavingConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("interleaving_config is required for INTERLEAVING type"))
+	}
+	if cfg.GetMethod() == commonv1.InterleavingMethod_INTERLEAVING_METHOD_UNSPECIFIED {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("interleaving_config.method must not be UNSPECIFIED"))
+	}
+
+	ids := cfg.GetAlgorithmIds()
+	minAlgorithms := 2
+	if cfg.GetMethod() == commonv1.InterleavingMethod_INTERLEAVING_METHOD_MULTILEAVE {
+		minAlgorithms = 3
+	}
+	if len(ids) < minAlgorithms {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("interleaving_config.algorithm_ids must have >= %d entries for %s, got %d",
+				minAlgorithms, cfg.GetMethod(), len(ids)))
+	}
+	for i, id := range ids {
+		if id == "" {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("interleaving_config.algorithm_ids[%d] must be non-empty", i))
+		}
+	}
+	return nil
+}
+
+func validateBanditConfig(exp *commonv1.Experiment, isContextual bool) *connect.Error {
+	cfg := exp.GetBanditConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("bandit_config is required for %s type", exp.GetType()))
+	}
+	if cfg.GetAlgorithm() == commonv1.BanditAlgorithm_BANDIT_ALGORITHM_UNSPECIFIED {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("bandit_config.algorithm must not be UNSPECIFIED"))
+	}
+	if cfg.GetRewardMetricId() == "" {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("bandit_config.reward_metric_id is required"))
+	}
+	frac := cfg.GetMinExplorationFraction()
+	if frac != 0 && (frac < 0 || frac > 1) {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("bandit_config.min_exploration_fraction must be in (0.0, 1.0] or 0 (use default), got %f", frac))
+	}
+	if isContextual && len(cfg.GetContextFeatureKeys()) == 0 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("bandit_config.context_feature_keys must have >= 1 entry for CONTEXTUAL_BANDIT"))
+	}
+	return nil
+}
+
+func validateSessionConfig(exp *commonv1.Experiment) *connect.Error {
+	cfg := exp.GetSessionConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("session_config is required for SESSION_LEVEL type"))
+	}
+	if cfg.GetSessionIdAttribute() == "" {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("session_config.session_id_attribute is required"))
+	}
+	if cfg.GetMinSessionsPerUser() < 0 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("session_config.min_sessions_per_user must be >= 0, got %d", cfg.GetMinSessionsPerUser()))
 	}
 	return nil
 }
