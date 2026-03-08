@@ -7,7 +7,8 @@
 use crate::config::PolicyConfig;
 use crate::snapshot::SnapshotStore;
 use crate::types::{PolicyError, RewardUpdate, SelectArmRequest, SelectArmResponse};
-use experimentation_bandit::policy::Policy;
+use experimentation_bandit::linucb::LinUcbPolicy;
+use experimentation_bandit::policy::AnyPolicy;
 use experimentation_bandit::thompson::ThompsonSamplingPolicy;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -16,7 +17,7 @@ use tracing::{error, info, warn};
 /// The single-threaded policy core that owns all mutable bandit state.
 pub struct PolicyCore {
     /// All experiment policies, keyed by experiment_id.
-    policies: HashMap<String, ThompsonSamplingPolicy>,
+    policies: HashMap<String, AnyPolicy>,
     /// RocksDB snapshot store.
     snapshot_store: SnapshotStore,
     /// Configuration.
@@ -49,9 +50,10 @@ impl PolicyCore {
 
         let count = envelopes.len();
         for envelope in envelopes {
-            let policy = ThompsonSamplingPolicy::deserialize(&envelope.policy_state);
+            let policy = AnyPolicy::deserialize(&envelope.policy_type, &envelope.policy_state);
             info!(
                 experiment_id = %envelope.experiment_id,
+                policy_type = %envelope.policy_type,
                 total_rewards = envelope.total_rewards_processed,
                 kafka_offset = envelope.kafka_offset,
                 "Restored policy from snapshot"
@@ -66,16 +68,47 @@ impl PolicyCore {
         Ok(count)
     }
 
-    /// Register a new experiment with the given arm IDs.
+    /// Register a new Thompson Sampling experiment with the given arm IDs.
     /// If the experiment already exists, this is a no-op.
-    /// Used by gRPC handler (once proto codegen is active) and tests.
     #[allow(dead_code)]
     pub fn register_experiment(&mut self, experiment_id: String, arm_ids: Vec<String>) {
         self.policies
             .entry(experiment_id.clone())
             .or_insert_with(|| {
-                info!(%experiment_id, arms = ?arm_ids, "Registered new experiment");
-                ThompsonSamplingPolicy::new(experiment_id, arm_ids)
+                info!(%experiment_id, arms = ?arm_ids, "Registered new Thompson experiment");
+                AnyPolicy::Thompson(ThompsonSamplingPolicy::new(experiment_id, arm_ids))
+            });
+    }
+
+    /// Register a new LinUCB experiment.
+    /// If the experiment already exists, this is a no-op.
+    #[allow(dead_code)]
+    pub fn register_linucb_experiment(
+        &mut self,
+        experiment_id: String,
+        arm_ids: Vec<String>,
+        feature_keys: Vec<String>,
+        alpha: f64,
+        min_exploration_fraction: f64,
+    ) {
+        self.policies
+            .entry(experiment_id.clone())
+            .or_insert_with(|| {
+                info!(
+                    %experiment_id,
+                    arms = ?arm_ids,
+                    features = ?feature_keys,
+                    alpha,
+                    min_exploration_fraction,
+                    "Registered new LinUCB experiment"
+                );
+                AnyPolicy::LinUcb(LinUcbPolicy::new(
+                    experiment_id,
+                    arm_ids,
+                    feature_keys,
+                    alpha,
+                    min_exploration_fraction,
+                ))
             });
     }
 
@@ -130,7 +163,7 @@ impl PolicyCore {
     }
 
     fn handle_reward_update(&mut self, update: RewardUpdate) {
-        let policy: &mut ThompsonSamplingPolicy = match self.policies.get_mut(&update.experiment_id) {
+        let policy = match self.policies.get_mut(&update.experiment_id) {
             Some(p) => p,
             None => {
                 warn!(
@@ -160,7 +193,7 @@ impl PolicyCore {
     }
 
     fn write_snapshot(&self, experiment_id: &str) {
-        let policy: &ThompsonSamplingPolicy = match self.policies.get(experiment_id) {
+        let policy = match self.policies.get(experiment_id) {
             Some(p) => p,
             None => return,
         };
@@ -173,6 +206,7 @@ impl PolicyCore {
 
         let envelope = SnapshotStore::make_envelope(
             experiment_id.to_string(),
+            policy.policy_type().to_string(),
             policy.serialize(),
             policy.total_rewards(),
             kafka_offset,
@@ -377,6 +411,166 @@ mod tests {
             assert!(
                 a_count >= 8,
                 "restored policy should prefer arm 'a' after 100 successes, got {a_count}/10 selections"
+            );
+
+            drop(policy_tx);
+            drop(_reward_tx);
+            handle.await.unwrap();
+        }
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_linucb_select_arm_via_channels() {
+        let db_path = temp_db_path("linucb-channel");
+        let store = SnapshotStore::open(&db_path).unwrap();
+        let config = test_config(db_path.to_str().unwrap());
+
+        let (policy_tx, policy_rx) = mpsc::channel(100);
+        let (reward_tx, reward_rx) = mpsc::channel(100);
+
+        let mut core = PolicyCore::new(store, config);
+        core.register_linucb_experiment(
+            "linucb-exp".into(),
+            vec!["a".into(), "b".into()],
+            vec!["f0".into(), "f1".into()],
+            1.0,
+            0.05,
+        );
+
+        let handle = tokio::spawn(core.run(policy_rx, reward_rx));
+
+        // Send a SelectArm request with context
+        let ctx: HashMap<String, f64> = [("f0".into(), 1.0), ("f1".into(), 0.5)]
+            .into_iter()
+            .collect();
+
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        policy_tx
+            .send(SelectArmRequest {
+                experiment_id: "linucb-exp".into(),
+                context: Some(ctx.clone()),
+                reply_tx,
+            })
+            .await
+            .unwrap();
+
+        let response = reply_rx.await.unwrap().unwrap();
+        assert!(response.arm_id == "a" || response.arm_id == "b");
+        assert_eq!(response.all_arm_probabilities.len(), 2);
+
+        // Send reward updates with context
+        for _ in 0..10 {
+            reward_tx
+                .send(RewardUpdate {
+                    experiment_id: "linucb-exp".into(),
+                    arm_id: "a".into(),
+                    reward: 1.0,
+                    context: Some(ctx.clone()),
+                    kafka_offset: 1,
+                })
+                .await
+                .unwrap();
+        }
+
+        // Verify selection still works after updates
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        policy_tx
+            .send(SelectArmRequest {
+                experiment_id: "linucb-exp".into(),
+                context: Some(ctx),
+                reply_tx,
+            })
+            .await
+            .unwrap();
+        let response = reply_rx.await.unwrap().unwrap();
+        assert!(response.arm_id == "a" || response.arm_id == "b");
+
+        drop(policy_tx);
+        drop(reward_tx);
+        handle.await.unwrap();
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_linucb_crash_recovery() {
+        let db_path = temp_db_path("linucb-crash");
+        let ctx: HashMap<String, f64> = [("f0".into(), 1.0), ("f1".into(), 0.5)]
+            .into_iter()
+            .collect();
+
+        // Phase 1: Train LinUCB, generate snapshots
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+
+            let (_policy_tx, policy_rx) = mpsc::channel(100);
+            let (reward_tx, reward_rx) = mpsc::channel(100);
+
+            let mut core = PolicyCore::new(store, config);
+            core.register_linucb_experiment(
+                "linucb-exp".into(),
+                vec!["a".into(), "b".into()],
+                vec!["f0".into(), "f1".into()],
+                1.0,
+                0.05,
+            );
+
+            let handle = tokio::spawn(core.run(policy_rx, reward_rx));
+
+            // Send rewards — arm "a" always gets reward 1.0
+            for i in 0..50 {
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "linucb-exp".into(),
+                        arm_id: "a".into(),
+                        reward: 1.0,
+                        context: Some(ctx.clone()),
+                        kafka_offset: i,
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            drop(reward_tx);
+            drop(_policy_tx);
+            handle.await.unwrap();
+        }
+
+        // Phase 2: Restore and verify state
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+
+            let mut core = PolicyCore::new(store, config);
+            let restored = core.restore_from_snapshots().unwrap();
+            assert_eq!(restored, 1, "should restore 1 LinUCB experiment");
+
+            let (policy_tx, policy_rx) = mpsc::channel(100);
+            let (_reward_tx, reward_rx) = mpsc::channel(100);
+
+            let handle = tokio::spawn(core.run(policy_rx, reward_rx));
+
+            // Verify the restored policy selects arms correctly
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            policy_tx
+                .send(SelectArmRequest {
+                    experiment_id: "linucb-exp".into(),
+                    context: Some(ctx),
+                    reply_tx,
+                })
+                .await
+                .unwrap();
+
+            let response = reply_rx.await.unwrap().unwrap();
+            // After 50 rewards to arm "a", it should be strongly preferred
+            assert_eq!(
+                response.arm_id, "a",
+                "restored LinUCB should prefer arm 'a' after training"
             );
 
             drop(policy_tx);
