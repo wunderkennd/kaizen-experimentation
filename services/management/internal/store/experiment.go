@@ -15,7 +15,7 @@ import (
 type ExperimentRow struct {
 	ExperimentID        string
 	Name                string
-	Description         string
+	Description         *string
 	OwnerEmail          string
 	Type                string
 	State               string

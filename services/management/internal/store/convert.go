@@ -107,10 +107,11 @@ type typeConfig struct {
 
 // ExperimentToRow converts a proto Experiment to DB rows.
 func ExperimentToRow(exp *commonv1.Experiment) (ExperimentRow, []VariantRow, []GuardrailConfigRow) {
+	desc := exp.GetDescription()
 	row := ExperimentRow{
 		ExperimentID:        exp.GetExperimentId(),
 		Name:                exp.GetName(),
-		Description:         exp.GetDescription(),
+		Description:         &desc,
 		OwnerEmail:          exp.GetOwnerEmail(),
 		Type:                TypeToString(exp.GetType()),
 		State:               "DRAFT",
@@ -210,7 +211,6 @@ func RowToExperiment(row ExperimentRow, variants []VariantRow, guardrails []Guar
 	exp := &commonv1.Experiment{
 		ExperimentId:        row.ExperimentID,
 		Name:                row.Name,
-		Description:         row.Description,
 		OwnerEmail:          row.OwnerEmail,
 		Type:                StringToType(row.Type),
 		State:               StringToState(row.State),
@@ -223,6 +223,9 @@ func RowToExperiment(row ExperimentRow, variants []VariantRow, guardrails []Guar
 		CreatedAt:           timestamppb.New(row.CreatedAt),
 	}
 
+	if row.Description != nil {
+		exp.Description = *row.Description
+	}
 	if row.TargetingRuleID != nil {
 		exp.TargetingRuleId = *row.TargetingRuleID
 	}
