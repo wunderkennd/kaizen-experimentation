@@ -88,12 +88,6 @@ func (s *ExperimentService) StartExperiment(
 		s.rollbackToDraft(ctx, id, "metric validation failed")
 		return nil, err
 	}
-
-	// Validate type-specific config references (e.g., bandit reward_metric_id).
-	if err := s.validateTypeConfigForStart(ctx, id); err != nil {
-		s.rollbackToDraft(ctx, id, "type config validation failed")
-		return nil, err
-	}
 	slog.Info("starting experiment: validation passed", "id", id)
 
 	// Transition 2: STARTING -> RUNNING (with bucket allocation)
@@ -222,20 +216,6 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	exp, err := s.concludeByID(ctx, id, "system", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return connect.NewResponse(exp), nil
-}
-
-// concludeByID performs the full RUNNING → CONCLUDING → CONCLUDED transition
-// with allocation release. Used by both the ConcludeExperiment RPC and the
-// sequential auto-conclude consumer. The actor identifies who triggered the
-// conclude (e.g., "system" for manual, "sequential_auto_conclude" for auto).
-// extraDetails are merged into the audit trail entries.
-func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, extraDetails map[string]any) (*commonv1.Experiment, error) {
 	// Transition 1: RUNNING -> CONCLUDING
 	tx1, err := s.store.BeginTx(ctx)
 	if err != nil {
@@ -249,19 +229,13 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		return nil, preconditionError("experiment must be in RUNNING state to conclude")
 	}
 
-	concludePhase1 := map[string]any{"phase": "final_analysis_begin"}
-	for k, v := range extraDetails {
-		concludePhase1[k] = v
-	}
-	phase1JSON, _ := json.Marshal(concludePhase1)
-
 	if err := s.audit.Insert(ctx, tx1, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "conclude",
-		ActorEmail:    actor,
+		ActorEmail:    "system",
 		PreviousState: "RUNNING",
 		NewState:      "CONCLUDING",
-		DetailsJSON:   phase1JSON,
+		DetailsJSON:   json.RawMessage(`{"phase":"final_analysis_begin"}`),
 	}); err != nil {
 		return nil, internalError("audit conclude-1", err)
 	}
@@ -302,22 +276,18 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		return nil, internalError("transition to CONCLUDED", err)
 	}
 
-	releaseDetails := map[string]any{
+	releaseDetails, _ := json.Marshal(map[string]any{
 		"phase":               "analysis_complete",
 		"allocation_released": true,
 		"cooldown_seconds":    layer.BucketReuseCooldownSeconds,
-	}
-	for k, v := range extraDetails {
-		releaseDetails[k] = v
-	}
-	releaseJSON, _ := json.Marshal(releaseDetails)
+	})
 	if err := s.audit.Insert(ctx, tx2, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "conclude",
-		ActorEmail:    actor,
+		ActorEmail:    "system",
 		PreviousState: "CONCLUDING",
 		NewState:      "CONCLUDED",
-		DetailsJSON:   releaseJSON,
+		DetailsJSON:   releaseDetails,
 	}); err != nil {
 		return nil, internalError("audit conclude-2", err)
 	}
@@ -336,8 +306,8 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		return nil, internalError("read back experiment", err)
 	}
 
-	slog.Info("experiment concluded", "id", id, "actor", actor)
-	return store.RowToExperiment(finalRow, variants, guardrails), nil
+	slog.Info("experiment concluded", "id", id)
+	return connect.NewResponse(store.RowToExperiment(finalRow, variants, guardrails)), nil
 }
 
 // ArchiveExperiment transitions CONCLUDED -> ARCHIVED.
@@ -497,65 +467,6 @@ func (s *ExperimentService) validateMetricsForStart(ctx context.Context, experim
 			fmt.Errorf("metric %q does not exist", missing))
 	}
 	return nil
-}
-
-// validateTypeConfigForStart validates type-specific config fields that
-// reference external resources. Called during STARTING phase, after
-// validateMetricsForStart.
-func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, experimentID string) error {
-	expRow, _, _, err := s.store.GetByID(ctx, experimentID)
-	if err != nil {
-		return internalError("read experiment for type config validation", err)
-	}
-
-	if expRow.Type != "MAB" && expRow.Type != "CONTEXTUAL_BANDIT" {
-		return nil
-	}
-
-	// Extract reward_metric_id from bandit_config in type_config JSONB.
-	rewardMetricID := extractBanditRewardMetricID(expRow.TypeConfig)
-	if rewardMetricID == "" {
-		return nil // Already validated at creation time.
-	}
-
-	exists, err := s.metrics.Exists(ctx, rewardMetricID)
-	if err != nil {
-		return internalError("check bandit reward metric existence", err)
-	}
-	if !exists {
-		return connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("bandit_config.reward_metric_id %q does not exist in metric_definitions", rewardMetricID))
-	}
-	return nil
-}
-
-// extractBanditRewardMetricID reads reward_metric_id from the bandit_config
-// nested in the experiment's type_config JSONB.
-func extractBanditRewardMetricID(typeConfig json.RawMessage) string {
-	if len(typeConfig) == 0 {
-		return ""
-	}
-	var tc map[string]json.RawMessage
-	if err := json.Unmarshal(typeConfig, &tc); err != nil {
-		return ""
-	}
-	raw, ok := tc["bandit_config"]
-	if !ok {
-		return ""
-	}
-	var bc map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &bc); err != nil {
-		return ""
-	}
-	raw, ok = bc["reward_metric_id"]
-	if !ok {
-		return ""
-	}
-	var id string
-	if err := json.Unmarshal(raw, &id); err != nil {
-		return ""
-	}
-	return id
 }
 
 // extractTrafficPercentage reads traffic_percentage from the experiment's

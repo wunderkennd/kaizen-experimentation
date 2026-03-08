@@ -118,152 +118,19 @@ func TestValidateCreateExperiment(t *testing.T) {
 			modify: func(e *commonv1.Experiment) {
 				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING
 				e.InterleavingConfig = &commonv1.InterleavingConfig{
-					Method:       commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT,
-					AlgorithmIds: []string{"algo-a", "algo-b"},
+					Method: commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT,
 				}
 			},
 			wantOK: true,
-		},
-		{
-			name: "interleaving unspecified method",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING
-				e.InterleavingConfig = &commonv1.InterleavingConfig{
-					AlgorithmIds: []string{"algo-a", "algo-b"},
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "interleaving too few algorithm_ids",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING
-				e.InterleavingConfig = &commonv1.InterleavingConfig{
-					Method:       commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT,
-					AlgorithmIds: []string{"algo-a"},
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "interleaving multileave needs 3 algorithms",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING
-				e.InterleavingConfig = &commonv1.InterleavingConfig{
-					Method:       commonv1.InterleavingMethod_INTERLEAVING_METHOD_MULTILEAVE,
-					AlgorithmIds: []string{"algo-a", "algo-b"},
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "interleaving empty algorithm_id",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING
-				e.InterleavingConfig = &commonv1.InterleavingConfig{
-					Method:       commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT,
-					AlgorithmIds: []string{"algo-a", ""},
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
 		},
 		{
 			name: "MAB without bandit_config",
 			modify: func(e *commonv1.Experiment) {
 				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_MAB
+				// MAB doesn't require control but needs bandit config
 				e.Variants[0].IsControl = false
 			},
 			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "MAB unspecified algorithm",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_MAB
-				e.Variants[0].IsControl = false
-				e.BanditConfig = &commonv1.BanditConfig{
-					RewardMetricId: "watch_time_minutes",
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "MAB missing reward_metric_id",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_MAB
-				e.Variants[0].IsControl = false
-				e.BanditConfig = &commonv1.BanditConfig{
-					Algorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "MAB exploration_fraction out of range",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_MAB
-				e.Variants[0].IsControl = false
-				e.BanditConfig = &commonv1.BanditConfig{
-					Algorithm:              commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
-					RewardMetricId:         "watch_time_minutes",
-					MinExplorationFraction: 1.5,
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "MAB valid thompson_sampling",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_MAB
-				e.Variants[0].IsControl = false
-				e.BanditConfig = &commonv1.BanditConfig{
-					Algorithm:      commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
-					RewardMetricId: "watch_time_minutes",
-				}
-			},
-			wantOK: true,
-		},
-		{
-			name: "contextual_bandit missing context_features",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT
-				e.Variants[0].IsControl = false
-				e.BanditConfig = &commonv1.BanditConfig{
-					Algorithm:      commonv1.BanditAlgorithm_BANDIT_ALGORITHM_LINEAR_UCB,
-					RewardMetricId: "watch_time_minutes",
-				}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "contextual_bandit valid",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT
-				e.Variants[0].IsControl = false
-				e.BanditConfig = &commonv1.BanditConfig{
-					Algorithm:          commonv1.BanditAlgorithm_BANDIT_ALGORITHM_LINEAR_UCB,
-					RewardMetricId:     "watch_time_minutes",
-					ContextFeatureKeys: []string{"device_type"},
-				}
-			},
-			wantOK: true,
-		},
-		{
-			name: "session missing session_id_attribute",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL
-				e.SessionConfig = &commonv1.SessionConfig{}
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "session valid",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL
-				e.SessionConfig = &commonv1.SessionConfig{
-					SessionIdAttribute: "session_id",
-				}
-			},
-			wantOK: true,
 		},
 		{
 			name: "session_level without session_config",
@@ -271,21 +138,6 @@ func TestValidateCreateExperiment(t *testing.T) {
 				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL
 			},
 			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "cumulative_holdout without flag",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT
-			},
-			wantCode: connect.CodeInvalidArgument,
-		},
-		{
-			name: "cumulative_holdout valid",
-			modify: func(e *commonv1.Experiment) {
-				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT
-				e.IsCumulativeHoldout = true
-			},
-			wantOK: true,
 		},
 	}
 

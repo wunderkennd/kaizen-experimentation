@@ -60,8 +60,7 @@ func setupStreamTest(t *testing.T) (
 
 	ms := store.NewMetricStore(pool)
 	ts := store.NewTargetingStore(pool)
-	ss := store.NewSurrogateStore(pool)
-	expSvc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, notifier)
+	expSvc := handlers.NewExperimentService(es, as, ls, ms, ts, notifier)
 	streamSvc := handlers.NewConfigStreamService(es, notifier)
 
 	mux := http.NewServeMux()
