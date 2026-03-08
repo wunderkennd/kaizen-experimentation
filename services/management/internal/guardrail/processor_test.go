@@ -67,9 +67,10 @@ func createRunningExperiment(t *testing.T, pool *pgxpool.Pool, name, guardrailAc
 	tx, err := es.BeginTx(ctx)
 	require.NoError(t, err)
 
+	desc := "guardrail test"
 	exp, err := es.Insert(ctx, tx, store.ExperimentRow{
 		Name:            name,
-		Description:     "guardrail test",
+		Description:     &desc,
 		OwnerEmail:      "test@example.com",
 		Type:            "AB",
 		TypeConfig:      json.RawMessage("{}"),
@@ -183,14 +184,16 @@ func TestProcessAlert_NotRunning(t *testing.T) {
 	es := store.NewExperimentStore(pool)
 	tx, err := es.BeginTx(ctx)
 	require.NoError(t, err)
+	desc2 := "guardrail test"
+	layerID := createTestLayerForGuardrail(t, pool, "not-running-layer-"+t.Name())
 	exp, err := es.Insert(ctx, tx, store.ExperimentRow{
 		Name:            "not-running-test-" + t.Name(),
-		Description:     "guardrail test",
+		Description:     &desc2,
 		OwnerEmail:      "test@example.com",
 		Type:            "AB",
 		TypeConfig:      json.RawMessage("{}"),
 		State:           "DRAFT",
-		LayerID:         "a0000000-0000-0000-0000-000000000001",
+		LayerID:         layerID,
 		PrimaryMetricID: "watch_time_minutes",
 		GuardrailAction: "AUTO_PAUSE",
 	})

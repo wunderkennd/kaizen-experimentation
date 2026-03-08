@@ -38,13 +38,8 @@ func (s *ExperimentService) CreateSurrogateModel(
 		return nil, wrapDBError(err, "surrogate_model", row.ModelID)
 	}
 
-	// Audit trail: use model_id as experiment_id field for surrogate operations.
-	_ = s.audit.Insert(ctx, nil, store.AuditEntry{
-		ExperimentID: created.ModelID,
-		Action:       "create_surrogate_model",
-		ActorEmail:   "system",
-	})
-
+	// NOTE: audit_trail.experiment_id has a FK to experiments — surrogate model
+	// operations are logged via slog until the schema supports non-experiment auditing.
 	slog.Info("surrogate model created", "model_id", created.ModelID, "target_metric", created.TargetMetricID, "type", created.ModelType)
 	return connect.NewResponse(store.RowToSurrogateModel(created)), nil
 }
@@ -104,13 +99,8 @@ func (s *ExperimentService) TriggerSurrogateRecalibration(
 		return nil, wrapDBError(err, "surrogate_model", id)
 	}
 
-	// Audit trail entry for the recalibration trigger.
-	_ = s.audit.Insert(ctx, nil, store.AuditEntry{
-		ExperimentID: id,
-		Action:       "trigger_surrogate_recalibration",
-		ActorEmail:   "system",
-	})
-
+	// NOTE: audit_trail.experiment_id has a FK to experiments — surrogate model
+	// operations are logged via slog until the schema supports non-experiment auditing.
 	// TODO: Publish Kafka event or call Agent-3 to trigger actual recalibration.
 	slog.Info("surrogate recalibration triggered", "model_id", id)
 
