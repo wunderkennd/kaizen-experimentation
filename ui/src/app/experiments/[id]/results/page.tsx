@@ -14,15 +14,11 @@ import { SequentialBoundaryPlot } from '@/components/charts/sequential-boundary-
 import { NoveltyTab } from '@/components/novelty-tab';
 import { InterferenceTab } from '@/components/interference-tab';
 import { InterleavingTab } from '@/components/interleaving-tab';
+import { SurrogateTab } from '@/components/surrogate-tab';
+import { HoldoutTab } from '@/components/holdout-tab';
+import { GuardrailTab } from '@/components/guardrail-tab';
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving';
-
-const TABS: { key: AnalysisTab; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'novelty', label: 'Novelty Effects' },
-  { key: 'interference', label: 'Content Interference' },
-  { key: 'interleaving', label: 'Interleaving' },
-];
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -74,7 +70,26 @@ export default function ResultsPage() {
 
   const hasCupedData = analysisResult.metricResults.some((m) => m.varianceReductionPct > 0);
   const maxVarianceReduction = Math.max(...analysisResult.metricResults.map((m) => m.varianceReductionPct));
-  const isInterleaving = experiment.type === 'INTERLEAVING';
+  const hasSurrogateProjections = (analysisResult.surrogateProjections?.length ?? 0) > 0;
+  const isHoldout = experiment.type === 'CUMULATIVE_HOLDOUT';
+  const hasGuardrails = experiment.guardrailConfigs.length > 0;
+
+  // Build tabs dynamically based on experiment features
+  const tabs: { key: AnalysisTab; label: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'novelty', label: 'Novelty Effects' },
+    { key: 'interference', label: 'Content Interference' },
+    { key: 'interleaving', label: 'Interleaving' },
+  ];
+  if (hasSurrogateProjections) {
+    tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
+  }
+  if (isHoldout) {
+    tabs.push({ key: 'holdout', label: 'Holdout Lift' });
+  }
+  if (hasGuardrails) {
+    tabs.push({ key: 'guardrails', label: 'Guardrails' });
+  }
 
   return (
     <div>
@@ -98,7 +113,7 @@ export default function ResultsPage() {
       {/* Tab navigation */}
       <div className="mb-6 border-b border-gray-200">
         <nav className="-mb-px flex space-x-6" aria-label="Analysis tabs">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -157,6 +172,18 @@ export default function ResultsPage() {
 
       {activeTab === 'interleaving' && (
         <InterleavingTab experimentId={params.id} />
+      )}
+
+      {activeTab === 'surrogate' && analysisResult.surrogateProjections && (
+        <SurrogateTab projections={analysisResult.surrogateProjections} />
+      )}
+
+      {activeTab === 'holdout' && (
+        <HoldoutTab experimentId={params.id} />
+      )}
+
+      {activeTab === 'guardrails' && (
+        <GuardrailTab experimentId={params.id} />
       )}
     </div>
   );

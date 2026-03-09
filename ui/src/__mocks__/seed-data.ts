@@ -1,7 +1,7 @@
 import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
-  BanditDashboardResult,
+  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -45,6 +45,7 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
       plannedLooks: 0,
       overallAlpha: 0.05,
     },
+    surrogateModelId: 'surrogate-homepage-ltv',
     isCumulativeHoldout: false,
     createdAt: '2026-02-15T10:00:00Z',
     startedAt: '2026-02-16T08:00:00Z',
@@ -239,6 +240,46 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     createdAt: '2026-02-10T09:00:00Z',
     startedAt: '2026-02-11T06:00:00Z',
   },
+  // Cumulative holdout experiment
+  {
+    experimentId: '77777777-7777-7777-7777-777777777777',
+    name: 'recommendation_holdout_q1',
+    description: 'Cumulative holdout measuring long-term impact of recommendation algorithm changes',
+    ownerEmail: 'alice@streamco.com',
+    type: 'CUMULATIVE_HOLDOUT',
+    state: 'RUNNING',
+    variants: [
+      {
+        variantId: 'v7-holdout',
+        name: 'holdout',
+        trafficFraction: 0.05,
+        isControl: true,
+        payloadJson: '{"algorithm": "collaborative_filter_v1"}',
+      },
+      {
+        variantId: 'v7-treatment',
+        name: 'all_changes',
+        trafficFraction: 0.95,
+        isControl: false,
+        payloadJson: '{"algorithm": "latest_production"}',
+      },
+    ],
+    layerId: 'layer-holdout',
+    hashSalt: 'salt-recommendation-holdout-q1',
+    primaryMetricId: 'monthly_active_days',
+    secondaryMetricIds: ['watch_hours_per_month', 'churn_rate'],
+    guardrailConfigs: [
+      {
+        metricId: 'churn_rate',
+        threshold: 0.08,
+        consecutiveBreachesRequired: 3,
+      },
+    ],
+    guardrailAction: 'ALERT_ONLY',
+    isCumulativeHoldout: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    startedAt: '2026-01-02T00:00:00Z',
+  },
 ];
 
 /** Mock query log entries for RUNNING experiments. */
@@ -370,6 +411,24 @@ const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
       observedCounts: { 'v1-control': 50102, 'v1-treatment': 49898 },
       expectedCounts: { 'v1-control': 50000, 'v1-treatment': 50000 },
     },
+    surrogateProjections: [
+      {
+        metricId: 'monthly_retention_rate',
+        surrogateMetricId: 'click_through_rate',
+        projectedEffect: 0.008,
+        projectionCiLower: 0.002,
+        projectionCiUpper: 0.014,
+        calibrationRSquared: 0.78,
+      },
+      {
+        metricId: 'lifetime_value',
+        surrogateMetricId: 'watch_time_per_session',
+        projectedEffect: 2.45,
+        projectionCiLower: -0.50,
+        projectionCiUpper: 5.40,
+        calibrationRSquared: 0.52,
+      },
+    ],
     computedAt: '2026-03-05T12:00:00Z',
   },
   {
@@ -558,6 +617,56 @@ const INITIAL_BANDIT_RESULTS: Record<string, BanditDashboardResult> = {
   },
 };
 
+/** Cumulative holdout results — recommendation_holdout_q1 running since Jan 2026. */
+const INITIAL_HOLDOUT_RESULTS: Record<string, CumulativeHoldoutResult> = {
+  '77777777-7777-7777-7777-777777777777': {
+    experimentId: '77777777-7777-7777-7777-777777777777',
+    metricId: 'monthly_active_days',
+    currentCumulativeLift: 1.8,
+    currentCiLower: 0.4,
+    currentCiUpper: 3.2,
+    isSignificant: true,
+    timeSeries: [
+      { date: '2026-01-15', cumulativeLift: 0.3, ciLower: -2.1, ciUpper: 2.7, sampleSize: 12000 },
+      { date: '2026-01-31', cumulativeLift: 0.8, ciLower: -1.0, ciUpper: 2.6, sampleSize: 24000 },
+      { date: '2026-02-15', cumulativeLift: 1.2, ciLower: -0.2, ciUpper: 2.6, sampleSize: 36000 },
+      { date: '2026-02-28', cumulativeLift: 1.5, ciLower: 0.1, ciUpper: 2.9, sampleSize: 48000 },
+      { date: '2026-03-05', cumulativeLift: 1.8, ciLower: 0.4, ciUpper: 3.2, sampleSize: 55000 },
+    ],
+    computedAt: '2026-03-05T18:00:00Z',
+  },
+};
+
+/** Guardrail breach history — homepage_recs_v2 had a brief crash_rate spike. */
+const INITIAL_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = {
+  '11111111-1111-1111-1111-111111111111': {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    breaches: [
+      {
+        experimentId: '11111111-1111-1111-1111-111111111111',
+        metricId: 'crash_rate',
+        variantId: 'v1-treatment',
+        currentValue: 0.012,
+        threshold: 0.01,
+        consecutiveBreachCount: 1,
+        action: 'ALERT',
+        detectedAt: '2026-02-28T03:15:00Z',
+      },
+      {
+        experimentId: '11111111-1111-1111-1111-111111111111',
+        metricId: 'crash_rate',
+        variantId: 'v1-treatment',
+        currentValue: 0.014,
+        threshold: 0.01,
+        consecutiveBreachCount: 2,
+        action: 'AUTO_PAUSE',
+        detectedAt: '2026-02-28T06:30:00Z',
+      },
+    ],
+    isPaused: false,
+  },
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -566,6 +675,8 @@ export let SEED_NOVELTY_RESULTS: Record<string, NoveltyAnalysisResult> = structu
 export let SEED_INTERFERENCE_RESULTS: Record<string, InterferenceAnalysisResult> = structuredClone(INITIAL_INTERFERENCE_RESULTS);
 export let SEED_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult> = structuredClone(INITIAL_INTERLEAVING_RESULTS);
 export let SEED_BANDIT_RESULTS: Record<string, BanditDashboardResult> = structuredClone(INITIAL_BANDIT_RESULTS);
+export let SEED_HOLDOUT_RESULTS: Record<string, CumulativeHoldoutResult> = structuredClone(INITIAL_HOLDOUT_RESULTS);
+export let SEED_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = structuredClone(INITIAL_GUARDRAIL_STATUS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -576,4 +687,6 @@ export function resetSeedData(): void {
   SEED_INTERFERENCE_RESULTS = structuredClone(INITIAL_INTERFERENCE_RESULTS);
   SEED_INTERLEAVING_RESULTS = structuredClone(INITIAL_INTERLEAVING_RESULTS);
   SEED_BANDIT_RESULTS = structuredClone(INITIAL_BANDIT_RESULTS);
+  SEED_HOLDOUT_RESULTS = structuredClone(INITIAL_HOLDOUT_RESULTS);
+  SEED_GUARDRAIL_STATUS = structuredClone(INITIAL_GUARDRAIL_STATUS);
 }

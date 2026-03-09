@@ -1,7 +1,7 @@
 import type {
   AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse,
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
-  BanditDashboardResult,
+  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult,
 } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
@@ -179,5 +179,17 @@ export async function getInterleavingAnalysis(experimentId: string): Promise<Int
 export async function getBanditDashboard(experimentId: string): Promise<BanditDashboardResult> {
   return callRpc<{ experimentId: string }, BanditDashboardResult>(
     BANDIT_URL, BANDIT_SVC, 'GetBanditDashboard', { experimentId },
+  );
+}
+
+export async function getCumulativeHoldoutResult(experimentId: string): Promise<CumulativeHoldoutResult> {
+  return callRpc<{ experimentId: string }, CumulativeHoldoutResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetCumulativeHoldoutResult', { experimentId },
+  );
+}
+
+export async function getGuardrailStatus(experimentId: string): Promise<GuardrailStatusResult> {
+  return callRpc<{ experimentId: string }, GuardrailStatusResult>(
+    MGMT_URL, MGMT_SVC, 'GetGuardrailStatus', { experimentId },
   );
 }
