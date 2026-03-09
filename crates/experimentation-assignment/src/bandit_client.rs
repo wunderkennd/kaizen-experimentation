@@ -1,14 +1,23 @@
 //! Bandit arm selection client.
 //!
-//! Until M4b delivers the BanditPolicyService, this module provides a mock
-//! implementation that selects arms uniformly at random with equal probability.
-//! The real implementation will call M4b's `SelectArm` gRPC RPC.
+//! Provides both a live gRPC client to M4b's `BanditPolicyService.SelectArm`
+//! and a mock uniform-random fallback used when M4b is unavailable or times out.
+//! Per onboarding pitfall #4: timeout at 10ms, fall back to uniform random.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use rand::Rng;
+use tonic::transport::Channel;
 
-use crate::config::BanditConfig;
+use crate::config::{BanditArmConfig, BanditConfig};
+
+use experimentation_proto::experimentation::bandit::v1::{
+    bandit_policy_service_client::BanditPolicyServiceClient, SelectArmRequest,
+};
+
+/// Default timeout for M4b SelectArm RPC (per onboarding pitfall #4).
+const BANDIT_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// Result of selecting an arm from a bandit experiment.
 #[derive(Debug, Clone)]
@@ -21,6 +30,114 @@ pub struct ArmSelection {
     pub payload_json: String,
     /// All arm probabilities at selection time.
     pub all_arm_probabilities: HashMap<String, f64>,
+}
+
+/// gRPC client wrapper for M4b BanditPolicyService.
+///
+/// Calls `SelectArm` with a 10ms timeout. On timeout or error, the caller
+/// falls back to uniform random arm selection.
+#[derive(Clone)]
+pub struct GrpcBanditClient {
+    client: BanditPolicyServiceClient<Channel>,
+    timeout: Duration,
+}
+
+impl GrpcBanditClient {
+    /// Connect to M4b at the given address (e.g., "http://localhost:50054").
+    pub async fn connect(addr: &str) -> Result<Self, tonic::transport::Error> {
+        let channel = Channel::from_shared(addr.to_string())
+            .expect("valid URI")
+            .connect()
+            .await?;
+        Ok(Self {
+            client: BanditPolicyServiceClient::new(channel),
+            timeout: BANDIT_TIMEOUT,
+        })
+    }
+
+    /// Select an arm via M4b's SelectArm RPC.
+    ///
+    /// Returns `Err` on timeout (>10ms) or gRPC failure — caller should fall back
+    /// to uniform random.
+    pub async fn select_arm(
+        &self,
+        experiment_id: &str,
+        user_id: &str,
+        context_features: HashMap<String, f64>,
+    ) -> Result<ArmSelectionResult, BanditClientError> {
+        let req = SelectArmRequest {
+            experiment_id: experiment_id.to_string(),
+            user_id: user_id.to_string(),
+            context_features,
+        };
+
+        let mut client = self.client.clone();
+        let resp = tokio::time::timeout(self.timeout, client.select_arm(req))
+            .await
+            .map_err(|_| BanditClientError::Timeout)?
+            .map_err(BanditClientError::Grpc)?;
+
+        let arm = resp.into_inner();
+        Ok(ArmSelectionResult {
+            arm_id: arm.arm_id,
+            assignment_probability: arm.assignment_probability,
+            all_arm_probabilities: arm.all_arm_probabilities,
+        })
+    }
+}
+
+/// Raw result from M4b (no payload — that comes from local config).
+#[derive(Debug)]
+pub struct ArmSelectionResult {
+    pub arm_id: String,
+    pub assignment_probability: f64,
+    pub all_arm_probabilities: HashMap<String, f64>,
+}
+
+/// Errors from the bandit gRPC client.
+#[derive(Debug)]
+pub enum BanditClientError {
+    Timeout,
+    Grpc(tonic::Status),
+}
+
+impl std::fmt::Display for BanditClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Timeout => write!(f, "M4b SelectArm timed out (>10ms)"),
+            Self::Grpc(status) => write!(f, "M4b SelectArm gRPC error: {status}"),
+        }
+    }
+}
+
+/// Look up the payload_json for a given arm_id from local bandit config.
+///
+/// M4b only selects the arm — payload is stored in the local experiment config.
+pub fn lookup_arm_payload(arms: &[BanditArmConfig], arm_id: &str) -> String {
+    arms.iter()
+        .find(|a| a.arm_id == arm_id)
+        .map(|a| a.payload_json.clone())
+        .unwrap_or_default()
+}
+
+/// Extract context features from user attributes based on bandit config keys.
+///
+/// For CONTEXTUAL_BANDIT experiments, parses string attribute values to f64.
+/// Non-numeric values are silently skipped.
+pub fn extract_context_features(
+    bandit_config: &BanditConfig,
+    attributes: &HashMap<String, String>,
+) -> HashMap<String, f64> {
+    bandit_config
+        .context_feature_keys
+        .iter()
+        .filter_map(|key| {
+            attributes
+                .get(key)
+                .and_then(|v| v.parse::<f64>().ok())
+                .map(|v| (key.clone(), v))
+        })
+        .collect()
 }
 
 /// Select an arm using uniform random (mock for M4b).
@@ -149,5 +266,76 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(0);
         let sel = select_arm_uniform(&config, &mut rng).unwrap();
         assert!(!sel.payload_json.is_empty());
+    }
+
+    #[test]
+    fn test_lookup_arm_payload_found() {
+        let arms = vec![
+            BanditArmConfig {
+                arm_id: "a".to_string(),
+                name: "A".to_string(),
+                payload_json: r#"{"x":1}"#.to_string(),
+            },
+            BanditArmConfig {
+                arm_id: "b".to_string(),
+                name: "B".to_string(),
+                payload_json: r#"{"x":2}"#.to_string(),
+            },
+        ];
+        assert_eq!(lookup_arm_payload(&arms, "b"), r#"{"x":2}"#);
+    }
+
+    #[test]
+    fn test_lookup_arm_payload_not_found() {
+        let arms = vec![BanditArmConfig {
+            arm_id: "a".to_string(),
+            name: "A".to_string(),
+            payload_json: "{}".to_string(),
+        }];
+        assert_eq!(lookup_arm_payload(&arms, "missing"), "");
+    }
+
+    #[test]
+    fn test_extract_context_features() {
+        let config = BanditConfig {
+            algorithm: "LINEAR_UCB".to_string(),
+            arms: vec![],
+            reward_metric_id: "clicks".to_string(),
+            context_feature_keys: vec![
+                "age".to_string(),
+                "tenure".to_string(),
+                "missing".to_string(),
+            ],
+            min_exploration_fraction: 0.1,
+            warmup_observations: 1000,
+        };
+        let mut attrs = HashMap::new();
+        attrs.insert("age".to_string(), "25.0".to_string());
+        attrs.insert("tenure".to_string(), "3.5".to_string());
+        attrs.insert("country".to_string(), "US".to_string()); // not in context_feature_keys
+
+        let features = extract_context_features(&config, &attrs);
+        assert_eq!(features.len(), 2);
+        assert!((features["age"] - 25.0).abs() < f64::EPSILON);
+        assert!((features["tenure"] - 3.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_extract_context_features_non_numeric_skipped() {
+        let config = BanditConfig {
+            algorithm: "LINEAR_UCB".to_string(),
+            arms: vec![],
+            reward_metric_id: "clicks".to_string(),
+            context_feature_keys: vec!["age".to_string(), "country".to_string()],
+            min_exploration_fraction: 0.1,
+            warmup_observations: 1000,
+        };
+        let mut attrs = HashMap::new();
+        attrs.insert("age".to_string(), "25".to_string());
+        attrs.insert("country".to_string(), "US".to_string()); // not parseable as f64
+
+        let features = extract_context_features(&config, &attrs);
+        assert_eq!(features.len(), 1);
+        assert!((features["age"] - 25.0).abs() < f64::EPSILON);
     }
 }

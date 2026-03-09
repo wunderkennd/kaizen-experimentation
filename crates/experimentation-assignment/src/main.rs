@@ -2,6 +2,7 @@ use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
+use experimentation_assignment::bandit_client::GrpcBanditClient;
 use experimentation_assignment::config::Config;
 use experimentation_assignment::config_cache::ConfigCache;
 use experimentation_assignment::service::AssignmentServiceImpl;
@@ -40,7 +41,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("M5_ADDR not set, running with static local config");
     }
 
-    let svc = AssignmentServiceImpl::new(handle);
+    // Connect to M4b BanditPolicyService for live arm selection.
+    let bandit_client = if let Ok(m4b_addr) = std::env::var("M4B_ADDR") {
+        match GrpcBanditClient::connect(&m4b_addr).await {
+            Ok(client) => {
+                tracing::info!(m4b_addr = %m4b_addr, "M4b bandit client connected");
+                Some(client)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    m4b_addr = %m4b_addr,
+                    error = %e,
+                    "M4b connect failed, bandit experiments use uniform random fallback",
+                );
+                None
+            }
+        }
+    } else {
+        tracing::warn!("M4B_ADDR not set, bandit experiments use uniform random");
+        None
+    };
+
+    let svc = AssignmentServiceImpl::new(handle, bandit_client);
 
     tracing::info!(%grpc_addr, "starting gRPC server");
     tonic::transport::Server::builder()

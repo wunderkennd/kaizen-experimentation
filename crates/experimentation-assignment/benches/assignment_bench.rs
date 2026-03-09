@@ -9,41 +9,74 @@ use experimentation_proto::experimentation::assignment::v1::RankedList;
 const DEV_CONFIG: &str = include_str!("../../../dev/config.json");
 
 fn bench_get_assignment(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
     let config = Config::from_json(DEV_CONFIG).unwrap();
     let svc = AssignmentServiceImpl::from_config(Arc::new(config));
     let no_attrs = HashMap::new();
 
     c.bench_function("get_assignment_single", |b| {
         b.iter(|| {
-            svc.assign(black_box("exp_dev_001"), black_box("user_42"), black_box(""), black_box(&no_attrs))
+            rt.block_on(async {
+                svc.assign(
+                    black_box("exp_dev_001"),
+                    black_box("user_42"),
+                    black_box(""),
+                    black_box(&no_attrs),
+                )
+                .await
                 .unwrap()
+            })
         })
     });
 
     c.bench_function("get_assignment_1000_users", |b| {
         b.iter(|| {
-            for i in 0..1000 {
-                let user_id = format!("user_{i}");
-                svc.assign(black_box("exp_dev_001"), black_box(&user_id), black_box(""), black_box(&no_attrs))
+            rt.block_on(async {
+                for i in 0..1000 {
+                    let user_id = format!("user_{i}");
+                    svc.assign(
+                        black_box("exp_dev_001"),
+                        black_box(&user_id),
+                        black_box(""),
+                        black_box(&no_attrs),
+                    )
+                    .await
                     .unwrap();
-            }
+                }
+            })
         })
     });
 
     c.bench_function("get_assignment_session_level", |b| {
         b.iter(|| {
-            svc.assign(black_box("exp_dev_003"), black_box("user_42"), black_box("session_42"), black_box(&no_attrs))
+            rt.block_on(async {
+                svc.assign(
+                    black_box("exp_dev_003"),
+                    black_box("user_42"),
+                    black_box("session_42"),
+                    black_box(&no_attrs),
+                )
+                .await
                 .unwrap()
+            })
         })
     });
 
     c.bench_function("get_assignment_session_1000", |b| {
         b.iter(|| {
-            for i in 0..1000 {
-                let session_id = format!("session_{i}");
-                svc.assign(black_box("exp_dev_003"), black_box("user_42"), black_box(&session_id), black_box(&no_attrs))
+            rt.block_on(async {
+                for i in 0..1000 {
+                    let session_id = format!("session_{i}");
+                    svc.assign(
+                        black_box("exp_dev_003"),
+                        black_box("user_42"),
+                        black_box(&session_id),
+                        black_box(&no_attrs),
+                    )
+                    .await
                     .unwrap();
-            }
+                }
+            })
         })
     });
 }
@@ -166,34 +199,41 @@ fn bench_multileave(c: &mut Criterion) {
 }
 
 fn bench_bandit_assignment(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
     let config = Config::from_json(DEV_CONFIG).unwrap();
     let svc = AssignmentServiceImpl::from_config(Arc::new(config));
     let no_attrs = HashMap::new();
 
     c.bench_function("get_assignment_mab_single", |b| {
         b.iter(|| {
-            svc.assign(
-                black_box("exp_dev_005"),
-                black_box("user_42"),
-                black_box(""),
-                black_box(&no_attrs),
-            )
-            .unwrap()
+            rt.block_on(async {
+                svc.assign(
+                    black_box("exp_dev_005"),
+                    black_box("user_42"),
+                    black_box(""),
+                    black_box(&no_attrs),
+                )
+                .await
+                .unwrap()
+            })
         })
     });
 
     c.bench_function("get_assignment_mab_1000_users", |b| {
         b.iter(|| {
-            for i in 0..1000 {
-                let user_id = format!("user_{i}");
-                svc.assign(
-                    black_box("exp_dev_005"),
-                    black_box(&user_id),
-                    black_box(""),
-                    black_box(&no_attrs),
-                )
-                .unwrap();
-            }
+            rt.block_on(async {
+                for i in 0..1000 {
+                    let user_id = format!("user_{i}");
+                    svc.assign(
+                        black_box("exp_dev_005"),
+                        black_box(&user_id),
+                        black_box(""),
+                        black_box(&no_attrs),
+                    )
+                    .await
+                    .unwrap();
+                }
+            })
         })
     });
 }
