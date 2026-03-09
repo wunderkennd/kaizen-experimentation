@@ -38,6 +38,30 @@ impl Default for KafkaConfig {
     }
 }
 
+/// Trait abstracting the Kafka publish path.
+///
+/// Implemented by `EventProducer` for production use. Tests inject a mock
+/// implementation to validate the service layer without a running Kafka broker.
+#[tonic::async_trait]
+pub trait Producer: Send + Sync {
+    async fn publish(
+        &self,
+        topic: &str,
+        key: &str,
+        payload: &[u8],
+        latency_histogram: Option<&Histogram>,
+    ) -> Result<(), ProduceError>;
+
+    async fn publish_with_event_type(
+        &self,
+        topic: &str,
+        key: &str,
+        payload: &[u8],
+        latency_histogram: Option<&Histogram>,
+        event_type: Option<&str>,
+    ) -> Result<(), ProduceError>;
+}
+
 /// Wraps an rdkafka FutureProducer with idempotent delivery.
 pub struct EventProducer {
     producer: FutureProducer,
@@ -92,18 +116,11 @@ impl EventProducer {
 
         Ok(Self { producer })
     }
+}
 
-    /// Publish a serialized protobuf payload to a topic with tracing headers.
-    ///
-    /// `key` determines the Kafka partition (e.g. experiment_id for exposures,
-    /// user_id for metric_events).
-    ///
-    /// Attaches headers for end-to-end latency tracing:
-    /// - `x-ingest-ts-ms`: epoch millis when the event was ingested by M2
-    /// - `x-event-type`: event type label (exposure, metric, reward, qoe)
-    ///
-    /// If a `latency_histogram` is provided, the publish duration is observed.
-    pub async fn publish(
+#[tonic::async_trait]
+impl Producer for EventProducer {
+    async fn publish(
         &self,
         topic: &str,
         key: &str,
@@ -114,8 +131,7 @@ impl EventProducer {
             .await
     }
 
-    /// Publish with an explicit event type header for downstream tracing.
-    pub async fn publish_with_event_type(
+    async fn publish_with_event_type(
         &self,
         topic: &str,
         key: &str,
