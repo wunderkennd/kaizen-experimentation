@@ -94,7 +94,7 @@ func setupIntegration(t *testing.T) testEnv {
 
 	// Build the service stack with PgWriter for query log, MockExecutor for
 	// Spark SQL (no real Spark in CI).
-	cfgStore, err := config.LoadFromFile("internal/config/testdata/seed_config.json")
+	cfgStore, err := config.LoadFromFile("config/testdata/seed_config.json")
 	require.NoError(t, err)
 	renderer, err := spark.NewSQLRenderer()
 	require.NoError(t, err)
@@ -724,7 +724,7 @@ func TestGuardrailAlertSchemaContract(t *testing.T) {
 }
 
 func TestGuardrailBreachProducesAlert(t *testing.T) {
-	cfgStore, err := config.LoadFromFile("internal/config/testdata/seed_config.json")
+	cfgStore, err := config.LoadFromFile("config/testdata/seed_config.json")
 	require.NoError(t, err)
 	renderer, err := spark.NewSQLRenderer()
 	require.NoError(t, err)
