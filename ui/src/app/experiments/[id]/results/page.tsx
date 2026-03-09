@@ -17,8 +17,9 @@ import { InterleavingTab } from '@/components/interleaving-tab';
 import { SurrogateTab } from '@/components/surrogate-tab';
 import { HoldoutTab } from '@/components/holdout-tab';
 import { GuardrailTab } from '@/components/guardrail-tab';
+import { CateTab } from '@/components/cate-tab';
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'lifecycle';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -81,6 +82,9 @@ export default function ResultsPage() {
     { key: 'interference', label: 'Content Interference' },
     { key: 'interleaving', label: 'Interleaving' },
   ];
+  if (experiment.type === 'AB' || experiment.type === 'MULTIVARIATE') {
+    tabs.push({ key: 'lifecycle', label: 'Lifecycle Segments' });
+  }
   if (hasSurrogateProjections) {
     tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
   }
@@ -172,6 +176,10 @@ export default function ResultsPage() {
 
       {activeTab === 'interleaving' && (
         <InterleavingTab experimentId={params.id} />
+      )}
+
+      {activeTab === 'lifecycle' && (
+        <CateTab experimentId={params.id} />
       )}
 
       {activeTab === 'surrogate' && analysisResult.surrogateProjections && (
