@@ -10,6 +10,33 @@ interface ExperimentCardProps {
   experiment: Experiment;
 }
 
+function ResultsCell({ experiment }: { experiment: Experiment }) {
+  switch (experiment.state) {
+    case 'RUNNING':
+      return (
+        <Link
+          href={`/experiments/${experiment.experimentId}/results`}
+          className="text-orange-600 hover:text-orange-800"
+        >
+          Interim results
+        </Link>
+      );
+    case 'CONCLUDED':
+      return (
+        <Link
+          href={`/experiments/${experiment.experimentId}/results`}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Results available
+        </Link>
+      );
+    case 'CONCLUDING':
+      return <span className="text-gray-400">Finalizing...</span>;
+    default:
+      return null;
+  }
+}
+
 export function ExperimentCard({ experiment }: ExperimentCardProps) {
   return (
     <tr className="hover:bg-gray-50">
@@ -34,14 +61,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
         {formatDate(experiment.createdAt)}
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-sm">
-        {experiment.state === 'CONCLUDED' && (
-          <Link
-            href={`/experiments/${experiment.experimentId}/results`}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            Results available
-          </Link>
-        )}
+        <ResultsCell experiment={experiment} />
       </td>
     </tr>
   );
