@@ -15,6 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ───────── Change Detection ─────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'proto/**'
+
   # ───────── Stage 1: Schema Validation ─────────
   schema:
     runs-on: ubuntu-latest
@@ -50,7 +67,8 @@ jobs:
   # ───────── Stage 2: Rust Build & Test ─────────
   rust:
     runs-on: ubuntu-latest
-    needs: schema
+    needs: [schema, changes]
+    if: needs.changes.outputs.rust == 'true' || github.ref == 'refs/heads/main'
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -121,7 +139,8 @@ jobs:
   # ───────── Stage 3: Go Build & Test ─────────
   go:
     runs-on: ubuntu-latest
-    needs: [schema, rust]
+    needs: [schema, rust, changes]
+    if: "!failure() && !cancelled()"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -154,11 +173,13 @@ jobs:
           cd gen/go && go mod download
 
       - uses: actions/download-artifact@v4
+        if: needs.changes.outputs.rust == 'true'
         with:
           name: rust-ffi-artifacts
           path: ffi-artifacts/
 
       - name: Stage FFI artifacts for CGo
+        if: needs.changes.outputs.rust == 'true'
         run: |
           mkdir -p target/debug crates/experimentation-ffi/target
           find ffi-artifacts/ -name 'libexperimentation_ffi.*' -exec cp {} target/debug/ \;
@@ -168,7 +189,8 @@ jobs:
         working-directory: services
         run: go vet ./...
 
-      - name: Unit tests
+      - name: Unit tests (with FFI)
+        if: needs.changes.outputs.rust == 'true'
         working-directory: services
         run: |
           # LD_LIBRARY_PATH is required so the Linux dynamic linker can find
@@ -176,13 +198,19 @@ jobs:
           export LD_LIBRARY_PATH=${{ github.workspace }}/target/debug:${LD_LIBRARY_PATH:-}
           CGO_ENABLED=1 go test -race -cover -tags='has_ffi' ./...
 
+      - name: Unit tests (without FFI)
+        if: needs.changes.outputs.rust != 'true'
+        working-directory: services
+        run: CGO_ENABLED=0 go test -race -cover ./...
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Integration tests
+      - name: Integration tests (with FFI)
+        if: needs.changes.outputs.rust == 'true'
         working-directory: services
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/debug
@@ -193,12 +221,23 @@ jobs:
             exit 1
           }
 
-          # Schema migrations and seed data are applied inside the postgres
-          # container via docker-entrypoint-initdb.d (see docker-compose.test.yml
-          # volume mounts and scripts/init-test-db.sh).
+          test_exit=0
+          CGO_ENABLED=1 go test -tags='integration,has_ffi' -race -timeout 2m ./... || test_exit=$?
+          docker compose -f ../docker-compose.test.yml down
+          exit $test_exit
+
+      - name: Integration tests (without FFI)
+        if: needs.changes.outputs.rust != 'true'
+        working-directory: services
+        run: |
+          docker compose -f ../docker-compose.test.yml up -d --wait || {
+            echo "::error::docker compose up failed — dumping container logs"
+            docker compose -f ../docker-compose.test.yml logs
+            exit 1
+          }
 
           test_exit=0
-          CGO_ENABLED=1 go test -tags=integration -race -timeout 2m ./... || test_exit=$?
+          CGO_ENABLED=0 go test -tags=integration -race -timeout 2m ./... || test_exit=$?
           docker compose -f ../docker-compose.test.yml down
           exit $test_exit
 
@@ -249,7 +288,8 @@ jobs:
   # ───────── Stage 5: Cross-Language Hash Parity ─────────
   hash-parity:
     runs-on: ubuntu-latest
-    needs: [rust, go]
+    needs: [rust, go, changes]
+    if: "!cancelled() && !failure() && (needs.changes.outputs.rust == 'true' || github.ref == 'refs/heads/main')"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -261,7 +301,7 @@ jobs:
 
   # ───────── Stage 6: Docker Build (main only) ─────────
   docker:
-    if: github.ref == 'refs/heads/main'
+    if: "!cancelled() && !failure() && github.ref == 'refs/heads/main'"
     runs-on: ubuntu-latest
     needs: [rust, go, typescript, hash-parity]
     strategy:
