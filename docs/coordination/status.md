@@ -104,8 +104,8 @@
 | 3.1 | LinUCB contextual bandit | Agent-4 | 🟢 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) | PR #54 merged |
 | 3.2 | Content cold-start bandit | Agent-4 | 🔵 | Agent-6 (cold-start widget on bandit dashboard) |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🟢 | PR #60 merged — arm allocation chart, reward rates, Thompson Sampling params, reward history |
-| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🔵 | — | Agent-2 done (session_id keyed events). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration + 11 e2e tests in PR #79). Agent-1 part pending. |
-| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟢 | — | Agent-2 done (QoE validation + ingestion PR #40). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl + e2e tests PR #79). Pipeline e2e verified. |
+| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🔵 | — | Agent-2 done (session_id keyed events + `test_session_pipeline_e2e.sh` e2e harness). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration + 11 e2e tests in PR #79). Agent-1 part pending. E2e harness validates cross-topic session_id correlation (exposure/metric/QoE). |
+| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟢 | — | Agent-2 done (QoE validation + ingestion PR #40 + `test_qoe_pipeline_e2e.sh` e2e harness). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl + e2e tests PR #79). Pipeline e2e verified. |
 | 3.6 | Cumulative holdout support | Agent-5 | 🟢 | M4a periodic lift reports |
 | 3.7 | CATE lifecycle segment tab | Agent-6 | 🟢 | PR #80 — Forest plot + Cochran Q heterogeneity indicator per lifecycle segment |
 | 3.8 | Phase 3 SVOD visualizations (QoE, novelty curve, GST, Lorenz) | Agent-6 | 🟢 | PR #76 (surrogate/holdout/guardrail), PR #81 (QoE dashboard, novelty decay curve, GST boundary, Lorenz curve). 171 tests. |
