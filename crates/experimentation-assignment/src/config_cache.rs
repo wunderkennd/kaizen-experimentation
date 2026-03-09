@@ -9,9 +9,7 @@ use std::sync::Arc;
 use experimentation_core::error::assert_finite;
 use tokio::sync::watch;
 
-use crate::config::{
-    AllocationConfig, Config, ExperimentConfig, LayerConfig, VariantConfig,
-};
+use crate::config::{AllocationConfig, Config, ExperimentConfig, LayerConfig, VariantConfig};
 
 use experimentation_proto::experimentation::common::v1::{
     Experiment, ExperimentState, ExperimentType, Variant,
@@ -151,19 +149,13 @@ pub fn experiment_from_proto(
         })
         .unwrap_or_else(|_| "UNSPECIFIED".to_string());
 
-    let variants: Vec<VariantConfig> = proto
-        .variants
-        .iter()
-        .map(variant_from_proto)
-        .collect();
+    let variants: Vec<VariantConfig> = proto.variants.iter().map(variant_from_proto).collect();
 
     // Preserve allocation from existing config, or default to full range.
-    let allocation = existing
-        .map(|e| e.allocation)
-        .unwrap_or(AllocationConfig {
-            start_bucket: 0,
-            end_bucket: 9999,
-        });
+    let allocation = existing.map(|e| e.allocation).unwrap_or(AllocationConfig {
+        start_bucket: 0,
+        end_bucket: 9999,
+    });
 
     // Preserve targeting rule from existing config (stream has only targeting_rule_id).
     let targeting_rule = existing.and_then(|e| e.targeting_rule.clone());

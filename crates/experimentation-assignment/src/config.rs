@@ -180,10 +180,13 @@ impl Config {
         // Validate traffic fractions and build indexes.
         for exp in &config.experiments {
             for v in &exp.variants {
-                assert_finite(v.traffic_fraction, &format!(
-                    "variant {}.traffic_fraction in experiment {}",
-                    v.variant_id, exp.experiment_id,
-                ));
+                assert_finite(
+                    v.traffic_fraction,
+                    &format!(
+                        "variant {}.traffic_fraction in experiment {}",
+                        v.variant_id, exp.experiment_id,
+                    ),
+                );
             }
         }
 
