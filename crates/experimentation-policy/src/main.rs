@@ -41,7 +41,7 @@ async fn main() {
     // 3. Create bounded channels (gRPC -> core, Kafka -> core, management)
     let (policy_tx, policy_rx) = mpsc::channel(config.policy_channel_depth);
     let (reward_tx, reward_rx) = mpsc::channel(config.reward_channel_depth);
-    let (_mgmt_tx, mgmt_rx) = mpsc::channel::<core::ManagementCommand>(64);
+    let (mgmt_tx, mgmt_rx) = mpsc::channel::<core::ManagementCommand>(64);
 
     // 4. Open RocksDB and create PolicyCore
     let snapshot_store = SnapshotStore::open(Path::new(&config.rocksdb_path))
@@ -70,9 +70,13 @@ async fn main() {
     // 7. Spawn Kafka consumer (stub)
     let kafka_handle = tokio::spawn(kafka::consume_rewards(reward_tx));
 
-    // 8. Start gRPC server (stub)
+    // 8. Start gRPC server
     let grpc_addr = config.grpc_addr.clone();
-    let grpc_handle = tokio::spawn(grpc::serve_grpc(grpc_addr));
+    let grpc_handle = tokio::spawn(grpc::serve_grpc(
+        grpc_addr,
+        policy_tx.clone(),
+        mgmt_tx.clone(),
+    ));
 
     info!("Policy service running. Press Ctrl-C to shutdown.");
 
