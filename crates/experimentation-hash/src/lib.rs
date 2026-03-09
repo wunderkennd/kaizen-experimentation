@@ -57,6 +57,32 @@ pub fn wasm_is_in_allocation(bucket: u32, start_bucket: u32, end_bucket: u32) ->
     is_in_allocation(bucket, start_bucket, end_bucket)
 }
 
+// ── UniFFI bindings (Swift / Kotlin) ───────────────────────────────────
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
+/// Compute bucket assignment via UniFFI (Swift/Kotlin).
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+pub fn uniffi_bucket(user_id: String, salt: String, total_buckets: u32) -> u32 {
+    bucket(&user_id, &salt, total_buckets)
+}
+
+/// Check allocation membership via UniFFI (Swift/Kotlin).
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+pub fn uniffi_is_in_allocation(b: u32, start_bucket: u32, end_bucket: u32) -> bool {
+    is_in_allocation(b, start_bucket, end_bucket)
+}
+
+/// Raw MurmurHash3 x86 32-bit via UniFFI (Swift/Kotlin).
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+pub fn uniffi_murmurhash3_x86_32(data: Vec<u8>, seed: u32) -> u32 {
+    murmur3::murmurhash3_x86_32(&data, seed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
