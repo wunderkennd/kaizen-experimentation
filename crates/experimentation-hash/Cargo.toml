@@ -24,10 +24,14 @@ proptest = { workspace = true }
 default = []
 wasm = ["dep:wasm-bindgen"]
 ffi = []            # Enables C-compatible extern functions for cbindgen
-uniffi = []         # UniFFI bindings for Swift/Kotlin
+uniffi = ["dep:uniffi"]  # UniFFI bindings for Swift/Kotlin
 python = ["dep:pyo3"]
 
 [dependencies.wasm-bindgen]
+workspace = true
+optional = true
+
+[dependencies.uniffi]
 workspace = true
 optional = true
 
