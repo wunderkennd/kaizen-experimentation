@@ -33,10 +33,7 @@ fn evaluate_group(group: &TargetingGroup, attributes: &HashMap<String, String>) 
 
 /// Evaluate a single predicate against the attribute map.
 /// Missing attribute → false (safe default, fail-closed).
-fn evaluate_predicate(
-    pred: &TargetingPredicate,
-    attributes: &HashMap<String, String>,
-) -> bool {
+fn evaluate_predicate(pred: &TargetingPredicate, attributes: &HashMap<String, String>) -> bool {
     let attr_value = match attributes.get(&pred.attribute_key) {
         Some(v) => v,
         None => return false, // Missing attribute → no match.
@@ -47,7 +44,10 @@ fn evaluate_predicate(
         "NOT_EQUALS" => pred.values.first().is_some_and(|v| v != attr_value),
         "IN" => pred.values.iter().any(|v| v == attr_value),
         "NOT_IN" => !pred.values.iter().any(|v| v == attr_value),
-        "CONTAINS" => pred.values.first().is_some_and(|v| attr_value.contains(v.as_str())),
+        "CONTAINS" => pred
+            .values
+            .first()
+            .is_some_and(|v| attr_value.contains(v.as_str())),
         "GT" | "GREATER_THAN" => compare_numeric(attr_value, &pred.values, |a, b| a > b),
         "LT" | "LESS_THAN" => compare_numeric(attr_value, &pred.values, |a, b| a < b),
         "GTE" => compare_numeric(attr_value, &pred.values, |a, b| a >= b),

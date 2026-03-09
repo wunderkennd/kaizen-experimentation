@@ -26,10 +26,7 @@ pub struct StreamClient {
 
 impl StreamClient {
     pub fn new(m5_endpoint: String, cache: ConfigCache) -> Self {
-        Self {
-            m5_endpoint,
-            cache,
-        }
+        Self { m5_endpoint, cache }
     }
 
     /// Run the stream loop until `shutdown` is cancelled.
@@ -96,10 +93,7 @@ impl StreamClient {
             last_known_version: self.cache.last_version(),
         };
 
-        let mut stream = client
-            .stream_config_updates(request)
-            .await?
-            .into_inner();
+        let mut stream = client.stream_config_updates(request).await?.into_inner();
 
         // Reset backoff on successful connection.
         // (Caller manages backoff state, but we signal success by processing updates.)

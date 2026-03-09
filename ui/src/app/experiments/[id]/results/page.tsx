@@ -19,8 +19,9 @@ import { SurrogateTab } from '@/components/surrogate-tab';
 import { HoldoutTab } from '@/components/holdout-tab';
 import { GuardrailTab } from '@/components/guardrail-tab';
 import { QoeTab } from '@/components/qoe-tab';
+import { CateTab } from '@/components/cate-tab';
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -86,6 +87,9 @@ export default function ResultsPage() {
   ];
   if (isQoe) {
     tabs.push({ key: 'qoe', label: 'QoE Metrics' });
+  }
+  if (experiment.type === 'AB' || experiment.type === 'MULTIVARIATE') {
+    tabs.push({ key: 'lifecycle', label: 'Lifecycle Segments' });
   }
   if (hasSurrogateProjections) {
     tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
@@ -191,6 +195,10 @@ export default function ResultsPage() {
 
       {activeTab === 'interleaving' && (
         <InterleavingTab experimentId={params.id} />
+      )}
+
+      {activeTab === 'lifecycle' && (
+        <CateTab experimentId={params.id} />
       )}
 
       {activeTab === 'surrogate' && analysisResult.surrogateProjections && (

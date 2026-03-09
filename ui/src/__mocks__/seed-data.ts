@@ -2,7 +2,7 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult,
+  GstTrajectoryResult, CateAnalysisResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -800,6 +800,87 @@ const INITIAL_GST_RESULTS: Record<string, GstTrajectoryResult[]> = {
   ],
 };
 
+/** CATE lifecycle segment analysis — homepage_recs_v2 shows heterogeneous effects. */
+const INITIAL_CATE_RESULTS: Record<string, CateAnalysisResult> = {
+  '11111111-1111-1111-1111-111111111111': {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    metricId: 'click_through_rate',
+    globalAte: 0.014,
+    globalSe: 0.0042,
+    globalCiLower: 0.006,
+    globalCiUpper: 0.022,
+    globalPValue: 0.001,
+    subgroupEffects: [
+      {
+        segment: 'TRIAL',
+        effect: 0.032,
+        se: 0.011,
+        ciLower: 0.010,
+        ciUpper: 0.054,
+        pValueRaw: 0.004,
+        pValueAdjusted: 0.012,
+        isSignificant: true,
+        nControl: 4200,
+        nTreatment: 4150,
+        controlMean: 0.108,
+        treatmentMean: 0.140,
+      },
+      {
+        segment: 'NEW',
+        effect: 0.021,
+        se: 0.008,
+        ciLower: 0.005,
+        ciUpper: 0.037,
+        pValueRaw: 0.009,
+        pValueAdjusted: 0.018,
+        isSignificant: true,
+        nControl: 8500,
+        nTreatment: 8400,
+        controlMean: 0.118,
+        treatmentMean: 0.139,
+      },
+      {
+        segment: 'ESTABLISHED',
+        effect: 0.008,
+        se: 0.005,
+        ciLower: -0.002,
+        ciUpper: 0.018,
+        pValueRaw: 0.11,
+        pValueAdjusted: 0.165,
+        isSignificant: false,
+        nControl: 18200,
+        nTreatment: 18100,
+        controlMean: 0.129,
+        treatmentMean: 0.137,
+      },
+      {
+        segment: 'MATURE',
+        effect: 0.004,
+        se: 0.006,
+        ciLower: -0.008,
+        ciUpper: 0.016,
+        pValueRaw: 0.51,
+        pValueAdjusted: 0.51,
+        isSignificant: false,
+        nControl: 15800,
+        nTreatment: 15900,
+        controlMean: 0.131,
+        treatmentMean: 0.135,
+      },
+    ],
+    heterogeneity: {
+      qStatistic: 12.4,
+      df: 3,
+      pValue: 0.006,
+      iSquared: 75.8,
+      heterogeneityDetected: true,
+    },
+    nSubgroups: 4,
+    fdrThreshold: 0.05,
+    computedAt: '2026-03-05T12:00:00Z',
+  },
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -812,6 +893,7 @@ export let SEED_HOLDOUT_RESULTS: Record<string, CumulativeHoldoutResult> = struc
 export let SEED_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = structuredClone(INITIAL_GUARDRAIL_STATUS);
 export let SEED_QOE_RESULTS: Record<string, QoeDashboardResult> = structuredClone(INITIAL_QOE_RESULTS);
 export let SEED_GST_RESULTS: Record<string, GstTrajectoryResult[]> = structuredClone(INITIAL_GST_RESULTS);
+export let SEED_CATE_RESULTS: Record<string, CateAnalysisResult> = structuredClone(INITIAL_CATE_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -826,4 +908,5 @@ export function resetSeedData(): void {
   SEED_GUARDRAIL_STATUS = structuredClone(INITIAL_GUARDRAIL_STATUS);
   SEED_QOE_RESULTS = structuredClone(INITIAL_QOE_RESULTS);
   SEED_GST_RESULTS = structuredClone(INITIAL_GST_RESULTS);
+  SEED_CATE_RESULTS = structuredClone(INITIAL_CATE_RESULTS);
 }

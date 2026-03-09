@@ -3,7 +3,7 @@ import {
   SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS,
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
-  SEED_GST_RESULTS,
+  SEED_GST_RESULTS, SEED_CATE_RESULTS,
 } from './seed-data';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
@@ -323,6 +323,19 @@ export const handlers = [
         breaches: [],
         isPaused: false,
       });
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetCateAnalysis
+  http.post(`${ANALYSIS_SVC}/GetCateAnalysis`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_CATE_RESULTS[body.experimentId];
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No CATE analysis for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
     }
     return HttpResponse.json(result);
   }),
