@@ -23,13 +23,13 @@ use experimentation_proto::pipeline::{
 
 use crate::buffer::{BufferedEvent, DiskBuffer};
 use crate::kafka::{
-    EventProducer, ProduceError, TOPIC_EXPOSURES, TOPIC_METRIC_EVENTS, TOPIC_QOE_EVENTS,
+    ProduceError, Producer, TOPIC_EXPOSURES, TOPIC_METRIC_EVENTS, TOPIC_QOE_EVENTS,
     TOPIC_REWARD_EVENTS,
 };
 use crate::metrics::PipelineMetrics;
 
 pub struct IngestionServiceImpl {
-    producer: EventProducer,
+    producer: Box<dyn Producer>,
     dedup: Mutex<EventDedup>,
     metrics: PipelineMetrics,
     buffer: Mutex<DiskBuffer>,
@@ -37,13 +37,13 @@ pub struct IngestionServiceImpl {
 
 impl IngestionServiceImpl {
     pub fn new(
-        producer: EventProducer,
+        producer: impl Producer + 'static,
         dedup: EventDedup,
         metrics: PipelineMetrics,
         buffer: DiskBuffer,
     ) -> Self {
         Self {
-            producer,
+            producer: Box::new(producer),
             dedup: Mutex::new(dedup),
             metrics,
             buffer: Mutex::new(buffer),
@@ -433,5 +433,830 @@ impl EventIngestionService for IngestionServiceImpl {
             duplicate_count: duplicate,
             invalid_count: invalid,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::buffer::BufferConfig;
+    use crate::kafka::ProduceError;
+    use crate::metrics::PipelineMetrics;
+    use chrono::{Duration, Utc};
+    use experimentation_ingest::dedup::{DedupConfig, DedupMetrics, EventDedup};
+    use experimentation_proto::common::{
+        ExposureEvent, MetricEvent, PlaybackMetrics, QoEEvent, RewardEvent,
+    };
+    use experimentation_proto::pipeline::{
+        IngestExposureBatchRequest, IngestExposureRequest, IngestMetricEventBatchRequest,
+        IngestMetricEventRequest, IngestQoEEventBatchRequest, IngestQoEEventRequest,
+        IngestRewardEventRequest,
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    // ---- Mock producer ----
+
+    /// Controls what the mock producer returns on publish calls.
+    #[derive(Clone)]
+    enum MockBehavior {
+        /// Always succeed.
+        Ok,
+        /// Return QueueFull on every call.
+        QueueFull,
+        /// Return a Kafka broker error on every call.
+        BrokerError,
+    }
+
+    struct MockProducer {
+        behavior: MockBehavior,
+        publish_count: AtomicUsize,
+        /// Stores (topic, key) pairs for each successful publish call.
+        published: std::sync::Mutex<Vec<(String, String)>>,
+    }
+
+    impl MockProducer {
+        fn new(behavior: MockBehavior) -> Self {
+            Self {
+                behavior,
+                publish_count: AtomicUsize::new(0),
+                published: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        fn call_count(&self) -> usize {
+            self.publish_count.load(Ordering::SeqCst)
+        }
+
+        fn published_events(&self) -> Vec<(String, String)> {
+            self.published.lock().unwrap().clone()
+        }
+    }
+
+    #[tonic::async_trait]
+    impl Producer for MockProducer {
+        async fn publish(
+            &self,
+            topic: &str,
+            key: &str,
+            _payload: &[u8],
+            _latency_histogram: Option<&prometheus::Histogram>,
+        ) -> Result<(), ProduceError> {
+            self.publish_with_event_type(topic, key, _payload, _latency_histogram, None)
+                .await
+        }
+
+        async fn publish_with_event_type(
+            &self,
+            topic: &str,
+            key: &str,
+            _payload: &[u8],
+            _latency_histogram: Option<&prometheus::Histogram>,
+            _event_type: Option<&str>,
+        ) -> Result<(), ProduceError> {
+            self.publish_count.fetch_add(1, Ordering::SeqCst);
+            match &self.behavior {
+                MockBehavior::Ok => {
+                    self.published
+                        .lock()
+                        .unwrap()
+                        .push((topic.to_string(), key.to_string()));
+                    Ok(())
+                }
+                MockBehavior::QueueFull => Err(ProduceError::QueueFull),
+                MockBehavior::BrokerError => {
+                    Err(ProduceError::Kafka("broker unreachable".to_string()))
+                }
+            }
+        }
+    }
+
+    // MockProducer wrapped in Arc so the test can inspect it after handing to the service.
+    struct MockProducerHandle {
+        inner: Arc<MockProducer>,
+    }
+
+    impl MockProducerHandle {
+        fn new(behavior: MockBehavior) -> Self {
+            Self {
+                inner: Arc::new(MockProducer::new(behavior)),
+            }
+        }
+
+        fn call_count(&self) -> usize {
+            self.inner.call_count()
+        }
+
+        fn published_events(&self) -> Vec<(String, String)> {
+            self.inner.published_events()
+        }
+    }
+
+    /// A wrapper that delegates to the Arc'd inner producer. This lets us
+    /// pass ownership to `IngestionServiceImpl::new` while retaining a handle.
+    struct ArcProducer(Arc<MockProducer>);
+
+    #[tonic::async_trait]
+    impl Producer for ArcProducer {
+        async fn publish(
+            &self,
+            topic: &str,
+            key: &str,
+            payload: &[u8],
+            hist: Option<&prometheus::Histogram>,
+        ) -> Result<(), ProduceError> {
+            self.0.publish(topic, key, payload, hist).await
+        }
+
+        async fn publish_with_event_type(
+            &self,
+            topic: &str,
+            key: &str,
+            payload: &[u8],
+            hist: Option<&prometheus::Histogram>,
+            event_type: Option<&str>,
+        ) -> Result<(), ProduceError> {
+            self.0
+                .publish_with_event_type(topic, key, payload, hist, event_type)
+                .await
+        }
+    }
+
+    // ---- Test fixtures ----
+
+    fn test_dedup() -> EventDedup {
+        let config = DedupConfig {
+            items_per_interval: 1000,
+            fp_rate: 0.001,
+            rotation_interval_secs: 3600,
+        };
+        EventDedup::with_config(config, DedupMetrics::noop())
+    }
+
+    fn test_buffer(dir: &std::path::Path) -> DiskBuffer {
+        DiskBuffer::new(BufferConfig {
+            dir: dir.to_path_buf(),
+            max_size_bytes: 1024 * 1024,
+        })
+        .unwrap()
+    }
+
+    fn build_service(handle: &MockProducerHandle, dir: &std::path::Path) -> IngestionServiceImpl {
+        IngestionServiceImpl::new(
+            ArcProducer(Arc::clone(&handle.inner)),
+            test_dedup(),
+            PipelineMetrics::noop(),
+            test_buffer(dir),
+        )
+    }
+
+    fn now_proto() -> Option<prost_types::Timestamp> {
+        let now = Utc::now();
+        Some(prost_types::Timestamp {
+            seconds: now.timestamp(),
+            nanos: now.timestamp_subsec_nanos() as i32,
+        })
+    }
+
+    fn valid_exposure() -> ExposureEvent {
+        ExposureEvent {
+            event_id: "evt-1".into(),
+            experiment_id: "exp-1".into(),
+            user_id: "user-1".into(),
+            variant_id: "control".into(),
+            timestamp: now_proto(),
+            assignment_probability: 0.5,
+            ..Default::default()
+        }
+    }
+
+    fn valid_metric_event() -> MetricEvent {
+        MetricEvent {
+            event_id: "met-1".into(),
+            user_id: "user-1".into(),
+            event_type: "play_start".into(),
+            value: 42.0,
+            timestamp: now_proto(),
+            ..Default::default()
+        }
+    }
+
+    fn valid_reward_event() -> RewardEvent {
+        RewardEvent {
+            event_id: "rew-1".into(),
+            experiment_id: "exp-1".into(),
+            user_id: "user-1".into(),
+            arm_id: "arm-a".into(),
+            reward: 0.85,
+            timestamp: now_proto(),
+            ..Default::default()
+        }
+    }
+
+    fn valid_qoe_event() -> QoEEvent {
+        QoEEvent {
+            event_id: "qoe-1".into(),
+            session_id: "sess-1".into(),
+            content_id: "movie-1".into(),
+            user_id: "user-1".into(),
+            metrics: Some(PlaybackMetrics {
+                time_to_first_frame_ms: 250,
+                rebuffer_count: 1,
+                rebuffer_ratio: 0.02,
+                avg_bitrate_kbps: 5000,
+                resolution_switches: 2,
+                peak_resolution_height: 1080,
+                startup_failure_rate: 0.0,
+                playback_duration_ms: 60000,
+            }),
+            timestamp: now_proto(),
+            ..Default::default()
+        }
+    }
+
+    // ---- Exposure tests ----
+
+    #[tokio::test]
+    async fn test_ingest_valid_exposure() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let resp = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(valid_exposure()),
+            }))
+            .await
+            .unwrap();
+
+        assert!(resp.into_inner().accepted);
+        assert_eq!(handle.call_count(), 1);
+        let published = handle.published_events();
+        assert_eq!(published[0].0, "exposures");
+        assert_eq!(published[0].1, "exp-1"); // keyed by experiment_id
+    }
+
+    #[tokio::test]
+    async fn test_ingest_exposure_missing_event_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let result = svc
+            .ingest_exposure(Request::new(IngestExposureRequest { event: None }))
+            .await;
+
+        assert!(result.is_err());
+        let status = result.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(status.message().contains("event is required"));
+        assert_eq!(handle.call_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_exposure_missing_experiment_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_exposure();
+        event.experiment_id = String::new();
+        let result = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+        assert_eq!(handle.call_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_exposure_duplicate_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        // First call: accepted
+        let resp1 = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(valid_exposure()),
+            }))
+            .await
+            .unwrap();
+        assert!(resp1.into_inner().accepted);
+
+        // Second call with same event_id: duplicate
+        let resp2 = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(valid_exposure()),
+            }))
+            .await
+            .unwrap();
+        assert!(!resp2.into_inner().accepted);
+
+        // Only one publish call (first event)
+        assert_eq!(handle.call_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_exposure_queue_full() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::QueueFull);
+        let svc = build_service(&handle, dir.path());
+
+        let result = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(valid_exposure()),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::ResourceExhausted);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_exposure_broker_error_buffers_to_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::BrokerError);
+        let svc = build_service(&handle, dir.path());
+
+        let resp = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(valid_exposure()),
+            }))
+            .await
+            .unwrap();
+
+        // Accepted (buffered to disk for later replay)
+        assert!(resp.into_inner().accepted);
+        assert_eq!(handle.call_count(), 1);
+
+        // Verify event was buffered
+        let buffer = svc.buffer.lock().unwrap();
+        assert!(buffer.has_pending());
+        let events = buffer.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].topic, "exposures");
+        assert_eq!(events[0].key, "exp-1");
+    }
+
+    // ---- Metric event tests ----
+
+    #[tokio::test]
+    async fn test_ingest_valid_metric_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let resp = svc
+            .ingest_metric_event(Request::new(IngestMetricEventRequest {
+                event: Some(valid_metric_event()),
+            }))
+            .await
+            .unwrap();
+
+        assert!(resp.into_inner().accepted);
+        let published = handle.published_events();
+        assert_eq!(published[0].0, "metric_events");
+        assert_eq!(published[0].1, "user-1"); // keyed by user_id
+    }
+
+    #[tokio::test]
+    async fn test_ingest_metric_event_missing_event_type() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_metric_event();
+        event.event_type = String::new();
+        let result = svc
+            .ingest_metric_event(Request::new(IngestMetricEventRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    // ---- Reward event tests ----
+
+    #[tokio::test]
+    async fn test_ingest_valid_reward_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let resp = svc
+            .ingest_reward_event(Request::new(IngestRewardEventRequest {
+                event: Some(valid_reward_event()),
+            }))
+            .await
+            .unwrap();
+
+        assert!(resp.into_inner().accepted);
+        let published = handle.published_events();
+        assert_eq!(published[0].0, "reward_events");
+        assert_eq!(published[0].1, "exp-1"); // keyed by experiment_id
+    }
+
+    #[tokio::test]
+    async fn test_ingest_reward_event_missing_arm_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_reward_event();
+        event.arm_id = String::new();
+        let result = svc
+            .ingest_reward_event(Request::new(IngestRewardEventRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    // ---- QoE event tests ----
+
+    #[tokio::test]
+    async fn test_ingest_valid_qoe_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let resp = svc
+            .ingest_qo_e_event(Request::new(IngestQoEEventRequest {
+                event: Some(valid_qoe_event()),
+            }))
+            .await
+            .unwrap();
+
+        assert!(resp.into_inner().accepted);
+        let published = handle.published_events();
+        assert_eq!(published[0].0, "qoe_events");
+        assert_eq!(published[0].1, "sess-1"); // keyed by session_id
+    }
+
+    #[tokio::test]
+    async fn test_ingest_qoe_event_missing_metrics() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_qoe_event();
+        event.metrics = None;
+        let result = svc
+            .ingest_qo_e_event(Request::new(IngestQoEEventRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    // ---- Batch tests ----
+
+    #[tokio::test]
+    async fn test_ingest_exposure_batch_mixed() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let valid1 = valid_exposure();
+        let mut valid2 = valid_exposure();
+        valid2.event_id = "evt-2".into();
+        valid2.experiment_id = "exp-2".into();
+
+        let mut invalid = valid_exposure();
+        invalid.experiment_id = String::new(); // invalid
+
+        let resp = svc
+            .ingest_exposure_batch(Request::new(IngestExposureBatchRequest {
+                events: vec![valid1.clone(), invalid, valid2],
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(resp.accepted_count, 2);
+        assert_eq!(resp.invalid_count, 1);
+        assert_eq!(resp.duplicate_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_exposure_batch_with_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let event = valid_exposure();
+        let mut different = valid_exposure();
+        different.event_id = "evt-2".into();
+
+        // Batch with 3 events: 2 unique + 1 duplicate of first
+        let resp = svc
+            .ingest_exposure_batch(Request::new(IngestExposureBatchRequest {
+                events: vec![event.clone(), different, event],
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(resp.accepted_count, 2);
+        assert_eq!(resp.duplicate_count, 1);
+        assert_eq!(resp.invalid_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_metric_event_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event1 = valid_metric_event();
+        event1.event_id = "met-1".into();
+        let mut event2 = valid_metric_event();
+        event2.event_id = "met-2".into();
+
+        let resp = svc
+            .ingest_metric_event_batch(Request::new(IngestMetricEventBatchRequest {
+                events: vec![event1, event2],
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(resp.accepted_count, 2);
+        assert_eq!(handle.call_count(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_qoe_event_batch_mixed() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let valid = valid_qoe_event();
+        let mut invalid = valid_qoe_event();
+        invalid.event_id = "qoe-2".into();
+        invalid.metrics = None; // invalid
+
+        let resp = svc
+            .ingest_qo_e_event_batch(Request::new(IngestQoEEventBatchRequest {
+                events: vec![valid, invalid],
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(resp.accepted_count, 1);
+        assert_eq!(resp.invalid_count, 1);
+    }
+
+    // ---- Cross-event dedup tests ----
+
+    #[tokio::test]
+    async fn test_dedup_works_across_event_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        // First: ingest exposure with event_id "shared-id"
+        let mut exposure = valid_exposure();
+        exposure.event_id = "shared-id".into();
+        let resp = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(exposure),
+            }))
+            .await
+            .unwrap();
+        assert!(resp.into_inner().accepted);
+
+        // Second: try to ingest metric event with same event_id
+        let mut metric = valid_metric_event();
+        metric.event_id = "shared-id".into();
+        let resp = svc
+            .ingest_metric_event(Request::new(IngestMetricEventRequest {
+                event: Some(metric),
+            }))
+            .await
+            .unwrap();
+        // Should be rejected as duplicate (Bloom filter is global)
+        assert!(!resp.into_inner().accepted);
+
+        assert_eq!(handle.call_count(), 1); // only the exposure was published
+    }
+
+    // ---- Timestamp validation through service ----
+
+    #[tokio::test]
+    async fn test_ingest_exposure_old_timestamp_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_exposure();
+        let old = Utc::now() - Duration::hours(25);
+        event.timestamp = Some(prost_types::Timestamp {
+            seconds: old.timestamp(),
+            nanos: 0,
+        });
+
+        let result = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+        assert_eq!(handle.call_count(), 0);
+    }
+
+    // ---- Buffer replay tests ----
+
+    #[tokio::test]
+    async fn test_replay_buffer_publishes_buffered_events() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Pre-populate buffer with events from a "previous crash"
+        {
+            let mut buffer = DiskBuffer::new(BufferConfig {
+                dir: dir.path().to_path_buf(),
+                max_size_bytes: 1024 * 1024,
+            })
+            .unwrap();
+            buffer
+                .append(&BufferedEvent {
+                    topic: "exposures".into(),
+                    key: "exp-1".into(),
+                    payload: vec![1, 2, 3],
+                })
+                .unwrap();
+            buffer
+                .append(&BufferedEvent {
+                    topic: "metric_events".into(),
+                    key: "user-1".into(),
+                    payload: vec![4, 5, 6],
+                })
+                .unwrap();
+        }
+
+        // Create service with the same buffer dir (simulating restart)
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        // Buffer should have pending events from "previous crash"
+        assert!(svc.buffer.lock().unwrap().has_pending());
+
+        svc.replay_buffer().await;
+
+        // Both events should have been replayed
+        assert_eq!(handle.call_count(), 2);
+
+        // Buffer should be cleared after successful replay
+        assert!(!svc.buffer.lock().unwrap().has_pending());
+    }
+
+    #[tokio::test]
+    async fn test_replay_buffer_stops_on_broker_unreachable() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Pre-populate buffer
+        {
+            let mut buffer = DiskBuffer::new(BufferConfig {
+                dir: dir.path().to_path_buf(),
+                max_size_bytes: 1024 * 1024,
+            })
+            .unwrap();
+            for i in 0..5 {
+                buffer
+                    .append(&BufferedEvent {
+                        topic: "exposures".into(),
+                        key: format!("key-{i}"),
+                        payload: vec![i as u8],
+                    })
+                    .unwrap();
+            }
+        }
+
+        // Broker is unreachable — replay should abort and keep buffer
+        let handle = MockProducerHandle::new(MockBehavior::BrokerError);
+        let svc = build_service(&handle, dir.path());
+        svc.replay_buffer().await;
+
+        // First event attempted, then aborted (broker unreachable)
+        assert_eq!(handle.call_count(), 1);
+
+        // Buffer should still have pending events
+        assert!(svc.buffer.lock().unwrap().has_pending());
+    }
+
+    // ---- Metrics verification ----
+
+    #[tokio::test]
+    async fn test_metrics_updated_on_ingest() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let registry = prometheus::Registry::new();
+        let metrics = PipelineMetrics::new(&registry);
+
+        let svc = IngestionServiceImpl::new(
+            ArcProducer(Arc::clone(&handle.inner)),
+            test_dedup(),
+            metrics.clone(),
+            test_buffer(dir.path()),
+        );
+
+        // Ingest a valid exposure
+        svc.ingest_exposure(Request::new(IngestExposureRequest {
+            event: Some(valid_exposure()),
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(
+            metrics.accepted("exposure").get(),
+            1,
+            "accepted counter should increment"
+        );
+
+        // Ingest an invalid exposure
+        let mut invalid = valid_exposure();
+        invalid.event_id = "evt-bad".into();
+        invalid.experiment_id = String::new();
+        let _ = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(invalid),
+            }))
+            .await;
+
+        assert_eq!(
+            metrics.rejected("exposure").get(),
+            1,
+            "rejected counter should increment"
+        );
+
+        // Ingest a duplicate
+        let _ = svc
+            .ingest_exposure(Request::new(IngestExposureRequest {
+                event: Some(valid_exposure()),
+            }))
+            .await;
+
+        assert_eq!(
+            metrics.deduplicated("exposure").get(),
+            1,
+            "deduplicated counter should increment"
+        );
+    }
+
+    // ---- All four event types publish to correct topics ----
+
+    #[tokio::test]
+    async fn test_all_event_types_route_to_correct_topics() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        // Exposure → exposures topic
+        svc.ingest_exposure(Request::new(IngestExposureRequest {
+            event: Some(valid_exposure()),
+        }))
+        .await
+        .unwrap();
+
+        // Metric → metric_events topic
+        svc.ingest_metric_event(Request::new(IngestMetricEventRequest {
+            event: Some(valid_metric_event()),
+        }))
+        .await
+        .unwrap();
+
+        // Reward → reward_events topic
+        svc.ingest_reward_event(Request::new(IngestRewardEventRequest {
+            event: Some(valid_reward_event()),
+        }))
+        .await
+        .unwrap();
+
+        // QoE → qoe_events topic
+        svc.ingest_qo_e_event(Request::new(IngestQoEEventRequest {
+            event: Some(valid_qoe_event()),
+        }))
+        .await
+        .unwrap();
+
+        let published = handle.published_events();
+        assert_eq!(published.len(), 4);
+        assert_eq!(published[0].0, "exposures");
+        assert_eq!(published[1].0, "metric_events");
+        assert_eq!(published[2].0, "reward_events");
+        assert_eq!(published[3].0, "qoe_events");
     }
 }
