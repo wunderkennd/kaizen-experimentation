@@ -118,6 +118,34 @@ func TestExportNotebook(t *testing.T) {
 	assert.Equal(t, 28, len(nb.Cells))
 }
 
+func TestExportNotebook_DatabricksFormat(t *testing.T) {
+	client, _ := setupTestServer(t)
+	ctx := context.Background()
+	_, _ = client.ComputeMetrics(ctx, connect.NewRequest(&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
+	resp, err := client.ExportNotebook(ctx, connect.NewRequest(&metricsv1.ExportNotebookRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001", NotebookFormat: "databricks"}))
+	require.NoError(t, err)
+	assert.Contains(t, resp.Msg.GetFilename(), ".py")
+	content := string(resp.Msg.GetNotebookContent())
+	assert.Contains(t, content, "# Databricks notebook source")
+	assert.Contains(t, content, "# COMMAND ----------")
+	assert.Contains(t, content, "# MAGIC ## Metric:")
+	assert.Contains(t, content, "display(df)")
+}
+
+func TestExportNotebook_DefaultFormatIsJupyter(t *testing.T) {
+	client, _ := setupTestServer(t)
+	ctx := context.Background()
+	_, _ = client.ComputeMetrics(ctx, connect.NewRequest(&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
+	// Empty format should default to Jupyter.
+	resp, err := client.ExportNotebook(ctx, connect.NewRequest(&metricsv1.ExportNotebookRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
+	require.NoError(t, err)
+	assert.Contains(t, resp.Msg.GetFilename(), ".ipynb")
+	var nb export.Notebook
+	err = json.Unmarshal(resp.Msg.GetNotebookContent(), &nb)
+	require.NoError(t, err)
+	assert.Equal(t, 4, nb.NBFormat)
+}
+
 func TestExportNotebook_NoLogs(t *testing.T) {
 	client, _ := setupTestServer(t)
 	_, err := client.ExportNotebook(context.Background(), connect.NewRequest(&metricsv1.ExportNotebookRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
