@@ -470,6 +470,91 @@ func TestChaos_RepeatedFailures_NoStateCorruption(t *testing.T) {
 	assert.NotEmpty(t, qlWriter.AllEntries())
 }
 
+// =====================
+// Retry recovery tests
+// =====================
+
+func TestChaos_StandardJob_RecoversFromTransientSparkFailure(t *testing.T) {
+	// The inner executor fails twice, then succeeds. The retry wrapper recovers.
+	inner := NewFailingExecutor(0, fmt.Errorf("spark cluster unreachable"))
+	// Override: allow up to callCount=2 to fail, then succeed.
+	// We use a TransientExecutor that fails first N calls per SQL method.
+	transient := &transientChaosExecutor{failFirstN: 2, failErr: fmt.Errorf("spark cluster unreachable"), defaultRows: 500}
+	retryExec := spark.NewRetryExecutorForTest(transient, spark.RetryConfig{
+		MaxRetries:     3,
+		BaseDelay:      1 * time.Second,
+		MaxDelay:       30 * time.Second,
+		JitterFraction: 0,
+	})
+	_ = inner // unused, we use transient instead
+
+	job := NewStandardJob(loadTestConfig(t), newRenderer(t), retryExec, querylog.NewMemWriter())
+	result, err := job.Run(context.Background(), "e0000000-0000-0000-0000-000000000001")
+	require.NoError(t, err)
+	assert.Equal(t, 4, result.MetricsComputed)
+}
+
+func TestChaos_StandardJob_PermanentErrorNotRetried(t *testing.T) {
+	inner := &permanentChaosExecutor{}
+	retryExec := spark.NewRetryExecutorForTest(inner, spark.RetryConfig{
+		MaxRetries:     3,
+		BaseDelay:      1 * time.Second,
+		MaxDelay:       30 * time.Second,
+		JitterFraction: 0,
+	})
+
+	job := NewStandardJob(loadTestConfig(t), newRenderer(t), retryExec, querylog.NewMemWriter())
+	_, err := job.Run(context.Background(), "e0000000-0000-0000-0000-000000000001")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SQL syntax error")
+	assert.True(t, spark.IsPermanent(err))
+	// Only 1 call — no retries for permanent errors.
+	assert.Equal(t, 1, inner.calls())
+}
+
+// transientChaosExecutor fails the first N calls per method, then succeeds.
+type transientChaosExecutor struct {
+	callCount   atomic.Int64
+	failFirstN  int64
+	failErr     error
+	defaultRows int64
+}
+
+func (e *transientChaosExecutor) ExecuteSQL(_ context.Context, _ string) (*spark.SQLResult, error) {
+	n := e.callCount.Add(1)
+	if n <= e.failFirstN {
+		return nil, e.failErr
+	}
+	return &spark.SQLResult{RowCount: e.defaultRows, Duration: 50 * time.Millisecond}, nil
+}
+
+func (e *transientChaosExecutor) ExecuteAndWrite(_ context.Context, _ string, _ string) (*spark.SQLResult, error) {
+	n := e.callCount.Add(1)
+	if n <= e.failFirstN {
+		return nil, e.failErr
+	}
+	return &spark.SQLResult{RowCount: e.defaultRows, Duration: 100 * time.Millisecond}, nil
+}
+
+// permanentChaosExecutor always returns a PermanentError.
+type permanentChaosExecutor struct {
+	callCount atomic.Int64
+}
+
+func (e *permanentChaosExecutor) ExecuteSQL(_ context.Context, _ string) (*spark.SQLResult, error) {
+	e.callCount.Add(1)
+	return nil, &spark.PermanentError{Err: fmt.Errorf("SQL syntax error")}
+}
+
+func (e *permanentChaosExecutor) ExecuteAndWrite(_ context.Context, _ string, _ string) (*spark.SQLResult, error) {
+	e.callCount.Add(1)
+	return nil, &spark.PermanentError{Err: fmt.Errorf("SQL syntax error")}
+}
+
+func (e *permanentChaosExecutor) calls() int {
+	return int(e.callCount.Load())
+}
+
 func TestChaos_GuardrailJob_BreachTrackerSurvivesFailures(t *testing.T) {
 	cfg := loadTestConfig(t)
 	renderer := newRenderer(t)
