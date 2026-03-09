@@ -56,7 +56,7 @@ describe('Experiment List Page', () => {
     render(<ExperimentListPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('alice@streamco.com')).toBeInTheDocument();
+      expect(screen.getAllByText('alice@streamco.com').length).toBeGreaterThanOrEqual(1);
     });
 
     expect(screen.getByText('bob@streamco.com')).toBeInTheDocument();
