@@ -18,7 +18,7 @@
 | Agent-3 | M3 Metrics | 🟢 Phase 3 Complete | agent-3/test/guardrail-e2e | M3↔M5 guardrail contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration (PR #51). M3↔M4a contracts (PR #61): 33 tests. CI opt (PR #58). Kafka publisher (PR #64). M3↔M5 contract tests: schema symmetry + Kafka roundtrip. Session-level + QoE SQL done (M2.11). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/cold-start-bandit | M3.2 Content Cold-Start Bandit | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start bandit in progress. |
 | Agent-5 | M5 Management | 🟢 Phase 3 Complete | agent-5/feat/cumulative-holdout | M3.6 Cumulative holdout complete | — | Phase 2 complete (PRs #50, #53). M3.6: cumulative holdout support — traffic 1-5% enforcement, sequential/guardrail bypass, holdout retirement audit, ListRunningHoldouts query. |
-| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/bandit-dashboard | Bandit dashboard (M3.3) complete | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard done. 115 tests pass. Next: live API integration (Agent-5 ↔ Agent-6). |
+| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/live-api-integration | Live API integration with Agent-5 | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60). Live API integration: Next.js rewrites proxy, ConnectRPC error parsing, opt-in MSW, 24 contract tests. 139 tests pass. Ready to pair with Agent-5 backend. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/phase4-benchmarks | Phase 4: Performance benchmarks + concurrency stress tests | — | M1.28–1.30 merged (PR #13). Phases 1–3 complete. Phase 4: EvaluateFlag p99 ~86μs (target <10ms ✅), hash Bucket ~64ns/op (target <1μs ✅), 50-writer concurrent update + 50r/10w mixed load pass with -race. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
@@ -103,7 +103,7 @@
 |---|-----------|-------|--------|----------|
 | 3.1 | LinUCB contextual bandit | Agent-4 | 🟢 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) | PR #54 merged |
 | 3.2 | Content cold-start bandit | Agent-4 | 🔵 | Agent-6 (cold-start widget on bandit dashboard) |
-| 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🔵 | PR pending — arm allocation chart, reward rates, Thompson Sampling params, reward history |
+| 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🟢 | PR #60 merged — arm allocation chart, reward rates, Thompson Sampling params, reward history |
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 done (session_id keyed events). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration, merged in M2.11). Agent-1 part pending. |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 done (QoE validation + ingestion PR #40). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl, merged in M2.11). Pipeline e2e pending. |
 | 3.6 | Cumulative holdout support | Agent-5 | 🟢 | M4a periodic lift reports |
@@ -124,7 +124,7 @@ Track integration test results between agent pairs.
 
 | Week | Pair | Status | Notes |
 |------|------|--------|-------|
-| 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
+| 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🔵 | Agent-6 live API integration PR in progress — Next.js rewrites proxy, ConnectRPC error parsing, enum prefix stripping, 24 contract tests. Ready for end-to-end pair testing with Agent-5 backend. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
 | 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟢 | Merged (PR #51): SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |

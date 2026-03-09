@@ -156,7 +156,7 @@ describe('Bandit Dashboard - error state', () => {
     render(<BanditDashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/failed/i)).toBeInTheDocument();
+      expect(screen.getByText(/no bandit dashboard/i)).toBeInTheDocument();
     });
   });
 });

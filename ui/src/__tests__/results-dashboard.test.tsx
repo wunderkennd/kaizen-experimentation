@@ -191,7 +191,7 @@ describe('Results Dashboard - error state', () => {
     render(<ResultsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/failed/i)).toBeInTheDocument();
+      expect(screen.getByText(/not found/i)).toBeInTheDocument();
     });
   });
 });
