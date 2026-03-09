@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-5 (Phase 4 stress tests — concurrent state transitions, bucket reuse integrity, audit completeness)
+> **Last updated**: 2026-03-09 by Agent-7 (M7 chaos/crash-recovery tests — 13 tests pass with -race)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/m4b-grpc-wiring | M4b gRPC wiring | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b BanditPolicyService gRPC wiring: all 5 RPCs implemented (SelectArm, CreateColdStartBandit, ExportAffinityScores, GetPolicySnapshot, RollbackPolicy), 17 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/test/phase4-stress-tests | Phase 4 stress tests | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: 6 stress tests — 100-goroutine concurrent start, rapid lifecycle cycles, bucket reuse integrity, audit trail completeness. |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/live-api-integration | Live API integration with Agent-5 | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60). Live API integration: Next.js rewrites proxy, ConnectRPC error parsing, opt-in MSW, 24 contract tests. 139 tests pass. Ready to pair with Agent-5 backend. |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/phase4-benchmarks | Phase 4: Performance benchmarks + concurrency stress tests | — | M1.28–1.30 merged (PR #13). Phases 1–3 complete. Phase 4: EvaluateFlag p99 ~86μs (target <10ms ✅), hash Bucket ~64ns/op (target <1μs ✅), 50-writer concurrent update + 50r/10w mixed load pass with -race. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/test/chaos-crash-recovery | Phase 4.5: Chaos/crash-recovery tests | — | M1.28–1.30 merged (PR #13). Phases 1–4 complete. Phase 4.5: 13 chaos tests — ChaosStore failure injection, PromoteToExperiment atomicity, store recovery, 60-goroutine concurrent CRUD with random failures, audit isolation, context cancellation, server restart simulation. All pass with -race. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
@@ -116,7 +116,7 @@
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | ⚪ | — |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | 🟢 | Agent-6 (role-aware UI controls) | PR #71 merged — ConnectRPC auth interceptor, 4-level role hierarchy, audit trail records real actor |
-| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged. Agent-3: 20 resilience tests (PR #69). Agent-5: 6 stress tests — 100-goroutine concurrent start, bucket reuse, audit completeness. Other agents pending. |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged. Agent-3: 20 resilience tests (PR #69). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. Other agents pending. |
 
 ## Pair Integration Schedule
 

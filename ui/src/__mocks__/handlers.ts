@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw';
 import {
   SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS,
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
-  SEED_BANDIT_RESULTS,
+  SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS,
 } from './seed-data';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
@@ -262,6 +262,33 @@ export const handlers = [
         { error: `No bandit dashboard for experiment ${body.experimentId}` },
         { status: 404 },
       );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetCumulativeHoldoutResult
+  http.post(`${ANALYSIS_SVC}/GetCumulativeHoldoutResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_HOLDOUT_RESULTS[body.experimentId];
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No holdout result for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetGuardrailStatus
+  http.post(`${MGMT_SVC}/GetGuardrailStatus`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_GUARDRAIL_STATUS[body.experimentId];
+    if (!result) {
+      return HttpResponse.json({
+        experimentId: body.experimentId,
+        breaches: [],
+        isPaused: false,
+      });
     }
     return HttpResponse.json(result);
   }),

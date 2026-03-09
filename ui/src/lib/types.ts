@@ -135,6 +135,7 @@ export interface AnalysisResult {
   experimentId: string;
   metricResults: MetricResult[];
   srmResult: SrmResult;
+  surrogateProjections?: SurrogateProjection[];
   computedAt: string;
 }
 
@@ -196,6 +197,57 @@ export interface InterleavingAnalysisResult {
   algorithmStrengths: AlgorithmStrength[];
   positionAnalyses: PositionAnalysis[];
   computedAt: string;
+}
+
+// --- Surrogate Projections (M2.10) ---
+
+export interface SurrogateProjection {
+  metricId: string;
+  surrogateMetricId: string;
+  projectedEffect: number;
+  projectionCiLower: number;
+  projectionCiUpper: number;
+  calibrationRSquared: number;
+}
+
+// --- Cumulative Holdout (M2.10) ---
+
+export interface HoldoutTimeSeriesPoint {
+  date: string;
+  cumulativeLift: number;
+  ciLower: number;
+  ciUpper: number;
+  sampleSize: number;
+}
+
+export interface CumulativeHoldoutResult {
+  experimentId: string;
+  metricId: string;
+  currentCumulativeLift: number;
+  currentCiLower: number;
+  currentCiUpper: number;
+  isSignificant: boolean;
+  timeSeries: HoldoutTimeSeriesPoint[];
+  computedAt: string;
+}
+
+// --- Guardrail Breach History (M2.10) ---
+
+export interface GuardrailBreachEvent {
+  experimentId: string;
+  metricId: string;
+  variantId: string;
+  currentValue: number;
+  threshold: number;
+  consecutiveBreachCount: number;
+  action: 'ALERT' | 'AUTO_PAUSE';
+  detectedAt: string;
+}
+
+export interface GuardrailStatusResult {
+  experimentId: string;
+  breaches: GuardrailBreachEvent[];
+  isPaused: boolean;
 }
 
 // --- Bandit Dashboard (M3.3) ---
