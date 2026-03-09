@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-7 (M7 chaos/crash-recovery tests — 13 tests pass with -race)
+> **Last updated**: 2026-03-09 by Agent-1 (Live M4b bandit delegation — GrpcBanditClient with 10ms timeout + fallback)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -13,12 +13,12 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/multileave-interleaving | Multileave (M2.7c) | — | M1.1–1.5 + M2.7 + M2.7b + Bandit delegation complete. M2.7c: Team Draft Multileave (3+ algorithms). |
+| Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/live-bandit-delegation | Live M4b bandit delegation | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation: GrpcBanditClient with 10ms timeout, uniform random fallback, context feature extraction. 57 tests (54 integration + 3 gRPC mock). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Service-layer tests + Producer trait extraction | — | Phase 1 (PRs #1, #8), Phase 2 (PR #23), Phase 3 (PR #40), Phase 4 (PRs #48, #59) all merged. 78 tests (36 pipeline + 42 ingest). Producer trait enables mock-based testing. |
-| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/test/e2e-pipeline-3.4-3.5 | 3.4/3.5 e2e pipeline tests | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests for session-level, QoE, lifecycle, correlation paths (PR #79). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/m4b-grpc-wiring | M4b gRPC wiring | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b BanditPolicyService gRPC wiring: all 5 RPCs implemented (SelectArm, CreateColdStartBandit, ExportAffinityScores, GetPolicySnapshot, RollbackPolicy), 17 tests pass. |
+| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/databricks-notebook-export | Databricks notebook export + Spark retry backoff | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR pending). |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/kafka-reward-consumer | M4b Kafka reward consumer | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b gRPC wiring merged (PR #72). Kafka reward consumer: rdkafka StreamConsumer, protobuf decode, assert_finite, batch commits, 30 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/test/phase4-stress-tests | Phase 4 stress tests | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: 6 stress tests — 100-goroutine concurrent start, rapid lifecycle cycles, bucket reuse integrity, audit trail completeness. |
-| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/live-api-integration | Live API integration with Agent-5 | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60). Live API integration: Next.js rewrites proxy, ConnectRPC error parsing, opt-in MSW, 24 contract tests. 139 tests pass. Ready to pair with Agent-5 backend. |
+| Agent-6 | M6 UI | 🔵 Phase 3 In Progress | agent-6/feat/qoe-novelty-curve | Phase 3 SVOD-specific views | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3: surrogate projections + cumulative holdout + guardrail panel (PR #76), CATE lifecycle tab (PR #80), QoE dashboard + novelty decay curve + GST boundary + Lorenz curve (PR #81). 171 tests pass. All Phase 3 visualization milestones complete. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/rbac-integration | Phase 4.4: RBAC integration | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor with role-based permissions — viewer (Get/List/Evaluate), experimenter (Create/Update), admin (Promote). 15 auth tests. DISABLE_AUTH env guard. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
@@ -107,6 +107,8 @@
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🔵 | — | Agent-2 done (session_id keyed events). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration + 11 e2e tests in PR #79). Agent-1 part pending. |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟢 | — | Agent-2 done (QoE validation + ingestion PR #40). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl + e2e tests PR #79). Pipeline e2e verified. |
 | 3.6 | Cumulative holdout support | Agent-5 | 🟢 | M4a periodic lift reports |
+| 3.7 | CATE lifecycle segment tab | Agent-6 | 🟢 | PR #80 — Forest plot + Cochran Q heterogeneity indicator per lifecycle segment |
+| 3.8 | Phase 3 SVOD visualizations (QoE, novelty curve, GST, Lorenz) | Agent-6 | 🟢 | PR #76 (surrogate/holdout/guardrail), PR #81 (QoE dashboard, novelty decay curve, GST boundary, Lorenz curve). 171 tests. |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
 
@@ -130,7 +132,7 @@ Track integration test results between agent pairs.
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | 🔵 | 33 contract tests verify M3 SQL output columns match Delta Lake schemas M4a reads. Covers all 4 output tables + ratio delta method variance components. |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟢 | M3 Kafka publisher (PR #64) + M5 consumer (PR #18). 3 schema contract tests (field symmetry, bidirectional deser, zero-value). Kafka roundtrip integration test. |
-| 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🔵 | M1 bandit delegation with mock uniform selection ready. M4b SelectArm gRPC now implemented with all 5 RPCs wired through LMAX core. Ready for live integration testing. |
+| 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🔵 | M1 GrpcBanditClient with 10ms timeout + uniform fallback. M4b SelectArm gRPC wired through LMAX core. 3 mock gRPC integration tests pass. Ready for live pairing (set M4B_ADDR env var). |
 | 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | ⚪ | — |
 
 ## Contract Changes Log

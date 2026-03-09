@@ -31,6 +31,7 @@ vi.mock('recharts', async () => {
     CartesianGrid: Noop,
     Tooltip: Noop,
     Cell: Noop,
+    Legend: Noop,
   };
 });
 

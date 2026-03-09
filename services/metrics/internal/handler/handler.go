@@ -91,12 +91,22 @@ func (h *MetricsHandler) ExportNotebook(ctx context.Context, req *connect.Reques
 	if len(entries) == 0 {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no query logs found for experiment %s", id))
 	}
-	nbBytes, err := export.GenerateNotebook(id, entries)
+	format := req.Msg.GetNotebookFormat()
+	var nbBytes []byte
+	var filename string
+	switch format {
+	case "databricks":
+		nbBytes, err = export.GenerateDatabricksNotebook(id, entries)
+		filename = fmt.Sprintf("experiment_%s_%s.py", id, time.Now().Format("20060102"))
+	default:
+		nbBytes, err = export.GenerateNotebook(id, entries)
+		filename = fmt.Sprintf("experiment_%s_%s.ipynb", id, time.Now().Format("20060102"))
+	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&metricsv1.ExportNotebookResponse{
-		NotebookContent: nbBytes, Filename: fmt.Sprintf("experiment_%s_%s.ipynb", id, time.Now().Format("20060102")),
+		NotebookContent: nbBytes, Filename: filename,
 	}), nil
 }
 

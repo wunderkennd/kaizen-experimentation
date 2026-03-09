@@ -68,6 +68,27 @@ func (s *ExperimentService) CreateExperiment(
 		return nil, internalError("audit create", err)
 	}
 
+	// Guardrail override audit: ALERT_ONLY is an explicit override of the
+	// safe-by-default AUTO_PAUSE behavior. Record a separate audit entry so
+	// this decision is clearly visible in the audit trail.
+	if created.GuardrailAction == "ALERT_ONLY" {
+		overrideDetails, _ := json.Marshal(map[string]string{
+			"guardrail_action": "ALERT_ONLY",
+			"override_reason":  "owner set at creation",
+		})
+		if err := s.audit.Insert(ctx, tx, store.AuditEntry{
+			ExperimentID: created.ExperimentID,
+			Action:       "guardrail_override",
+			ActorEmail:   actorFromContext(ctx),
+			NewState:     "DRAFT",
+			DetailsJSON:  overrideDetails,
+		}); err != nil {
+			return nil, internalError("audit guardrail_override", err)
+		}
+		slog.Warn("guardrail override: experiment created with ALERT_ONLY",
+			"id", created.ExperimentID, "actor", actorFromContext(ctx))
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, internalError("commit transaction", err)
 	}
@@ -207,6 +228,47 @@ func (s *ExperimentService) UpdateExperiment(
 		DetailsJSON:  json.RawMessage(`{"source":"api"}`),
 	}); err != nil {
 		return nil, internalError("audit update", err)
+	}
+
+	// Guardrail override audit: detect changes to guardrail_action.
+	if current.GuardrailAction != updated.GuardrailAction {
+		if updated.GuardrailAction == "ALERT_ONLY" {
+			overrideDetails, _ := json.Marshal(map[string]string{
+				"previous_action": current.GuardrailAction,
+				"new_action":      "ALERT_ONLY",
+				"override_reason": "owner changed via update",
+			})
+			if err := s.audit.Insert(ctx, tx, store.AuditEntry{
+				ExperimentID:  updated.ExperimentID,
+				Action:        "guardrail_override",
+				ActorEmail:    actorFromContext(ctx),
+				PreviousState: "DRAFT",
+				NewState:      "DRAFT",
+				DetailsJSON:   overrideDetails,
+			}); err != nil {
+				return nil, internalError("audit guardrail_override", err)
+			}
+			slog.Warn("guardrail override: experiment updated to ALERT_ONLY",
+				"id", updated.ExperimentID, "actor", actorFromContext(ctx))
+		} else if current.GuardrailAction == "ALERT_ONLY" {
+			revokeDetails, _ := json.Marshal(map[string]string{
+				"previous_action": "ALERT_ONLY",
+				"new_action":      updated.GuardrailAction,
+				"revoke_reason":   "owner reverted via update",
+			})
+			if err := s.audit.Insert(ctx, tx, store.AuditEntry{
+				ExperimentID:  updated.ExperimentID,
+				Action:        "guardrail_override_revoked",
+				ActorEmail:    actorFromContext(ctx),
+				PreviousState: "DRAFT",
+				NewState:      "DRAFT",
+				DetailsJSON:   revokeDetails,
+			}); err != nil {
+				return nil, internalError("audit guardrail_override_revoked", err)
+			}
+			slog.Info("guardrail override revoked: experiment updated to AUTO_PAUSE",
+				"id", updated.ExperimentID, "actor", actorFromContext(ctx))
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

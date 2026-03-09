@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import type { InterferenceAnalysisResult } from '@/lib/types';
 import { getInterferenceAnalysis } from '@/lib/api';
 import { formatPValue } from '@/lib/utils';
@@ -36,6 +40,17 @@ export function InterferenceTab({ experimentId }: InterferenceTabProps) {
       </div>
     );
   }
+
+  // Build Lorenz curve chart data if available
+  const hasLorenzData = result.treatmentLorenzCurve && result.controlLorenzCurve;
+  const lorenzChartData = hasLorenzData
+    ? result.treatmentLorenzCurve!.map((t, i) => ({
+        contentPct: (t.cumulativeContentFraction * 100),
+        treatment: (t.cumulativeConsumptionFraction * 100),
+        control: (result.controlLorenzCurve![i]?.cumulativeConsumptionFraction ?? 0) * 100,
+        equality: (t.cumulativeContentFraction * 100),
+      }))
+    : [];
 
   return (
     <div className="space-y-4">
@@ -110,6 +125,73 @@ export function InterferenceTab({ experimentId }: InterferenceTabProps) {
           </div>
         </div>
       </div>
+
+      {/* Lorenz Curve */}
+      {hasLorenzData && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h4 className="mb-3 text-sm font-semibold text-gray-900">Consumption Concentration (Lorenz Curve)</h4>
+          <p className="mb-2 text-xs text-gray-500">
+            How evenly content consumption is distributed. The further a curve is from the equality line, the more concentrated consumption is on fewer titles.
+          </p>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={lorenzChartData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis
+                dataKey="contentPct"
+                label={{ value: 'Cumulative % of Content', position: 'insideBottom', offset: -2, fontSize: 12 }}
+                tickFormatter={(v: number) => `${v}%`}
+                tick={{ fontSize: 11 }}
+              />
+              <YAxis
+                label={{ value: 'Cumulative % of Consumption', angle: -90, position: 'insideLeft', fontSize: 12 }}
+                tickFormatter={(v: number) => `${v}%`}
+                tick={{ fontSize: 11 }}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) => [
+                  `${value.toFixed(1)}%`,
+                  name === 'treatment' ? `Treatment (Gini ${result.treatmentGiniCoefficient.toFixed(2)})` :
+                  name === 'control' ? `Control (Gini ${result.controlGiniCoefficient.toFixed(2)})` :
+                  'Perfect Equality',
+                ]}
+                labelFormatter={(label: number) => `${label.toFixed(0)}% of content`}
+              />
+              <Legend
+                formatter={(value: string) =>
+                  value === 'treatment' ? 'Treatment' :
+                  value === 'control' ? 'Control' :
+                  'Perfect Equality'
+                }
+              />
+              <Line
+                type="monotone"
+                dataKey="equality"
+                stroke="#9ca3af"
+                strokeDasharray="4 4"
+                strokeWidth={1}
+                dot={false}
+                name="equality"
+              />
+              <Line
+                type="monotone"
+                dataKey="control"
+                stroke="#6b7280"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                name="control"
+              />
+              <Line
+                type="monotone"
+                dataKey="treatment"
+                stroke="#6366f1"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                name="treatment"
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Spillover titles table */}
       {result.spilloverTitles.length > 0 && (

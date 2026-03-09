@@ -1,7 +1,8 @@
 import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
-  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult,
+  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
+  GstTrajectoryResult, CateAnalysisResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -535,6 +536,25 @@ const INITIAL_NOVELTY_RESULTS: Record<string, NoveltyAnalysisResult> = {
     decayConstantDays: 4.2,
     isStabilized: false,
     daysUntilProjectedStability: 6,
+    dailyEffects: [
+      { day: 1, observedEffect: 0.032, fittedEffect: 0.027 },
+      { day: 2, observedEffect: 0.028, fittedEffect: 0.024 },
+      { day: 3, observedEffect: 0.022, fittedEffect: 0.021 },
+      { day: 4, observedEffect: 0.019, fittedEffect: 0.018 },
+      { day: 5, observedEffect: 0.017, fittedEffect: 0.016 },
+      { day: 6, observedEffect: 0.016, fittedEffect: 0.014 },
+      { day: 7, observedEffect: 0.013, fittedEffect: 0.013 },
+      { day: 8, observedEffect: 0.014, fittedEffect: 0.012 },
+      { day: 9, observedEffect: 0.011, fittedEffect: 0.011 },
+      { day: 10, observedEffect: 0.012, fittedEffect: 0.011 },
+      { day: 11, observedEffect: 0.010, fittedEffect: 0.010 },
+      { day: 12, observedEffect: 0.011, fittedEffect: 0.010 },
+      { day: 13, observedEffect: 0.009, fittedEffect: 0.010 },
+      { day: 14, observedEffect: 0.010, fittedEffect: 0.009 },
+      { day: 15, observedEffect: 0.009, fittedEffect: 0.009 },
+      { day: 16, observedEffect: 0.010, fittedEffect: 0.009 },
+      { day: 17, observedEffect: 0.009, fittedEffect: 0.009 },
+    ],
     computedAt: '2026-03-05T12:00:00Z',
   },
 };
@@ -554,6 +574,32 @@ const INITIAL_INTERFERENCE_RESULTS: Record<string, InterferenceAnalysisResult> =
       { contentId: 'title-1234', treatmentWatchRate: 0.082, controlWatchRate: 0.041, pValue: 0.002 },
       { contentId: 'title-5678', treatmentWatchRate: 0.015, controlWatchRate: 0.044, pValue: 0.008 },
       { contentId: 'title-9012', treatmentWatchRate: 0.063, controlWatchRate: 0.038, pValue: 0.031 },
+    ],
+    treatmentLorenzCurve: [
+      { cumulativeContentFraction: 0, cumulativeConsumptionFraction: 0 },
+      { cumulativeContentFraction: 0.1, cumulativeConsumptionFraction: 0.02 },
+      { cumulativeContentFraction: 0.2, cumulativeConsumptionFraction: 0.05 },
+      { cumulativeContentFraction: 0.3, cumulativeConsumptionFraction: 0.10 },
+      { cumulativeContentFraction: 0.4, cumulativeConsumptionFraction: 0.17 },
+      { cumulativeContentFraction: 0.5, cumulativeConsumptionFraction: 0.26 },
+      { cumulativeContentFraction: 0.6, cumulativeConsumptionFraction: 0.37 },
+      { cumulativeContentFraction: 0.7, cumulativeConsumptionFraction: 0.51 },
+      { cumulativeContentFraction: 0.8, cumulativeConsumptionFraction: 0.68 },
+      { cumulativeContentFraction: 0.9, cumulativeConsumptionFraction: 0.85 },
+      { cumulativeContentFraction: 1.0, cumulativeConsumptionFraction: 1.0 },
+    ],
+    controlLorenzCurve: [
+      { cumulativeContentFraction: 0, cumulativeConsumptionFraction: 0 },
+      { cumulativeContentFraction: 0.1, cumulativeConsumptionFraction: 0.03 },
+      { cumulativeContentFraction: 0.2, cumulativeConsumptionFraction: 0.07 },
+      { cumulativeContentFraction: 0.3, cumulativeConsumptionFraction: 0.13 },
+      { cumulativeContentFraction: 0.4, cumulativeConsumptionFraction: 0.20 },
+      { cumulativeContentFraction: 0.5, cumulativeConsumptionFraction: 0.29 },
+      { cumulativeContentFraction: 0.6, cumulativeConsumptionFraction: 0.40 },
+      { cumulativeContentFraction: 0.7, cumulativeConsumptionFraction: 0.54 },
+      { cumulativeContentFraction: 0.8, cumulativeConsumptionFraction: 0.70 },
+      { cumulativeContentFraction: 0.9, cumulativeConsumptionFraction: 0.86 },
+      { cumulativeContentFraction: 1.0, cumulativeConsumptionFraction: 1.0 },
     ],
     computedAt: '2026-03-05T12:00:00Z',
   },
@@ -667,6 +713,174 @@ const INITIAL_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = {
   },
 };
 
+/** QoE dashboard mock — adaptive_bitrate_v3 with playback quality metrics. */
+const INITIAL_QOE_RESULTS: Record<string, QoeDashboardResult> = {
+  '22222222-2222-2222-2222-222222222222': {
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    snapshots: [
+      {
+        metricId: 'time_to_first_frame_ms',
+        label: 'Time to First Frame',
+        controlValue: 1200,
+        treatmentValue: 950,
+        unit: 'ms',
+        lowerIsBetter: true,
+        warningThreshold: 1500,
+        criticalThreshold: 2500,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'rebuffer_ratio',
+        label: 'Rebuffer Ratio',
+        controlValue: 0.015,
+        treatmentValue: 0.008,
+        unit: '%',
+        lowerIsBetter: true,
+        warningThreshold: 0.02,
+        criticalThreshold: 0.05,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'avg_bitrate_kbps',
+        label: 'Average Bitrate',
+        controlValue: 4200,
+        treatmentValue: 5100,
+        unit: 'kbps',
+        lowerIsBetter: false,
+        warningThreshold: 3000,
+        criticalThreshold: 1500,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'resolution_switches',
+        label: 'Resolution Switches',
+        controlValue: 2.3,
+        treatmentValue: 1.1,
+        unit: '/session',
+        lowerIsBetter: true,
+        warningThreshold: 3.0,
+        criticalThreshold: 5.0,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'startup_failure_rate',
+        label: 'Startup Failure Rate',
+        controlValue: 0.020,
+        treatmentValue: 0.035,
+        unit: '%',
+        lowerIsBetter: true,
+        warningThreshold: 0.03,
+        criticalThreshold: 0.05,
+        status: 'WARNING',
+      },
+    ],
+    overallStatus: 'WARNING',
+    computedAt: '2026-03-05T16:00:00Z',
+  },
+};
+
+/** GST boundary trajectory mock — homepage_recs_v2 using MSPRT with 5 planned looks. */
+const INITIAL_GST_RESULTS: Record<string, GstTrajectoryResult[]> = {
+  '11111111-1111-1111-1111-111111111111': [
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      metricId: 'click_through_rate',
+      method: 'MSPRT',
+      plannedLooks: 5,
+      overallAlpha: 0.05,
+      boundaryPoints: [
+        { look: 1, informationFraction: 0.20, boundaryZScore: 4.56, observedZScore: 1.2 },
+        { look: 2, informationFraction: 0.40, boundaryZScore: 3.23, observedZScore: 2.1 },
+        { look: 3, informationFraction: 0.60, boundaryZScore: 2.63, observedZScore: 2.8 },
+        { look: 4, informationFraction: 0.80, boundaryZScore: 2.28 },
+        { look: 5, informationFraction: 1.00, boundaryZScore: 2.04 },
+      ],
+      computedAt: '2026-03-05T12:00:00Z',
+    },
+  ],
+};
+
+/** CATE lifecycle segment analysis — homepage_recs_v2 shows heterogeneous effects. */
+const INITIAL_CATE_RESULTS: Record<string, CateAnalysisResult> = {
+  '11111111-1111-1111-1111-111111111111': {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    metricId: 'click_through_rate',
+    globalAte: 0.014,
+    globalSe: 0.0042,
+    globalCiLower: 0.006,
+    globalCiUpper: 0.022,
+    globalPValue: 0.001,
+    subgroupEffects: [
+      {
+        segment: 'TRIAL',
+        effect: 0.032,
+        se: 0.011,
+        ciLower: 0.010,
+        ciUpper: 0.054,
+        pValueRaw: 0.004,
+        pValueAdjusted: 0.012,
+        isSignificant: true,
+        nControl: 4200,
+        nTreatment: 4150,
+        controlMean: 0.108,
+        treatmentMean: 0.140,
+      },
+      {
+        segment: 'NEW',
+        effect: 0.021,
+        se: 0.008,
+        ciLower: 0.005,
+        ciUpper: 0.037,
+        pValueRaw: 0.009,
+        pValueAdjusted: 0.018,
+        isSignificant: true,
+        nControl: 8500,
+        nTreatment: 8400,
+        controlMean: 0.118,
+        treatmentMean: 0.139,
+      },
+      {
+        segment: 'ESTABLISHED',
+        effect: 0.008,
+        se: 0.005,
+        ciLower: -0.002,
+        ciUpper: 0.018,
+        pValueRaw: 0.11,
+        pValueAdjusted: 0.165,
+        isSignificant: false,
+        nControl: 18200,
+        nTreatment: 18100,
+        controlMean: 0.129,
+        treatmentMean: 0.137,
+      },
+      {
+        segment: 'MATURE',
+        effect: 0.004,
+        se: 0.006,
+        ciLower: -0.008,
+        ciUpper: 0.016,
+        pValueRaw: 0.51,
+        pValueAdjusted: 0.51,
+        isSignificant: false,
+        nControl: 15800,
+        nTreatment: 15900,
+        controlMean: 0.131,
+        treatmentMean: 0.135,
+      },
+    ],
+    heterogeneity: {
+      qStatistic: 12.4,
+      df: 3,
+      pValue: 0.006,
+      iSquared: 75.8,
+      heterogeneityDetected: true,
+    },
+    nSubgroups: 4,
+    fdrThreshold: 0.05,
+    computedAt: '2026-03-05T12:00:00Z',
+  },
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -677,6 +891,9 @@ export let SEED_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult>
 export let SEED_BANDIT_RESULTS: Record<string, BanditDashboardResult> = structuredClone(INITIAL_BANDIT_RESULTS);
 export let SEED_HOLDOUT_RESULTS: Record<string, CumulativeHoldoutResult> = structuredClone(INITIAL_HOLDOUT_RESULTS);
 export let SEED_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = structuredClone(INITIAL_GUARDRAIL_STATUS);
+export let SEED_QOE_RESULTS: Record<string, QoeDashboardResult> = structuredClone(INITIAL_QOE_RESULTS);
+export let SEED_GST_RESULTS: Record<string, GstTrajectoryResult[]> = structuredClone(INITIAL_GST_RESULTS);
+export let SEED_CATE_RESULTS: Record<string, CateAnalysisResult> = structuredClone(INITIAL_CATE_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -689,4 +906,7 @@ export function resetSeedData(): void {
   SEED_BANDIT_RESULTS = structuredClone(INITIAL_BANDIT_RESULTS);
   SEED_HOLDOUT_RESULTS = structuredClone(INITIAL_HOLDOUT_RESULTS);
   SEED_GUARDRAIL_STATUS = structuredClone(INITIAL_GUARDRAIL_STATUS);
+  SEED_QOE_RESULTS = structuredClone(INITIAL_QOE_RESULTS);
+  SEED_GST_RESULTS = structuredClone(INITIAL_GST_RESULTS);
+  SEED_CATE_RESULTS = structuredClone(INITIAL_CATE_RESULTS);
 }

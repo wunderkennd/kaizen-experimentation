@@ -105,6 +105,32 @@ export interface SequentialResult {
   adjustedPValue: number;
 }
 
+// --- GST Boundary Trajectory (M3.8) ---
+
+export interface GstBoundaryPoint {
+  look: number;
+  informationFraction: number;
+  boundaryZScore: number;
+  observedZScore?: number;
+}
+
+export interface GstTrajectoryResult {
+  experimentId: string;
+  metricId: string;
+  method: SequentialMethod;
+  plannedLooks: number;
+  overallAlpha: number;
+  boundaryPoints: GstBoundaryPoint[];
+  computedAt: string;
+}
+
+// --- Lorenz Curve (Interference M2.5 extension) ---
+
+export interface LorenzCurvePoint {
+  cumulativeContentFraction: number;
+  cumulativeConsumptionFraction: number;
+}
+
 export interface MetricResult {
   metricId: string;
   variantId: string;
@@ -151,6 +177,7 @@ export interface NoveltyAnalysisResult {
   decayConstantDays: number;
   isStabilized: boolean;
   daysUntilProjectedStability: number;
+  dailyEffects?: NoveltyDailyEffect[];
   computedAt: string;
 }
 
@@ -173,6 +200,8 @@ export interface InterferenceAnalysisResult {
   treatmentCatalogCoverage: number;
   controlCatalogCoverage: number;
   spilloverTitles: TitleSpillover[];
+  treatmentLorenzCurve?: LorenzCurvePoint[];
+  controlLorenzCurve?: LorenzCurvePoint[];
   computedAt: string;
 }
 
@@ -250,6 +279,84 @@ export interface GuardrailStatusResult {
   isPaused: boolean;
 }
 
+// --- QoE Dashboard (M2.10) ---
+
+export type QoeStatus = 'GOOD' | 'WARNING' | 'CRITICAL';
+
+export interface QoeMetricSnapshot {
+  metricId: string;
+  label: string;
+  controlValue: number;
+  treatmentValue: number;
+  unit: string;
+  lowerIsBetter: boolean;
+  warningThreshold: number;
+  criticalThreshold: number;
+  status: QoeStatus;
+}
+
+export interface QoeDashboardResult {
+  experimentId: string;
+  snapshots: QoeMetricSnapshot[];
+  overallStatus: QoeStatus;
+  computedAt: string;
+}
+
+// --- Novelty Daily Effects (M2.4 extension) ---
+
+export interface NoveltyDailyEffect {
+  day: number;
+  observedEffect: number;
+  fittedEffect: number;
+}
+
+// --- CATE / Lifecycle Segments (M4.1) ---
+
+export type LifecycleSegment =
+  | 'TRIAL'
+  | 'NEW'
+  | 'ESTABLISHED'
+  | 'MATURE'
+  | 'AT_RISK'
+  | 'WINBACK';
+
+export interface SubgroupEffect {
+  segment: LifecycleSegment;
+  effect: number;
+  se: number;
+  ciLower: number;
+  ciUpper: number;
+  pValueRaw: number;
+  pValueAdjusted: number;
+  isSignificant: boolean;
+  nControl: number;
+  nTreatment: number;
+  controlMean: number;
+  treatmentMean: number;
+}
+
+export interface HeterogeneityTest {
+  qStatistic: number;
+  df: number;
+  pValue: number;
+  iSquared: number;
+  heterogeneityDetected: boolean;
+}
+
+export interface CateAnalysisResult {
+  experimentId: string;
+  metricId: string;
+  globalAte: number;
+  globalSe: number;
+  globalCiLower: number;
+  globalCiUpper: number;
+  globalPValue: number;
+  subgroupEffects: SubgroupEffect[];
+  heterogeneity: HeterogeneityTest;
+  nSubgroups: number;
+  fdrThreshold: number;
+  computedAt: string;
+}
 // --- Bandit Dashboard (M3.3) ---
 
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';

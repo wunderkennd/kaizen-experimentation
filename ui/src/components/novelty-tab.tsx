@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid,
+  Tooltip, ReferenceLine, ResponsiveContainer, Legend,
+} from 'recharts';
 import type { NoveltyAnalysisResult } from '@/lib/types';
 import { getNoveltyAnalysis } from '@/lib/api';
 import { formatEffect } from '@/lib/utils';
@@ -84,6 +88,60 @@ export function NoveltyTab({ experimentId }: NoveltyTabProps) {
           </p>
         </div>
       </div>
+
+      {/* Decay Curve Chart */}
+      {result.dailyEffects && result.dailyEffects.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h4 className="mb-3 text-sm font-semibold text-gray-900">Treatment Effect Over Time</h4>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={result.dailyEffects} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis
+                dataKey="day"
+                label={{ value: 'Day', position: 'insideBottom', offset: -2 }}
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis
+                tickFormatter={(v: number) => v.toFixed(3)}
+                tick={{ fontSize: 12 }}
+                label={{ value: 'Effect', angle: -90, position: 'insideLeft' }}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) => [
+                  value.toFixed(4),
+                  name === 'observedEffect' ? 'Observed' : 'Fitted Decay',
+                ]}
+                labelFormatter={(label: number) => `Day ${label}`}
+              />
+              <Legend
+                formatter={(value: string) =>
+                  value === 'observedEffect' ? 'Observed Effect' :
+                  value === 'fittedEffect' ? 'Fitted Decay Curve' : value
+                }
+              />
+              <ReferenceLine
+                y={result.projectedSteadyStateEffect}
+                stroke="#6366f1"
+                strokeDasharray="6 3"
+                label={{ value: 'Steady State', position: 'right', fontSize: 11, fill: '#6366f1' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="fittedEffect"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={false}
+                name="fittedEffect"
+              />
+              <Scatter
+                dataKey="observedEffect"
+                fill="#3b82f6"
+                name="observedEffect"
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Stability status */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">

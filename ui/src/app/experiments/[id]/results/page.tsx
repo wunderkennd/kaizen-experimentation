@@ -11,14 +11,17 @@ import { CupedToggle } from '@/components/cuped-toggle';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
 import { ForestPlot } from '@/components/charts/forest-plot';
 import { SequentialBoundaryPlot } from '@/components/charts/sequential-boundary-plot';
+import { GstTrajectoryChart } from '@/components/charts/gst-trajectory-chart';
 import { NoveltyTab } from '@/components/novelty-tab';
 import { InterferenceTab } from '@/components/interference-tab';
 import { InterleavingTab } from '@/components/interleaving-tab';
 import { SurrogateTab } from '@/components/surrogate-tab';
 import { HoldoutTab } from '@/components/holdout-tab';
 import { GuardrailTab } from '@/components/guardrail-tab';
+import { QoeTab } from '@/components/qoe-tab';
+import { CateTab } from '@/components/cate-tab';
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -73,6 +76,7 @@ export default function ResultsPage() {
   const hasSurrogateProjections = (analysisResult.surrogateProjections?.length ?? 0) > 0;
   const isHoldout = experiment.type === 'CUMULATIVE_HOLDOUT';
   const hasGuardrails = experiment.guardrailConfigs.length > 0;
+  const isQoe = experiment.type === 'PLAYBACK_QOE';
 
   // Build tabs dynamically based on experiment features
   const tabs: { key: AnalysisTab; label: string }[] = [
@@ -81,6 +85,12 @@ export default function ResultsPage() {
     { key: 'interference', label: 'Content Interference' },
     { key: 'interleaving', label: 'Interleaving' },
   ];
+  if (isQoe) {
+    tabs.push({ key: 'qoe', label: 'QoE Metrics' });
+  }
+  if (experiment.type === 'AB' || experiment.type === 'MULTIVARIATE') {
+    tabs.push({ key: 'lifecycle', label: 'Lifecycle Segments' });
+  }
   if (hasSurrogateProjections) {
     tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
   }
@@ -154,10 +164,23 @@ export default function ResultsPage() {
 
           {/* Sequential Boundary Plot */}
           {experiment.sequentialTestConfig && (
-            <SequentialBoundaryPlot
-              metricResults={analysisResult.metricResults}
-              overallAlpha={experiment.sequentialTestConfig.overallAlpha}
-            />
+            <>
+              <SequentialBoundaryPlot
+                metricResults={analysisResult.metricResults}
+                overallAlpha={experiment.sequentialTestConfig.overallAlpha}
+              />
+
+              {/* GST Stopping Boundary Trajectory */}
+              {analysisResult.metricResults
+                .filter((m) => m.sequentialResult)
+                .map((m) => (
+                  <GstTrajectoryChart
+                    key={m.metricId}
+                    experimentId={params.id}
+                    metricId={m.metricId}
+                  />
+                ))}
+            </>
           )}
         </>
       )}
@@ -174,6 +197,10 @@ export default function ResultsPage() {
         <InterleavingTab experimentId={params.id} />
       )}
 
+      {activeTab === 'lifecycle' && (
+        <CateTab experimentId={params.id} />
+      )}
+
       {activeTab === 'surrogate' && analysisResult.surrogateProjections && (
         <SurrogateTab projections={analysisResult.surrogateProjections} />
       )}
@@ -184,6 +211,10 @@ export default function ResultsPage() {
 
       {activeTab === 'guardrails' && (
         <GuardrailTab experimentId={params.id} />
+      )}
+
+      {activeTab === 'qoe' && (
+        <QoeTab experimentId={params.id} />
       )}
     </div>
   );

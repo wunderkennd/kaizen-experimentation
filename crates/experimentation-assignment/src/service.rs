@@ -14,10 +14,10 @@ use tonic::{Request, Response, Status};
 use experimentation_proto::experimentation::assignment::v1::{
     assignment_service_server::AssignmentService, ConfigUpdate, GetAssignmentRequest,
     GetAssignmentResponse, GetAssignmentsRequest, GetAssignmentsResponse,
-    GetInterleavedListRequest, GetInterleavedListResponse, RankedList,
-    StreamConfigUpdatesRequest,
+    GetInterleavedListRequest, GetInterleavedListResponse, RankedList, StreamConfigUpdatesRequest,
 };
 
+use crate::bandit_client::{self, GrpcBanditClient};
 use crate::config::{Config, ExperimentConfig};
 use crate::config_cache::ConfigCacheHandle;
 use crate::targeting;
@@ -25,25 +25,33 @@ use crate::targeting;
 /// gRPC service implementation backed by a live config cache.
 pub struct AssignmentServiceImpl {
     config: ConfigCacheHandle,
+    bandit_client: Option<GrpcBanditClient>,
 }
 
 impl AssignmentServiceImpl {
-    pub fn new(config: ConfigCacheHandle) -> Self {
-        Self { config }
-    }
-
-    /// Wrap a static `Arc<Config>` for tests and backward compatibility.
-    pub fn from_config(config: Arc<Config>) -> Self {
+    pub fn new(config: ConfigCacheHandle, bandit_client: Option<GrpcBanditClient>) -> Self {
         Self {
-            config: ConfigCacheHandle::from_static(config),
+            config,
+            bandit_client,
         }
     }
 
-    /// Core assignment logic — pure CPU, no async needed.
+    /// Wrap a static `Arc<Config>` for tests and backward compatibility.
+    ///
+    /// Uses no bandit client (uniform random fallback for bandit experiments).
+    pub fn from_config(config: Arc<Config>) -> Self {
+        Self {
+            config: ConfigCacheHandle::from_static(config),
+            bandit_client: None,
+        }
+    }
+
+    /// Core assignment logic.
     ///
     /// Returns `Ok(response)` on success, `Err(Status)` on lookup failure.
+    /// Async because bandit experiments may call M4b SelectArm gRPC.
     #[allow(clippy::result_large_err)]
-    pub fn assign(
+    pub async fn assign(
         &self,
         experiment_id: &str,
         user_id: &str,
@@ -56,9 +64,7 @@ impl AssignmentServiceImpl {
         let exp = config
             .experiments_by_id
             .get(experiment_id)
-            .ok_or_else(|| {
-                Status::not_found(format!("experiment not found: {experiment_id}"))
-            })?;
+            .ok_or_else(|| Status::not_found(format!("experiment not found: {experiment_id}")))?;
 
         // 2. Check experiment state — only RUNNING serves assignments.
         if exp.state != "RUNNING" {
@@ -84,13 +90,13 @@ impl AssignmentServiceImpl {
         let layer = config
             .layers_by_id
             .get(&exp.layer_id)
-            .ok_or_else(|| {
-                Status::internal(format!("layer not found: {}", exp.layer_id))
-            })?;
+            .ok_or_else(|| Status::internal(format!("layer not found: {}", exp.layer_id)))?;
 
         // 5. Bandit delegation: MAB / CONTEXTUAL_BANDIT use arm selection, not bucketing.
         if exp.r#type == "MAB" || exp.r#type == "CONTEXTUAL_BANDIT" {
-            return self.assign_bandit(exp, user_id, experiment_id);
+            return self
+                .assign_bandit(exp, user_id, experiment_id, attributes)
+                .await;
         }
 
         // 6. Hash entity into a bucket (user_id for AB, session_id for SESSION_LEVEL).
@@ -104,8 +110,7 @@ impl AssignmentServiceImpl {
         } else {
             user_id
         };
-        let bucket =
-            experimentation_hash::bucket(hash_input, &exp.hash_salt, layer.total_buckets);
+        let bucket = experimentation_hash::bucket(hash_input, &exp.hash_salt, layer.total_buckets);
 
         // 7. Check allocation range.
         if !experimentation_hash::is_in_allocation(
@@ -134,15 +139,19 @@ impl AssignmentServiceImpl {
 
     /// Bandit arm selection for MAB / CONTEXTUAL_BANDIT experiments.
     ///
-    /// Derives a deterministic RNG seed from (user_id, experiment_id),
-    /// then delegates to the bandit client (currently mock uniform random).
-    /// When M4b is live, this will call `SelectArm` gRPC instead.
+    /// If a gRPC bandit client is configured, calls M4b `SelectArm` with a 10ms
+    /// timeout. On success, the arm payload is looked up from local config (M4b
+    /// only selects the arm, not the payload). On timeout or error, falls back
+    /// to uniform random selection.
+    ///
+    /// If no bandit client is configured, always uses uniform random.
     #[allow(clippy::result_large_err)]
-    fn assign_bandit(
+    async fn assign_bandit(
         &self,
         exp: &ExperimentConfig,
         user_id: &str,
         experiment_id: &str,
+        attributes: &HashMap<String, String>,
     ) -> Result<GetAssignmentResponse, Status> {
         let bandit_config = exp.bandit_config.as_ref().ok_or_else(|| {
             Status::failed_precondition(format!(
@@ -150,22 +159,46 @@ impl AssignmentServiceImpl {
             ))
         })?;
 
-        // Deterministic seed from (user_id, experiment_id).
+        // Try live M4b client first.
+        if let Some(ref client) = self.bandit_client {
+            let context_features =
+                bandit_client::extract_context_features(bandit_config, attributes);
+
+            match client
+                .select_arm(experiment_id, user_id, context_features)
+                .await
+            {
+                Ok(result) => {
+                    let payload =
+                        bandit_client::lookup_arm_payload(&bandit_config.arms, &result.arm_id);
+                    return Ok(GetAssignmentResponse {
+                        experiment_id: experiment_id.to_string(),
+                        variant_id: result.arm_id,
+                        payload_json: payload,
+                        assignment_probability: result.assignment_probability,
+                        is_active: true,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        experiment_id,
+                        error = %e,
+                        "M4b SelectArm failed, falling back to uniform random",
+                    );
+                    // Fall through to uniform random below.
+                }
+            }
+        }
+
+        // Fallback: deterministic uniform random arm selection.
         let seed_input = format!("{user_id}\x00{experiment_id}");
-        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(
-            seed_input.as_bytes(),
-            0,
-        ) as u64;
-        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(
-            seed_input.as_bytes(),
-            1,
-        ) as u64;
+        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 0) as u64;
+        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 1) as u64;
         let seed = (hi << 32) | lo;
         let mut rng = StdRng::seed_from_u64(seed);
 
-        // TODO(m4b): Replace with gRPC call to M4b SelectArm when available.
-        let selection = crate::bandit_client::select_arm_uniform(bandit_config, &mut rng)
-            .ok_or_else(|| {
+        let selection =
+            bandit_client::select_arm_uniform(bandit_config, &mut rng).ok_or_else(|| {
                 Status::failed_precondition(format!(
                     "experiment {experiment_id} bandit_config has no arms",
                 ))
@@ -197,9 +230,7 @@ impl AssignmentServiceImpl {
         let exp = config
             .experiments_by_id
             .get(experiment_id)
-            .ok_or_else(|| {
-                Status::not_found(format!("experiment not found: {experiment_id}"))
-            })?;
+            .ok_or_else(|| Status::not_found(format!("experiment not found: {experiment_id}")))?;
 
         // 2. Experiment must be RUNNING.
         if exp.state != "RUNNING" {
@@ -218,14 +249,8 @@ impl AssignmentServiceImpl {
 
         // 4. Derive deterministic 64-bit seed from (user_id, experiment_id).
         let seed_input = format!("{user_id}\x00{experiment_id}");
-        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(
-            seed_input.as_bytes(),
-            0,
-        ) as u64;
-        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(
-            seed_input.as_bytes(),
-            1,
-        ) as u64;
+        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 0) as u64;
+        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 1) as u64;
         let seed = (hi << 32) | lo;
         let mut rng = StdRng::seed_from_u64(seed);
 
@@ -261,18 +286,14 @@ impl AssignmentServiceImpl {
                 let mut total_items = 0usize;
                 for algo_id in &il_config.algorithm_ids {
                     let ranked = algorithm_lists.get(algo_id).ok_or_else(|| {
-                        Status::invalid_argument(format!(
-                            "missing algorithm list for '{algo_id}'",
-                        ))
+                        Status::invalid_argument(format!("missing algorithm list for '{algo_id}'",))
                     })?;
                     total_items += ranked.item_ids.len();
                     ordered_lists.push((&ranked.item_ids, algo_id.as_str()));
                 }
 
                 let k = il_config.max_list_size.min(total_items);
-                experimentation_interleaving::multileave::multileave(
-                    &ordered_lists, k, &mut rng,
-                )
+                experimentation_interleaving::multileave::multileave(&ordered_lists, k, &mut rng)
             }
             other => {
                 return Err(Status::invalid_argument(format!(
@@ -325,12 +346,8 @@ impl AssignmentServiceImpl {
 ///
 /// Uses traffic_fraction to partition the allocation range. Falls through to the
 /// last variant if floating-point rounding causes no match (total function).
-fn select_variant(
-    exp: &ExperimentConfig,
-    bucket: u32,
-) -> &crate::config::VariantConfig {
-    let alloc_size =
-        (exp.allocation.end_bucket - exp.allocation.start_bucket + 1) as f64;
+fn select_variant(exp: &ExperimentConfig, bucket: u32) -> &crate::config::VariantConfig {
+    let alloc_size = (exp.allocation.end_bucket - exp.allocation.start_bucket + 1) as f64;
     let relative_bucket = (bucket - exp.allocation.start_bucket) as f64;
 
     let mut cumulative = 0.0_f64;
@@ -342,7 +359,9 @@ fn select_variant(
     }
 
     // Fallthrough guard: assign to last variant (handles FP rounding edge cases).
-    exp.variants.last().expect("experiment must have at least one variant")
+    exp.variants
+        .last()
+        .expect("experiment must have at least one variant")
 }
 
 #[tonic::async_trait]
@@ -352,7 +371,14 @@ impl AssignmentService for AssignmentServiceImpl {
         request: Request<GetAssignmentRequest>,
     ) -> Result<Response<GetAssignmentResponse>, Status> {
         let req = request.into_inner();
-        let resp = self.assign(&req.experiment_id, &req.user_id, &req.session_id, &req.attributes)?;
+        let resp = self
+            .assign(
+                &req.experiment_id,
+                &req.user_id,
+                &req.session_id,
+                &req.attributes,
+            )
+            .await?;
         Ok(Response::new(resp))
     }
 
@@ -366,7 +392,15 @@ impl AssignmentService for AssignmentServiceImpl {
 
         for exp in &config.experiments {
             // Best-effort: skip experiments that fail assignment.
-            if let Ok(resp) = self.assign(&exp.experiment_id, &req.user_id, &req.session_id, &req.attributes) {
+            if let Ok(resp) = self
+                .assign(
+                    &exp.experiment_id,
+                    &req.user_id,
+                    &req.session_id,
+                    &req.attributes,
+                )
+                .await
+            {
                 assignments.push(resp);
             }
         }
@@ -383,8 +417,7 @@ impl AssignmentService for AssignmentServiceImpl {
         Ok(Response::new(resp))
     }
 
-    type StreamConfigUpdatesStream =
-        ReceiverStream<Result<ConfigUpdate, Status>>;
+    type StreamConfigUpdatesStream = ReceiverStream<Result<ConfigUpdate, Status>>;
 
     async fn stream_config_updates(
         &self,

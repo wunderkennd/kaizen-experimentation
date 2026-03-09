@@ -1,7 +1,8 @@
 import type {
   AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse,
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
-  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult,
+  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
+  GstTrajectoryResult, CateAnalysisResult,
 } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
@@ -188,8 +189,26 @@ export async function getCumulativeHoldoutResult(experimentId: string): Promise<
   );
 }
 
+export async function getGstTrajectory(experimentId: string, metricId: string): Promise<GstTrajectoryResult> {
+  return callRpc<{ experimentId: string; metricId: string }, GstTrajectoryResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetGstTrajectory', { experimentId, metricId },
+  );
+}
+
+export async function getQoeDashboard(experimentId: string): Promise<QoeDashboardResult> {
+  return callRpc<{ experimentId: string }, QoeDashboardResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetQoeDashboard', { experimentId },
+  );
+}
+
 export async function getGuardrailStatus(experimentId: string): Promise<GuardrailStatusResult> {
   return callRpc<{ experimentId: string }, GuardrailStatusResult>(
     MGMT_URL, MGMT_SVC, 'GetGuardrailStatus', { experimentId },
+  );
+}
+
+export async function getCateAnalysis(experimentId: string): Promise<CateAnalysisResult> {
+  return callRpc<{ experimentId: string }, CateAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetCateAnalysis', { experimentId },
   );
 }

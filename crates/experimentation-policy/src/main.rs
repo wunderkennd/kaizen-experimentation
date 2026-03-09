@@ -67,8 +67,15 @@ async fn main() {
         })
         .expect("failed to spawn policy core thread");
 
-    // 7. Spawn Kafka consumer (stub)
-    let kafka_handle = tokio::spawn(kafka::consume_rewards(reward_tx));
+    // 7. Spawn Kafka reward consumer
+    let kafka_handle = tokio::spawn({
+        let config = config.clone();
+        async move {
+            if let Err(e) = kafka::consume_rewards(reward_tx, &config).await {
+                tracing::error!(error = %e, "Kafka reward consumer failed to start");
+            }
+        }
+    });
 
     // 8. Start gRPC server
     let grpc_addr = config.grpc_addr.clone();
