@@ -11,9 +11,12 @@ import (
 	"strings"
 	"syscall"
 
+	"connectrpc.com/connect"
+
 	"github.com/org/experimentation/gen/go/experimentation/assignment/v1/assignmentv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
+	"github.com/org/experimentation-platform/services/management/internal/auth"
 	"github.com/org/experimentation-platform/services/management/internal/guardrail"
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
 	"github.com/org/experimentation-platform/services/management/internal/sequential"
@@ -85,6 +88,20 @@ func main() {
 	}
 	streamSvc := handlers.NewConfigStreamService(experimentStore, notifier)
 
+	// Auth interceptors.
+	var handlerOpts []connect.HandlerOption
+	var streamOpts []connect.HandlerOption
+	if os.Getenv("DISABLE_AUTH") == "true" {
+		slog.Warn("auth disabled via DISABLE_AUTH=true")
+	} else {
+		handlerOpts = append(handlerOpts,
+			connect.WithInterceptors(auth.NewAuthInterceptor()),
+		)
+		streamOpts = append(streamOpts,
+			connect.WithInterceptors(auth.NewStreamAuthInterceptor()),
+		)
+	}
+
 	// Register ConnectRPC handlers on mux.
 	mux := http.NewServeMux()
 
@@ -94,10 +111,10 @@ func main() {
 		fmt.Fprint(w, "ok")
 	})
 
-	mgmtPath, mgmtHandler := managementv1connect.NewExperimentManagementServiceHandler(expSvc)
+	mgmtPath, mgmtHandler := managementv1connect.NewExperimentManagementServiceHandler(expSvc, handlerOpts...)
 	mux.Handle(mgmtPath, mgmtHandler)
 
-	streamPath, streamHandler := assignmentv1connect.NewAssignmentServiceHandler(streamSvc)
+	streamPath, streamHandler := assignmentv1connect.NewAssignmentServiceHandler(streamSvc, streamOpts...)
 	mux.Handle(streamPath, streamHandler)
 
 	srv := &http.Server{

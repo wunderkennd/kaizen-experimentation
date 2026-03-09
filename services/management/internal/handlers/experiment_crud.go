@@ -61,7 +61,7 @@ func (s *ExperimentService) CreateExperiment(
 	if err := s.audit.Insert(ctx, tx, store.AuditEntry{
 		ExperimentID: created.ExperimentID,
 		Action:       "create",
-		ActorEmail:   created.OwnerEmail,
+		ActorEmail:   actorFromContext(ctx),
 		NewState:     "DRAFT",
 		DetailsJSON:  json.RawMessage(`{"source":"api"}`),
 	}); err != nil {
@@ -201,7 +201,7 @@ func (s *ExperimentService) UpdateExperiment(
 	if err := s.audit.Insert(ctx, tx, store.AuditEntry{
 		ExperimentID: updated.ExperimentID,
 		Action:       "config_update",
-		ActorEmail:   updated.OwnerEmail,
+		ActorEmail:   actorFromContext(ctx),
 		PreviousState: "DRAFT",
 		NewState:     "DRAFT",
 		DetailsJSON:  json.RawMessage(`{"source":"api"}`),

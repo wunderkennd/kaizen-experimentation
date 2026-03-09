@@ -71,7 +71,7 @@ func (s *ExperimentService) StartExperiment(
 	if err := s.audit.Insert(ctx, tx1, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "start",
-		ActorEmail:    "system",
+		ActorEmail:    actorFromContext(ctx),
 		PreviousState: "DRAFT",
 		NewState:      "STARTING",
 		DetailsJSON:   json.RawMessage(`{"phase":"validation_begin"}`),
@@ -183,7 +183,7 @@ func (s *ExperimentService) StartExperiment(
 	if err := s.audit.Insert(ctx, tx2, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "start",
-		ActorEmail:    "system",
+		ActorEmail:    actorFromContext(ctx),
 		PreviousState: "STARTING",
 		NewState:      "RUNNING",
 		DetailsJSON:   allocDetails,
@@ -229,7 +229,7 @@ func (s *ExperimentService) ConcludeExperiment(
 		extraDetails = map[string]any{"holdout_retirement": true}
 	}
 
-	exp, err := s.concludeByID(ctx, id, "system", extraDetails)
+	exp, err := s.concludeByID(ctx, id, actorFromContext(ctx), extraDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func (s *ExperimentService) ArchiveExperiment(
 	if err := s.audit.Insert(ctx, tx, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "archive",
-		ActorEmail:    "system",
+		ActorEmail:    actorFromContext(ctx),
 		PreviousState: "CONCLUDED",
 		NewState:      "ARCHIVED",
 	}); err != nil {
@@ -426,7 +426,7 @@ func (s *ExperimentService) PauseExperiment(
 	if err := s.audit.Insert(ctx, nil, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        action,
-		ActorEmail:    "system",
+		ActorEmail:    actorFromContext(ctx),
 		PreviousState: "RUNNING",
 		NewState:      "RUNNING",
 		DetailsJSON:   details,
@@ -464,7 +464,7 @@ func (s *ExperimentService) ResumeExperiment(
 	if err := s.audit.Insert(ctx, nil, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "resume",
-		ActorEmail:    "system",
+		ActorEmail:    actorFromContext(ctx),
 		PreviousState: "RUNNING",
 		NewState:      "RUNNING",
 	}); err != nil {

@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-08 by Agent-2 (All phases complete, service-layer tests added)
+> **Last updated**: 2026-03-09 by Agent-3 (Phase 4 chaos/resilience tests — 20 tests across all M3 jobs)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/multileave-interleaving | Multileave (M2.7c) | — | M1.1–1.5 + M2.7 + M2.7b + Bandit delegation complete. M2.7c: Team Draft Multileave (3+ algorithms). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Service-layer tests + Producer trait extraction | — | Phase 1 (PRs #1, #8), Phase 2 (PR #23), Phase 3 (PR #40), Phase 4 (PRs #48, #59) all merged. 78 tests (36 pipeline + 42 ingest). Producer trait enables mock-based testing. |
-| Agent-3 | M3 Metrics | 🟢 Phase 3 Complete | agent-3/test/guardrail-e2e | M3↔M5 guardrail contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration (PR #51). M3↔M4a contracts (PR #61): 33 tests. CI opt (PR #58). Kafka publisher (PR #64). M3↔M5 contract tests: schema symmetry + Kafka roundtrip. Session-level + QoE SQL done (M2.11). |
+| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/test/chaos-resilience | 4.5 Chaos/resilience tests | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Phase 4: 20 chaos tests (PR #69) — FailingExecutor/Writer/Publisher inject Spark SQL, PG, Kafka failures across all job types. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/m4b-grpc-wiring | M4b gRPC wiring | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b BanditPolicyService gRPC wiring: all 5 RPCs implemented (SelectArm, CreateColdStartBandit, ExportAffinityScores, GetPolicySnapshot, RollbackPolicy), 17 tests pass. |
 | Agent-5 | M5 Management | 🟢 Phase 3 Complete | agent-5/feat/cumulative-holdout | M3.6 Cumulative holdout complete | — | Phase 2 complete (PRs #50, #53). M3.6: cumulative holdout support — traffic 1-5% enforcement, sequential/guardrail bypass, holdout retirement audit, ListRunningHoldouts query. |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/live-api-integration | Live API integration with Agent-5 | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60). Live API integration: Next.js rewrites proxy, ConnectRPC error parsing, opt-in MSW, 24 contract tests. 139 tests pass. Ready to pair with Agent-5 backend. |
@@ -112,11 +112,11 @@
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 4.1 | CATE heterogeneous treatment effects | Agent-4 | ⚪ | — |
+| 4.1 | CATE heterogeneous treatment effects | Agent-4 | 🔵 | Subgroup analysis + Cochran Q + BH-FDR. 22 tests (18 unit/proptest + 4 golden). |
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | ⚪ | — |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | ⚪ | — |
-| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests in PR. Other agents pending. |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged. Agent-3: 20 resilience tests (PR #69) — Spark SQL, PG, Kafka failure injection across StandardJob, GuardrailJob, InterleavingJob, ContentConsumptionJob. Other agents pending. |
 
 ## Pair Integration Schedule
 
