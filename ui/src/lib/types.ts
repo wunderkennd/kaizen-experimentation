@@ -250,6 +250,54 @@ export interface GuardrailStatusResult {
   isPaused: boolean;
 }
 
+// --- CATE / Lifecycle Segments (M4.1) ---
+
+export type LifecycleSegment =
+  | 'TRIAL'
+  | 'NEW'
+  | 'ESTABLISHED'
+  | 'MATURE'
+  | 'AT_RISK'
+  | 'WINBACK';
+
+export interface SubgroupEffect {
+  segment: LifecycleSegment;
+  effect: number;
+  se: number;
+  ciLower: number;
+  ciUpper: number;
+  pValueRaw: number;
+  pValueAdjusted: number;
+  isSignificant: boolean;
+  nControl: number;
+  nTreatment: number;
+  controlMean: number;
+  treatmentMean: number;
+}
+
+export interface HeterogeneityTest {
+  qStatistic: number;
+  df: number;
+  pValue: number;
+  iSquared: number;
+  heterogeneityDetected: boolean;
+}
+
+export interface CateAnalysisResult {
+  experimentId: string;
+  metricId: string;
+  globalAte: number;
+  globalSe: number;
+  globalCiLower: number;
+  globalCiUpper: number;
+  globalPValue: number;
+  subgroupEffects: SubgroupEffect[];
+  heterogeneity: HeterogeneityTest;
+  nSubgroups: number;
+  fdrThreshold: number;
+  computedAt: string;
+}
+
 // --- Bandit Dashboard (M3.3) ---
 
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';
