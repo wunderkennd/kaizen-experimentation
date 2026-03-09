@@ -164,11 +164,6 @@ func flagSnapshot(f *store.Flag) map[string]any {
 	}
 }
 
-func actorFromContext(_ context.Context) string {
-	// TODO: Extract from auth headers when RBAC is integrated.
-	return "system"
-}
-
 func validateFlag(pb *flagsv1.Flag) error {
 	if strings.TrimSpace(pb.GetName()) == "" {
 		return fmt.Errorf("name is required")

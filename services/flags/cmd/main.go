@@ -10,7 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/org/experimentation-platform/services/flags/internal/auth"
 	"github.com/org/experimentation-platform/services/flags/internal/handlers"
 	"github.com/org/experimentation-platform/services/flags/internal/store"
 	"github.com/org/experimentation/gen/go/experimentation/flags/v1/flagsv1connect"
@@ -86,8 +88,17 @@ func main() {
 		fmt.Fprint(w, "ok")
 	})
 
+	// RBAC interceptor (disabled via DISABLE_AUTH=true for dev/test).
+	var handlerOpts []connect.HandlerOption
+	if os.Getenv("DISABLE_AUTH") == "true" {
+		slog.Warn("RBAC disabled — DISABLE_AUTH=true (dev mode only)")
+	} else {
+		handlerOpts = append(handlerOpts, connect.WithInterceptors(auth.NewAuthInterceptor()))
+		slog.Info("RBAC interceptor enabled")
+	}
+
 	// ConnectRPC handler.
-	path, handler := flagsv1connect.NewFeatureFlagServiceHandler(svc)
+	path, handler := flagsv1connect.NewFeatureFlagServiceHandler(svc, handlerOpts...)
 	mux.Handle(path, handler)
 
 	// Register audit endpoints.
