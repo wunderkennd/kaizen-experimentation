@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -38,8 +39,34 @@ func TestMemPublisher_Reset(t *testing.T) {
 	assert.Len(t, pub.Alerts(), 0)
 }
 
-func TestKafkaPublisher_PublishAlert(t *testing.T) {
-	pub := NewKafkaPublisher("guardrail_alerts")
-	err := pub.PublishAlert(context.Background(), GuardrailAlert{ExperimentID: "exp-001", MetricID: "error_rate"})
-	assert.NoError(t, err)
+func TestGuardrailAlert_JSONRoundTrip(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	alert := GuardrailAlert{
+		ExperimentID:           "exp-001",
+		MetricID:               "error_rate",
+		VariantID:              "variant-B",
+		CurrentValue:           0.05,
+		Threshold:              0.01,
+		ConsecutiveBreachCount: 3,
+		DetectedAt:             now,
+	}
+	data, err := json.Marshal(alert)
+	require.NoError(t, err)
+
+	var decoded GuardrailAlert
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+	assert.Equal(t, alert, decoded)
+
+	// Verify JSON field names match M5's expected contract.
+	var raw map[string]interface{}
+	err = json.Unmarshal(data, &raw)
+	require.NoError(t, err)
+	expectedKeys := []string{
+		"experiment_id", "metric_id", "variant_id",
+		"current_value", "threshold", "consecutive_breach_count", "detected_at",
+	}
+	for _, key := range expectedKeys {
+		assert.Contains(t, raw, key, "missing expected JSON field: %s", key)
+	}
 }

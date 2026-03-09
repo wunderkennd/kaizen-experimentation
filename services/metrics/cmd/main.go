@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,7 +49,12 @@ func main() {
 		slog.Warn("POSTGRES_URL not set, using in-memory query log")
 	}
 	stdJob := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter)
-	gPublisher := alerts.NewKafkaPublisher("guardrail_alerts")
+	kafkaBrokers := os.Getenv("KAFKA_BROKERS")
+	if kafkaBrokers == "" {
+		kafkaBrokers = "localhost:9092"
+	}
+	brokers := strings.Split(kafkaBrokers, ",")
+	gPublisher := alerts.NewKafkaPublisher(brokers, "guardrail_alerts")
 	gTracker := alerts.NewBreachTracker()
 	gVP := jobs.NewMockValueProvider()
 	gJob := jobs.NewGuardrailJob(cfgStore, renderer, executor, qlWriter, gPublisher, gTracker, gVP)
