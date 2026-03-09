@@ -151,6 +151,7 @@ export interface NoveltyAnalysisResult {
   decayConstantDays: number;
   isStabilized: boolean;
   daysUntilProjectedStability: number;
+  dailyEffects?: NoveltyDailyEffect[];
   computedAt: string;
 }
 
@@ -248,6 +249,37 @@ export interface GuardrailStatusResult {
   experimentId: string;
   breaches: GuardrailBreachEvent[];
   isPaused: boolean;
+}
+
+// --- QoE Dashboard (M2.10) ---
+
+export type QoeStatus = 'GOOD' | 'WARNING' | 'CRITICAL';
+
+export interface QoeMetricSnapshot {
+  metricId: string;
+  label: string;
+  controlValue: number;
+  treatmentValue: number;
+  unit: string;
+  lowerIsBetter: boolean;
+  warningThreshold: number;
+  criticalThreshold: number;
+  status: QoeStatus;
+}
+
+export interface QoeDashboardResult {
+  experimentId: string;
+  snapshots: QoeMetricSnapshot[];
+  overallStatus: QoeStatus;
+  computedAt: string;
+}
+
+// --- Novelty Daily Effects (M2.4 extension) ---
+
+export interface NoveltyDailyEffect {
+  day: number;
+  observedEffect: number;
+  fittedEffect: number;
 }
 
 // --- Bandit Dashboard (M3.3) ---

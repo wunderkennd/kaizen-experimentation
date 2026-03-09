@@ -28,6 +28,7 @@ vi.mock('recharts', async () => {
     ComposedChart: Passthrough,
     BarChart: Passthrough,
     Bar: Noop,
+    Line: Noop,
     Scatter: Noop,
     XAxis: Noop,
     YAxis: Noop,
@@ -36,6 +37,7 @@ vi.mock('recharts', async () => {
     Tooltip: Noop,
     ErrorBar: Noop,
     Cell: Noop,
+    Legend: Noop,
   };
 });
 

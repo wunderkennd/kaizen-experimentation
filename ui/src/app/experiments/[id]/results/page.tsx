@@ -17,8 +17,9 @@ import { InterleavingTab } from '@/components/interleaving-tab';
 import { SurrogateTab } from '@/components/surrogate-tab';
 import { HoldoutTab } from '@/components/holdout-tab';
 import { GuardrailTab } from '@/components/guardrail-tab';
+import { QoeTab } from '@/components/qoe-tab';
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -73,6 +74,7 @@ export default function ResultsPage() {
   const hasSurrogateProjections = (analysisResult.surrogateProjections?.length ?? 0) > 0;
   const isHoldout = experiment.type === 'CUMULATIVE_HOLDOUT';
   const hasGuardrails = experiment.guardrailConfigs.length > 0;
+  const isQoe = experiment.type === 'PLAYBACK_QOE';
 
   // Build tabs dynamically based on experiment features
   const tabs: { key: AnalysisTab; label: string }[] = [
@@ -81,6 +83,9 @@ export default function ResultsPage() {
     { key: 'interference', label: 'Content Interference' },
     { key: 'interleaving', label: 'Interleaving' },
   ];
+  if (isQoe) {
+    tabs.push({ key: 'qoe', label: 'QoE Metrics' });
+  }
   if (hasSurrogateProjections) {
     tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
   }
@@ -184,6 +189,10 @@ export default function ResultsPage() {
 
       {activeTab === 'guardrails' && (
         <GuardrailTab experimentId={params.id} />
+      )}
+
+      {activeTab === 'qoe' && (
+        <QoeTab experimentId={params.id} />
       )}
     </div>
   );

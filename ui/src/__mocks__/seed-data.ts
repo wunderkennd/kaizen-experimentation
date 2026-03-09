@@ -1,7 +1,7 @@
 import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
-  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult,
+  BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -535,6 +535,25 @@ const INITIAL_NOVELTY_RESULTS: Record<string, NoveltyAnalysisResult> = {
     decayConstantDays: 4.2,
     isStabilized: false,
     daysUntilProjectedStability: 6,
+    dailyEffects: [
+      { day: 1, observedEffect: 0.032, fittedEffect: 0.027 },
+      { day: 2, observedEffect: 0.028, fittedEffect: 0.024 },
+      { day: 3, observedEffect: 0.022, fittedEffect: 0.021 },
+      { day: 4, observedEffect: 0.019, fittedEffect: 0.018 },
+      { day: 5, observedEffect: 0.017, fittedEffect: 0.016 },
+      { day: 6, observedEffect: 0.016, fittedEffect: 0.014 },
+      { day: 7, observedEffect: 0.013, fittedEffect: 0.013 },
+      { day: 8, observedEffect: 0.014, fittedEffect: 0.012 },
+      { day: 9, observedEffect: 0.011, fittedEffect: 0.011 },
+      { day: 10, observedEffect: 0.012, fittedEffect: 0.011 },
+      { day: 11, observedEffect: 0.010, fittedEffect: 0.010 },
+      { day: 12, observedEffect: 0.011, fittedEffect: 0.010 },
+      { day: 13, observedEffect: 0.009, fittedEffect: 0.010 },
+      { day: 14, observedEffect: 0.010, fittedEffect: 0.009 },
+      { day: 15, observedEffect: 0.009, fittedEffect: 0.009 },
+      { day: 16, observedEffect: 0.010, fittedEffect: 0.009 },
+      { day: 17, observedEffect: 0.009, fittedEffect: 0.009 },
+    ],
     computedAt: '2026-03-05T12:00:00Z',
   },
 };
@@ -667,6 +686,72 @@ const INITIAL_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = {
   },
 };
 
+/** QoE dashboard mock — adaptive_bitrate_v3 with playback quality metrics. */
+const INITIAL_QOE_RESULTS: Record<string, QoeDashboardResult> = {
+  '22222222-2222-2222-2222-222222222222': {
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    snapshots: [
+      {
+        metricId: 'time_to_first_frame_ms',
+        label: 'Time to First Frame',
+        controlValue: 1200,
+        treatmentValue: 950,
+        unit: 'ms',
+        lowerIsBetter: true,
+        warningThreshold: 1500,
+        criticalThreshold: 2500,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'rebuffer_ratio',
+        label: 'Rebuffer Ratio',
+        controlValue: 0.015,
+        treatmentValue: 0.008,
+        unit: '%',
+        lowerIsBetter: true,
+        warningThreshold: 0.02,
+        criticalThreshold: 0.05,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'avg_bitrate_kbps',
+        label: 'Average Bitrate',
+        controlValue: 4200,
+        treatmentValue: 5100,
+        unit: 'kbps',
+        lowerIsBetter: false,
+        warningThreshold: 3000,
+        criticalThreshold: 1500,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'resolution_switches',
+        label: 'Resolution Switches',
+        controlValue: 2.3,
+        treatmentValue: 1.1,
+        unit: '/session',
+        lowerIsBetter: true,
+        warningThreshold: 3.0,
+        criticalThreshold: 5.0,
+        status: 'GOOD',
+      },
+      {
+        metricId: 'startup_failure_rate',
+        label: 'Startup Failure Rate',
+        controlValue: 0.020,
+        treatmentValue: 0.035,
+        unit: '%',
+        lowerIsBetter: true,
+        warningThreshold: 0.03,
+        criticalThreshold: 0.05,
+        status: 'WARNING',
+      },
+    ],
+    overallStatus: 'WARNING',
+    computedAt: '2026-03-05T16:00:00Z',
+  },
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -677,6 +762,7 @@ export let SEED_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult>
 export let SEED_BANDIT_RESULTS: Record<string, BanditDashboardResult> = structuredClone(INITIAL_BANDIT_RESULTS);
 export let SEED_HOLDOUT_RESULTS: Record<string, CumulativeHoldoutResult> = structuredClone(INITIAL_HOLDOUT_RESULTS);
 export let SEED_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = structuredClone(INITIAL_GUARDRAIL_STATUS);
+export let SEED_QOE_RESULTS: Record<string, QoeDashboardResult> = structuredClone(INITIAL_QOE_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -689,4 +775,5 @@ export function resetSeedData(): void {
   SEED_BANDIT_RESULTS = structuredClone(INITIAL_BANDIT_RESULTS);
   SEED_HOLDOUT_RESULTS = structuredClone(INITIAL_HOLDOUT_RESULTS);
   SEED_GUARDRAIL_STATUS = structuredClone(INITIAL_GUARDRAIL_STATUS);
+  SEED_QOE_RESULTS = structuredClone(INITIAL_QOE_RESULTS);
 }
