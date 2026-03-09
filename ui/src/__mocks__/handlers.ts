@@ -3,6 +3,7 @@ import {
   SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS,
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
+  SEED_GST_RESULTS,
 } from './seed-data';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
@@ -273,6 +274,26 @@ export const handlers = [
     if (!result) {
       return HttpResponse.json(
         { error: `No holdout result for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetGstTrajectory
+  http.post(`${ANALYSIS_SVC}/GetGstTrajectory`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string; metricId: string };
+    const results = SEED_GST_RESULTS[body.experimentId];
+    if (!results) {
+      return HttpResponse.json(
+        { error: `No GST trajectory for experiment ${body.experimentId}` },
+        { status: 404 },
+      );
+    }
+    const result = results.find((r) => r.metricId === body.metricId);
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No GST trajectory for metric ${body.metricId}` },
         { status: 404 },
       );
     }

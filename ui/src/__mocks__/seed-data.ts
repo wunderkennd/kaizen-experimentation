@@ -2,6 +2,7 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
+  GstTrajectoryResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -574,6 +575,32 @@ const INITIAL_INTERFERENCE_RESULTS: Record<string, InterferenceAnalysisResult> =
       { contentId: 'title-5678', treatmentWatchRate: 0.015, controlWatchRate: 0.044, pValue: 0.008 },
       { contentId: 'title-9012', treatmentWatchRate: 0.063, controlWatchRate: 0.038, pValue: 0.031 },
     ],
+    treatmentLorenzCurve: [
+      { cumulativeContentFraction: 0, cumulativeConsumptionFraction: 0 },
+      { cumulativeContentFraction: 0.1, cumulativeConsumptionFraction: 0.02 },
+      { cumulativeContentFraction: 0.2, cumulativeConsumptionFraction: 0.05 },
+      { cumulativeContentFraction: 0.3, cumulativeConsumptionFraction: 0.10 },
+      { cumulativeContentFraction: 0.4, cumulativeConsumptionFraction: 0.17 },
+      { cumulativeContentFraction: 0.5, cumulativeConsumptionFraction: 0.26 },
+      { cumulativeContentFraction: 0.6, cumulativeConsumptionFraction: 0.37 },
+      { cumulativeContentFraction: 0.7, cumulativeConsumptionFraction: 0.51 },
+      { cumulativeContentFraction: 0.8, cumulativeConsumptionFraction: 0.68 },
+      { cumulativeContentFraction: 0.9, cumulativeConsumptionFraction: 0.85 },
+      { cumulativeContentFraction: 1.0, cumulativeConsumptionFraction: 1.0 },
+    ],
+    controlLorenzCurve: [
+      { cumulativeContentFraction: 0, cumulativeConsumptionFraction: 0 },
+      { cumulativeContentFraction: 0.1, cumulativeConsumptionFraction: 0.03 },
+      { cumulativeContentFraction: 0.2, cumulativeConsumptionFraction: 0.07 },
+      { cumulativeContentFraction: 0.3, cumulativeConsumptionFraction: 0.13 },
+      { cumulativeContentFraction: 0.4, cumulativeConsumptionFraction: 0.20 },
+      { cumulativeContentFraction: 0.5, cumulativeConsumptionFraction: 0.29 },
+      { cumulativeContentFraction: 0.6, cumulativeConsumptionFraction: 0.40 },
+      { cumulativeContentFraction: 0.7, cumulativeConsumptionFraction: 0.54 },
+      { cumulativeContentFraction: 0.8, cumulativeConsumptionFraction: 0.70 },
+      { cumulativeContentFraction: 0.9, cumulativeConsumptionFraction: 0.86 },
+      { cumulativeContentFraction: 1.0, cumulativeConsumptionFraction: 1.0 },
+    ],
     computedAt: '2026-03-05T12:00:00Z',
   },
 };
@@ -752,6 +779,27 @@ const INITIAL_QOE_RESULTS: Record<string, QoeDashboardResult> = {
   },
 };
 
+/** GST boundary trajectory mock — homepage_recs_v2 using MSPRT with 5 planned looks. */
+const INITIAL_GST_RESULTS: Record<string, GstTrajectoryResult[]> = {
+  '11111111-1111-1111-1111-111111111111': [
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      metricId: 'click_through_rate',
+      method: 'MSPRT',
+      plannedLooks: 5,
+      overallAlpha: 0.05,
+      boundaryPoints: [
+        { look: 1, informationFraction: 0.20, boundaryZScore: 4.56, observedZScore: 1.2 },
+        { look: 2, informationFraction: 0.40, boundaryZScore: 3.23, observedZScore: 2.1 },
+        { look: 3, informationFraction: 0.60, boundaryZScore: 2.63, observedZScore: 2.8 },
+        { look: 4, informationFraction: 0.80, boundaryZScore: 2.28 },
+        { look: 5, informationFraction: 1.00, boundaryZScore: 2.04 },
+      ],
+      computedAt: '2026-03-05T12:00:00Z',
+    },
+  ],
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -763,6 +811,7 @@ export let SEED_BANDIT_RESULTS: Record<string, BanditDashboardResult> = structur
 export let SEED_HOLDOUT_RESULTS: Record<string, CumulativeHoldoutResult> = structuredClone(INITIAL_HOLDOUT_RESULTS);
 export let SEED_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = structuredClone(INITIAL_GUARDRAIL_STATUS);
 export let SEED_QOE_RESULTS: Record<string, QoeDashboardResult> = structuredClone(INITIAL_QOE_RESULTS);
+export let SEED_GST_RESULTS: Record<string, GstTrajectoryResult[]> = structuredClone(INITIAL_GST_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -776,4 +825,5 @@ export function resetSeedData(): void {
   SEED_HOLDOUT_RESULTS = structuredClone(INITIAL_HOLDOUT_RESULTS);
   SEED_GUARDRAIL_STATUS = structuredClone(INITIAL_GUARDRAIL_STATUS);
   SEED_QOE_RESULTS = structuredClone(INITIAL_QOE_RESULTS);
+  SEED_GST_RESULTS = structuredClone(INITIAL_GST_RESULTS);
 }

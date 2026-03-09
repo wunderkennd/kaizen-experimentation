@@ -11,6 +11,7 @@ import { CupedToggle } from '@/components/cuped-toggle';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
 import { ForestPlot } from '@/components/charts/forest-plot';
 import { SequentialBoundaryPlot } from '@/components/charts/sequential-boundary-plot';
+import { GstTrajectoryChart } from '@/components/charts/gst-trajectory-chart';
 import { NoveltyTab } from '@/components/novelty-tab';
 import { InterferenceTab } from '@/components/interference-tab';
 import { InterleavingTab } from '@/components/interleaving-tab';
@@ -159,10 +160,23 @@ export default function ResultsPage() {
 
           {/* Sequential Boundary Plot */}
           {experiment.sequentialTestConfig && (
-            <SequentialBoundaryPlot
-              metricResults={analysisResult.metricResults}
-              overallAlpha={experiment.sequentialTestConfig.overallAlpha}
-            />
+            <>
+              <SequentialBoundaryPlot
+                metricResults={analysisResult.metricResults}
+                overallAlpha={experiment.sequentialTestConfig.overallAlpha}
+              />
+
+              {/* GST Stopping Boundary Trajectory */}
+              {analysisResult.metricResults
+                .filter((m) => m.sequentialResult)
+                .map((m) => (
+                  <GstTrajectoryChart
+                    key={m.metricId}
+                    experimentId={params.id}
+                    metricId={m.metricId}
+                  />
+                ))}
+            </>
           )}
         </>
       )}

@@ -105,6 +105,32 @@ export interface SequentialResult {
   adjustedPValue: number;
 }
 
+// --- GST Boundary Trajectory (M3.8) ---
+
+export interface GstBoundaryPoint {
+  look: number;
+  informationFraction: number;
+  boundaryZScore: number;
+  observedZScore?: number;
+}
+
+export interface GstTrajectoryResult {
+  experimentId: string;
+  metricId: string;
+  method: SequentialMethod;
+  plannedLooks: number;
+  overallAlpha: number;
+  boundaryPoints: GstBoundaryPoint[];
+  computedAt: string;
+}
+
+// --- Lorenz Curve (Interference M2.5 extension) ---
+
+export interface LorenzCurvePoint {
+  cumulativeContentFraction: number;
+  cumulativeConsumptionFraction: number;
+}
+
 export interface MetricResult {
   metricId: string;
   variantId: string;
@@ -174,6 +200,8 @@ export interface InterferenceAnalysisResult {
   treatmentCatalogCoverage: number;
   controlCatalogCoverage: number;
   spilloverTitles: TitleSpillover[];
+  treatmentLorenzCurve?: LorenzCurvePoint[];
+  controlLorenzCurve?: LorenzCurvePoint[];
   computedAt: string;
 }
 
