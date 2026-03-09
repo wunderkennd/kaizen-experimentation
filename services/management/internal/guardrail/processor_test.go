@@ -176,6 +176,77 @@ func TestProcessAlert_AlertOnly(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
+func TestProcessAlert_CumulativeHoldoutForcesAlertOnly(t *testing.T) {
+	proc, pool := setupProcessor(t)
+	ctx := context.Background()
+
+	// Create a holdout with AUTO_PAUSE set directly in DB (simulates manual override).
+	es := store.NewExperimentStore(pool)
+	ls := store.NewLayerStore(pool)
+	as := store.NewAuditStore(pool)
+	_ = as
+
+	layerID := createTestLayerForGuardrail(t, pool, "holdout-guardrail-layer-"+t.Name())
+
+	tx, err := es.BeginTx(ctx)
+	require.NoError(t, err)
+	desc := "holdout guardrail test"
+	exp, err := es.Insert(ctx, tx, store.ExperimentRow{
+		Name:                "holdout-autopause-" + t.Name(),
+		Description:         &desc,
+		OwnerEmail:          "test@example.com",
+		Type:                "CUMULATIVE_HOLDOUT",
+		TypeConfig:          json.RawMessage(`{"traffic_percentage":0.05}`),
+		State:               "DRAFT",
+		LayerID:             layerID,
+		PrimaryMetricID:     "watch_time_minutes",
+		GuardrailAction:     "AUTO_PAUSE", // should be overridden
+		IsCumulativeHoldout: true,
+	})
+	require.NoError(t, err)
+
+	err = es.InsertVariants(ctx, tx, []store.VariantRow{
+		{ExperimentID: exp.ExperimentID, Name: "control", TrafficFraction: 0.95, IsControl: true},
+		{ExperimentID: exp.ExperimentID, Name: "treatment", TrafficFraction: 0.05, IsControl: false},
+	})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+
+	// Transition to RUNNING manually.
+	tx2, err := es.BeginTx(ctx)
+	require.NoError(t, err)
+	_, err = es.TransitionState(ctx, tx2, exp.ExperimentID, "DRAFT", "STARTING", "")
+	require.NoError(t, err)
+	require.NoError(t, tx2.Commit(ctx))
+
+	tx3, err := es.BeginTx(ctx)
+	require.NoError(t, err)
+	_, err = ls.GetLayerByIDForUpdate(ctx, tx3, layerID)
+	require.NoError(t, err)
+	_, err = ls.InsertAllocation(ctx, tx3, store.AllocationRow{
+		LayerID: layerID, ExperimentID: exp.ExperimentID,
+		StartBucket: 0, EndBucket: 499,
+	})
+	require.NoError(t, err)
+	_, err = es.TransitionState(ctx, tx3, exp.ExperimentID, "STARTING", "RUNNING", "started_at")
+	require.NoError(t, err)
+	require.NoError(t, tx3.Commit(ctx))
+
+	// Process alert — should be ALERT_ONLY even though DB says AUTO_PAUSE.
+	result, err := proc.ProcessAlert(ctx, newAlert(exp.ExperimentID))
+	require.NoError(t, err)
+	assert.Equal(t, guardrail.ResultAlertOnly, result,
+		"cumulative holdout should force ALERT_ONLY regardless of DB guardrail_action")
+
+	// Verify audit trail has guardrail_alert (not guardrail_auto_pause).
+	var action string
+	err = pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_alert'`,
+		exp.ExperimentID).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "guardrail_alert", action)
+}
+
 func TestProcessAlert_NotRunning(t *testing.T) {
 	proc, pool := setupProcessor(t)
 	ctx := context.Background()

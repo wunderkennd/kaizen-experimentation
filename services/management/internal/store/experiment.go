@@ -428,6 +428,27 @@ func (s *ExperimentStore) GetGuardrailsByExperiment(ctx context.Context, experim
 	return s.getGuardrails(ctx, s.pool, experimentID)
 }
 
+// ListRunningHoldouts returns all RUNNING cumulative holdout experiments.
+// Used by M4a for periodic lift report scheduling.
+func (s *ExperimentStore) ListRunningHoldouts(ctx context.Context) ([]ExperimentRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+experimentCols+` FROM experiments WHERE state = 'RUNNING' AND is_cumulative_holdout = true ORDER BY started_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ExperimentRow
+	for rows.Next() {
+		r, scanErr := scanExperimentRows(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
 // ListRunning returns all experiments in RUNNING state with their variants and guardrails.
 func (s *ExperimentStore) ListRunning(ctx context.Context) ([]ExperimentRow, [][]VariantRow, [][]GuardrailConfigRow, error) {
 	rows, err := s.pool.Query(ctx,

@@ -222,7 +222,14 @@ func (s *ExperimentService) ConcludeExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	exp, err := s.concludeByID(ctx, id, "system", nil)
+	// Check if this is a cumulative holdout retirement.
+	var extraDetails map[string]any
+	expRow, _, _, readErr := s.store.GetByID(ctx, id)
+	if readErr == nil && expRow.IsCumulativeHoldout {
+		extraDetails = map[string]any{"holdout_retirement": true}
+	}
+
+	exp, err := s.concludeByID(ctx, id, "system", extraDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -506,6 +513,15 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 	expRow, _, _, err := s.store.GetByID(ctx, experimentID)
 	if err != nil {
 		return internalError("read experiment for type config validation", err)
+	}
+
+	if expRow.Type == "CUMULATIVE_HOLDOUT" {
+		trafficPct := extractTrafficPercentage(expRow.TypeConfig)
+		if trafficPct < 0.01 || trafficPct > 0.05 {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("CUMULATIVE_HOLDOUT traffic_percentage must be between 1%% and 5%%, got %.1f%%", trafficPct*100))
+		}
+		return nil
 	}
 
 	if expRow.Type != "MAB" && expRow.Type != "CONTEXTUAL_BANDIT" {
