@@ -5,6 +5,7 @@
 //! Crash-only: no graceful shutdown. Bloom filter resets on restart (brief dedup gap accepted).
 
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use prost::Message;
 use tonic::{Request, Response, Status};
@@ -120,6 +121,22 @@ fn map_validation_error(e: experimentation_core::Error) -> Status {
     Status::invalid_argument(e.to_string())
 }
 
+/// Observe the delay between an event's timestamp and the current server time.
+/// Skips observation if the timestamp is missing or in the future (clock skew).
+fn observe_ingest_delay(metrics: &PipelineMetrics, event_type: &str, ts: Option<&prost_types::Timestamp>) {
+    if let Some(ts) = ts {
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+        let event_secs = ts.seconds as f64 + ts.nanos as f64 / 1_000_000_000.0;
+        let delay = now_secs - event_secs;
+        if delay >= 0.0 {
+            metrics.ingest_delay(event_type).observe(delay);
+        }
+    }
+}
+
 /// Process a single event through the validate → dedup → publish pipeline.
 /// Returns Ok(true) if accepted, Ok(false) if duplicate.
 async fn process_event<E: Message>(
@@ -144,12 +161,12 @@ async fn process_event<E: Message>(
         return Ok(false);
     }
 
-    // Publish
+    // Publish with event type header for downstream latency tracing
     let payload = event.encode_to_vec();
     let histogram = svc.metrics.publish_latency(topic);
     match svc
         .producer
-        .publish(topic, key, &payload, Some(&histogram))
+        .publish_with_event_type(topic, key, &payload, Some(&histogram), Some(event_type))
         .await
     {
         Ok(()) => {
@@ -198,7 +215,7 @@ async fn process_batch_event<E: Message>(
     let histogram = svc.metrics.publish_latency(topic);
     match svc
         .producer
-        .publish(topic, key, &payload, Some(&histogram))
+        .publish_with_event_type(topic, key, &payload, Some(&histogram), Some(event_type))
         .await
     {
         Ok(()) => {
@@ -230,6 +247,8 @@ impl EventIngestionService for IngestionServiceImpl {
             .into_inner()
             .event
             .ok_or_else(|| Status::invalid_argument("event is required"))?;
+
+        observe_ingest_delay(&self.metrics, crate::metrics::EVENT_TYPE_EXPOSURE, event.timestamp.as_ref());
 
         let accepted = process_event(
             self,
@@ -286,6 +305,8 @@ impl EventIngestionService for IngestionServiceImpl {
             .event
             .ok_or_else(|| Status::invalid_argument("event is required"))?;
 
+        observe_ingest_delay(&self.metrics, crate::metrics::EVENT_TYPE_METRIC, event.timestamp.as_ref());
+
         let accepted = process_event(
             self,
             &event.event_id,
@@ -341,6 +362,8 @@ impl EventIngestionService for IngestionServiceImpl {
             .event
             .ok_or_else(|| Status::invalid_argument("event is required"))?;
 
+        observe_ingest_delay(&self.metrics, crate::metrics::EVENT_TYPE_REWARD, event.timestamp.as_ref());
+
         let accepted = process_event(
             self,
             &event.event_id,
@@ -363,6 +386,8 @@ impl EventIngestionService for IngestionServiceImpl {
             .into_inner()
             .event
             .ok_or_else(|| Status::invalid_argument("event is required"))?;
+
+        observe_ingest_delay(&self.metrics, crate::metrics::EVENT_TYPE_QOE, event.timestamp.as_ref());
 
         let accepted = process_event(
             self,

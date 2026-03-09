@@ -1,4 +1,8 @@
-import type { AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse, QueryLogEntry } from './types';
+import type {
+  AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse,
+  QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
+  BanditDashboardResult,
+} from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
 const MGMT_URL = process.env.NEXT_PUBLIC_MANAGEMENT_URL || 'http://localhost:50055';
@@ -9,6 +13,9 @@ const METRICS_SVC = 'experimentation.metrics.v1.MetricComputationService';
 
 const ANALYSIS_URL = process.env.NEXT_PUBLIC_ANALYSIS_URL || 'http://localhost:50053';
 const ANALYSIS_SVC = 'experimentation.analysis.v1.AnalysisService';
+
+const BANDIT_URL = process.env.NEXT_PUBLIC_BANDIT_URL || 'http://localhost:50056';
+const BANDIT_SVC = 'experimentation.bandit.v1.BanditPolicyService';
 
 async function callRpc<Req, Res>(baseUrl: string, service: string, method: string, request: Req): Promise<Res> {
   const res = await fetch(`${baseUrl}/${service}/${method}`, {
@@ -133,5 +140,29 @@ export async function createExperiment(request: CreateExperimentRequest): Promis
 export async function getAnalysisResult(experimentId: string): Promise<AnalysisResult> {
   return callRpc<{ experimentId: string }, AnalysisResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetAnalysisResult', { experimentId },
+  );
+}
+
+export async function getNoveltyAnalysis(experimentId: string): Promise<NoveltyAnalysisResult> {
+  return callRpc<{ experimentId: string }, NoveltyAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetNoveltyAnalysis', { experimentId },
+  );
+}
+
+export async function getInterferenceAnalysis(experimentId: string): Promise<InterferenceAnalysisResult> {
+  return callRpc<{ experimentId: string }, InterferenceAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetInterferenceAnalysis', { experimentId },
+  );
+}
+
+export async function getInterleavingAnalysis(experimentId: string): Promise<InterleavingAnalysisResult> {
+  return callRpc<{ experimentId: string }, InterleavingAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetInterleavingAnalysis', { experimentId },
+  );
+}
+
+export async function getBanditDashboard(experimentId: string): Promise<BanditDashboardResult> {
+  return callRpc<{ experimentId: string }, BanditDashboardResult>(
+    BANDIT_URL, BANDIT_SVC, 'GetBanditDashboard', { experimentId },
   );
 }

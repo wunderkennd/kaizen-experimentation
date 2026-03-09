@@ -514,6 +514,129 @@ fn interleaving_balance() {
     );
 }
 
+// ── M2.7b Tests (GetInterleavedList / Optimized Interleaving) ──
+
+#[test]
+fn optimized_interleaving_basic() {
+    let svc = make_service();
+    let lists = make_algo_lists(
+        &["i1", "i2", "i3", "i4", "i5"],
+        &["i6", "i7", "i8", "i9", "i10"],
+    );
+    let resp = svc.interleave("exp_dev_006", "user_1", &lists).unwrap();
+
+    assert!(!resp.merged_list.is_empty());
+    assert!(resp.merged_list.len() <= 10);
+    for item in &resp.merged_list {
+        assert!(resp.provenance.contains_key(item));
+        let algo = &resp.provenance[item];
+        assert!(algo == "algo_a" || algo == "algo_b");
+    }
+}
+
+#[test]
+fn optimized_interleaving_deterministic() {
+    let svc = make_service();
+    let lists = make_algo_lists(&["x1", "x2", "x3", "x4"], &["y1", "y2", "y3", "y4"]);
+    let r1 = svc.interleave("exp_dev_006", "user_42", &lists).unwrap();
+    let r2 = svc.interleave("exp_dev_006", "user_42", &lists).unwrap();
+    assert_eq!(r1.merged_list, r2.merged_list);
+    assert_eq!(r1.provenance, r2.provenance);
+}
+
+#[test]
+fn optimized_interleaving_respects_max_list_size() {
+    let svc = make_service();
+    let a: Vec<&str> = (0..10).map(|i| ["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9"][i]).collect();
+    let b: Vec<&str> = (0..10).map(|i| ["b0","b1","b2","b3","b4","b5","b6","b7","b8","b9"][i]).collect();
+    let lists = make_algo_lists(&a, &b);
+    let resp = svc.interleave("exp_dev_006", "user_1", &lists).unwrap();
+    assert!(
+        resp.merged_list.len() <= 10,
+        "merged list length {} exceeds max_list_size 10",
+        resp.merged_list.len(),
+    );
+}
+
+#[test]
+fn optimized_interleaving_empty_lists() {
+    let svc = make_service();
+    let lists = make_algo_lists(&[], &[]);
+    let resp = svc.interleave("exp_dev_006", "user_1", &lists).unwrap();
+    assert!(resp.merged_list.is_empty());
+    assert!(resp.provenance.is_empty());
+}
+
+#[test]
+fn optimized_interleaving_dedup() {
+    let svc = make_service();
+    let lists = make_algo_lists(&["shared", "a_only"], &["shared", "b_only"]);
+    let resp = svc.interleave("exp_dev_006", "user_1", &lists).unwrap();
+
+    let count_shared = resp.merged_list.iter().filter(|i| *i == "shared").count();
+    assert_eq!(count_shared, 1, "shared item should appear exactly once");
+    assert_eq!(resp.merged_list.len(), 3);
+}
+
+#[test]
+fn optimized_interleaving_balance() {
+    let svc = make_service();
+    let mut algo_a_count = 0u64;
+    let mut algo_b_count = 0u64;
+
+    for i in 0..1000 {
+        let user_id = format!("opt_balance_user_{i}");
+        let lists = make_algo_lists(&["i1", "i2", "i3", "i4"], &["i5", "i6", "i7", "i8"]);
+        let resp = svc.interleave("exp_dev_006", &user_id, &lists).unwrap();
+        for algo in resp.provenance.values() {
+            match algo.as_str() {
+                "algo_a" => algo_a_count += 1,
+                "algo_b" => algo_b_count += 1,
+                _ => panic!("unexpected algo: {algo}"),
+            }
+        }
+    }
+
+    let total = (algo_a_count + algo_b_count) as f64;
+    let frac_a = algo_a_count as f64 / total;
+    assert!(
+        (0.35..=0.65).contains(&frac_a),
+        "algo_a fraction {frac_a:.3} is outside [0.35, 0.65]"
+    );
+}
+
+#[test]
+fn unsupported_method_returns_error() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "bad_method_exp",
+            "state": "RUNNING",
+            "type": "INTERLEAVING",
+            "hash_salt": "salt",
+            "layer_id": "layer_default",
+            "variants": [
+                { "variant_id": "algo_a", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+                { "variant_id": "algo_b", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{}" }
+            ],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "interleaving_config": {
+                "method": "NONEXISTENT",
+                "algorithm_ids": ["algo_a", "algo_b"],
+                "max_list_size": 10
+            }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let lists = make_algo_lists(&["a", "b"], &["c", "d"]);
+    let err = svc.interleave("bad_method_exp", "user_1", &lists).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert!(err.message().contains("unsupported interleaving method"));
+}
+
 // ── Bandit Delegation Tests (MAB / CONTEXTUAL_BANDIT) ──
 
 #[test]

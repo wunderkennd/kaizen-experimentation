@@ -19,6 +19,7 @@ pub struct PipelineMetrics {
     pub events_deduplicated: IntCounterVec,
     pub events_backpressure: IntCounterVec,
     pub kafka_publish_latency: HistogramVec,
+    pub event_ingest_delay: HistogramVec,
 }
 
 impl PipelineMetrics {
@@ -72,6 +73,18 @@ impl PipelineMetrics {
         )
         .unwrap();
 
+        let event_ingest_delay = HistogramVec::new(
+            HistogramOpts::new(
+                "event_ingest_delay_seconds",
+                "Delay between event timestamp and M2 ingest time (client clock skew + network)",
+            )
+            .buckets(vec![
+                0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0, 300.0, 3600.0,
+            ]),
+            &["event_type"],
+        )
+        .unwrap();
+
         registry
             .register(Box::new(events_accepted.clone()))
             .unwrap();
@@ -87,6 +100,9 @@ impl PipelineMetrics {
         registry
             .register(Box::new(kafka_publish_latency.clone()))
             .unwrap();
+        registry
+            .register(Box::new(event_ingest_delay.clone()))
+            .unwrap();
 
         Self {
             events_accepted,
@@ -94,6 +110,7 @@ impl PipelineMetrics {
             events_deduplicated,
             events_backpressure,
             kafka_publish_latency,
+            event_ingest_delay,
         }
     }
 
@@ -127,6 +144,12 @@ impl PipelineMetrics {
     /// Get the publish latency histogram for a given topic.
     pub fn publish_latency(&self, topic: &str) -> Histogram {
         self.kafka_publish_latency.with_label_values(&[topic])
+    }
+
+    /// Get the ingest delay histogram for a given event type.
+    /// Records the time between event timestamp and server ingest time.
+    pub fn ingest_delay(&self, event_type: &str) -> Histogram {
+        self.event_ingest_delay.with_label_values(&[event_type])
     }
 }
 

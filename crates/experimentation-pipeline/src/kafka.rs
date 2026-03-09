@@ -3,9 +3,17 @@
 use prometheus::Histogram;
 use rdkafka::config::ClientConfig;
 use rdkafka::error::KafkaError;
+use rdkafka::message::OwnedHeaders;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tracing::info;
+
+/// Kafka header key for ingest timestamp (epoch milliseconds).
+/// Downstream consumers use this to measure end-to-end pipeline latency.
+pub const HEADER_INGEST_TS_MS: &str = "x-ingest-ts-ms";
+
+/// Kafka header key for event type (exposure, metric, reward, qoe).
+pub const HEADER_EVENT_TYPE: &str = "x-event-type";
 
 /// Kafka topic names matching topic_configs.sh.
 pub const TOPIC_EXPOSURES: &str = "exposures";
@@ -85,10 +93,14 @@ impl EventProducer {
         Ok(Self { producer })
     }
 
-    /// Publish a serialized protobuf payload to a topic.
+    /// Publish a serialized protobuf payload to a topic with tracing headers.
     ///
     /// `key` determines the Kafka partition (e.g. experiment_id for exposures,
     /// user_id for metric_events).
+    ///
+    /// Attaches headers for end-to-end latency tracing:
+    /// - `x-ingest-ts-ms`: epoch millis when the event was ingested by M2
+    /// - `x-event-type`: event type label (exposure, metric, reward, qoe)
     ///
     /// If a `latency_histogram` is provided, the publish duration is observed.
     pub async fn publish(
@@ -98,7 +110,40 @@ impl EventProducer {
         payload: &[u8],
         latency_histogram: Option<&Histogram>,
     ) -> Result<(), ProduceError> {
-        let record = FutureRecord::to(topic).key(key).payload(payload);
+        self.publish_with_event_type(topic, key, payload, latency_histogram, None)
+            .await
+    }
+
+    /// Publish with an explicit event type header for downstream tracing.
+    pub async fn publish_with_event_type(
+        &self,
+        topic: &str,
+        key: &str,
+        payload: &[u8],
+        latency_histogram: Option<&Histogram>,
+        event_type: Option<&str>,
+    ) -> Result<(), ProduceError> {
+        let ingest_ts_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+            .to_string();
+
+        let mut headers = OwnedHeaders::new().insert(rdkafka::message::Header {
+            key: HEADER_INGEST_TS_MS,
+            value: Some(ingest_ts_ms.as_bytes()),
+        });
+        if let Some(et) = event_type {
+            headers = headers.insert(rdkafka::message::Header {
+                key: HEADER_EVENT_TYPE,
+                value: Some(et.as_bytes()),
+            });
+        }
+
+        let record = FutureRecord::to(topic)
+            .key(key)
+            .payload(payload)
+            .headers(headers);
 
         let start = Instant::now();
         let result = match self.producer.send(record, Duration::from_secs(0)).await {
