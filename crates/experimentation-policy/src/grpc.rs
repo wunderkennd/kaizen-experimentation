@@ -357,6 +357,12 @@ mod tests {
             reward_channel_depth: 100,
             snapshot_interval: 5,
             max_snapshots_per_experiment: 3,
+            kafka_brokers: "localhost:9092".into(),
+            kafka_group_id: "test-group".into(),
+            kafka_reward_topic: "reward_events".into(),
+            kafka_auto_offset_reset: "earliest".into(),
+            kafka_commit_batch_size: 100,
+            kafka_commit_interval_secs: 5,
         };
 
         let (policy_tx, policy_rx) = mpsc::channel(100);

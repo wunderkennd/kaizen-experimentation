@@ -188,8 +188,8 @@ def generate_metric(rng: random.Random) -> dict:
         "event_id": f"met_{uuid.uuid4().hex[:20]}",
         "experiment_id": rng.choice(EXPERIMENT_IDS),
         "user_id": make_user_id(rng),
-        "metric_id": metric_id,
-        "metric_value": round(value_fn(), 6),
+        "event_type": metric_id,
+        "value": round(value_fn(), 6),
         "timestamp": make_timestamp(rng),
     }
 
@@ -211,7 +211,7 @@ def generate_reward(rng: random.Random) -> dict:
         "experiment_id": exp_id,
         "user_id": make_user_id(rng),
         "arm_id": rng.choice(variants),
-        "reward_value": reward,
+        "reward": reward,
         "timestamp": make_timestamp(rng),
     }
 
@@ -278,7 +278,7 @@ def generate_qoe(rng: random.Random) -> dict:
         "cdn_provider": rng.choice(CDN_PROVIDERS),
         "abr_algorithm": rng.choice(ABR_ALGORITHMS),
         "encoding_profile": rng.choice(ENCODING_PROFILES),
-        "playback_metrics": playback_metrics,
+        "metrics": playback_metrics,
         "timestamp": make_timestamp(rng),
     }
 

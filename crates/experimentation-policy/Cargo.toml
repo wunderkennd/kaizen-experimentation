@@ -22,6 +22,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 prost-types = { workspace = true }
+rdkafka = { workspace = true }
+prost = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

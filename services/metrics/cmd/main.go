@@ -36,7 +36,8 @@ func main() {
 	if err != nil { slog.Error("failed to load config", "error", err); os.Exit(1) }
 	renderer, err := spark.NewSQLRenderer()
 	if err != nil { slog.Error("failed to create SQL renderer", "error", err); os.Exit(1) }
-	executor := spark.NewMockExecutor(500)
+	baseExecutor := spark.NewMockExecutor(500)
+	executor := spark.NewRetryExecutor(baseExecutor, spark.DefaultRetryConfig())
 	var qlWriter querylog.Writer
 	pgURL := os.Getenv("POSTGRES_URL")
 	if pgURL != "" {

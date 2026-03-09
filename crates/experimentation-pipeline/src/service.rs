@@ -23,10 +23,19 @@ use experimentation_proto::pipeline::{
 
 use crate::buffer::{BufferedEvent, DiskBuffer};
 use crate::kafka::{
-    ProduceError, Producer, TOPIC_EXPOSURES, TOPIC_METRIC_EVENTS, TOPIC_QOE_EVENTS,
-    TOPIC_REWARD_EVENTS,
+    ProduceError, Producer, HEADER_TRACEPARENT, TOPIC_EXPOSURES, TOPIC_METRIC_EVENTS,
+    TOPIC_QOE_EVENTS, TOPIC_REWARD_EVENTS,
 };
 use crate::metrics::PipelineMetrics;
+
+/// Extract W3C traceparent header from gRPC request metadata.
+fn extract_traceparent<T>(request: &Request<T>) -> Option<String> {
+    request
+        .metadata()
+        .get(HEADER_TRACEPARENT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+}
 
 pub struct IngestionServiceImpl {
     producer: Box<dyn Producer>,
@@ -139,6 +148,8 @@ fn observe_ingest_delay(metrics: &PipelineMetrics, event_type: &str, ts: Option<
 
 /// Process a single event through the validate → dedup → publish pipeline.
 /// Returns Ok(true) if accepted, Ok(false) if duplicate.
+/// Forwards the W3C traceparent header (if present) to Kafka for distributed tracing.
+#[allow(clippy::too_many_arguments)]
 async fn process_event<E: Message>(
     svc: &IngestionServiceImpl,
     event_id: &str,
@@ -147,6 +158,7 @@ async fn process_event<E: Message>(
     key: &str,
     event: &E,
     validate: impl FnOnce() -> experimentation_core::Result<()>,
+    traceparent: Option<&str>,
 ) -> Result<bool, Status> {
     // Validate
     if let Err(e) = validate() {
@@ -161,12 +173,12 @@ async fn process_event<E: Message>(
         return Ok(false);
     }
 
-    // Publish with event type header for downstream latency tracing
+    // Publish with event type + traceparent headers for downstream tracing
     let payload = event.encode_to_vec();
     let histogram = svc.metrics.publish_latency(topic);
     match svc
         .producer
-        .publish_with_event_type(topic, key, &payload, Some(&histogram), Some(event_type))
+        .publish_with_headers(topic, key, &payload, Some(&histogram), Some(event_type), traceparent)
         .await
     {
         Ok(()) => {
@@ -193,6 +205,7 @@ async fn process_event<E: Message>(
 
 /// Process a batch event through validate → dedup → publish.
 /// Returns (accepted_delta, duplicate_delta, invalid_delta).
+#[allow(clippy::too_many_arguments)]
 async fn process_batch_event<E: Message>(
     svc: &IngestionServiceImpl,
     event_id: &str,
@@ -201,6 +214,7 @@ async fn process_batch_event<E: Message>(
     key: &str,
     event: &E,
     validate_result: Result<(), experimentation_core::Error>,
+    traceparent: Option<&str>,
 ) -> Result<(i32, i32, i32), Status> {
     if validate_result.is_err() {
         svc.metrics.rejected(event_type).inc();
@@ -215,7 +229,7 @@ async fn process_batch_event<E: Message>(
     let histogram = svc.metrics.publish_latency(topic);
     match svc
         .producer
-        .publish_with_event_type(topic, key, &payload, Some(&histogram), Some(event_type))
+        .publish_with_headers(topic, key, &payload, Some(&histogram), Some(event_type), traceparent)
         .await
     {
         Ok(()) => {
@@ -243,6 +257,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestExposureRequest>,
     ) -> Result<Response<IngestExposureResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let event = request
             .into_inner()
             .event
@@ -258,6 +273,7 @@ impl EventIngestionService for IngestionServiceImpl {
             &event.experiment_id,
             &event,
             || validation::validate_exposure(&event),
+            traceparent.as_deref(),
         )
         .await?;
 
@@ -268,6 +284,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestExposureBatchRequest>,
     ) -> Result<Response<IngestBatchResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let events = request.into_inner().events;
         let mut accepted = 0i32;
         let mut duplicate = 0i32;
@@ -282,6 +299,7 @@ impl EventIngestionService for IngestionServiceImpl {
                 &event.experiment_id,
                 event,
                 validation::validate_exposure(event),
+                traceparent.as_deref(),
             )
             .await?;
             accepted += a;
@@ -300,6 +318,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestMetricEventRequest>,
     ) -> Result<Response<IngestMetricEventResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let event = request
             .into_inner()
             .event
@@ -315,6 +334,7 @@ impl EventIngestionService for IngestionServiceImpl {
             &event.user_id,
             &event,
             || validation::validate_metric_event(&event),
+            traceparent.as_deref(),
         )
         .await?;
 
@@ -325,6 +345,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestMetricEventBatchRequest>,
     ) -> Result<Response<IngestBatchResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let events = request.into_inner().events;
         let mut accepted = 0i32;
         let mut duplicate = 0i32;
@@ -339,6 +360,7 @@ impl EventIngestionService for IngestionServiceImpl {
                 &event.user_id,
                 event,
                 validation::validate_metric_event(event),
+                traceparent.as_deref(),
             )
             .await?;
             accepted += a;
@@ -357,6 +379,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestRewardEventRequest>,
     ) -> Result<Response<IngestRewardEventResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let event = request
             .into_inner()
             .event
@@ -372,6 +395,7 @@ impl EventIngestionService for IngestionServiceImpl {
             &event.experiment_id,
             &event,
             || validation::validate_reward_event(&event),
+            traceparent.as_deref(),
         )
         .await?;
 
@@ -382,6 +406,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestQoEEventRequest>,
     ) -> Result<Response<IngestQoEEventResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let event = request
             .into_inner()
             .event
@@ -397,6 +422,7 @@ impl EventIngestionService for IngestionServiceImpl {
             &event.session_id,
             &event,
             || validation::validate_qoe_event(&event),
+            traceparent.as_deref(),
         )
         .await?;
 
@@ -407,6 +433,7 @@ impl EventIngestionService for IngestionServiceImpl {
         &self,
         request: Request<IngestQoEEventBatchRequest>,
     ) -> Result<Response<IngestBatchResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
         let events = request.into_inner().events;
         let mut accepted = 0i32;
         let mut duplicate = 0i32;
@@ -421,6 +448,7 @@ impl EventIngestionService for IngestionServiceImpl {
                 &event.session_id,
                 event,
                 validation::validate_qoe_event(event),
+                traceparent.as_deref(),
             )
             .await?;
             accepted += a;
@@ -502,17 +530,18 @@ mod tests {
             _payload: &[u8],
             _latency_histogram: Option<&prometheus::Histogram>,
         ) -> Result<(), ProduceError> {
-            self.publish_with_event_type(topic, key, _payload, _latency_histogram, None)
+            self.publish_with_headers(topic, key, _payload, _latency_histogram, None, None)
                 .await
         }
 
-        async fn publish_with_event_type(
+        async fn publish_with_headers(
             &self,
             topic: &str,
             key: &str,
             _payload: &[u8],
             _latency_histogram: Option<&prometheus::Histogram>,
             _event_type: Option<&str>,
+            _traceparent: Option<&str>,
         ) -> Result<(), ProduceError> {
             self.publish_count.fetch_add(1, Ordering::SeqCst);
             match &self.behavior {
@@ -568,16 +597,17 @@ mod tests {
             self.0.publish(topic, key, payload, hist).await
         }
 
-        async fn publish_with_event_type(
+        async fn publish_with_headers(
             &self,
             topic: &str,
             key: &str,
             payload: &[u8],
             hist: Option<&prometheus::Histogram>,
             event_type: Option<&str>,
+            traceparent: Option<&str>,
         ) -> Result<(), ProduceError> {
             self.0
-                .publish_with_event_type(topic, key, payload, hist, event_type)
+                .publish_with_headers(topic, key, payload, hist, event_type, traceparent)
                 .await
         }
     }
