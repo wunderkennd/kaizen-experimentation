@@ -99,11 +99,31 @@
         "warmup_observations": 1000
       }
     }
+    ,
+    {
+      "experiment_id": "exp_dev_006",
+      "name": "Optimized Interleaving Ranker Test",
+      "state": "RUNNING",
+      "type": "INTERLEAVING",
+      "hash_salt": "dev_salt_006",
+      "layer_id": "layer_interleave_opt",
+      "variants": [
+        { "variant_id": "algo_a", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "algo_b", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "interleaving_config": {
+        "method": "OPTIMIZED",
+        "algorithm_ids": ["algo_a", "algo_b"],
+        "max_list_size": 10
+      }
+    }
   ],
   "layers": [
     { "layer_id": "layer_default", "total_buckets": 10000 },
     { "layer_id": "layer_session", "total_buckets": 10000 },
     { "layer_id": "layer_interleave", "total_buckets": 10000 },
-    { "layer_id": "layer_bandit", "total_buckets": 10000 }
+    { "layer_id": "layer_bandit", "total_buckets": 10000 },
+    { "layer_id": "layer_interleave_opt", "total_buckets": 10000 }
   ]
 }

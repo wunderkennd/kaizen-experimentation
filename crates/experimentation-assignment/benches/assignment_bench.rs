@@ -94,6 +94,35 @@ fn bench_get_interleaved_list(c: &mut Criterion) {
     });
 }
 
+fn bench_optimized_interleave(c: &mut Criterion) {
+    let config = Config::from_json(DEV_CONFIG).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let lists_10 = make_interleave_lists(10);
+    c.bench_function("get_optimized_interleave_10_items", |b| {
+        b.iter(|| {
+            svc.interleave(
+                black_box("exp_dev_006"),
+                black_box("user_42"),
+                black_box(&lists_10),
+            )
+            .unwrap()
+        })
+    });
+
+    let lists_50 = make_interleave_lists(50);
+    c.bench_function("get_optimized_interleave_50_items", |b| {
+        b.iter(|| {
+            svc.interleave(
+                black_box("exp_dev_006"),
+                black_box("user_42"),
+                black_box(&lists_50),
+            )
+            .unwrap()
+        })
+    });
+}
+
 fn bench_bandit_assignment(c: &mut Criterion) {
     let config = Config::from_json(DEV_CONFIG).unwrap();
     let svc = AssignmentServiceImpl::from_config(Arc::new(config));
@@ -131,6 +160,7 @@ criterion_group!(
     benches,
     bench_get_assignment,
     bench_get_interleaved_list,
+    bench_optimized_interleave,
     bench_bandit_assignment,
 );
 criterion_main!(benches);
