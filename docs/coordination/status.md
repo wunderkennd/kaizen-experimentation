@@ -13,7 +13,7 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/interleaved-list-rpc | Optimized Interleaving (M2.7b) | — | M1.1–1.5 + M2.7 + Bandit delegation complete. M2.7b: Optimized Interleaving (greedy softmax) with method dispatch. |
+| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/multileave-interleaving | Multileave (M2.7c) | — | M1.1–1.5 + M2.7 + M2.7b + Bandit delegation complete. M2.7c: Team Draft Multileave (3+ algorithms). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Service-layer tests + Producer trait extraction | — | Phase 1 (PRs #1, #8), Phase 2 (PR #23), Phase 3 (PR #40), Phase 4 (PRs #48, #59) all merged. 78 tests (36 pipeline + 42 ingest). Producer trait enables mock-based testing. |
 | Agent-3 | M3 Metrics | 🔵 Contract Testing | agent-3/test/m3-m4-integration-contract | M3 ↔ M4a data contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration tests merged (PR #51). M3↔M4a contract tests: 33 tests verify SQL template output columns match Delta Lake schemas M4a reads. CI optimization (PR #58): skip Rust jobs on non-Rust changes. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/cold-start-bandit | M3.2 Content Cold-Start Bandit | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start bandit in progress. |
@@ -91,6 +91,7 @@
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | PR #38 — Sign test, Bradley-Terry MM, position analysis |
 | 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | 🟢 | Agent-4 (interleaving analysis) |
 | 2.7b | Optimized Interleaving (softmax method) | Agent-1 | 🟢 | Agent-4 (interleaving analysis — sensitivity comparison) |
+| 2.7c | Multileave Interleaving (Team Draft N-way) | Agent-1 | 🟢 | Agent-4 (N-way ranking comparison) |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | 🟢 | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | 🟢 | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🟢 | Agent-3 part: PR #35. Agent-4 part: PR #43. Both merged. |

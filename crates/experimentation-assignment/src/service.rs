@@ -183,7 +183,7 @@ impl AssignmentServiceImpl {
     /// Produce an interleaved list for a given experiment and user.
     ///
     /// Validates config, derives a deterministic RNG seed from (user_id, experiment_id),
-    /// then delegates to the Team Draft algorithm.
+    /// then dispatches to the appropriate interleaving algorithm.
     #[allow(clippy::result_large_err)]
     pub fn interleave(
         &self,
@@ -216,36 +216,7 @@ impl AssignmentServiceImpl {
             ))
         })?;
 
-        // 4. Request must contain exactly 2 algorithm lists (pairwise interleaving).
-        if algorithm_lists.len() != 2 {
-            return Err(Status::invalid_argument(format!(
-                "expected exactly 2 algorithm lists, got {}",
-                algorithm_lists.len(),
-            )));
-        }
-
-        // 5. Extract lists ordered by config algorithm_ids.
-        if il_config.algorithm_ids.len() != 2 {
-            return Err(Status::failed_precondition(format!(
-                "interleaving_config.algorithm_ids must have exactly 2 entries, got {}",
-                il_config.algorithm_ids.len(),
-            )));
-        }
-        let algo_a_id = &il_config.algorithm_ids[0];
-        let algo_b_id = &il_config.algorithm_ids[1];
-
-        let list_a = algorithm_lists.get(algo_a_id).ok_or_else(|| {
-            Status::invalid_argument(format!(
-                "missing algorithm list for '{algo_a_id}'",
-            ))
-        })?;
-        let list_b = algorithm_lists.get(algo_b_id).ok_or_else(|| {
-            Status::invalid_argument(format!(
-                "missing algorithm list for '{algo_b_id}'",
-            ))
-        })?;
-
-        // 6. Derive deterministic 64-bit seed from (user_id, experiment_id).
+        // 4. Derive deterministic 64-bit seed from (user_id, experiment_id).
         let seed_input = format!("{user_id}\x00{experiment_id}");
         let lo = experimentation_hash::murmur3::murmurhash3_x86_32(
             seed_input.as_bytes(),
@@ -258,29 +229,51 @@ impl AssignmentServiceImpl {
         let seed = (hi << 32) | lo;
         let mut rng = StdRng::seed_from_u64(seed);
 
-        // 7. Compute k = min(max_list_size, total available items).
-        let k = il_config
-            .max_list_size
-            .min(list_a.item_ids.len() + list_b.item_ids.len());
-
-        // 8. Delegate to interleaving algorithm based on method.
+        // 5. Dispatch by method.
         let result = match il_config.method.as_str() {
-            "TEAM_DRAFT" | "" => experimentation_interleaving::team_draft::team_draft(
-                &list_a.item_ids,
-                &list_b.item_ids,
-                algo_a_id,
-                algo_b_id,
-                k,
-                &mut rng,
-            ),
-            "OPTIMIZED" => experimentation_interleaving::optimized::optimized_interleave(
-                &list_a.item_ids,
-                &list_b.item_ids,
-                algo_a_id,
-                algo_b_id,
-                k,
-                &mut rng,
-            ),
+            "TEAM_DRAFT" | "" => {
+                let (algo_a_id, algo_b_id, list_a, list_b) =
+                    Self::extract_pairwise(il_config, algorithm_lists)?;
+                let k = il_config.max_list_size.min(list_a.len() + list_b.len());
+                experimentation_interleaving::team_draft::team_draft(
+                    list_a, list_b, algo_a_id, algo_b_id, k, &mut rng,
+                )
+            }
+            "OPTIMIZED" => {
+                let (algo_a_id, algo_b_id, list_a, list_b) =
+                    Self::extract_pairwise(il_config, algorithm_lists)?;
+                let k = il_config.max_list_size.min(list_a.len() + list_b.len());
+                experimentation_interleaving::optimized::optimized_interleave(
+                    list_a, list_b, algo_a_id, algo_b_id, k, &mut rng,
+                )
+            }
+            "MULTILEAVE" => {
+                // Require >= 3 algorithm_ids for multileave.
+                if il_config.algorithm_ids.len() < 3 {
+                    return Err(Status::failed_precondition(format!(
+                        "MULTILEAVE requires >= 3 algorithm_ids, got {}",
+                        il_config.algorithm_ids.len(),
+                    )));
+                }
+
+                // Build ordered (list, algo_id) vec from config order.
+                let mut ordered_lists: Vec<(&[String], &str)> = Vec::new();
+                let mut total_items = 0usize;
+                for algo_id in &il_config.algorithm_ids {
+                    let ranked = algorithm_lists.get(algo_id).ok_or_else(|| {
+                        Status::invalid_argument(format!(
+                            "missing algorithm list for '{algo_id}'",
+                        ))
+                    })?;
+                    total_items += ranked.item_ids.len();
+                    ordered_lists.push((&ranked.item_ids, algo_id.as_str()));
+                }
+
+                let k = il_config.max_list_size.min(total_items);
+                experimentation_interleaving::multileave::multileave(
+                    &ordered_lists, k, &mut rng,
+                )
+            }
             other => {
                 return Err(Status::invalid_argument(format!(
                     "unsupported interleaving method: {other}",
@@ -292,6 +285,39 @@ impl AssignmentServiceImpl {
             merged_list: result.merged_list,
             provenance: result.provenance,
         })
+    }
+
+    /// Validate and extract pairwise algorithm lists from a request.
+    ///
+    /// Enforces exactly 2 algorithm_ids in config and exactly 2 lists in request.
+    #[allow(clippy::result_large_err, clippy::type_complexity)]
+    fn extract_pairwise<'a>(
+        il_config: &'a crate::config::InterleavingConfig,
+        algorithm_lists: &'a HashMap<String, RankedList>,
+    ) -> Result<(&'a str, &'a str, &'a [String], &'a [String]), Status> {
+        if algorithm_lists.len() != 2 {
+            return Err(Status::invalid_argument(format!(
+                "expected exactly 2 algorithm lists, got {}",
+                algorithm_lists.len(),
+            )));
+        }
+        if il_config.algorithm_ids.len() != 2 {
+            return Err(Status::failed_precondition(format!(
+                "interleaving_config.algorithm_ids must have exactly 2 entries, got {}",
+                il_config.algorithm_ids.len(),
+            )));
+        }
+        let algo_a_id = il_config.algorithm_ids[0].as_str();
+        let algo_b_id = il_config.algorithm_ids[1].as_str();
+
+        let list_a = algorithm_lists.get(algo_a_id).ok_or_else(|| {
+            Status::invalid_argument(format!("missing algorithm list for '{algo_a_id}'"))
+        })?;
+        let list_b = algorithm_lists.get(algo_b_id).ok_or_else(|| {
+            Status::invalid_argument(format!("missing algorithm list for '{algo_b_id}'"))
+        })?;
+
+        Ok((algo_a_id, algo_b_id, &list_a.item_ids, &list_b.item_ids))
     }
 }
 

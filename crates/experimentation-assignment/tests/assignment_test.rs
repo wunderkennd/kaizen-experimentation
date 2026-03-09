@@ -637,6 +637,178 @@ fn unsupported_method_returns_error() {
     assert!(err.message().contains("unsupported interleaving method"));
 }
 
+// ── M3.x Tests (GetInterleavedList / Multileave) ──
+
+fn make_multi_algo_lists(items: &[(&str, &[&str])]) -> HashMap<String, RankedList> {
+    items
+        .iter()
+        .map(|(algo_id, item_ids)| {
+            (
+                algo_id.to_string(),
+                RankedList {
+                    item_ids: item_ids.iter().map(|s| s.to_string()).collect(),
+                },
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn multileave_basic_3_algorithms() {
+    let svc = make_service();
+    let lists = make_multi_algo_lists(&[
+        ("algo_x", &["i1", "i2", "i3", "i4", "i5"]),
+        ("algo_y", &["i6", "i7", "i8", "i9", "i10"]),
+        ("algo_z", &["i11", "i12", "i13", "i14", "i15"]),
+    ]);
+    let resp = svc.interleave("exp_dev_007", "user_1", &lists).unwrap();
+
+    assert!(!resp.merged_list.is_empty());
+    assert!(resp.merged_list.len() <= 15);
+    for item in &resp.merged_list {
+        assert!(resp.provenance.contains_key(item), "missing provenance for {item}");
+        let algo = &resp.provenance[item];
+        assert!(
+            ["algo_x", "algo_y", "algo_z"].contains(&algo.as_str()),
+            "unexpected provenance: {algo}"
+        );
+    }
+}
+
+#[test]
+fn multileave_deterministic() {
+    let svc = make_service();
+    let lists = make_multi_algo_lists(&[
+        ("algo_x", &["x1", "x2", "x3"]),
+        ("algo_y", &["y1", "y2", "y3"]),
+        ("algo_z", &["z1", "z2", "z3"]),
+    ]);
+    let r1 = svc.interleave("exp_dev_007", "user_42", &lists).unwrap();
+    let r2 = svc.interleave("exp_dev_007", "user_42", &lists).unwrap();
+    assert_eq!(r1.merged_list, r2.merged_list, "same inputs must produce same output");
+    assert_eq!(r1.provenance, r2.provenance);
+}
+
+#[test]
+fn multileave_balance_3_algorithms() {
+    let svc = make_service();
+    let mut counts: HashMap<String, u64> = HashMap::new();
+
+    for i in 0..1000 {
+        let user_id = format!("ml_balance_user_{i}");
+        let lists = make_multi_algo_lists(&[
+            ("algo_x", &["i1", "i2", "i3", "i4"]),
+            ("algo_y", &["i5", "i6", "i7", "i8"]),
+            ("algo_z", &["i9", "i10", "i11", "i12"]),
+        ]);
+        let resp = svc.interleave("exp_dev_007", &user_id, &lists).unwrap();
+        for algo in resp.provenance.values() {
+            *counts.entry(algo.clone()).or_insert(0) += 1;
+        }
+    }
+
+    let total: u64 = counts.values().sum();
+    for (algo, count) in &counts {
+        let frac = *count as f64 / total as f64;
+        assert!(
+            (0.25..=0.42).contains(&frac),
+            "algo {algo} fraction {frac:.3} outside [0.25, 0.42]"
+        );
+    }
+}
+
+#[test]
+fn multileave_dedup_across_3_lists() {
+    let svc = make_service();
+    let lists = make_multi_algo_lists(&[
+        ("algo_x", &["shared", "x_only"]),
+        ("algo_y", &["shared", "y_only"]),
+        ("algo_z", &["shared", "z_only"]),
+    ]);
+    let resp = svc.interleave("exp_dev_007", "user_1", &lists).unwrap();
+
+    let count_shared = resp.merged_list.iter().filter(|i| *i == "shared").count();
+    assert_eq!(count_shared, 1, "shared item should appear exactly once");
+    assert_eq!(resp.merged_list.len(), 4); // shared + x_only + y_only + z_only
+}
+
+#[test]
+fn multileave_respects_max_list_size() {
+    // exp_dev_007 has max_list_size=15. Provide 30 items total.
+    let svc = make_service();
+    let lists = make_multi_algo_lists(&[
+        ("algo_x", &["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9"]),
+        ("algo_y", &["b0","b1","b2","b3","b4","b5","b6","b7","b8","b9"]),
+        ("algo_z", &["c0","c1","c2","c3","c4","c5","c6","c7","c8","c9"]),
+    ]);
+    let resp = svc.interleave("exp_dev_007", "user_1", &lists).unwrap();
+    assert!(
+        resp.merged_list.len() <= 15,
+        "merged list length {} exceeds max_list_size 15",
+        resp.merged_list.len(),
+    );
+}
+
+#[test]
+fn multileave_empty_lists() {
+    let svc = make_service();
+    let lists = make_multi_algo_lists(&[
+        ("algo_x", &[]),
+        ("algo_y", &[]),
+        ("algo_z", &[]),
+    ]);
+    let resp = svc.interleave("exp_dev_007", "user_1", &lists).unwrap();
+    assert!(resp.merged_list.is_empty());
+    assert!(resp.provenance.is_empty());
+}
+
+#[test]
+fn multileave_wrong_algo_count_for_multileave() {
+    // MULTILEAVE config with only 2 algorithm_ids → FailedPrecondition.
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "bad_multi",
+            "state": "RUNNING",
+            "type": "INTERLEAVING",
+            "hash_salt": "salt",
+            "layer_id": "layer_default",
+            "variants": [
+                { "variant_id": "a", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+                { "variant_id": "b", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{}" }
+            ],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "interleaving_config": {
+                "method": "MULTILEAVE",
+                "algorithm_ids": ["a", "b"],
+                "max_list_size": 10
+            }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let lists = make_algo_lists(&["x", "y"], &["z", "w"]);
+    let err = svc.interleave("bad_multi", "user_1", &lists).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(err.message().contains("MULTILEAVE requires >= 3"));
+}
+
+#[test]
+fn multileave_missing_algo_list_in_request() {
+    // Config has 3 algorithm_ids but request only provides 2 lists.
+    let svc = make_service();
+    let lists = make_multi_algo_lists(&[
+        ("algo_x", &["i1", "i2"]),
+        ("algo_y", &["i3", "i4"]),
+        // algo_z is missing
+    ]);
+    let err = svc.interleave("exp_dev_007", "user_1", &lists).unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert!(err.message().contains("algo_z"));
+}
+
 // ── Bandit Delegation Tests (MAB / CONTEXTUAL_BANDIT) ──
 
 #[test]
