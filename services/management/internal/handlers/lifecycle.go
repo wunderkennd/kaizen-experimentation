@@ -526,6 +526,10 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 		return internalError("read experiment for type config validation", err)
 	}
 
+	if expRow.Type == "PLAYBACK_QOE" {
+		return s.validateQoeMetricsForStart(ctx, experimentID)
+	}
+
 	if expRow.Type == "CUMULATIVE_HOLDOUT" {
 		trafficPct := extractTrafficPercentage(expRow.TypeConfig)
 		if trafficPct < 0.01 || trafficPct > 0.05 {
@@ -607,4 +611,30 @@ func extractTrafficPercentage(typeConfig json.RawMessage) float64 {
 		return 1.0
 	}
 	return pct
+}
+
+// validateQoeMetricsForStart checks that at least one metric in the experiment's
+// metric set (primary, secondary, or guardrail) has is_qoe_metric = true.
+func (s *ExperimentService) validateQoeMetricsForStart(ctx context.Context, experimentID string) error {
+	expRow, _, guardrails, err := s.store.GetByID(ctx, experimentID)
+	if err != nil {
+		return internalError("read experiment for QoE validation", err)
+	}
+
+	var metricIDs []string
+	metricIDs = append(metricIDs, expRow.PrimaryMetricID)
+	metricIDs = append(metricIDs, expRow.SecondaryMetricIDs...)
+	for _, g := range guardrails {
+		metricIDs = append(metricIDs, g.MetricID)
+	}
+
+	hasQoe, err := s.metrics.AnyQoeMetric(ctx, metricIDs)
+	if err != nil {
+		return internalError("check QoE metric existence", err)
+	}
+	if !hasQoe {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("PLAYBACK_QOE experiments require at least one metric with is_qoe_metric = true"))
+	}
+	return nil
 }
