@@ -216,7 +216,7 @@ impl AssignmentServiceImpl {
             ))
         })?;
 
-        // 4. Request must contain exactly 2 algorithm lists (Team Draft is pairwise).
+        // 4. Request must contain exactly 2 algorithm lists (pairwise interleaving).
         if algorithm_lists.len() != 2 {
             return Err(Status::invalid_argument(format!(
                 "expected exactly 2 algorithm lists, got {}",
@@ -263,15 +263,30 @@ impl AssignmentServiceImpl {
             .max_list_size
             .min(list_a.item_ids.len() + list_b.item_ids.len());
 
-        // 8. Delegate to Team Draft.
-        let result = experimentation_interleaving::team_draft::team_draft(
-            &list_a.item_ids,
-            &list_b.item_ids,
-            algo_a_id,
-            algo_b_id,
-            k,
-            &mut rng,
-        );
+        // 8. Delegate to interleaving algorithm based on method.
+        let result = match il_config.method.as_str() {
+            "TEAM_DRAFT" | "" => experimentation_interleaving::team_draft::team_draft(
+                &list_a.item_ids,
+                &list_b.item_ids,
+                algo_a_id,
+                algo_b_id,
+                k,
+                &mut rng,
+            ),
+            "OPTIMIZED" => experimentation_interleaving::optimized::optimized_interleave(
+                &list_a.item_ids,
+                &list_b.item_ids,
+                algo_a_id,
+                algo_b_id,
+                k,
+                &mut rng,
+            ),
+            other => {
+                return Err(Status::invalid_argument(format!(
+                    "unsupported interleaving method: {other}",
+                )));
+            }
+        };
 
         Ok(GetInterleavedListResponse {
             merged_list: result.merged_list,

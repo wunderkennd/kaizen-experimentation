@@ -13,7 +13,7 @@
 
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/bandit-delegation | Bandit delegation (MAB/CONTEXTUAL_BANDIT) | — | M1.1–1.5 + M2.7 complete. Bandit delegation: MAB/CONTEXTUAL_BANDIT experiments use mock uniform arm selection (until M4b SelectArm is live). |
+| Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/interleaved-list-rpc | Optimized Interleaving (M2.7b) | — | M1.1–1.5 + M2.7 + Bandit delegation complete. M2.7b: Optimized Interleaving (greedy softmax) with method dispatch. |
 | Agent-2 | M2 Pipeline | 🔵 Phase 4 In Progress | agent-2/feat/phase4-chaos-engineering | Phase 4: Chaos engineering + crash recovery | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3 done (PR #40). Phase 4: chaos scripts, crash-recovery tests, synthetic event generator. |
 | Agent-3 | M3 Metrics | 🔵 Integration Testing | agent-3/feat/m2-m3-integration-tests | Agent-2 ↔ Agent-3 integration tests | — | Phase 1 done. Phase 2: M2.10 (PR #35), M2.11 (PR #34) done. Integration tests: SQL template ↔ M2 schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
@@ -90,6 +90,7 @@
 | 2.5 | Interference analysis | Agent-4 | 🟢 | Agent-6 (interference tab) | PR #38 — JSD, Jaccard, Gini, title spillover with BH correction |
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | PR #38 — Sign test, Bradley-Terry MM, position analysis |
 | 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | 🟢 | Agent-4 (interleaving analysis) |
+| 2.7b | Optimized Interleaving (softmax method) | Agent-1 | 🟢 | Agent-4 (interleaving analysis — sensitivity comparison) |
 | 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | 🟢 | Stakeholder demo |
 | 2.9 | Notebook export (.ipynb from query log) | Agent-6 | 🟢 | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🟢 | Agent-3 part: PR #35. Agent-4 part: PR #43. Both merged. |
