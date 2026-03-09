@@ -18,7 +18,7 @@
 | Agent-3 | M3 Metrics | 🔵 Integration Testing | agent-3/feat/m2-m3-integration-tests | Agent-2 ↔ Agent-3 integration tests | — | Phase 1 done. Phase 2: M2.10 (PR #35), M2.11 (PR #34) done. Integration tests: SQL template ↔ M2 schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
 | Agent-5 | M5 Management | 🔵 Phase 2 | agent-5/feat/surrogate-crud | Sequential auto-conclude (Phase 2) | — | Surrogate CRUD + sequential auto-conclude. Unblocks Agent-4 (boundary crossing → auto-conclude integration). |
-| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/analysis-tabs | Analysis tabs (M2.4–2.6 UI) complete, PR #56 | — | M1.25–1.27 done, M2.8–2.9 done. Analysis tabs: novelty, interference, interleaving. 104 tests pass. Next: bandit dashboard (M3.3, blocked on M3.1) or live API integration. |
+| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/bandit-dashboard | Bandit dashboard (M3.3) complete | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard done. 115 tests pass. Next: live API integration (Agent-5 ↔ Agent-6). |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
@@ -102,7 +102,7 @@
 |---|-----------|-------|--------|----------|
 | 3.1 | LinUCB contextual bandit | Agent-4 | 🔵 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) |
 | 3.2 | Content cold-start bandit | Agent-4 | ⚪ | — |
-| 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | ⚪ | — |
+| 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🔵 | PR pending — arm allocation chart, reward rates, Thompson Sampling params, reward history |
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 part done (session_id keyed events). Agent-1/3 parts pending. |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 part done (QoE validation + ingestion PR #40). Agent-3 part pending (Spark SQL). |
 | 3.6 | Cumulative holdout support | Agent-5 | ⚪ | — |
