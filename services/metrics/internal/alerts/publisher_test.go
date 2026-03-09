@@ -40,7 +40,7 @@ func TestMemPublisher_Reset(t *testing.T) {
 }
 
 func TestGuardrailAlert_JSONRoundTrip(t *testing.T) {
-	now := time.Now().Truncate(time.Second)
+	now := time.Now().UTC().Truncate(time.Second)
 	alert := GuardrailAlert{
 		ExperimentID:           "exp-001",
 		MetricID:               "error_rate",
