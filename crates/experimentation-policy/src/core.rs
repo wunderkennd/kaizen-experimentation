@@ -20,7 +20,6 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 /// Management commands sent to the policy core (cold-start, snapshots, rollback).
-#[allow(dead_code)] // RollbackPolicy will be used by gRPC handler in a follow-up milestone
 pub enum ManagementCommand {
     CreateColdStart(CreateColdStartRequest),
     ExportAffinity(ExportAffinityRequest),
