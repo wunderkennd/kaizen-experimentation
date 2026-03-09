@@ -21,6 +21,9 @@ Usage:
     # Write to file
     python scripts/generate_synthetic_events.py --type metric --count 5000 --output events.jsonl
 
+    # Generate guardrail alert events (for M5 auto-pause testing)
+    python scripts/generate_synthetic_events.py --type guardrail_alert --count 10
+
     # All event types (for full pipeline testing)
     python scripts/generate_synthetic_events.py --type all --count 200
 """
@@ -91,6 +94,15 @@ CONTENT_IDS = [f"content_{i:04d}" for i in range(1, 201)]
 
 # Interleaving algorithms (for provenance maps)
 INTERLEAVING_ALGORITHMS = ["team_draft_a", "team_draft_b", "balanced_interleave"]
+
+# Guardrail metric IDs and thresholds
+GUARDRAIL_METRICS = {
+    "error_rate": {"threshold": 0.05, "breach_range": (0.06, 0.15)},
+    "crash_rate": {"threshold": 0.02, "breach_range": (0.025, 0.08)},
+    "rebuffer_ratio": {"threshold": 0.03, "breach_range": (0.035, 0.10)},
+    "latency_p99_ms": {"threshold": 5000, "breach_range": (5500, 15000)},
+    "revenue_per_user": {"threshold": 8.0, "breach_range": (4.0, 7.5)},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +283,35 @@ def generate_qoe(rng: random.Random) -> dict:
     }
 
 
+def generate_guardrail_alert(rng: random.Random) -> dict:
+    """Generate a realistic GuardrailAlert event.
+
+    Simulates M3 detecting a guardrail metric breach. Published to the
+    guardrail_alerts Kafka topic, consumed by M5 for auto-pause.
+    """
+    metric_id = rng.choice(list(GUARDRAIL_METRICS.keys()))
+    metric_config = GUARDRAIL_METRICS[metric_id]
+    threshold = metric_config["threshold"]
+    breach_lo, breach_hi = metric_config["breach_range"]
+    current_value = rng.uniform(breach_lo, breach_hi)
+
+    exp_id = rng.choice(EXPERIMENT_IDS)
+    variants = VARIANT_IDS.get(exp_id, ["control", "treatment"])
+    # Guardrail alerts are for non-control variants
+    non_control = [v for v in variants if v != "control"]
+    variant_id = rng.choice(non_control) if non_control else variants[-1]
+
+    return {
+        "experiment_id": exp_id,
+        "metric_id": metric_id,
+        "variant_id": variant_id,
+        "current_value": round(current_value, 6),
+        "threshold": threshold,
+        "consecutive_breach_count": rng.randint(1, 5),
+        "detected_at": make_timestamp(rng, jitter_hours=1),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Output formatters
 # ---------------------------------------------------------------------------
@@ -284,6 +325,10 @@ def format_grpcurl_cmd(event_type: str, event: dict, host: str = "localhost:5005
         "reward": "IngestRewardEvent",
         "qoe": "IngestQoEEvent",
     }
+    if event_type == "guardrail_alert":
+        # Guardrail alerts are not ingested via gRPC — output as JSON for kafka-console-producer
+        payload = json.dumps(event, separators=(",", ":"))
+        return f"echo '{payload}' | kafka-console-producer --broker-list localhost:9092 --topic guardrail_alerts"
     rpc = rpc_map[event_type]
     payload = json.dumps({"event": event}, separators=(",", ":"))
     return f"grpcurl -plaintext -d '{payload}' {host} {service}/{rpc}"
@@ -301,7 +346,7 @@ def main():
     )
     parser.add_argument(
         "--type", "-t",
-        choices=["exposure", "metric", "reward", "qoe", "all"],
+        choices=["exposure", "metric", "reward", "qoe", "guardrail_alert", "all"],
         default="exposure",
         help="Event type to generate (default: exposure)",
     )
@@ -321,6 +366,7 @@ def main():
         "metric": lambda: generate_metric(rng),
         "reward": lambda: generate_reward(rng),
         "qoe": lambda: generate_qoe(rng),
+        "guardrail_alert": lambda: generate_guardrail_alert(rng),
     }
 
     out = open(args.output, "w") if args.output else sys.stdout
@@ -329,7 +375,7 @@ def main():
         for i in range(args.count):
             if args.type == "all":
                 # Rotate through event types
-                event_types = ["exposure", "metric", "reward", "qoe"]
+                event_types = ["exposure", "metric", "reward", "qoe", "guardrail_alert"]
                 event_type = event_types[i % len(event_types)]
             else:
                 event_type = args.type
