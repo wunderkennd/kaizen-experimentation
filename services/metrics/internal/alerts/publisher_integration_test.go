@@ -5,6 +5,7 @@ package alerts
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,22 +14,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ensureTopic creates a Kafka topic using the admin Client API, which works
+// reliably with KRaft mode. The old conn.CreateTopics path is unreliable
+// because it doesn't always reach the controller.
+func ensureTopic(t *testing.T, brokerAddr, topic string, partitions int) {
+	t.Helper()
+
+	// Quick connectivity check — skip if Kafka isn't available.
+	conn, err := kafka.Dial("tcp", brokerAddr)
+	if err != nil {
+		t.Skipf("Kafka not available at %s: %v", brokerAddr, err)
+	}
+	conn.Close()
+
+	client := &kafka.Client{
+		Addr:    kafka.TCP(brokerAddr),
+		Timeout: 10 * time.Second,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	resp, err := client.CreateTopics(ctx, &kafka.CreateTopicsRequest{
+		Topics: []kafka.TopicConfig{{
+			Topic:             topic,
+			NumPartitions:     partitions,
+			ReplicationFactor: 1,
+		}},
+	})
+	require.NoError(t, err)
+
+	// Tolerate "already exists" but fail on other per-topic errors.
+	for name, topicErr := range resp.Errors {
+		if topicErr != nil && !strings.Contains(topicErr.Error(), "Topic with this name already exists") {
+			t.Fatalf("Failed to create topic %s: %v", name, topicErr)
+		}
+	}
+}
+
 func TestKafkaPublisher_Integration(t *testing.T) {
 	brokers := []string{"localhost:9092"}
 	topic := "guardrail_alerts_test"
 
-	// Create the topic if it doesn't exist.
-	conn, err := kafka.Dial("tcp", brokers[0])
-	if err != nil {
-		t.Skipf("Kafka not available at %s: %v", brokers[0], err)
-	}
-	defer conn.Close()
-
-	_ = conn.CreateTopics(kafka.TopicConfig{
-		Topic:             topic,
-		NumPartitions:     1,
-		ReplicationFactor: 1,
-	})
+	ensureTopic(t, brokers[0], topic, 1)
 
 	pub := NewKafkaPublisher(brokers, topic)
 	defer pub.Close()
@@ -47,7 +75,7 @@ func TestKafkaPublisher_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = pub.PublishAlert(ctx, alert)
+	err := pub.PublishAlert(ctx, alert)
 	require.NoError(t, err)
 
 	// Read the message back and verify it matches.
@@ -82,17 +110,7 @@ func TestKafkaPublisher_MultipleAlerts_Integration(t *testing.T) {
 	brokers := []string{"localhost:9092"}
 	topic := "guardrail_alerts_multi_test"
 
-	conn, err := kafka.Dial("tcp", brokers[0])
-	if err != nil {
-		t.Skipf("Kafka not available at %s: %v", brokers[0], err)
-	}
-	defer conn.Close()
-
-	_ = conn.CreateTopics(kafka.TopicConfig{
-		Topic:             topic,
-		NumPartitions:     3,
-		ReplicationFactor: 1,
-	})
+	ensureTopic(t, brokers[0], topic, 3)
 
 	pub := NewKafkaPublisher(brokers, topic)
 	defer pub.Close()
