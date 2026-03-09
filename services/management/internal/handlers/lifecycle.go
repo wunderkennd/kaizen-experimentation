@@ -277,8 +277,19 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		return nil, internalError("commit tx1", err)
 	}
 
-	// TODO(M4a): Trigger final analysis. For now, transition synchronously.
-	slog.Info("concluding experiment: final analysis mocked", "id", id)
+	// Type-specific conclude: trigger M4a analysis, M4b policy snapshot (bandits),
+	// surrogate projection flagging. All calls are best-effort/non-blocking.
+	expForConclude, _, _, readErr := s.store.GetByID(ctx, id)
+	if readErr == nil {
+		concludeDetails := s.handleTypeSpecificConclude(ctx, expForConclude)
+		if extraDetails == nil {
+			extraDetails = map[string]any{}
+		}
+		for k, v := range concludeDetails {
+			extraDetails[k] = v
+		}
+	}
+	slog.Info("concluding experiment: type-specific conclude complete", "id", id)
 
 	// Transition 2: CONCLUDING -> CONCLUDED (with allocation release)
 	tx2, err := s.store.BeginTx(ctx)

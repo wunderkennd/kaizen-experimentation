@@ -4,6 +4,7 @@ package handlers_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -1599,4 +1600,114 @@ func TestGuardrailOverride_UpdateSameAction_NoAudit(t *testing.T) {
 		created.Msg.ExperimentId).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "updating without changing guardrail_action should not produce additional override audit")
+}
+
+// --- Type-Specific Conclude Audit Tests ---
+
+// concludeAuditDetails is a helper that creates, starts, concludes an experiment
+// and returns the details_json from the second conclude audit entry (phase=analysis_complete).
+func concludeAuditDetails(t *testing.T, env testEnv, exp *commonv1.Experiment) map[string]any {
+	t.Helper()
+	ctx := context.Background()
+	client := env.client
+
+	layer := createTestLayer(t, client, "conclude-type-"+t.Name(), 0)
+	exp.LayerId = layer.LayerId
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	_, err = client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// Read the second conclude audit entry (CONCLUDING → CONCLUDED, phase=analysis_complete).
+	var detailsJSON []byte
+	err = env.pool.QueryRow(ctx,
+		`SELECT details_json FROM audit_trail
+		 WHERE experiment_id = $1 AND action = 'conclude' AND new_state = 'CONCLUDED'`,
+		id).Scan(&detailsJSON)
+	require.NoError(t, err)
+
+	var details map[string]any
+	require.NoError(t, json.Unmarshal(detailsJSON, &details))
+	return details
+}
+
+func TestConclude_AB_TypeDetails(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	exp := newABExperimentInLayer("conclude-ab-type", "placeholder")
+	details := concludeAuditDetails(t, env, exp)
+
+	assert.Equal(t, "standard", details["analysis_type"])
+	assert.Equal(t, "skipped_no_client", details["analysis_trigger"])
+}
+
+func TestConclude_Interleaving_TypeDetails(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	exp := newInterleavingExperiment("conclude-interleaving-type", "placeholder")
+	details := concludeAuditDetails(t, env, exp)
+
+	assert.Equal(t, "interleaving_sign_test_bradley_terry", details["analysis_type"])
+	assert.Equal(t, "skipped_no_client", details["analysis_trigger"])
+}
+
+func TestConclude_MAB_TypeDetails(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	exp := newBanditExperiment("conclude-mab-type", "placeholder")
+	details := concludeAuditDetails(t, env, exp)
+
+	assert.Equal(t, "ipw_causal", details["analysis_type"])
+	assert.Equal(t, "skipped_no_client", details["analysis_trigger"])
+	assert.Equal(t, "skipped_no_client", details["policy_snapshot"])
+}
+
+func TestConclude_SessionLevel_TypeDetails(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	exp := newSessionExperiment("conclude-session-type", "placeholder")
+	details := concludeAuditDetails(t, env, exp)
+
+	assert.Equal(t, "clustered_naive_hc1", details["analysis_type"])
+	assert.Equal(t, "skipped_no_client", details["analysis_trigger"])
+}
+
+func TestConclude_WithSurrogate_TypeDetails(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	// Create a surrogate model first.
+	model, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+		Model: newSurrogateModel(),
+	}))
+	require.NoError(t, err)
+	modelID := model.Msg.ModelId
+
+	// Create an AB experiment linked to the surrogate model.
+	exp := newABExperimentInLayer("conclude-surrogate-type", "placeholder")
+	exp.SurrogateModelId = modelID
+
+	details := concludeAuditDetails(t, env, exp)
+
+	assert.Equal(t, "standard", details["analysis_type"])
+	assert.Equal(t, "requested", details["surrogate_projection"])
+	assert.Equal(t, modelID, details["surrogate_model_id"])
 }
