@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/multileave-interleaving | Multileave (M2.7c) | — | M1.1–1.5 + M2.7 + M2.7b + Bandit delegation complete. M2.7c: Team Draft Multileave (3+ algorithms). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Service-layer tests + Producer trait extraction | — | Phase 1 (PRs #1, #8), Phase 2 (PR #23), Phase 3 (PR #40), Phase 4 (PRs #48, #59) all merged. 78 tests (36 pipeline + 42 ingest). Producer trait enables mock-based testing. |
-| Agent-3 | M3 Metrics | 🔵 Contract Testing | agent-3/test/m3-m4-integration-contract | M3 ↔ M4a data contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration tests merged (PR #51). M3↔M4a contract tests: 33 tests verify SQL template output columns match Delta Lake schemas M4a reads. CI optimization (PR #58): skip Rust jobs on non-Rust changes. |
+| Agent-3 | M3 Metrics | 🟢 Phase 3 Complete | agent-3/test/guardrail-e2e | M3↔M5 guardrail contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration (PR #51). M3↔M4a contracts (PR #61): 33 tests. CI opt (PR #58). Kafka publisher (PR #64). M3↔M5 contract tests: schema symmetry + Kafka roundtrip. Session-level + QoE SQL done (M2.11). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/cold-start-bandit | M3.2 Content Cold-Start Bandit | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start bandit in progress. |
 | Agent-5 | M5 Management | 🟢 Phase 3 Complete | agent-5/feat/cumulative-holdout | M3.6 Cumulative holdout complete | — | Phase 2 complete (PRs #50, #53). M3.6: cumulative holdout support — traffic 1-5% enforcement, sequential/guardrail bypass, holdout retirement audit, ListRunningHoldouts query. |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/bandit-dashboard | Bandit dashboard (M3.3) complete | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard done. 115 tests pass. Next: live API integration (Agent-5 ↔ Agent-6). |
@@ -104,8 +104,8 @@
 | 3.1 | LinUCB contextual bandit | Agent-4 | 🟢 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) | PR #54 merged |
 | 3.2 | Content cold-start bandit | Agent-4 | 🔵 | Agent-6 (cold-start widget on bandit dashboard) |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🔵 | PR pending — arm allocation chart, reward rates, Thompson Sampling params, reward history |
-| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 part done (session_id keyed events). Agent-1/3 parts pending. |
-| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 part done (QoE validation + ingestion PR #40). Agent-3 part pending (Spark SQL). |
+| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 done (session_id keyed events). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration, merged in M2.11). Agent-1 part pending. |
+| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 done (QoE validation + ingestion PR #40). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl, merged in M2.11). Pipeline e2e pending. |
 | 3.6 | Cumulative holdout support | Agent-5 | 🟢 | M4a periodic lift reports |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
@@ -129,7 +129,7 @@ Track integration test results between agent pairs.
 | 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟢 | Merged (PR #51): SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | 🔵 | 33 contract tests verify M3 SQL output columns match Delta Lake schemas M4a reads. Covers all 4 output tables + ratio delta method variance components. |
-| 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
+| 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟢 | M3 Kafka publisher (PR #64) + M5 consumer (PR #18). 3 schema contract tests (field symmetry, bidirectional deser, zero-value). Kafka roundtrip integration test. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🟡 | M1 bandit delegation with mock uniform selection ready. Awaiting M4b SelectArm gRPC for live integration. |
 | 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | ⚪ | — |
 
