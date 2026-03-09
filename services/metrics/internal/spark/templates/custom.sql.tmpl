@@ -1,0 +1,17 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+custom_result AS (
+    {{.CustomSQL}}
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    cr.user_id,
+    eu.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    cr.metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM custom_result cr
+INNER JOIN exposed_users eu ON cr.user_id = eu.user_id

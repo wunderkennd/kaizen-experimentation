@@ -132,8 +132,21 @@ func TestRenderForType_AllCases(t *testing.T) {
 		assert.NotEmpty(t, sql, "type %q should produce SQL", mt)
 	}
 
+	// CUSTOM type with valid custom_sql.
+	customP := p
+	customP.CustomSQL = "SELECT user_id, AVG(value) AS metric_value FROM events GROUP BY user_id"
+	sql, err := r.RenderForType("CUSTOM", customP)
+	assert.NoError(t, err, "CUSTOM with valid SQL should succeed")
+	assert.NotEmpty(t, sql)
+	assert.Contains(t, sql, "custom_result")
+
+	// CUSTOM type without custom_sql fails.
+	_, err = r.RenderForType("CUSTOM", p)
+	assert.Error(t, err, "CUSTOM without custom_sql should fail")
+	assert.Contains(t, err.Error(), "requires non-empty custom_sql")
+
 	// Invalid types.
-	for _, mt := range []string{"PERCENTILE", "CUSTOM", "HISTOGRAM", "", "  "} {
+	for _, mt := range []string{"PERCENTILE", "HISTOGRAM", "", "  "} {
 		_, err := r.RenderForType(mt, p)
 		assert.Error(t, err, "type %q should fail", mt)
 		assert.Contains(t, err.Error(), "unsupported metric type")

@@ -72,6 +72,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			ComputationDate:      computationDate,
 			NumeratorEventType:   m.NumeratorEventType,
 			DenominatorEventType: m.DenominatorEventType,
+			CustomSQL:            m.CustomSQL,
 		}
 
 		// QoE metrics use a separate template reading from delta.qoe_events.

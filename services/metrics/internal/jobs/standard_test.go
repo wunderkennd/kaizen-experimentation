@@ -272,6 +272,47 @@ func TestStandardJob_Run_MixedQoEAndEngagement(t *testing.T) {
 	assert.Equal(t, 0, corrCount, "No QoE metrics means no correlation computation")
 }
 
+func TestStandardJob_Run_CustomMetricType(t *testing.T) {
+	job, executor, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	// custom_metric_test experiment uses power_users_watch_time (CUSTOM type)
+	// plus watch_time_minutes (MEAN with CUPED)
+	result, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000005")
+	require.NoError(t, err)
+
+	assert.Equal(t, "e0000000-0000-0000-0000-000000000005", result.ExperimentID)
+	assert.Equal(t, 2, result.MetricsComputed)
+
+	// Verify CUSTOM metric SQL contains the custom_result CTE and user-provided SQL
+	var customCall *spark.MockCall
+	for _, c := range executor.GetCalls() {
+		if strings.Contains(c.SQL, "custom_result") {
+			cc := c
+			customCall = &cc
+			break
+		}
+	}
+	require.NotNil(t, customCall, "Should have a call with custom_result CTE")
+	assert.Contains(t, customCall.SQL, "HAVING COUNT(*) >= 10",
+		"Custom SQL should contain user-provided HAVING clause")
+	assert.Contains(t, customCall.SQL, "delta.exposures",
+		"Custom SQL should be joined with exposures")
+	assert.Equal(t, "delta.metric_summaries", customCall.TargetTable)
+
+	// Verify query log entries
+	var customLogEntry *querylog.Entry
+	for _, e := range qlWriter.AllEntries() {
+		if e.MetricID == "power_users_watch_time" && e.JobType == "daily_metric" {
+			ee := e
+			customLogEntry = &ee
+			break
+		}
+	}
+	require.NotNil(t, customLogEntry, "Should have a daily_metric query log entry for CUSTOM metric")
+	assert.Contains(t, customLogEntry.SQLText, "custom_result")
+}
+
 func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 	job, executor, _ := setupTestJob(t)
 	ctx := context.Background()
