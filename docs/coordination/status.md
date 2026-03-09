@@ -112,7 +112,7 @@
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 4.1 | CATE heterogeneous treatment effects | Agent-4 | ⚪ | — |
+| 4.1 | CATE heterogeneous treatment effects | Agent-4 | 🔵 | Subgroup analysis + Cochran Q + BH-FDR. 22 tests (18 unit/proptest + 4 golden). |
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | ⚪ | — |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | ⚪ | — |

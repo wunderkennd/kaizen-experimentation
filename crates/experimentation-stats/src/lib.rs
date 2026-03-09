@@ -30,6 +30,7 @@ pub mod novelty;
 pub mod interference;
 pub mod interleaving;
 pub mod surrogate;
+pub mod cate;
 // Stubs — implement in Phase 3:
 // pub mod delta_method;
 // pub mod clustering;
