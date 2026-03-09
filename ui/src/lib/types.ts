@@ -137,3 +137,63 @@ export interface AnalysisResult {
   srmResult: SrmResult;
   computedAt: string;
 }
+
+// --- Novelty Analysis (M2.4) ---
+
+export interface NoveltyAnalysisResult {
+  experimentId: string;
+  metricId: string;
+  noveltyDetected: boolean;
+  rawTreatmentEffect: number;
+  projectedSteadyStateEffect: number;
+  noveltyAmplitude: number;
+  decayConstantDays: number;
+  isStabilized: boolean;
+  daysUntilProjectedStability: number;
+  computedAt: string;
+}
+
+// --- Interference Analysis (M2.5) ---
+
+export interface TitleSpillover {
+  contentId: string;
+  treatmentWatchRate: number;
+  controlWatchRate: number;
+  pValue: number;
+}
+
+export interface InterferenceAnalysisResult {
+  experimentId: string;
+  interferenceDetected: boolean;
+  jensenShannonDivergence: number;
+  jaccardSimilarityTop100: number;
+  treatmentGiniCoefficient: number;
+  controlGiniCoefficient: number;
+  treatmentCatalogCoverage: number;
+  controlCatalogCoverage: number;
+  spilloverTitles: TitleSpillover[];
+  computedAt: string;
+}
+
+// --- Interleaving Analysis (M2.6) ---
+
+export interface AlgorithmStrength {
+  algorithmId: string;
+  strength: number;
+  ciLower: number;
+  ciUpper: number;
+}
+
+export interface PositionAnalysis {
+  position: number;
+  algorithmEngagementRates: Record<string, number>;
+}
+
+export interface InterleavingAnalysisResult {
+  experimentId: string;
+  algorithmWinRates: Record<string, number>;
+  signTestPValue: number;
+  algorithmStrengths: AlgorithmStrength[];
+  positionAnalyses: PositionAnalysis[];
+  computedAt: string;
+}

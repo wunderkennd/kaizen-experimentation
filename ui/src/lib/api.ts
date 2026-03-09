@@ -1,4 +1,7 @@
-import type { AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse, QueryLogEntry } from './types';
+import type {
+  AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse,
+  QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
+} from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
 const MGMT_URL = process.env.NEXT_PUBLIC_MANAGEMENT_URL || 'http://localhost:50055';
@@ -133,5 +136,23 @@ export async function createExperiment(request: CreateExperimentRequest): Promis
 export async function getAnalysisResult(experimentId: string): Promise<AnalysisResult> {
   return callRpc<{ experimentId: string }, AnalysisResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetAnalysisResult', { experimentId },
+  );
+}
+
+export async function getNoveltyAnalysis(experimentId: string): Promise<NoveltyAnalysisResult> {
+  return callRpc<{ experimentId: string }, NoveltyAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetNoveltyAnalysis', { experimentId },
+  );
+}
+
+export async function getInterferenceAnalysis(experimentId: string): Promise<InterferenceAnalysisResult> {
+  return callRpc<{ experimentId: string }, InterferenceAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetInterferenceAnalysis', { experimentId },
+  );
+}
+
+export async function getInterleavingAnalysis(experimentId: string): Promise<InterleavingAnalysisResult> {
+  return callRpc<{ experimentId: string }, InterleavingAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetInterleavingAnalysis', { experimentId },
   );
 }
