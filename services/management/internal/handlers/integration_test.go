@@ -1449,3 +1449,154 @@ func TestRBAC_AuditTrailRecordsRealActor(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "alice@corp.com", actorEmail)
 }
+
+// --- Guardrail Override Audit Tests ---
+
+func TestGuardrailOverride_CreateWithAlertOnly(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "guardrail-override-create-"+t.Name(), 0)
+
+	exp := newABExperimentInLayer("alert-only-create", layer.LayerId)
+	exp.GuardrailAction = commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY, created.Msg.GuardrailAction)
+
+	// Verify guardrail_override audit entry exists.
+	var action string
+	var detailsJSON []byte
+	err = env.pool.QueryRow(ctx,
+		`SELECT action, details_json FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override'`,
+		created.Msg.ExperimentId).Scan(&action, &detailsJSON)
+	require.NoError(t, err, "expected guardrail_override audit entry")
+	assert.Equal(t, "guardrail_override", action)
+	assert.Contains(t, string(detailsJSON), "ALERT_ONLY")
+
+	// Verify actor is recorded.
+	var actor string
+	err = env.pool.QueryRow(ctx,
+		`SELECT actor_email FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override'`,
+		created.Msg.ExperimentId).Scan(&actor)
+	require.NoError(t, err)
+	assert.Equal(t, "test@example.com", actor)
+}
+
+func TestGuardrailOverride_CreateWithAutoPause_NoOverrideAudit(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "guardrail-no-override-"+t.Name(), 0)
+
+	exp := newABExperimentInLayer("auto-pause-create", layer.LayerId)
+	// AUTO_PAUSE is default — no override audit expected.
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+
+	// Verify NO guardrail_override audit entry exists.
+	var count int
+	err = env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override'`,
+		created.Msg.ExperimentId).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "AUTO_PAUSE should not produce a guardrail_override audit entry")
+}
+
+func TestGuardrailOverride_UpdateTriggers(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "guardrail-override-update-"+t.Name(), 0)
+
+	// Create with AUTO_PAUSE (default).
+	exp := newABExperimentInLayer("update-override-test", layer.LayerId)
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.GuardrailAction_GUARDRAIL_ACTION_AUTO_PAUSE, created.Msg.GuardrailAction)
+
+	// Update to ALERT_ONLY → should trigger guardrail_override audit.
+	updated := created.Msg
+	updated.GuardrailAction = commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY
+	_, err = client.UpdateExperiment(ctx, connect.NewRequest(&mgmtv1.UpdateExperimentRequest{
+		Experiment: updated,
+	}))
+	require.NoError(t, err)
+
+	var overrideCount int
+	err = env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override'`,
+		created.Msg.ExperimentId).Scan(&overrideCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, overrideCount, "update to ALERT_ONLY should produce guardrail_override")
+
+	// Verify override details reference the change.
+	var detailsJSON []byte
+	err = env.pool.QueryRow(ctx,
+		`SELECT details_json FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override'`,
+		created.Msg.ExperimentId).Scan(&detailsJSON)
+	require.NoError(t, err)
+	assert.Contains(t, string(detailsJSON), "AUTO_PAUSE")
+	assert.Contains(t, string(detailsJSON), "ALERT_ONLY")
+
+	// Update back to AUTO_PAUSE → should trigger guardrail_override_revoked audit.
+	updated.GuardrailAction = commonv1.GuardrailAction_GUARDRAIL_ACTION_AUTO_PAUSE
+	_, err = client.UpdateExperiment(ctx, connect.NewRequest(&mgmtv1.UpdateExperimentRequest{
+		Experiment: updated,
+	}))
+	require.NoError(t, err)
+
+	var revokedCount int
+	err = env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override_revoked'`,
+		created.Msg.ExperimentId).Scan(&revokedCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, revokedCount, "revert to AUTO_PAUSE should produce guardrail_override_revoked")
+}
+
+func TestGuardrailOverride_UpdateSameAction_NoAudit(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "guardrail-same-action-"+t.Name(), 0)
+
+	// Create with ALERT_ONLY.
+	exp := newABExperimentInLayer("same-action-test", layer.LayerId)
+	exp.GuardrailAction = commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+
+	// Update but keep ALERT_ONLY → should NOT produce an additional guardrail_override.
+	updated := created.Msg
+	updated.Name = "same-action-test-renamed"
+	_, err = client.UpdateExperiment(ctx, connect.NewRequest(&mgmtv1.UpdateExperimentRequest{
+		Experiment: updated,
+	}))
+	require.NoError(t, err)
+
+	// Count override entries — should be 1 (from creation only).
+	var count int
+	err = env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_override'`,
+		created.Msg.ExperimentId).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "updating without changing guardrail_action should not produce additional override audit")
+}
