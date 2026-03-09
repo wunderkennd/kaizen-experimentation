@@ -38,6 +38,7 @@ vi.mock('recharts', async () => {
     Tooltip: Noop,
     ErrorBar: Noop,
     Cell: Noop,
+    Legend: Noop,
   };
 });
 
