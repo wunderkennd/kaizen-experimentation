@@ -21,6 +21,7 @@ import (
 	mgmtv1 "github.com/org/experimentation/gen/go/experimentation/management/v1"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
+	"github.com/org/experimentation-platform/services/management/internal/auth"
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
 	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
@@ -31,7 +32,24 @@ type testEnv struct {
 	pool   *pgxpool.Pool
 }
 
+// withAuth returns a client option that injects auth headers into every request.
+func withAuth(email, role string) connect.ClientOption {
+	return connect.WithInterceptors(connect.UnaryInterceptorFunc(
+		func(next connect.UnaryFunc) connect.UnaryFunc {
+			return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+				req.Header().Set(auth.HeaderUserEmail, email)
+				req.Header().Set(auth.HeaderUserRole, role)
+				return next(ctx, req)
+			}
+		},
+	))
+}
+
 func setupTestServer(t *testing.T) (testEnv, func()) {
+	return setupTestServerWithAuth(t, "test@example.com", "admin")
+}
+
+func setupTestServerWithAuth(t *testing.T, email, role string) (testEnv, func()) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -47,15 +65,48 @@ func setupTestServer(t *testing.T) (testEnv, func()) {
 	svc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, nil)
 
 	mux := http.NewServeMux()
-	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc)
+	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc,
+		connect.WithInterceptors(auth.NewAuthInterceptor()),
+	)
 	mux.Handle(path, handler)
 
 	server := httptest.NewServer(mux)
 	client := managementv1connect.NewExperimentManagementServiceClient(
 		http.DefaultClient, server.URL,
+		withAuth(email, role),
 	)
 
 	return testEnv{client: client, pool: pool}, func() {
+		server.Close()
+		pool.Close()
+	}
+}
+
+// setupTestServerRaw returns a test server with auth interceptor but an unauthenticated client.
+func setupTestServerRaw(t *testing.T) (string, *pgxpool.Pool, func()) {
+	t.Helper()
+
+	ctx := context.Background()
+	pool, err := store.NewPool(ctx)
+	require.NoError(t, err)
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	ls := store.NewLayerStore(pool)
+	ms := store.NewMetricStore(pool)
+	ts := store.NewTargetingStore(pool)
+	ss := store.NewSurrogateStore(pool)
+	svc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, nil)
+
+	mux := http.NewServeMux()
+	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc,
+		connect.WithInterceptors(auth.NewAuthInterceptor()),
+	)
+	mux.Handle(path, handler)
+
+	server := httptest.NewServer(mux)
+
+	return server.URL, pool, func() {
 		server.Close()
 		pool.Close()
 	}
@@ -1253,4 +1304,148 @@ type mockConcludeCall struct {
 func (m *mockConcluder) ConcludeByID(_ context.Context, id, actor string, _ map[string]any) error {
 	m.calls = append(m.calls, mockConcludeCall{ID: id, Actor: actor})
 	return nil
+}
+
+// ─── RBAC integration tests ───────────────────────────────────────────────────
+
+func TestRBAC_ViewerCanRead(t *testing.T) {
+	serverURL, _, cleanup := setupTestServerRaw(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Admin creates experiment.
+	adminClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("admin@example.com", "admin"),
+	)
+	layer := createTestLayer(t, adminClient, "rbac-viewer-read-"+t.Name(), 0)
+	created, err := adminClient.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("rbac-viewer-read", layer.LayerId),
+	}))
+	require.NoError(t, err)
+
+	// Viewer can read it.
+	viewerClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("viewer@example.com", "viewer"),
+	)
+	got, err := viewerClient.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, created.Msg.ExperimentId, got.Msg.ExperimentId)
+}
+
+func TestRBAC_ViewerCannotCreate(t *testing.T) {
+	serverURL, _, cleanup := setupTestServerRaw(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	viewerClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("viewer@example.com", "viewer"),
+	)
+
+	_, err := viewerClient.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperiment("rbac-viewer-create"),
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+}
+
+func TestRBAC_ExperimenterCanCreate(t *testing.T) {
+	serverURL, _, cleanup := setupTestServerRaw(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Admin creates the layer (layer creation is admin-only).
+	adminClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("admin@example.com", "admin"),
+	)
+	layer := createTestLayer(t, adminClient, "rbac-exp-create-"+t.Name(), 0)
+
+	// Experimenter creates the experiment.
+	expClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("experimenter@example.com", "experimenter"),
+	)
+	created, err := expClient.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("rbac-exp-create", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT, created.Msg.State)
+}
+
+func TestRBAC_ExperimenterCannotArchive(t *testing.T) {
+	serverURL, _, cleanup := setupTestServerRaw(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Admin creates and drives experiment to CONCLUDED.
+	adminClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("admin@example.com", "admin"),
+	)
+	layer := createTestLayer(t, adminClient, "rbac-exp-archive-"+t.Name(), 0)
+	created, err := adminClient.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("rbac-exp-archive", layer.LayerId),
+	}))
+	require.NoError(t, err)
+
+	_, err = adminClient.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+
+	_, err = adminClient.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+
+	// Experimenter tries to archive → denied.
+	expClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("experimenter@example.com", "experimenter"),
+	)
+	_, err = expClient.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+		ExperimentId: created.Msg.ExperimentId,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+}
+
+func TestRBAC_MissingHeaders(t *testing.T) {
+	serverURL, _, cleanup := setupTestServerRaw(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	noAuthClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL,
+	)
+
+	_, err := noAuthClient.ListExperiments(ctx, connect.NewRequest(&mgmtv1.ListExperimentsRequest{}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
+}
+
+func TestRBAC_AuditTrailRecordsRealActor(t *testing.T) {
+	serverURL, pool, cleanup := setupTestServerRaw(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Admin creates layer.
+	adminClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("admin@example.com", "admin"),
+	)
+	layer := createTestLayer(t, adminClient, "rbac-audit-"+t.Name(), 0)
+
+	// Experimenter creates experiment.
+	expClient := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, serverURL, withAuth("alice@corp.com", "experimenter"),
+	)
+	created, err := expClient.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("rbac-audit-actor", layer.LayerId),
+	}))
+	require.NoError(t, err)
+
+	// Verify audit trail has real actor email (not "system").
+	var actorEmail string
+	err = pool.QueryRow(ctx, `SELECT actor_email FROM audit_trail WHERE experiment_id = $1 AND action = 'create'`,
+		created.Msg.ExperimentId).Scan(&actorEmail)
+	require.NoError(t, err)
+	assert.Equal(t, "alice@corp.com", actorEmail)
 }
