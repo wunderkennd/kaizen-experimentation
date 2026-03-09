@@ -1,4 +1,4 @@
-import type { Experiment, ListExperimentsResponse, QueryLogEntry } from './types';
+import type { AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse, QueryLogEntry } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
 const MGMT_URL = process.env.NEXT_PUBLIC_MANAGEMENT_URL || 'http://localhost:50055';
@@ -6,6 +6,9 @@ const MGMT_SVC = 'experimentation.management.v1.ExperimentManagementService';
 
 const METRICS_URL = process.env.NEXT_PUBLIC_METRICS_URL || 'http://localhost:50054';
 const METRICS_SVC = 'experimentation.metrics.v1.MetricComputationService';
+
+const ANALYSIS_URL = process.env.NEXT_PUBLIC_ANALYSIS_URL || 'http://localhost:50053';
+const ANALYSIS_SVC = 'experimentation.analysis.v1.AnalysisService';
 
 async function callRpc<Req, Res>(baseUrl: string, service: string, method: string, request: Req): Promise<Res> {
   const res = await fetch(`${baseUrl}/${service}/${method}`, {
@@ -118,4 +121,17 @@ export async function exportNotebook(experimentId: string): Promise<{ content: s
     METRICS_URL, METRICS_SVC, 'ExportNotebook', { experimentId },
   );
   return raw;
+}
+
+export async function createExperiment(request: CreateExperimentRequest): Promise<Experiment> {
+  const raw = await callRpc<CreateExperimentRequest, { experiment?: Record<string, unknown> }>(
+    MGMT_URL, MGMT_SVC, 'CreateExperiment', request,
+  );
+  return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
+}
+
+export async function getAnalysisResult(experimentId: string): Promise<AnalysisResult> {
+  return callRpc<{ experimentId: string }, AnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetAnalysisResult', { experimentId },
+  );
 }

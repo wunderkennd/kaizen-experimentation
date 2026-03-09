@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import type { Experiment } from '@/lib/types';
 import { listExperiments } from '@/lib/api';
 import { ExperimentCard } from '@/components/experiment-card';
@@ -49,7 +50,15 @@ export default function ExperimentListPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Experiments</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Experiments</h1>
+        <Link
+          href="/experiments/new"
+          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+        >
+          New Experiment
+        </Link>
+      </div>
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

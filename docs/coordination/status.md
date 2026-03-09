@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-05 by Agent-5 (Phase 1 complete — all agents synced)
+> **Last updated**: 2026-03-08 by Agent-6 (M2.8–2.9 complete, create experiment form)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -14,11 +14,11 @@
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/interleaved-list-rpc | Optimized Interleaving (M2.7b) | — | M1.1–1.5 + M2.7 + Bandit delegation complete. M2.7b: Optimized Interleaving (greedy softmax) with method dispatch. |
-| Agent-2 | M2 Pipeline | 🔵 Phase 3 In Progress | agent-2/feat/qoe-interleaving-validation | Phase 3: QoE enrichment + interleaving provenance | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3: QoE upper bounds + interleaving provenance validation. |
+| Agent-2 | M2 Pipeline | 🔵 Phase 4 In Progress | agent-2/feat/phase4-chaos-engineering | Phase 4: Chaos engineering + crash recovery | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3 done (PR #40). Phase 4: chaos scripts, crash-recovery tests, synthetic event generator. |
 | Agent-3 | M3 Metrics | 🔵 Phase 2 In Progress | agent-3/feat/surrogate-metric-framework | M2.10 Surrogate Metric Framework | — | Phase 1 done. M2.11 done (PR #26). M2.10 in progress (PR #35). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 2 In Progress | agent-4/feat/surrogate-validation | M2.10 Surrogate Validation | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. |
-| Agent-5 | M5 Management | 🟢 Phase 1 Complete | — | STARTING validation + targeting rule CRUD | — | M1.20–1.24 all merged (PRs #7, #10, #15, #18, #24). All Phase 1 milestones done. |
-| Agent-6 | M6 UI | 🟡 Not Started | — | Experiment list + detail shell (1.25) | — | Unblocked by M1.20. Agent-5 CRUD API available. Can use live backend. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
+| Agent-5 | M5 Management | 🔵 Phase 2 | agent-5/feat/surrogate-crud | Sequential auto-conclude (Phase 2) | — | Surrogate CRUD + sequential auto-conclude. Unblocks Agent-4 (boundary crossing → auto-conclude integration). |
+| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/results-dashboard | Create experiment form + M2.8–2.9 complete | — | M1.25–1.27 done, M2.8–2.9 done. 87 tests pass. Create experiment form with full field coverage. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
@@ -68,16 +68,16 @@
 | 1.22 | StreamConfigUpdates RPC | Agent-5 | 🟢 | PR #15 | 2026-03-05 | Agent-1 (real-time config cache) |
 | 1.23 | Guardrail alert consumer → auto-pause | Agent-5 | 🟢 | PR #18 | 2026-03-05 | ADR-008 auto-pause. Kafka consumer + processor. |
 | 1.24 | Metric definition CRUD | Agent-5 | 🟢 | PR #24 | 2026-03-05 | Agent-3 (metric configs) |
-| **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟡 | — | — | Stakeholder demo. Unblocked by M1.20. Ready to start. |
-| 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | 🟡 | — | — | Unblocked. Agent-5 CRUD API available for live integration. |
-| 1.27 | View SQL page (query log from M3) | Agent-6 | ⚪ | — | — | Needs Agent-2 query log (1.9 merged) |
+| **1.25** | **Experiment list + detail shell (MSW mocked)** | Agent-6 | 🟢 | PR #30 | 2026-03-06 | Stakeholder demo. |
+| 1.26 | State indicator component (color-coded lifecycle) | Agent-6 | 🟢 | PR #30 | 2026-03-06 | Color-coded state badges for all 6 states. |
+| 1.27 | View SQL page (query log from M3) | Agent-6 | 🟢 | PR #30 | 2026-03-06 | Query log table + notebook export. |
 | **1.28** | **Boolean flag CRUD + CGo hash bridge** | Agent-7 | 🟢 | PR #13 | 2026-03-05 | CRUD + EvaluateFlag + CGo bridge. 10K hash vectors match. |
 | 1.29 | Percentage rollout (monotonic) | Agent-7 | 🟢 | PR #13 | 2026-03-05 | Monotonic rollout. No user eviction on % increase. |
 | 1.30 | PromoteToExperiment → M5 CreateExperiment | Agent-7 | 🟢 | PR #13 | 2026-03-05 | Mocked in PR #13. Agent-5 CRUD now available for live wiring. |
 
 **Bold** = critical path milestones that unblock downstream agents.
 
-**Phase 1 remaining**: 1.25–1.27 (Agent-6) — only 3 milestones left
+**Phase 1 complete**: All 30 milestones merged.
 
 ### Phase 2: Analysis & UI (Weeks 6–11)
 
@@ -91,8 +91,8 @@
 | 2.6 | Interleaving analysis (Team Draft scoring) | Agent-4 | 🟢 | Agent-6 (interleaving tab) | PR #38 — Sign test, Bradley-Terry MM, position analysis |
 | 2.7 | GetInterleavedList RPC (Team Draft) | Agent-1 | 🟢 | Agent-4 (interleaving analysis) |
 | 2.7b | Optimized Interleaving (softmax method) | Agent-1 | 🟢 | Agent-4 (interleaving analysis — sensitivity comparison) |
-| 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | ⚪ | Stakeholder demo |
-| 2.9 | Notebook export (.ipynb from query log) | Agent-6 | ⚪ | — |
+| 2.8 | Results dashboard (treatment effects, CI chart, sequential boundary) | Agent-6 | 🟢 | Stakeholder demo |
+| 2.9 | Notebook export (.ipynb from query log) | Agent-6 | 🟢 | — |
 | 2.10 | Surrogate metric framework (M3 + M4a) | Agent-3/4 | 🔵 | Agent-3 part: PR #35 complete. Agent-4 part: surrogate validation in progress. |
 | 2.11 | SVOD-specific metrics (QoE, lifecycle, content consumption, interleaving scoring, session-level, QoE-engagement correlation) | Agent-3 | 🟢 | Agent-4 (interference, novelty, interleaving analysis M2.6), Agent-6 (QoE dashboard) |
 
@@ -100,11 +100,11 @@
 
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
-| 3.1 | LinUCB contextual bandit | Agent-4 | ⚪ | — |
+| 3.1 | LinUCB contextual bandit | Agent-4 | 🔵 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) |
 | 3.2 | Content cold-start bandit | Agent-4 | ⚪ | — |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | ⚪ | — |
-| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | ⚪ | — |
-| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | ⚪ | — |
+| 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 part done (session_id keyed events). Agent-1/3 parts pending. |
+| 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 part done (QoE validation + ingestion PR #40). Agent-3 part pending (Spark SQL). |
 | 3.6 | Cumulative holdout support | Agent-5 | ⚪ | — |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
@@ -115,7 +115,7 @@
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | ⚪ | — |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | ⚪ | — |
-| 4.5 | End-to-end chaos testing passing | All | ⚪ | Production readiness |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests in PR. Other agents pending. |
 
 ## Pair Integration Schedule
 
@@ -125,7 +125,7 @@ Track integration test results between agent pairs.
 |------|------|--------|-------|
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
-| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | ⚪ | — |
+| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟡 | Agent-2 has synthetic event generator + chaos scripts ready. Agent-3 needs Kafka consumer for live integration. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
@@ -162,8 +162,8 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 
 **In progress:**
 - Agent-3: M2.10 surrogate metric framework (Agent-3 part complete in PR #35, Agent-4 part pending)
-- Agent-5: Phase 1 polish — STARTING validation gate, targeting rule CRUD, integration tests
-- Agent-6: experiment list + detail shell (1.25, not started)
+- Agent-5: Surrogate model CRUD (Phase 2) — CreateSurrogateModel, ListSurrogateModels, GetSurrogateCalibration, TriggerSurrogateRecalibration
+- Agent-6: M1.25–1.27 complete, M2.8–2.9 complete, create experiment form in progress
 
 **Unblocked this week:**
 - Agent-1 unblocked for 1.3 (config cache) by Agent-5 StreamConfigUpdates (PR #15)
@@ -171,4 +171,4 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 - Agent-7 unblocked for live PromoteToExperiment by Agent-5 CRUD (M1.20)
 
 **Risks:**
-- Agent-6 has not started Phase 1 work — may become critical path for stakeholder demo
+- None — Agent-6 Phase 1 milestones now complete

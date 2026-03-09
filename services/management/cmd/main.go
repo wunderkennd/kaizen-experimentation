@@ -16,6 +16,7 @@ import (
 
 	"github.com/org/experimentation-platform/services/management/internal/guardrail"
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
+	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
 	"golang.org/x/net/http2"
@@ -48,6 +49,7 @@ func main() {
 	layerStore := store.NewLayerStore(pool)
 	metricStore := store.NewMetricStore(pool)
 	targetingStore := store.NewTargetingStore(pool)
+	surrogateStore := store.NewSurrogateStore(pool)
 
 	// Notifier for streaming config updates.
 	dsn := os.Getenv("DATABASE_URL")
@@ -58,19 +60,29 @@ func main() {
 	notifier.Start(ctx)
 	defer notifier.Stop()
 
-	// Guardrail alert consumer (Kafka → auto-pause).
-	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
-		processor := guardrail.NewProcessor(experimentStore, auditStore, notifier)
-		consumer := guardrail.NewConsumer(strings.Split(brokers, ","), processor)
-		consumer.Start(ctx)
-		defer consumer.Stop()
-		slog.Info("guardrail consumer started", "brokers", brokers)
-	} else {
-		slog.Info("guardrail consumer disabled (KAFKA_BROKERS not set)")
-	}
+	// Service handlers (created before consumers because sequential consumer uses expSvc as Concluder).
+	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, surrogateStore, notifier)
 
-	// Service handlers.
-	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, notifier)
+	// Kafka consumers (guardrail auto-pause + sequential auto-conclude).
+	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
+		brokerList := strings.Split(brokers, ",")
+
+		// Guardrail alert consumer (Kafka → auto-pause).
+		grProcessor := guardrail.NewProcessor(experimentStore, auditStore, notifier)
+		grConsumer := guardrail.NewConsumer(brokerList, grProcessor)
+		grConsumer.Start(ctx)
+		defer grConsumer.Stop()
+		slog.Info("guardrail consumer started", "brokers", brokers)
+
+		// Sequential boundary alert consumer (Kafka → auto-conclude).
+		seqProcessor := sequential.NewProcessor(experimentStore, auditStore, notifier, expSvc)
+		seqConsumer := sequential.NewConsumer(brokerList, seqProcessor)
+		seqConsumer.Start(ctx)
+		defer seqConsumer.Stop()
+		slog.Info("sequential consumer started", "brokers", brokers)
+	} else {
+		slog.Info("kafka consumers disabled (KAFKA_BROKERS not set)")
+	}
 	streamSvc := handlers.NewConfigStreamService(experimentStore, notifier)
 
 	// Register ConnectRPC handlers on mux.

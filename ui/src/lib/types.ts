@@ -72,6 +72,22 @@ export interface ListExperimentsResponse {
   nextPageToken: string;
 }
 
+export interface CreateExperimentRequest {
+  name: string;
+  description: string;
+  ownerEmail: string;
+  type: ExperimentType;
+  variants: Variant[];
+  layerId: string;
+  primaryMetricId: string;
+  secondaryMetricIds: string[];
+  guardrailConfigs: GuardrailConfig[];
+  guardrailAction: GuardrailAction;
+  sequentialTestConfig?: SequentialTestConfig;
+  targetingRuleId?: string;
+  isCumulativeHoldout: boolean;
+}
+
 export interface QueryLogEntry {
   experimentId: string;
   metricId: string;
@@ -79,4 +95,45 @@ export interface QueryLogEntry {
   rowCount: number;
   durationMs: number;
   computedAt?: string;
+}
+
+export interface SequentialResult {
+  boundaryCrossed: boolean;
+  alphaSpent: number;
+  alphaRemaining: number;
+  currentLook: number;
+  adjustedPValue: number;
+}
+
+export interface MetricResult {
+  metricId: string;
+  variantId: string;
+  controlMean: number;
+  treatmentMean: number;
+  absoluteEffect: number;
+  relativeEffect: number;
+  ciLower: number;
+  ciUpper: number;
+  pValue: number;
+  isSignificant: boolean;
+  cupedAdjustedEffect: number;
+  cupedCiLower: number;
+  cupedCiUpper: number;
+  varianceReductionPct: number;
+  sequentialResult?: SequentialResult;
+}
+
+export interface SrmResult {
+  chiSquared: number;
+  pValue: number;
+  isMismatch: boolean;
+  observedCounts: Record<string, number>;
+  expectedCounts: Record<string, number>;
+}
+
+export interface AnalysisResult {
+  experimentId: string;
+  metricResults: MetricResult[];
+  srmResult: SrmResult;
+  computedAt: string;
 }

@@ -1,8 +1,9 @@
 import { http, HttpResponse } from 'msw';
-import { SEED_EXPERIMENTS, SEED_QUERY_LOG } from './seed-data';
+import { SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS } from './seed-data';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
+const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
 
 export const handlers = [
   // ListExperiments
@@ -26,6 +27,33 @@ export const handlers = [
     }
 
     return HttpResponse.json({ experiment });
+  }),
+
+  // CreateExperiment
+  http.post(`${MGMT_SVC}/CreateExperiment`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    const newExperiment = {
+      experimentId: crypto.randomUUID(),
+      name: body.name as string,
+      description: (body.description as string) || '',
+      ownerEmail: (body.ownerEmail as string) || '',
+      type: body.type as string,
+      state: 'DRAFT' as const,
+      variants: body.variants || [],
+      layerId: (body.layerId as string) || '',
+      hashSalt: `salt-${(body.name as string || '').replace(/\s+/g, '-').toLowerCase()}`,
+      primaryMetricId: (body.primaryMetricId as string) || '',
+      secondaryMetricIds: (body.secondaryMetricIds as string[]) || [],
+      guardrailConfigs: body.guardrailConfigs || [],
+      guardrailAction: (body.guardrailAction as string) || 'AUTO_PAUSE',
+      sequentialTestConfig: body.sequentialTestConfig,
+      targetingRuleId: body.targetingRuleId as string | undefined,
+      isCumulativeHoldout: (body.isCumulativeHoldout as boolean) || false,
+      createdAt: new Date().toISOString(),
+    };
+
+    SEED_EXPERIMENTS.push(newExperiment as typeof SEED_EXPERIMENTS[number]);
+    return HttpResponse.json({ experiment: newExperiment });
   }),
 
   // UpdateExperiment
@@ -131,6 +159,30 @@ export const handlers = [
       state: 'ARCHIVED',
     };
     return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
+  }),
+
+  // GetAnalysisResult
+  http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId?: string };
+    const experimentId = body.experimentId;
+
+    if (!experimentId) {
+      return HttpResponse.json(
+        { error: 'experimentId is required' },
+        { status: 400 },
+      );
+    }
+
+    const result = SEED_ANALYSIS_RESULTS.find((r) => r.experimentId === experimentId);
+
+    if (!result) {
+      return HttpResponse.json(
+        { error: `No analysis result for experiment ${experimentId}` },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json(result);
   }),
 
   // GetQueryLog

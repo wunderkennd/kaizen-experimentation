@@ -382,4 +382,210 @@ mod tests {
         let deserialized = deserialize_entry(&mut reader).unwrap().unwrap();
         assert_eq!(deserialized, event);
     }
+
+    // ---- Phase 4: Crash-recovery tests ----
+
+    /// Simulate crash-restart cycle: write events, drop buffer (crash), create new
+    /// buffer (restart), verify all events are recoverable and in correct order.
+    #[test]
+    fn test_crash_recovery_preserves_all_events() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = BufferConfig {
+            dir: dir.path().to_path_buf(),
+            max_size_bytes: 1024 * 1024, // 1 MB
+        };
+
+        let events: Vec<BufferedEvent> = (0..100)
+            .map(|i| {
+                make_event(
+                    if i % 2 == 0 { "exposures" } else { "metric_events" },
+                    &format!("key-{i}"),
+                    format!("protobuf-payload-{i:06}").as_bytes(),
+                )
+            })
+            .collect();
+
+        // Phase 1: Write events (simulating buffering during Kafka outage)
+        {
+            let mut buffer = DiskBuffer::new(config.clone()).unwrap();
+            for event in &events {
+                buffer.append(event).unwrap();
+            }
+            assert!(buffer.has_pending());
+            // Buffer is dropped here (simulating kill -9)
+        }
+
+        // Phase 2: Restart — verify all events are recoverable
+        let mut buffer = DiskBuffer::new(config).unwrap();
+        assert!(buffer.has_pending());
+
+        let recovered = buffer.read_all().unwrap();
+        assert_eq!(recovered.len(), events.len(), "All events must survive crash");
+
+        // Verify order preservation
+        for (i, (original, recovered)) in events.iter().zip(recovered.iter()).enumerate() {
+            assert_eq!(original, recovered, "Event {i} mismatch after crash recovery");
+        }
+
+        // Phase 3: Clear after successful "replay"
+        buffer.clear().unwrap();
+        assert!(!buffer.has_pending());
+        assert!(buffer.read_all().unwrap().is_empty());
+    }
+
+    /// Recovery startup time: creating DiskBuffer and reading pending events
+    /// must complete in < 100ms even with 10K buffered events.
+    #[test]
+    fn test_recovery_startup_latency() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = BufferConfig {
+            dir: dir.path().to_path_buf(),
+            max_size_bytes: 50 * 1024 * 1024, // 50 MB
+        };
+
+        // Write 10K events (simulating a large crash buffer)
+        {
+            let mut buffer = DiskBuffer::new(config.clone()).unwrap();
+            for i in 0..10_000 {
+                let event = make_event(
+                    "exposures",
+                    &format!("exp-{i}"),
+                    &[0xAB; 200], // ~200 byte payloads (realistic protobuf size)
+                );
+                buffer.append(&event).unwrap();
+            }
+        }
+
+        // Measure restart + read time
+        let start = std::time::Instant::now();
+        let buffer = DiskBuffer::new(config).unwrap();
+        assert!(buffer.has_pending());
+        let events = buffer.read_all().unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(events.len(), 10_000);
+        assert!(
+            elapsed.as_millis() < 2000,
+            "Recovery took {}ms, expected < 2000ms",
+            elapsed.as_millis()
+        );
+    }
+
+    /// Test that multiple crash-restart cycles don't corrupt the buffer.
+    #[test]
+    fn test_multiple_crash_restart_cycles() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = BufferConfig {
+            dir: dir.path().to_path_buf(),
+            max_size_bytes: 10 * 1024, // 10 KB
+        };
+
+        // Cycle 1: Write some events, "crash"
+        {
+            let mut buffer = DiskBuffer::new(config.clone()).unwrap();
+            for i in 0..5 {
+                buffer.append(&make_event("t", "k", format!("cycle1-{i}").as_bytes())).unwrap();
+            }
+        }
+
+        // Cycle 2: Restart, verify, add more events, "crash" again
+        {
+            let mut buffer = DiskBuffer::new(config.clone()).unwrap();
+            let recovered = buffer.read_all().unwrap();
+            assert_eq!(recovered.len(), 5);
+
+            // Simulate partial replay — buffer NOT cleared (crash before clear)
+            for i in 0..3 {
+                buffer.append(&make_event("t", "k", format!("cycle2-{i}").as_bytes())).unwrap();
+            }
+        }
+
+        // Cycle 3: Restart, verify both cycle 1 and cycle 2 events present
+        {
+            let buffer = DiskBuffer::new(config.clone()).unwrap();
+            let recovered = buffer.read_all().unwrap();
+            assert_eq!(recovered.len(), 8, "Should have 5 from cycle 1 + 3 from cycle 2");
+
+            // Cycle 1 events first
+            assert!(String::from_utf8_lossy(&recovered[0].payload).starts_with("cycle1-"));
+            // Cycle 2 events appended
+            assert!(String::from_utf8_lossy(&recovered[5].payload).starts_with("cycle2-"));
+        }
+
+        // Cycle 4: Successful replay — clear buffer
+        {
+            let mut buffer = DiskBuffer::new(config).unwrap();
+            buffer.clear().unwrap();
+            assert!(!buffer.has_pending());
+        }
+    }
+
+    /// Test buffer with all four Kafka topics (exposures, metric_events, reward_events, qoe_events).
+    #[test]
+    fn test_crash_recovery_multi_topic() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = BufferConfig {
+            dir: dir.path().to_path_buf(),
+            max_size_bytes: 1024 * 1024,
+        };
+
+        let topics = ["exposures", "metric_events", "reward_events", "qoe_events"];
+
+        {
+            let mut buffer = DiskBuffer::new(config.clone()).unwrap();
+            for (i, topic) in topics.iter().enumerate() {
+                for j in 0..10 {
+                    let event = make_event(
+                        topic,
+                        &format!("key-{i}-{j}"),
+                        format!("{topic}-event-{j}").as_bytes(),
+                    );
+                    buffer.append(&event).unwrap();
+                }
+            }
+        }
+
+        // Recovery
+        let buffer = DiskBuffer::new(config).unwrap();
+        let recovered = buffer.read_all().unwrap();
+        assert_eq!(recovered.len(), 40); // 4 topics × 10 events
+
+        // Verify topic distribution
+        for topic in topics {
+            let count = recovered.iter().filter(|e| e.topic == topic).count();
+            assert_eq!(count, 10, "Expected 10 events for topic {topic}");
+        }
+    }
+
+    /// Test truncated WAL (simulating crash mid-write).
+    #[test]
+    fn test_truncated_wal_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = BufferConfig {
+            dir: dir.path().to_path_buf(),
+            max_size_bytes: 1024 * 1024,
+        };
+
+        // Write 5 complete events
+        {
+            let mut buffer = DiskBuffer::new(config.clone()).unwrap();
+            for i in 0..5 {
+                buffer.append(&make_event("t", "k", format!("event-{i}").as_bytes())).unwrap();
+            }
+        }
+
+        // Corrupt the WAL by appending partial data (simulating crash mid-write)
+        {
+            let wal_path = dir.path().join(BUFFER_FILE_NAME);
+            let mut file = OpenOptions::new().append(true).open(&wal_path).unwrap();
+            // Write partial entry: topic length but no topic data
+            file.write_all(&10u32.to_le_bytes()).unwrap();
+            file.write_all(b"parti").unwrap(); // incomplete — 5 of 10 bytes
+        }
+
+        // Recovery should return the 5 complete events, ignoring truncated tail
+        let buffer = DiskBuffer::new(config).unwrap();
+        let recovered = buffer.read_all().unwrap();
+        assert_eq!(recovered.len(), 5, "Should recover 5 complete events, ignoring truncated entry");
+    }
 }
