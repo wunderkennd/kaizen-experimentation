@@ -38,9 +38,10 @@ async fn main() {
     let config = PolicyConfig::from_env();
     info!(?config, "Configuration loaded");
 
-    // 3. Create bounded channels (gRPC -> core, Kafka -> core)
+    // 3. Create bounded channels (gRPC -> core, Kafka -> core, management)
     let (policy_tx, policy_rx) = mpsc::channel(config.policy_channel_depth);
     let (reward_tx, reward_rx) = mpsc::channel(config.reward_channel_depth);
+    let (_mgmt_tx, mgmt_rx) = mpsc::channel::<core::ManagementCommand>(64);
 
     // 4. Open RocksDB and create PolicyCore
     let snapshot_store = SnapshotStore::open(Path::new(&config.rocksdb_path))
@@ -62,7 +63,7 @@ async fn main() {
                 .enable_all()
                 .build()
                 .expect("failed to build single-threaded runtime for policy core");
-            rt.block_on(policy_core.run(policy_rx, reward_rx));
+            rt.block_on(policy_core.run(policy_rx, reward_rx, mgmt_rx));
         })
         .expect("failed to spawn policy core thread");
 

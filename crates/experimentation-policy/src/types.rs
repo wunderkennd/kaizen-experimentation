@@ -36,11 +36,67 @@ pub struct RewardUpdate {
     pub kafka_offset: i64,
 }
 
+/// Request to create a cold-start bandit.
+pub struct CreateColdStartRequest {
+    pub config: experimentation_bandit::cold_start::ColdStartConfig,
+    pub reply_tx: oneshot::Sender<Result<CreateColdStartResponse, PolicyError>>,
+}
+
+/// Response from creating a cold-start bandit.
+#[derive(Debug, Clone)]
+pub struct CreateColdStartResponse {
+    pub experiment_id: String,
+    pub content_id: String,
+}
+
+/// Request to export affinity scores from a trained cold-start bandit.
+pub struct ExportAffinityRequest {
+    pub experiment_id: String,
+    /// Per-segment context feature vectors for affinity computation.
+    pub segment_contexts: HashMap<String, HashMap<String, f64>>,
+    pub reply_tx: oneshot::Sender<Result<ExportAffinityResponse, PolicyError>>,
+}
+
+/// Response with exported affinity scores.
+#[derive(Debug, Clone)]
+pub struct ExportAffinityResponse {
+    pub content_id: String,
+    pub segment_affinity_scores: HashMap<String, f64>,
+    pub optimal_placements: HashMap<String, String>,
+}
+
+/// Request to get a policy snapshot.
+pub struct GetSnapshotRequest {
+    pub experiment_id: String,
+    pub reply_tx: oneshot::Sender<Result<GetSnapshotResponse, PolicyError>>,
+}
+
+/// Response with policy snapshot data.
+#[derive(Debug, Clone)]
+pub struct GetSnapshotResponse {
+    pub experiment_id: String,
+    pub policy_state: Vec<u8>,
+    pub total_rewards_processed: u64,
+    pub kafka_offset: i64,
+    pub snapshot_at_epoch_ms: i64,
+}
+
+/// Request to rollback policy to a previous snapshot.
+pub struct RollbackPolicyRequest {
+    pub experiment_id: String,
+    pub target_snapshot_epoch_ms: i64,
+    pub reply_tx: oneshot::Sender<Result<GetSnapshotResponse, PolicyError>>,
+}
+
 /// Errors originating from the policy core.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum PolicyError {
     #[error("experiment not found: {0}")]
     ExperimentNotFound(String),
+    #[error("snapshot not found: {0}")]
+    SnapshotNotFound(String),
+    #[error("wrong policy type: expected {expected}, got {actual}")]
+    WrongPolicyType { expected: String, actual: String },
     #[error("internal error: {0}")]
     Internal(String),
 }

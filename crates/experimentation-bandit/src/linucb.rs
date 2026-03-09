@@ -204,6 +204,33 @@ impl LinUcbPolicy {
         &self.experiment_id
     }
 
+    /// Get the feature keys.
+    pub fn feature_keys(&self) -> &[String] {
+        &self.feature_keys
+    }
+
+    /// Get the arms.
+    pub fn arms(&self) -> &[LinUcbArm] {
+        &self.arms
+    }
+
+    /// Compute the predicted reward for a given arm and context.
+    ///
+    /// Returns θ_a^T · x where θ_a = A_inv_a · b_a.
+    /// This is the exploitation component (without exploration bonus).
+    pub fn predicted_reward(&self, arm_id: &str, context: &HashMap<String, f64>) -> f64 {
+        let x = self.context_to_vector(context);
+        let arm = self
+            .arms
+            .iter()
+            .find(|a| a.arm_id == arm_id)
+            .unwrap_or_else(|| panic!("unknown arm_id: {arm_id}"));
+        let theta = &arm.a_inv * &arm.b;
+        let reward = theta.dot(&x);
+        assert_finite(reward, "LinUCB predicted reward");
+        reward
+    }
+
     /// Convert a context HashMap to a DVector using the stable feature_keys ordering.
     /// Missing keys default to 0.0.
     fn context_to_vector(&self, context: &HashMap<String, f64>) -> DVector<f64> {
