@@ -2,6 +2,7 @@
 //!
 //! Implements Team Draft (Phase 1), Optimized (Phase 2), and Multileave (Phase 3).
 
+pub mod multileave;
 pub mod optimized;
 pub mod team_draft;
 

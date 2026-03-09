@@ -123,6 +123,48 @@ fn bench_optimized_interleave(c: &mut Criterion) {
     });
 }
 
+fn make_multileave_lists(n: usize) -> HashMap<String, RankedList> {
+    let mut m = HashMap::new();
+    for (i, algo) in ["algo_x", "algo_y", "algo_z"].iter().enumerate() {
+        m.insert(
+            algo.to_string(),
+            RankedList {
+                item_ids: (0..n).map(|j| format!("{algo}_item_{}_{j}", i)).collect(),
+            },
+        );
+    }
+    m
+}
+
+fn bench_multileave(c: &mut Criterion) {
+    let config = Config::from_json(DEV_CONFIG).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let lists_10 = make_multileave_lists(10);
+    c.bench_function("get_multileave_3_algos_10_items", |b| {
+        b.iter(|| {
+            svc.interleave(
+                black_box("exp_dev_007"),
+                black_box("user_42"),
+                black_box(&lists_10),
+            )
+            .unwrap()
+        })
+    });
+
+    let lists_50 = make_multileave_lists(50);
+    c.bench_function("get_multileave_3_algos_50_items", |b| {
+        b.iter(|| {
+            svc.interleave(
+                black_box("exp_dev_007"),
+                black_box("user_42"),
+                black_box(&lists_50),
+            )
+            .unwrap()
+        })
+    });
+}
+
 fn bench_bandit_assignment(c: &mut Criterion) {
     let config = Config::from_json(DEV_CONFIG).unwrap();
     let svc = AssignmentServiceImpl::from_config(Arc::new(config));
@@ -161,6 +203,7 @@ criterion_group!(
     bench_get_assignment,
     bench_get_interleaved_list,
     bench_optimized_interleave,
+    bench_multileave,
     bench_bandit_assignment,
 );
 criterion_main!(benches);
