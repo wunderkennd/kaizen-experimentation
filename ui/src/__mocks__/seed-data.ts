@@ -1,6 +1,7 @@
 import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
+  BanditDashboardResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -520,6 +521,43 @@ const INITIAL_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult> =
   },
 };
 
+/** Bandit dashboard mock — cold_start_bandit with Thompson Sampling. */
+const INITIAL_BANDIT_RESULTS: Record<string, BanditDashboardResult> = {
+  '44444444-4444-4444-4444-444444444444': {
+    experimentId: '44444444-4444-4444-4444-444444444444',
+    algorithm: 'THOMPSON_SAMPLING',
+    totalRewardsProcessed: 3842,
+    snapshotAt: '2026-03-05T16:00:00Z',
+    arms: [
+      { armId: 'v4-arm1', name: 'top_carousel', selectionCount: 1200, rewardCount: 312, rewardRate: 0.26, assignmentProbability: 0.35, alpha: 313, beta: 889, expectedReward: 0.260 },
+      { armId: 'v4-arm2', name: 'genre_row', selectionCount: 980, rewardCount: 196, rewardRate: 0.20, assignmentProbability: 0.18, alpha: 197, beta: 785, expectedReward: 0.201 },
+      { armId: 'v4-arm3', name: 'trending_section', selectionCount: 860, rewardCount: 224, rewardRate: 0.26, assignmentProbability: 0.32, alpha: 225, beta: 637, expectedReward: 0.261 },
+      { armId: 'v4-arm4', name: 'personalized_row', selectionCount: 802, rewardCount: 144, rewardRate: 0.18, assignmentProbability: 0.15, alpha: 145, beta: 659, expectedReward: 0.180 },
+    ],
+    isWarmup: false,
+    warmupObservations: 1000,
+    minExplorationFraction: 0.1,
+    rewardHistory: [
+      { timestamp: '2026-03-02T00:00:00Z', armId: 'top_carousel', cumulativeReward: 45, cumulativeSelections: 180 },
+      { timestamp: '2026-03-02T00:00:00Z', armId: 'genre_row', cumulativeReward: 32, cumulativeSelections: 170 },
+      { timestamp: '2026-03-02T00:00:00Z', armId: 'trending_section', cumulativeReward: 38, cumulativeSelections: 160 },
+      { timestamp: '2026-03-02T00:00:00Z', armId: 'personalized_row', cumulativeReward: 28, cumulativeSelections: 165 },
+      { timestamp: '2026-03-03T00:00:00Z', armId: 'top_carousel', cumulativeReward: 105, cumulativeSelections: 400 },
+      { timestamp: '2026-03-03T00:00:00Z', armId: 'genre_row', cumulativeReward: 68, cumulativeSelections: 350 },
+      { timestamp: '2026-03-03T00:00:00Z', armId: 'trending_section', cumulativeReward: 82, cumulativeSelections: 340 },
+      { timestamp: '2026-03-03T00:00:00Z', armId: 'personalized_row', cumulativeReward: 55, cumulativeSelections: 330 },
+      { timestamp: '2026-03-04T00:00:00Z', armId: 'top_carousel', cumulativeReward: 190, cumulativeSelections: 720 },
+      { timestamp: '2026-03-04T00:00:00Z', armId: 'genre_row', cumulativeReward: 120, cumulativeSelections: 580 },
+      { timestamp: '2026-03-04T00:00:00Z', armId: 'trending_section', cumulativeReward: 155, cumulativeSelections: 560 },
+      { timestamp: '2026-03-04T00:00:00Z', armId: 'personalized_row', cumulativeReward: 88, cumulativeSelections: 520 },
+      { timestamp: '2026-03-05T00:00:00Z', armId: 'top_carousel', cumulativeReward: 312, cumulativeSelections: 1200 },
+      { timestamp: '2026-03-05T00:00:00Z', armId: 'genre_row', cumulativeReward: 196, cumulativeSelections: 980 },
+      { timestamp: '2026-03-05T00:00:00Z', armId: 'trending_section', cumulativeReward: 224, cumulativeSelections: 860 },
+      { timestamp: '2026-03-05T00:00:00Z', armId: 'personalized_row', cumulativeReward: 144, cumulativeSelections: 802 },
+    ],
+  },
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -527,6 +565,7 @@ export let SEED_ANALYSIS_RESULTS: AnalysisResult[] = structuredClone(INITIAL_ANA
 export let SEED_NOVELTY_RESULTS: Record<string, NoveltyAnalysisResult> = structuredClone(INITIAL_NOVELTY_RESULTS);
 export let SEED_INTERFERENCE_RESULTS: Record<string, InterferenceAnalysisResult> = structuredClone(INITIAL_INTERFERENCE_RESULTS);
 export let SEED_INTERLEAVING_RESULTS: Record<string, InterleavingAnalysisResult> = structuredClone(INITIAL_INTERLEAVING_RESULTS);
+export let SEED_BANDIT_RESULTS: Record<string, BanditDashboardResult> = structuredClone(INITIAL_BANDIT_RESULTS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -536,4 +575,5 @@ export function resetSeedData(): void {
   SEED_NOVELTY_RESULTS = structuredClone(INITIAL_NOVELTY_RESULTS);
   SEED_INTERFERENCE_RESULTS = structuredClone(INITIAL_INTERFERENCE_RESULTS);
   SEED_INTERLEAVING_RESULTS = structuredClone(INITIAL_INTERLEAVING_RESULTS);
+  SEED_BANDIT_RESULTS = structuredClone(INITIAL_BANDIT_RESULTS);
 }

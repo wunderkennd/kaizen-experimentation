@@ -102,6 +102,14 @@ export default function ExperimentDetailPage() {
               View Results
             </Link>
           )}
+          {(experiment.type === 'MAB' || experiment.type === 'CONTEXTUAL_BANDIT') && experiment.state !== 'DRAFT' && (
+            <Link
+              href={`/experiments/${experiment.experimentId}/bandit`}
+              className="rounded-md bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+            >
+              Bandit Dashboard
+            </Link>
+          )}
           <Link
             href={`/experiments/${experiment.experimentId}/sql`}
             className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"

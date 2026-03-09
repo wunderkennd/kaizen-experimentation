@@ -197,3 +197,38 @@ export interface InterleavingAnalysisResult {
   positionAnalyses: PositionAnalysis[];
   computedAt: string;
 }
+
+// --- Bandit Dashboard (M3.3) ---
+
+export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';
+
+export interface BanditArmStats {
+  armId: string;
+  name: string;
+  selectionCount: number;
+  rewardCount: number;
+  rewardRate: number;
+  assignmentProbability: number;
+  alpha?: number;
+  beta?: number;
+  expectedReward?: number;
+}
+
+export interface RewardHistoryPoint {
+  timestamp: string;
+  armId: string;
+  cumulativeReward: number;
+  cumulativeSelections: number;
+}
+
+export interface BanditDashboardResult {
+  experimentId: string;
+  algorithm: BanditAlgorithm;
+  totalRewardsProcessed: number;
+  snapshotAt: string;
+  arms: BanditArmStats[];
+  isWarmup: boolean;
+  warmupObservations: number;
+  minExplorationFraction: number;
+  rewardHistory: RewardHistoryPoint[];
+}
