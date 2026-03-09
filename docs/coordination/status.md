@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/cold-start-bandit | M3.2 Content Cold-Start Bandit | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start bandit in progress. |
 | Agent-5 | M5 Management | 🟢 Phase 3 Complete | agent-5/feat/cumulative-holdout | M3.6 Cumulative holdout complete | — | Phase 2 complete (PRs #50, #53). M3.6: cumulative holdout support — traffic 1-5% enforcement, sequential/guardrail bypass, holdout retirement audit, ListRunningHoldouts query. |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/bandit-dashboard | Bandit dashboard (M3.3) complete | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard done. 115 tests pass. Next: live API integration (Agent-5 ↔ Agent-6). |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/phase4-benchmarks | Phase 4: Performance benchmarks + concurrency stress tests | — | M1.28–1.30 merged (PR #13). Phases 1–3 complete. Phase 4: EvaluateFlag p99 ~86μs (target <10ms ✅), hash Bucket ~64ns/op (target <1μs ✅), 50-writer concurrent update + 50r/10w mixed load pass with -race. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
