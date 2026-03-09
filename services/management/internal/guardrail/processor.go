@@ -77,6 +77,13 @@ func (p *Processor) ProcessAlert(ctx context.Context, alert Alert) (ProcessResul
 		return ResultSkipped, nil
 	}
 
+	// Safety net: holdouts should never be auto-paused even if guardrail_action
+	// was manually set to AUTO_PAUSE in the database. Force ALERT_ONLY behavior.
+	if exp.IsCumulativeHoldout {
+		log.Info("guardrail: cumulative holdout, forcing ALERT_ONLY")
+		exp.GuardrailAction = "ALERT_ONLY"
+	}
+
 	details, _ := json.Marshal(map[string]any{
 		"metric_id":                alert.MetricID,
 		"variant_id":              alert.VariantID,

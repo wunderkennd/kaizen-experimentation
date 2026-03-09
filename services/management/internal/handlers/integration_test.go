@@ -1078,3 +1078,179 @@ func TestSequentialAutoConclude_ViaConcludeByID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "sequential_auto_conclude", actor)
 }
+
+// --- Cumulative Holdout Tests ---
+
+func newHoldoutExperiment(name, layerID string) *commonv1.Experiment {
+	return &commonv1.Experiment{
+		Name:                name,
+		OwnerEmail:          "test@example.com",
+		LayerId:             layerID,
+		PrimaryMetricId:     "watch_time_minutes",
+		Type:                commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT,
+		IsCumulativeHoldout: true,
+		GuardrailAction:     commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY,
+		Variants: []*commonv1.Variant{
+			{Name: "control", TrafficFraction: 0.95, IsControl: true},
+			{Name: "treatment", TrafficFraction: 0.05, IsControl: false},
+		},
+	}
+}
+
+func TestHoldoutLifecycle(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "holdout-lifecycle-"+t.Name(), 0)
+
+	// Create holdout.
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newHoldoutExperiment("holdout-lifecycle-test", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+	assert.True(t, created.Msg.IsCumulativeHoldout)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT, created.Msg.State)
+
+	// Set traffic_percentage to 5% (required for holdouts).
+	setTrafficPercentage(t, env.pool, id, 0.05)
+
+	// Start → RUNNING.
+	started, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, started.Msg.State)
+
+	// Conclude → CONCLUDED (holdout retirement).
+	concluded, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_CONCLUDED, concluded.Msg.State)
+
+	// Verify holdout_retirement in audit trail.
+	var detailsJSON []byte
+	err = env.pool.QueryRow(ctx,
+		`SELECT details_json FROM audit_trail WHERE experiment_id = $1 AND action = 'conclude' AND new_state = 'CONCLUDING'`,
+		id).Scan(&detailsJSON)
+	require.NoError(t, err)
+	assert.Contains(t, string(detailsJSON), `"holdout_retirement"`)
+}
+
+func TestHoldout_BadTrafficPercentage(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "holdout-bad-traffic-"+t.Name(), 0)
+
+	// Create holdout (default traffic_percentage = 100% which is invalid for holdout).
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newHoldoutExperiment("holdout-bad-traffic", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// Start without setting traffic_percentage → should fail (default 100% > 5%).
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "CUMULATIVE_HOLDOUT traffic_percentage must be between 1% and 5%")
+
+	// Verify rolled back to DRAFT.
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT, got.Msg.State)
+}
+
+func TestHoldout_TooLowTrafficPercentage(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "holdout-low-traffic-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newHoldoutExperiment("holdout-low-traffic", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// Set traffic to 0.5% (below 1% minimum).
+	setTrafficPercentage(t, env.pool, id, 0.005)
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestHoldout_SequentialBypass(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "holdout-seq-bypass-"+t.Name(), 0)
+
+	// Create and start a holdout.
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newHoldoutExperiment("holdout-seq-bypass", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+	setTrafficPercentage(t, env.pool, id, 0.05)
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// Set sequential_method in DB (simulates config).
+	_, err = env.pool.Exec(ctx,
+		`UPDATE experiments SET sequential_method = 'MSPRT' WHERE experiment_id = $1`, id)
+	require.NoError(t, err)
+
+	// Wire up sequential processor with mock concluder.
+	es := store.NewExperimentStore(env.pool)
+	as := store.NewAuditStore(env.pool)
+	concluder := &mockConcluder{}
+	proc := sequential.NewProcessor(es, as, nil, concluder)
+
+	alert := sequential.BoundaryAlert{
+		ExperimentID: id,
+		MetricID:     "watch_time_minutes",
+		CurrentLook:  5,
+	}
+
+	result, err := proc.ProcessAlert(ctx, alert)
+	require.NoError(t, err)
+	assert.Equal(t, sequential.ResultSkipped, result,
+		"holdout should skip auto-conclude")
+	assert.Len(t, concluder.calls, 0)
+}
+
+// mockConcluder tracks ConcludeByID calls for testing holdout sequential bypass.
+type mockConcluder struct {
+	calls []mockConcludeCall
+}
+
+type mockConcludeCall struct {
+	ID    string
+	Actor string
+}
+
+func (m *mockConcluder) ConcludeByID(_ context.Context, id, actor string, _ map[string]any) error {
+	m.calls = append(m.calls, mockConcludeCall{ID: id, Actor: actor})
+	return nil
+}

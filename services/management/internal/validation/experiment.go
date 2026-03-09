@@ -128,6 +128,12 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 			return connect.NewError(connect.CodeInvalidArgument,
 				fmt.Errorf("is_cumulative_holdout must be true for CUMULATIVE_HOLDOUT type"))
 		}
+		ga := exp.GetGuardrailAction()
+		if ga != commonv1.GuardrailAction_GUARDRAIL_ACTION_UNSPECIFIED &&
+			ga != commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("cumulative holdout experiments must use ALERT_ONLY guardrail action"))
+		}
 	}
 	return nil
 }
