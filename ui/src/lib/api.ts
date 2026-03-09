@@ -5,17 +5,32 @@ import type {
 } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
-const MGMT_URL = process.env.NEXT_PUBLIC_MANAGEMENT_URL || 'http://localhost:50055';
+// In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
+// In tests, vitest.config.ts sets NEXT_PUBLIC_*_URL to absolute URLs so MSW can intercept.
+// In production, set NEXT_PUBLIC_*_URL env vars to point to your backends directly.
+const MGMT_URL = process.env.NEXT_PUBLIC_MANAGEMENT_URL || '/api/rpc/management';
 const MGMT_SVC = 'experimentation.management.v1.ExperimentManagementService';
 
-const METRICS_URL = process.env.NEXT_PUBLIC_METRICS_URL || 'http://localhost:50054';
+const METRICS_URL = process.env.NEXT_PUBLIC_METRICS_URL || '/api/rpc/metrics';
 const METRICS_SVC = 'experimentation.metrics.v1.MetricComputationService';
 
-const ANALYSIS_URL = process.env.NEXT_PUBLIC_ANALYSIS_URL || 'http://localhost:50053';
+const ANALYSIS_URL = process.env.NEXT_PUBLIC_ANALYSIS_URL || '/api/rpc/analysis';
 const ANALYSIS_SVC = 'experimentation.analysis.v1.AnalysisService';
 
-const BANDIT_URL = process.env.NEXT_PUBLIC_BANDIT_URL || 'http://localhost:50056';
+const BANDIT_URL = process.env.NEXT_PUBLIC_BANDIT_URL || '/api/rpc/bandit';
 const BANDIT_SVC = 'experimentation.bandit.v1.BanditPolicyService';
+
+/** Parse ConnectRPC error response for a human-readable message. */
+async function parseRpcError(res: Response, method: string): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body.message) return body.message;
+    if (body.error) return body.error;
+  } catch {
+    // body wasn't JSON
+  }
+  return `RPC ${method} failed: ${res.status}`;
+}
 
 async function callRpc<Req, Res>(baseUrl: string, service: string, method: string, request: Req): Promise<Res> {
   const res = await fetch(`${baseUrl}/${service}/${method}`, {
@@ -23,7 +38,7 @@ async function callRpc<Req, Res>(baseUrl: string, service: string, method: strin
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   });
-  if (!res.ok) throw new Error(`RPC ${method} failed: ${res.status}`);
+  if (!res.ok) throw new Error(await parseRpcError(res, method));
   return res.json();
 }
 

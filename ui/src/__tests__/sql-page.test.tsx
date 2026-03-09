@@ -110,7 +110,7 @@ describe('SQL Page', () => {
     render(<SqlPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/RPC GetQueryLog failed: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/Internal server error/)).toBeInTheDocument();
     });
   });
 
