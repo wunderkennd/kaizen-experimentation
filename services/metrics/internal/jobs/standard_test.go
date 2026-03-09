@@ -272,6 +272,46 @@ func TestStandardJob_Run_MixedQoEAndEngagement(t *testing.T) {
 	assert.Equal(t, 0, corrCount, "No QoE metrics means no correlation computation")
 }
 
+func TestStandardJob_Run_PercentileMetricType(t *testing.T) {
+	job, executor, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	// latency_percentile_test experiment uses latency_p50_ms (PERCENTILE type)
+	result, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000006")
+	require.NoError(t, err)
+
+	assert.Equal(t, "e0000000-0000-0000-0000-000000000006", result.ExperimentID)
+	assert.Equal(t, 1, result.MetricsComputed)
+
+	// Verify PERCENTILE metric SQL uses PERCENTILE_APPROX with correct value
+	var pctCall *spark.MockCall
+	for _, c := range executor.GetCalls() {
+		if strings.Contains(c.SQL, "PERCENTILE_APPROX") {
+			cc := c
+			pctCall = &cc
+			break
+		}
+	}
+	require.NotNil(t, pctCall, "Should have a call with PERCENTILE_APPROX")
+	assert.Contains(t, pctCall.SQL, "0.5",
+		"PERCENTILE SQL should contain the percentile value 0.5")
+	assert.Contains(t, pctCall.SQL, "delta.exposures",
+		"PERCENTILE SQL should join with exposures")
+	assert.Equal(t, "delta.metric_summaries", pctCall.TargetTable)
+
+	// Verify query log entries
+	var pctLogEntry *querylog.Entry
+	for _, e := range qlWriter.AllEntries() {
+		if e.MetricID == "latency_p50_ms" && e.JobType == "daily_metric" {
+			ee := e
+			pctLogEntry = &ee
+			break
+		}
+	}
+	require.NotNil(t, pctLogEntry, "Should have a daily_metric query log entry for PERCENTILE metric")
+	assert.Contains(t, pctLogEntry.SQLText, "PERCENTILE_APPROX")
+}
+
 func TestStandardJob_Run_CustomMetricType(t *testing.T) {
 	job, executor, qlWriter := setupTestJob(t)
 	ctx := context.Background()

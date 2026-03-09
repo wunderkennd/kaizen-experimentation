@@ -132,10 +132,30 @@ func TestRenderForType_AllCases(t *testing.T) {
 		assert.NotEmpty(t, sql, "type %q should produce SQL", mt)
 	}
 
+	// PERCENTILE type with valid percentile value.
+	pctP := p
+	pctP.Percentile = 0.50
+	sql, err := r.RenderForType("PERCENTILE", pctP)
+	assert.NoError(t, err, "PERCENTILE with valid percentile should succeed")
+	assert.NotEmpty(t, sql)
+	assert.Contains(t, sql, "PERCENTILE_APPROX")
+
+	// PERCENTILE type without valid percentile fails.
+	_, err = r.RenderForType("PERCENTILE", p) // p.Percentile == 0
+	assert.Error(t, err, "PERCENTILE without valid percentile should fail")
+	assert.Contains(t, err.Error(), "requires percentile in (0,1)")
+
+	// PERCENTILE case insensitive.
+	pctP2 := p
+	pctP2.Percentile = 0.95
+	sql, err = r.RenderForType("percentile", pctP2)
+	assert.NoError(t, err, "percentile (lowercase) should succeed")
+	assert.Contains(t, sql, "0.95")
+
 	// CUSTOM type with valid custom_sql.
 	customP := p
 	customP.CustomSQL = "SELECT user_id, AVG(value) AS metric_value FROM events GROUP BY user_id"
-	sql, err := r.RenderForType("CUSTOM", customP)
+	sql, err = r.RenderForType("CUSTOM", customP)
 	assert.NoError(t, err, "CUSTOM with valid SQL should succeed")
 	assert.NotEmpty(t, sql)
 	assert.Contains(t, sql, "custom_result")
@@ -146,7 +166,7 @@ func TestRenderForType_AllCases(t *testing.T) {
 	assert.Contains(t, err.Error(), "requires non-empty custom_sql")
 
 	// Invalid types.
-	for _, mt := range []string{"PERCENTILE", "HISTOGRAM", "", "  "} {
+	for _, mt := range []string{"HISTOGRAM", "", "  "} {
 		_, err := r.RenderForType(mt, p)
 		assert.Error(t, err, "type %q should fail", mt)
 		assert.Contains(t, err.Error(), "unsupported metric type")

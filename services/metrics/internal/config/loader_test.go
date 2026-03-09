@@ -77,6 +77,14 @@ func TestLoadFromFile(t *testing.T) {
 		assert.False(t, m3.LowerIsBetter)
 	})
 
+	t.Run("percentile metric", func(t *testing.T) {
+		m, err := cs.GetMetric("latency_p50_ms")
+		require.NoError(t, err)
+		assert.Equal(t, "PERCENTILE", m.Type)
+		assert.Equal(t, 0.50, m.Percentile)
+		assert.True(t, m.LowerIsBetter)
+	})
+
 	t.Run("qoe metric", func(t *testing.T) {
 		m, err := cs.GetMetric("ttff_mean")
 		require.NoError(t, err)
@@ -102,7 +110,7 @@ func TestLoadFromFile(t *testing.T) {
 
 	t.Run("running experiments", func(t *testing.T) {
 		ids := cs.RunningExperimentIDs()
-		assert.Len(t, ids, 4)
+		assert.Len(t, ids, 5)
 	})
 
 	t.Run("not found", func(t *testing.T) {
