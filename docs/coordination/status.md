@@ -18,7 +18,7 @@
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/test/e2e-pipeline-3.4-3.5 | 3.4/3.5 e2e pipeline tests | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests for session-level, QoE, lifecycle, correlation paths (PR #79). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/m4b-grpc-wiring | M4b gRPC wiring | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b BanditPolicyService gRPC wiring: all 5 RPCs implemented (SelectArm, CreateColdStartBandit, ExportAffinityScores, GetPolicySnapshot, RollbackPolicy), 17 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/test/phase4-stress-tests | Phase 4 stress tests | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: 6 stress tests — 100-goroutine concurrent start, rapid lifecycle cycles, bucket reuse integrity, audit trail completeness. |
-| Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/live-api-integration | Live API integration with Agent-5 | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60). Live API integration: Next.js rewrites proxy, ConnectRPC error parsing, opt-in MSW, 24 contract tests. 139 tests pass. Ready to pair with Agent-5 backend. |
+| Agent-6 | M6 UI | 🔵 Phase 3 In Progress | agent-6/feat/qoe-novelty-curve | Phase 3 SVOD-specific views | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3: surrogate projections + cumulative holdout + guardrail panel (PR #76), CATE lifecycle tab (PR #80), QoE dashboard + novelty decay curve + GST boundary + Lorenz curve (PR #81). 171 tests pass. All Phase 3 visualization milestones complete. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/test/chaos-crash-recovery | Phase 4.5: Chaos/crash-recovery tests | — | M1.28–1.30 merged (PR #13). Phases 1–4 complete. Phase 4.5: 13 chaos tests — ChaosStore failure injection, PromoteToExperiment atomicity, store recovery, 60-goroutine concurrent CRUD with random failures, audit isolation, context cancellation, server restart simulation. All pass with -race. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
@@ -107,6 +107,8 @@
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🔵 | — | Agent-2 done (session_id keyed events). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration + 11 e2e tests in PR #79). Agent-1 part pending. |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟢 | — | Agent-2 done (QoE validation + ingestion PR #40). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl + e2e tests PR #79). Pipeline e2e verified. |
 | 3.6 | Cumulative holdout support | Agent-5 | 🟢 | M4a periodic lift reports |
+| 3.7 | CATE lifecycle segment tab | Agent-6 | 🟢 | PR #80 — Forest plot + Cochran Q heterogeneity indicator per lifecycle segment |
+| 3.8 | Phase 3 SVOD visualizations (QoE, novelty curve, GST, Lorenz) | Agent-6 | 🟢 | PR #76 (surrogate/holdout/guardrail), PR #81 (QoE dashboard, novelty decay curve, GST boundary, Lorenz curve). 171 tests. |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
 
