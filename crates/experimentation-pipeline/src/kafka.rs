@@ -15,6 +15,10 @@ pub const HEADER_INGEST_TS_MS: &str = "x-ingest-ts-ms";
 /// Kafka header key for event type (exposure, metric, reward, qoe).
 pub const HEADER_EVENT_TYPE: &str = "x-event-type";
 
+/// W3C Trace Context header. Propagated from incoming gRPC metadata to Kafka
+/// so downstream consumers (M3, M4a) can correlate traces back to ingest.
+pub const HEADER_TRACEPARENT: &str = "traceparent";
+
 /// Kafka topic names matching topic_configs.sh.
 pub const TOPIC_EXPOSURES: &str = "exposures";
 pub const TOPIC_METRIC_EVENTS: &str = "metric_events";
@@ -52,13 +56,14 @@ pub trait Producer: Send + Sync {
         latency_histogram: Option<&Histogram>,
     ) -> Result<(), ProduceError>;
 
-    async fn publish_with_event_type(
+    async fn publish_with_headers(
         &self,
         topic: &str,
         key: &str,
         payload: &[u8],
         latency_histogram: Option<&Histogram>,
         event_type: Option<&str>,
+        traceparent: Option<&str>,
     ) -> Result<(), ProduceError>;
 }
 
@@ -127,17 +132,18 @@ impl Producer for EventProducer {
         payload: &[u8],
         latency_histogram: Option<&Histogram>,
     ) -> Result<(), ProduceError> {
-        self.publish_with_event_type(topic, key, payload, latency_histogram, None)
+        self.publish_with_headers(topic, key, payload, latency_histogram, None, None)
             .await
     }
 
-    async fn publish_with_event_type(
+    async fn publish_with_headers(
         &self,
         topic: &str,
         key: &str,
         payload: &[u8],
         latency_histogram: Option<&Histogram>,
         event_type: Option<&str>,
+        traceparent: Option<&str>,
     ) -> Result<(), ProduceError> {
         let ingest_ts_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -153,6 +159,12 @@ impl Producer for EventProducer {
             headers = headers.insert(rdkafka::message::Header {
                 key: HEADER_EVENT_TYPE,
                 value: Some(et.as_bytes()),
+            });
+        }
+        if let Some(tp) = traceparent {
+            headers = headers.insert(rdkafka::message::Header {
+                key: HEADER_TRACEPARENT,
+                value: Some(tp.as_bytes()),
             });
         }
 

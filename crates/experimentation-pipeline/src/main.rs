@@ -17,7 +17,6 @@ use experimentation_ingest::dedup::{DedupConfig, DedupMetrics, EventDedup};
 use experimentation_proto::pipeline::event_ingestion_service_server::EventIngestionServiceServer;
 use prometheus::Registry;
 use tracing::info;
-use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::buffer::{BufferConfig, DiskBuffer};
 use crate::kafka::{EventProducer, KafkaConfig};
@@ -28,7 +27,11 @@ fn env_or(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
 }
 
-/// Serve Prometheus metrics on a separate HTTP endpoint.
+/// Serve Prometheus metrics + health check endpoints on a separate HTTP endpoint.
+///
+/// - `GET /metrics` — Prometheus scrape endpoint
+/// - `GET /healthz` — Liveness probe (always 200 if process is running)
+/// - `GET /readyz` — Readiness probe (always 200; Kafka producer initializes at startup)
 async fn serve_metrics(addr: SocketAddr, registry: Registry) {
     use http_body_util::Full;
     use hyper::body::Bytes;
@@ -39,7 +42,7 @@ async fn serve_metrics(addr: SocketAddr, registry: Registry) {
     use tokio::net::TcpListener;
 
     let listener = TcpListener::bind(addr).await.expect("metrics bind failed");
-    info!(%addr, "Prometheus metrics endpoint listening");
+    info!(%addr, "Prometheus metrics + health endpoints listening");
 
     loop {
         let (stream, _) = listener.accept().await.expect("metrics accept failed");
@@ -47,14 +50,24 @@ async fn serve_metrics(addr: SocketAddr, registry: Registry) {
         let registry = registry.clone();
 
         tokio::spawn(async move {
-            let svc = service_fn(move |_req: Request<hyper::body::Incoming>| {
+            let svc = service_fn(move |req: Request<hyper::body::Incoming>| {
                 let registry = registry.clone();
                 async move {
-                    let encoder = prometheus::TextEncoder::new();
-                    let metric_families = registry.gather();
-                    let mut buffer = Vec::new();
-                    encoder.encode(&metric_families, &mut buffer).unwrap();
-                    Ok::<_, hyper::Error>(Response::new(Full::new(Bytes::from(buffer))))
+                    match req.uri().path() {
+                        "/healthz" => Ok::<_, hyper::Error>(
+                            Response::new(Full::new(Bytes::from_static(b"ok"))),
+                        ),
+                        "/readyz" => Ok::<_, hyper::Error>(
+                            Response::new(Full::new(Bytes::from_static(b"ok"))),
+                        ),
+                        _ => {
+                            let encoder = prometheus::TextEncoder::new();
+                            let metric_families = registry.gather();
+                            let mut buffer = Vec::new();
+                            encoder.encode(&metric_families, &mut buffer).unwrap();
+                            Ok::<_, hyper::Error>(Response::new(Full::new(Bytes::from(buffer))))
+                        }
+                    }
                 }
             });
             if let Err(e) = hyper_util::server::conn::auto::Builder::new(
@@ -71,11 +84,8 @@ async fn serve_metrics(addr: SocketAddr, registry: Registry) {
 
 #[tokio::main]
 async fn main() {
-    // Tracing: JSON format, filterable via RUST_LOG env
-    fmt()
-        .json()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    // Tracing: JSON format with thread IDs, file/line numbers, env-filterable
+    experimentation_core::telemetry::init_tracing("experimentation-pipeline");
 
     let port: u16 = env_or("PORT", "50051").parse().expect("PORT must be u16");
     let metrics_port: u16 = env_or("METRICS_PORT", "9090")
@@ -151,6 +161,8 @@ async fn main() {
     info!(%addr, "gRPC server listening");
 
     tonic::transport::Server::builder()
+        .accept_http1(true)
+        .layer(tonic_web::GrpcWebLayer::new())
         .add_service(EventIngestionServiceServer::new(service))
         .serve(addr)
         .await
