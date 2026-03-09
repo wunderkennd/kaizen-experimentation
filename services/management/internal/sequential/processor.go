@@ -83,6 +83,11 @@ func (p *Processor) ProcessAlert(ctx context.Context, alert BoundaryAlert) (Proc
 		return ResultSkipped, nil
 	}
 
+	if exp.IsCumulativeHoldout {
+		log.Info("sequential: cumulative holdout experiment, skipping auto-conclude")
+		return ResultSkipped, nil
+	}
+
 	// Only auto-conclude experiments with a sequential method configured.
 	if exp.SequentialMethod == nil || *exp.SequentialMethod == "" {
 		log.Warn("sequential: experiment has no sequential_method, skipping alert")

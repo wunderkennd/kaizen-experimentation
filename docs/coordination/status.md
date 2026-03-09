@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-08 by Agent-3 (M3↔M4a contract tests + CI optimization)
+> **Last updated**: 2026-03-08 by Agent-5 (M3.6 cumulative holdout support complete)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -17,7 +17,7 @@
 | Agent-2 | M2 Pipeline | 🔵 Phase 4 In Progress | agent-2/feat/phase4-latency-tracing | Phase 4: End-to-end latency tracing + partition rebalance testing | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3 done (PR #40). Phase 4a done (PR #48). Phase 4b: Kafka headers for latency tracing, ingest delay metrics, partition rebalance test. |
 | Agent-3 | M3 Metrics | 🔵 Contract Testing | agent-3/test/m3-m4-integration-contract | M3 ↔ M4a data contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration tests merged (PR #51). M3↔M4a contract tests: 33 tests verify SQL template output columns match Delta Lake schemas M4a reads. CI optimization (PR #58): skip Rust jobs on non-Rust changes. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
-| Agent-5 | M5 Management | 🔵 Phase 2 | agent-5/feat/surrogate-crud | Sequential auto-conclude (Phase 2) | — | Surrogate CRUD + sequential auto-conclude. Unblocks Agent-4 (boundary crossing → auto-conclude integration). |
+| Agent-5 | M5 Management | 🟢 Phase 3 Complete | agent-5/feat/cumulative-holdout | M3.6 Cumulative holdout complete | — | Phase 2 complete (PRs #50, #53). M3.6: cumulative holdout support — traffic 1-5% enforcement, sequential/guardrail bypass, holdout retirement audit, ListRunningHoldouts query. |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/bandit-dashboard | Bandit dashboard (M3.3) complete | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard done. 115 tests pass. Next: live API integration (Agent-5 ↔ Agent-6). |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/flag-experiment-linkage | Phase 2+3: Flag-experiment linkage + dependency tracking | — | M1.28–1.30 merged (PR #13). PR #36: production wiring. Flag-experiment linkage: PromoteToExperiment records experiment ID, ResolvePromotedExperiment auto-updates flag when experiment concludes. Dependency tracking: query flags by targeting rule. |
 
@@ -105,7 +105,7 @@
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🔵 | PR pending — arm allocation chart, reward rates, Thompson Sampling params, reward history |
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟡 | — | Agent-2 part done (session_id keyed events). Agent-1/3 parts pending. |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟡 | — | Agent-2 part done (QoE validation + ingestion PR #40). Agent-3 part pending (Spark SQL). |
-| 3.6 | Cumulative holdout support | Agent-5 | ⚪ | — |
+| 3.6 | Cumulative holdout support | Agent-5 | 🟢 | M4a periodic lift reports |
 
 ### Phase 4: Advanced & Polish (Weeks 16–22)
 
@@ -162,7 +162,7 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 
 **In progress:**
 - Agent-3: M2.10 surrogate metric framework (Agent-3 part complete in PR #35, Agent-4 part pending)
-- Agent-5: Surrogate model CRUD (Phase 2) — CreateSurrogateModel, ListSurrogateModels, GetSurrogateCalibration, TriggerSurrogateRecalibration
+- Agent-5: Phase 2 complete (PRs #50, #53). M3.6 cumulative holdout support complete
 - Agent-6: M1.25–1.27 complete, M2.8–2.9 complete, create experiment form done (PR #49 merged), analysis tabs M2.4–2.6 UI done (PR #56)
 
 **Unblocked this week:**

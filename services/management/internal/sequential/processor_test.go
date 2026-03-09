@@ -174,6 +174,46 @@ func TestProcessAlert_ExperimentNotFound(t *testing.T) {
 	assert.Equal(t, sequential.ResultSkipped, result)
 }
 
+func TestProcessAlert_CumulativeHoldoutBypass(t *testing.T) {
+	pool := newPool(t)
+	ctx := context.Background()
+
+	// Create a RUNNING cumulative holdout experiment with sequential_method.
+	var id string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO experiments (
+			name, description, owner_email, type, layer_id, primary_metric_id,
+			state, sequential_method, is_cumulative_holdout, started_at
+		) VALUES ('holdout-seq-bypass', '', 'test@example.com', 'CUMULATIVE_HOLDOUT',
+			'a0000000-0000-0000-0000-000000000001', 'watch_time_minutes',
+			'RUNNING', 'MSPRT', true, NOW())
+		RETURNING experiment_id`,
+	).Scan(&id)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO variants (experiment_id, name, traffic_fraction, is_control)
+		VALUES ($1, 'control', 0.95, true), ($1, 'treatment', 0.05, false)`, id)
+	require.NoError(t, err)
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	concluder := &mockConcluder{}
+	proc := sequential.NewProcessor(es, as, nil, concluder)
+
+	alert := sequential.BoundaryAlert{
+		ExperimentID: id,
+		MetricID:     "watch_time_minutes",
+		CurrentLook:  3,
+		DetectedAt:   time.Now(),
+	}
+
+	result, err := proc.ProcessAlert(ctx, alert)
+	require.NoError(t, err)
+	assert.Equal(t, sequential.ResultSkipped, result)
+	assert.Len(t, concluder.calls, 0, "holdout should not be auto-concluded")
+}
+
 func TestProcessAlert_ExperimentNotRunning(t *testing.T) {
 	pool := newPool(t)
 	ctx := context.Background()

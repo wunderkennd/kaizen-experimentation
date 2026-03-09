@@ -287,6 +287,24 @@ func TestValidateCreateExperiment(t *testing.T) {
 			},
 			wantOK: true,
 		},
+		{
+			name: "cumulative_holdout with AUTO_PAUSE guardrail_action",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT
+				e.IsCumulativeHoldout = true
+				e.GuardrailAction = commonv1.GuardrailAction_GUARDRAIL_ACTION_AUTO_PAUSE
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "cumulative_holdout with ALERT_ONLY guardrail_action",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT
+				e.IsCumulativeHoldout = true
+				e.GuardrailAction = commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY
+			},
+			wantOK: true,
+		},
 	}
 
 	for _, tt := range tests {
