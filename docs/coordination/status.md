@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-08 by Agent-6 (analysis tabs M2.4–2.6 UI complete)
+> **Last updated**: 2026-03-08 by Agent-3 (M3↔M4a contract tests + CI optimization)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 2 In Progress | agent-1/feat/interleaved-list-rpc | Optimized Interleaving (M2.7b) | — | M1.1–1.5 + M2.7 + Bandit delegation complete. M2.7b: Optimized Interleaving (greedy softmax) with method dispatch. |
 | Agent-2 | M2 Pipeline | 🔵 Phase 4 In Progress | agent-2/feat/phase4-latency-tracing | Phase 4: End-to-end latency tracing + partition rebalance testing | — | Phase 1 done (PRs #1, #8). Phase 2 done (PR #23). Phase 3 done (PR #40). Phase 4a done (PR #48). Phase 4b: Kafka headers for latency tracing, ingest delay metrics, partition rebalance test. |
-| Agent-3 | M3 Metrics | 🔵 Integration Testing | agent-3/feat/m2-m3-integration-tests | Agent-2 ↔ Agent-3 integration tests | — | Phase 1 done. Phase 2: M2.10 (PR #35), M2.11 (PR #34) done. Integration tests: SQL template ↔ M2 schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
+| Agent-3 | M3 Metrics | 🔵 Contract Testing | agent-3/test/m3-m4-integration-contract | M3 ↔ M4a data contract tests | — | Phase 1 done. Phase 2 done (M2.10 PR #35, M2.11 PR #34). M2↔M3 integration tests merged (PR #51). M3↔M4a contract tests: 33 tests verify SQL template output columns match Delta Lake schemas M4a reads. CI optimization (PR #58): skip Rust jobs on non-Rust changes. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/linucb-contextual-bandit | M3.1 LinUCB Contextual Bandit | — | M1.14–1.19 merged. M2.1–2.6 complete (PRs #25, #29, #38). M2.10 (Agent-4 part) in progress. M3.1 LinUCB PR open. |
 | Agent-5 | M5 Management | 🔵 Phase 2 | agent-5/feat/surrogate-crud | Sequential auto-conclude (Phase 2) | — | Surrogate CRUD + sequential auto-conclude. Unblocks Agent-4 (boundary crossing → auto-conclude integration). |
 | Agent-6 | M6 UI | 🔵 In Progress | agent-6/feat/bandit-dashboard | Bandit dashboard (M3.3) complete | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard done. 115 tests pass. Next: live API integration (Agent-5 ↔ Agent-6). |
@@ -125,9 +125,9 @@ Track integration test results between agent pairs.
 |------|------|--------|-------|
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟡 | Agent-5 CRUD ready. Agent-6 can start live integration. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
-| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🔵 | Integration tests in PR: SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log persistence, notebook export from real PostgreSQL, guardrail alert contract validation. |
+| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟢 | Merged (PR #51): SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
-| 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | ⚪ | — |
+| 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | 🔵 | 33 contract tests verify M3 SQL output columns match Delta Lake schemas M4a reads. Covers all 4 output tables + ratio delta method variance components. |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟡 | Both sides ready (M3 PR #16, M5 PR #18). Needs Kafka for live test. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🟡 | M1 bandit delegation with mock uniform selection ready. Awaiting M4b SelectArm gRPC for live integration. |
 | 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | ⚪ | — |
