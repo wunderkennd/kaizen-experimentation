@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-2 (QoE + session-level e2e test harnesses, health check + traceparent + tonic-web — PR #85)
+> **Last updated**: 2026-03-09 by Agent-6 (Phase 4 experiment list search/filter/sort + results link fix — PR #90)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -18,7 +18,7 @@
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/databricks-notebook-export | Databricks notebook export + Spark retry backoff | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR pending). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/kafka-reward-consumer | M4b Kafka reward consumer | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b gRPC wiring merged (PR #72). Kafka reward consumer: rdkafka StreamConsumer, protobuf decode, assert_finite, batch commits, 30 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/test/phase4-stress-tests | Phase 4 stress tests | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: 6 stress tests — 100-goroutine concurrent start, rapid lifecycle cycles, bucket reuse integrity, audit trail completeness. |
-| Agent-6 | M6 UI | 🔵 Phase 3 In Progress | agent-6/feat/qoe-novelty-curve | Phase 3 SVOD-specific views | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3: surrogate projections + cumulative holdout + guardrail panel (PR #76), CATE lifecycle tab (PR #80), QoE dashboard + novelty decay curve + GST boundary + Lorenz curve (PR #81). 171 tests pass. All Phase 3 visualization milestones complete. |
+| Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/qoe-novelty-curve | Phase 4 experiment list UX | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search, filter, sort + results link fix (PR #90). 195 tests pass. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/rbac-integration | Phase 4.4: RBAC integration | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor with role-based permissions — viewer (Get/List/Evaluate), experimenter (Create/Update), admin (Promote). 15 auth tests. DISABLE_AUTH env guard. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
