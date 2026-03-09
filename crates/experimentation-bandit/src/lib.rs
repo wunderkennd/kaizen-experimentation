@@ -8,6 +8,7 @@
 //! This crate provides pure functions — no threads, no channels.
 //! The threading model is the responsibility of experimentation-policy.
 
+pub mod cold_start;
 pub mod linucb;
 pub mod policy;
 pub mod thompson;
