@@ -1,0 +1,107 @@
+{
+  "experiments": [
+    {
+      "experiment_id": "e2e-session-001",
+      "name": "session_level_with_standard_metrics",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-02-01",
+      "primary_metric_id": "watch_time_minutes",
+      "secondary_metric_ids": ["stream_start_rate"],
+      "session_level": true,
+      "variants": [
+        {"variant_id": "ctrl-s1", "name": "control", "traffic_fraction": 0.5, "is_control": true},
+        {"variant_id": "treat-s1", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
+      ]
+    },
+    {
+      "experiment_id": "e2e-qoe-001",
+      "name": "qoe_only_pipeline",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-02-01",
+      "primary_metric_id": "ttff_mean",
+      "secondary_metric_ids": ["rebuffer_ratio_mean"],
+      "variants": [
+        {"variant_id": "ctrl-q1", "name": "control", "traffic_fraction": 0.5, "is_control": true},
+        {"variant_id": "treat-q1", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
+      ]
+    },
+    {
+      "experiment_id": "e2e-mixed-001",
+      "name": "mixed_qoe_and_engagement",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-02-01",
+      "primary_metric_id": "ttff_mean",
+      "secondary_metric_ids": ["watch_time_minutes", "stream_start_rate"],
+      "variants": [
+        {"variant_id": "ctrl-m1", "name": "control", "traffic_fraction": 0.5, "is_control": true},
+        {"variant_id": "treat-m1", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
+      ]
+    },
+    {
+      "experiment_id": "e2e-lifecycle-001",
+      "name": "lifecycle_stratification_pipeline",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-02-01",
+      "primary_metric_id": "watch_time_minutes",
+      "secondary_metric_ids": ["stream_start_rate"],
+      "lifecycle_stratification_enabled": true,
+      "lifecycle_segments": ["TRIAL", "NEW", "ESTABLISHED", "MATURE", "AT_RISK", "WINBACK"],
+      "variants": [
+        {"variant_id": "ctrl-lc1", "name": "control", "traffic_fraction": 0.5, "is_control": true},
+        {"variant_id": "treat-lc1", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
+      ]
+    },
+    {
+      "experiment_id": "e2e-full-001",
+      "name": "full_pipeline_session_lifecycle_qoe",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-02-01",
+      "primary_metric_id": "ttff_mean",
+      "secondary_metric_ids": ["watch_time_minutes", "rebuffer_ratio_mean"],
+      "session_level": true,
+      "lifecycle_stratification_enabled": true,
+      "lifecycle_segments": ["TRIAL", "NEW", "ESTABLISHED"],
+      "variants": [
+        {"variant_id": "ctrl-f1", "name": "control", "traffic_fraction": 0.5, "is_control": true},
+        {"variant_id": "treat-f1", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "metric_id": "watch_time_minutes",
+      "name": "Watch Time (minutes)",
+      "type": "MEAN",
+      "source_event_type": "heartbeat"
+    },
+    {
+      "metric_id": "stream_start_rate",
+      "name": "Stream Start Rate",
+      "type": "PROPORTION",
+      "source_event_type": "stream_start"
+    },
+    {
+      "metric_id": "ttff_mean",
+      "name": "Time to First Frame (mean)",
+      "type": "MEAN",
+      "source_event_type": "qoe_playback",
+      "is_qoe_metric": true,
+      "qoe_field": "time_to_first_frame_ms",
+      "lower_is_better": true
+    },
+    {
+      "metric_id": "rebuffer_ratio_mean",
+      "name": "Rebuffer Ratio (mean)",
+      "type": "MEAN",
+      "source_event_type": "qoe_playback",
+      "is_qoe_metric": true,
+      "qoe_field": "rebuffer_ratio",
+      "lower_is_better": true
+    }
+  ]
+}
