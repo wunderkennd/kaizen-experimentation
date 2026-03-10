@@ -115,6 +115,13 @@ func (w *MemWriter) GetLogs(_ context.Context, experimentID string, metricID str
 	return result, nil
 }
 
+// Reset clears all logged entries (for benchmarks).
+func (w *MemWriter) Reset() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.entries = w.entries[:0]
+}
+
 // AllEntries returns all logged entries (for test assertions).
 func (w *MemWriter) AllEntries() []Entry {
 	w.mu.Lock()
