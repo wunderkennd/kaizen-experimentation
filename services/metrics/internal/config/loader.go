@@ -61,8 +61,9 @@ type MetricConfig struct {
 	SourceEventType      string `json:"source_event_type"`
 	NumeratorEventType   string `json:"numerator_event_type,omitempty"`
 	DenominatorEventType string `json:"denominator_event_type,omitempty"`
-	CupedCovariateMetricID string `json:"cuped_covariate_metric_id,omitempty"`
-	LowerIsBetter        bool   `json:"lower_is_better,omitempty"`
+	CupedCovariateMetricID string  `json:"cuped_covariate_metric_id,omitempty"`
+	Percentile             float64 `json:"percentile,omitempty"`
+	LowerIsBetter          bool    `json:"lower_is_better,omitempty"`
 	IsQoEMetric          bool   `json:"is_qoe_metric,omitempty"`
 	QoEField             string `json:"qoe_field,omitempty"`
 	CustomSQL            string `json:"custom_sql,omitempty"`

@@ -100,13 +100,19 @@ impl AssignmentServiceImpl {
         }
 
         // 6. Hash entity into a bucket (user_id for AB, session_id for SESSION_LEVEL).
+        //    SESSION_LEVEL with allow_cross_session_variation=false hashes on user_id
+        //    to lock variant across sessions. session_id is still required for metrics.
         let hash_input = if exp.r#type == "SESSION_LEVEL" {
             if session_id.is_empty() {
                 return Err(Status::invalid_argument(
                     "session_id required for session-level experiment",
                 ));
             }
-            session_id
+            let cross_session = exp
+                .session_config
+                .as_ref()
+                .is_none_or(|sc| sc.allow_cross_session_variation);
+            if cross_session { session_id } else { user_id }
         } else {
             user_id
         };

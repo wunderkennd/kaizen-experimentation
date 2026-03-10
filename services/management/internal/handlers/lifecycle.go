@@ -277,8 +277,19 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		return nil, internalError("commit tx1", err)
 	}
 
-	// TODO(M4a): Trigger final analysis. For now, transition synchronously.
-	slog.Info("concluding experiment: final analysis mocked", "id", id)
+	// Type-specific conclude: trigger M4a analysis, M4b policy snapshot (bandits),
+	// surrogate projection flagging. All calls are best-effort/non-blocking.
+	expForConclude, _, _, readErr := s.store.GetByID(ctx, id)
+	if readErr == nil {
+		concludeDetails := s.handleTypeSpecificConclude(ctx, expForConclude)
+		if extraDetails == nil {
+			extraDetails = map[string]any{}
+		}
+		for k, v := range concludeDetails {
+			extraDetails[k] = v
+		}
+	}
+	slog.Info("concluding experiment: type-specific conclude complete", "id", id)
 
 	// Transition 2: CONCLUDING -> CONCLUDED (with allocation release)
 	tx2, err := s.store.BeginTx(ctx)
@@ -515,6 +526,10 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 		return internalError("read experiment for type config validation", err)
 	}
 
+	if expRow.Type == "PLAYBACK_QOE" {
+		return s.validateQoeMetricsForStart(ctx, experimentID)
+	}
+
 	if expRow.Type == "CUMULATIVE_HOLDOUT" {
 		trafficPct := extractTrafficPercentage(expRow.TypeConfig)
 		if trafficPct < 0.01 || trafficPct > 0.05 {
@@ -596,4 +611,30 @@ func extractTrafficPercentage(typeConfig json.RawMessage) float64 {
 		return 1.0
 	}
 	return pct
+}
+
+// validateQoeMetricsForStart checks that at least one metric in the experiment's
+// metric set (primary, secondary, or guardrail) has is_qoe_metric = true.
+func (s *ExperimentService) validateQoeMetricsForStart(ctx context.Context, experimentID string) error {
+	expRow, _, guardrails, err := s.store.GetByID(ctx, experimentID)
+	if err != nil {
+		return internalError("read experiment for QoE validation", err)
+	}
+
+	var metricIDs []string
+	metricIDs = append(metricIDs, expRow.PrimaryMetricID)
+	metricIDs = append(metricIDs, expRow.SecondaryMetricIDs...)
+	for _, g := range guardrails {
+		metricIDs = append(metricIDs, g.MetricID)
+	}
+
+	hasQoe, err := s.metrics.AnyQoeMetric(ctx, metricIDs)
+	if err != nil {
+		return internalError("check QoE metric existence", err)
+	}
+	if !hasQoe {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("PLAYBACK_QOE experiments require at least one metric with is_qoe_metric = true"))
+	}
+	return nil
 }

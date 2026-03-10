@@ -123,6 +123,11 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 		if err := validateSessionConfig(exp); err != nil {
 			return err
 		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE:
+		if len(exp.GetGuardrailConfigs()) == 0 {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("PLAYBACK_QOE experiments require at least one guardrail config with a QoE metric"))
+		}
 	case commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT:
 		if !exp.GetIsCumulativeHoldout() {
 			return connect.NewError(connect.CodeInvalidArgument,

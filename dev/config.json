@@ -136,6 +136,20 @@
         "algorithm_ids": ["algo_x", "algo_y", "algo_z"],
         "max_list_size": 15
       }
+    },
+    {
+      "experiment_id": "exp_dev_008",
+      "name": "Session Level Locked Variant",
+      "state": "RUNNING",
+      "type": "SESSION_LEVEL",
+      "hash_salt": "dev_salt_008",
+      "layer_id": "layer_session_locked",
+      "variants": [
+        { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"locked_feature\": true}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "session_config": { "session_id_attribute": "session_id", "allow_cross_session_variation": false }
     }
   ],
   "layers": [
@@ -144,6 +158,7 @@
     { "layer_id": "layer_interleave", "total_buckets": 10000 },
     { "layer_id": "layer_bandit", "total_buckets": 10000 },
     { "layer_id": "layer_interleave_opt", "total_buckets": 10000 },
-    { "layer_id": "layer_interleave_multi", "total_buckets": 10000 }
+    { "layer_id": "layer_interleave_multi", "total_buckets": 10000 },
+    { "layer_id": "layer_session_locked", "total_buckets": 10000 }
   ]
 }

@@ -39,6 +39,8 @@ type TemplateParams struct {
 	QoEFieldA            string // first QoE field for correlation (e.g. "time_to_first_frame_ms")
 	QoEFieldB            string // engagement field for correlation (e.g. "watch_time")
 	EngagementSourceType string // event_type for engagement metric
+	// Percentile metric fields
+	Percentile float64 // percentile value in (0,1), e.g. 0.50 for p50, 0.95 for p95
 	// Custom metric fields
 	CustomSQL string // user-provided Spark SQL expression for CUSTOM metrics
 }
@@ -79,6 +81,7 @@ func (r *SQLRenderer) RenderInterleavingScore(p TemplateParams) (string, error) 
 func (r *SQLRenderer) RenderSessionLevelMean(p TemplateParams) (string, error) { return r.Render("session_level_mean.sql.tmpl", p) }
 func (r *SQLRenderer) RenderQoEEngagementCorrelation(p TemplateParams) (string, error) { return r.Render("qoe_engagement_correlation.sql.tmpl", p) }
 func (r *SQLRenderer) RenderCustom(p TemplateParams) (string, error)               { return r.Render("custom.sql.tmpl", p) }
+func (r *SQLRenderer) RenderPercentile(p TemplateParams) (string, error)           { return r.Render("percentile.sql.tmpl", p) }
 
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {
@@ -90,6 +93,11 @@ func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string
 		return r.RenderCount(p)
 	case "RATIO":
 		return r.RenderRatio(p)
+	case "PERCENTILE":
+		if p.Percentile <= 0 || p.Percentile >= 1 {
+			return "", fmt.Errorf("spark: PERCENTILE metric %q requires percentile in (0,1), got %g", p.MetricID, p.Percentile)
+		}
+		return r.RenderPercentile(p)
 	case "CUSTOM":
 		if p.CustomSQL == "" {
 			return "", fmt.Errorf("spark: CUSTOM metric %q requires non-empty custom_sql", p.MetricID)
@@ -99,6 +107,6 @@ func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string
 		}
 		return r.RenderCustom(p)
 	default:
-		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, CUSTOM)", metricType)
+		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM)", metricType)
 	}
 }
