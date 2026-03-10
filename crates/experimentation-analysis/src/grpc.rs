@@ -4,6 +4,7 @@
 
 use crate::config::AnalysisConfig;
 use crate::delta_reader;
+use crate::store::AnalysisStore;
 use experimentation_proto::experimentation::analysis::v1::analysis_service_server::{
     AnalysisService, AnalysisServiceServer,
 };
@@ -16,26 +17,32 @@ use experimentation_proto::experimentation::analysis::v1::{
 };
 use experimentation_stats::{cuped, interference, interleaving, novelty, srm, ttest};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{info, warn};
 
 /// gRPC handler for the analysis service.
 #[derive(Clone)]
 pub struct AnalysisServiceHandler {
     config: AnalysisConfig,
+    store: Option<Arc<AnalysisStore>>,
 }
 
 impl AnalysisServiceHandler {
-    pub fn new(config: AnalysisConfig) -> Self {
-        Self { config }
+    pub fn new(config: AnalysisConfig, store: Option<Arc<AnalysisStore>>) -> Self {
+        Self { config, store }
     }
+}
+
+fn try_parse_uuid(id: &str) -> Option<uuid::Uuid> {
+    uuid::Uuid::parse_str(id).ok()
 }
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-fn now_timestamp() -> prost_types::Timestamp {
+pub(crate) fn now_timestamp() -> prost_types::Timestamp {
     let now = chrono::Utc::now();
     prost_types::Timestamp {
         seconds: now.timestamp(),
@@ -225,9 +232,8 @@ async fn compute_analysis(
             let treatment_tuples = &variant_data[variant_id];
             let treatment_values: Vec<f64> = treatment_tuples.iter().map(|(v, _)| *v).collect();
 
-            let ttest_result =
-                ttest::welch_ttest(&control_values, &treatment_values, alpha)
-                    .map_err(map_stats_error)?;
+            let ttest_result = ttest::welch_ttest(&control_values, &treatment_values, alpha)
+                .map_err(map_stats_error)?;
 
             let relative_effect = if ttest_result.control_mean.abs() > 1e-10 {
                 ttest_result.effect / ttest_result.control_mean.abs()
@@ -236,14 +242,9 @@ async fn compute_analysis(
             };
 
             // CUPED: only if all observations in both groups have non-null covariates.
-            let control_covs: Vec<f64> = control_tuples
-                .iter()
-                .filter_map(|(_, c)| *c)
-                .collect();
-            let treatment_covs: Vec<f64> = treatment_tuples
-                .iter()
-                .filter_map(|(_, c)| *c)
-                .collect();
+            let control_covs: Vec<f64> = control_tuples.iter().filter_map(|(_, c)| *c).collect();
+            let treatment_covs: Vec<f64> =
+                treatment_tuples.iter().filter_map(|(_, c)| *c).collect();
 
             let (cuped_effect, cuped_ci_lower, cuped_ci_upper, variance_reduction_pct) =
                 if control_covs.len() == control_values.len()
@@ -317,6 +318,14 @@ impl AnalysisService for AnalysisServiceHandler {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
         let result = compute_analysis(&self.config, &experiment_id).await?;
+
+        // Fire-and-forget cache write.
+        if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
+            if let Err(e) = store.save_analysis_result(&uuid, &result).await {
+                warn!(experiment_id, error = %e, "failed to cache analysis result");
+            }
+        }
+
         Ok(Response::new(result))
     }
 
@@ -328,7 +337,28 @@ impl AnalysisService for AnalysisServiceHandler {
         if experiment_id.is_empty() {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
+
+        // Cache-first: try PostgreSQL.
+        if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
+            match store.get_analysis_result(&uuid).await {
+                Ok(Some(cached)) => return Ok(Response::new(cached)),
+                Ok(None) => {} // cache miss — fall through to Delta Lake
+                Err(e) => {
+                    warn!(experiment_id, error = %e, "cache read failed, falling back to Delta Lake");
+                }
+            }
+        }
+
+        // Cache miss or no store: compute from Delta Lake.
         let result = compute_analysis(&self.config, &experiment_id).await?;
+
+        // Write through to cache.
+        if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
+            if let Err(e) = store.save_analysis_result(&uuid, &result).await {
+                warn!(experiment_id, error = %e, "failed to cache analysis result");
+            }
+        }
+
         Ok(Response::new(result))
     }
 
@@ -341,12 +371,10 @@ impl AnalysisService for AnalysisServiceHandler {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
 
-        let scores = delta_reader::read_interleaving_scores(
-            &self.config.delta_lake_path,
-            &experiment_id,
-        )
-        .await
-        .map_err(map_reader_error)?;
+        let scores =
+            delta_reader::read_interleaving_scores(&self.config.delta_lake_path, &experiment_id)
+                .await
+                .map_err(map_reader_error)?;
 
         let result = interleaving::analyze_interleaving(&scores, self.config.default_alpha)
             .map_err(map_stats_error)?;
@@ -376,11 +404,16 @@ impl AnalysisService for AnalysisServiceHandler {
         let result = novelty::analyze_novelty(&effects, self.config.default_alpha)
             .map_err(map_stats_error)?;
 
-        Ok(Response::new(to_proto_novelty_result(
-            &experiment_id,
-            &metric_id,
-            &result,
-        )))
+        let proto_result = to_proto_novelty_result(&experiment_id, &metric_id, &result);
+
+        // Fire-and-forget cache write.
+        if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
+            if let Err(e) = store.save_novelty_result(&uuid, &proto_result).await {
+                warn!(experiment_id, error = %e, "failed to cache novelty result");
+            }
+        }
+
+        Ok(Response::new(proto_result))
     }
 
     async fn get_interference_analysis(
@@ -392,12 +425,10 @@ impl AnalysisService for AnalysisServiceHandler {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
 
-        let input = delta_reader::read_content_consumption(
-            &self.config.delta_lake_path,
-            &experiment_id,
-        )
-        .await
-        .map_err(map_reader_error)?;
+        let input =
+            delta_reader::read_content_consumption(&self.config.delta_lake_path, &experiment_id)
+                .await
+                .map_err(map_reader_error)?;
 
         let result = interference::analyze_interference(
             &input,
@@ -406,21 +437,30 @@ impl AnalysisService for AnalysisServiceHandler {
         )
         .map_err(|e| Status::internal(format!("analysis failed: {e}")))?;
 
-        Ok(Response::new(to_proto_interference_result(
-            &experiment_id,
-            &result,
-        )))
+        let proto_result = to_proto_interference_result(&experiment_id, &result);
+
+        // Fire-and-forget cache write.
+        if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
+            if let Err(e) = store.save_interference_result(&uuid, &proto_result).await {
+                warn!(experiment_id, error = %e, "failed to cache interference result");
+            }
+        }
+
+        Ok(Response::new(proto_result))
     }
 }
 
 /// Start the gRPC server serving the AnalysisService.
-pub async fn serve_grpc(config: AnalysisConfig) -> Result<(), String> {
+pub async fn serve_grpc(
+    config: AnalysisConfig,
+    store: Option<Arc<AnalysisStore>>,
+) -> Result<(), String> {
     let addr = config
         .grpc_addr
         .parse()
         .map_err(|e| format!("invalid gRPC address '{}': {e}", config.grpc_addr))?;
 
-    let handler = AnalysisServiceHandler::new(config);
+    let handler = AnalysisServiceHandler::new(config, store);
 
     info!(%addr, "gRPC server starting");
 
@@ -454,7 +494,12 @@ mod tests {
             delta_lake_path: path.into(),
             default_alpha: 0.05,
             default_js_threshold: 0.05,
+            database_url: None,
         }
+    }
+
+    fn test_handler(path: &str) -> AnalysisServiceHandler {
+        AnalysisServiceHandler::new(test_config(path), None)
     }
 
     async fn write_table(dir: &std::path::Path, name: &str, batch: RecordBatch) {
@@ -655,17 +700,32 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 11.0, 12.0, 13.0, 14.0, 15.0];
         let covariates: Vec<Option<f64>> = vec![None; n];
 
-        let batch = make_analysis_data(&exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates);
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
@@ -695,18 +755,35 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         // Highly correlated covariate and outcome
-        let values: Vec<f64> = (0..10).map(|i| (i as f64) * 2.0 + if i >= 5 { 3.0 } else { 1.0 }).collect();
+        let values: Vec<f64> = (0..10)
+            .map(|i| (i as f64) * 2.0 + if i >= 5 { 3.0 } else { 1.0 })
+            .collect();
         let covariates: Vec<Option<f64>> = (0..10).map(|i| Some(i as f64)).collect();
 
-        let batch = make_analysis_data(&exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates);
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
@@ -716,7 +793,11 @@ mod tests {
 
         let mr = &resp.into_inner().metric_results[0];
         // CUPED should be populated since all covariates are present
-        assert!(mr.variance_reduction_pct > 0.0, "CUPED should reduce variance, got {}", mr.variance_reduction_pct);
+        assert!(
+            mr.variance_reduction_pct > 0.0,
+            "CUPED should reduce variance, got {}",
+            mr.variance_reduction_pct
+        );
     }
 
     #[tokio::test]
@@ -727,17 +808,32 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 1.1, 2.1, 3.1, 4.1, 5.1];
         let covariates: Vec<Option<f64>> = vec![None; n];
 
-        let batch = make_analysis_data(&exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates);
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
@@ -753,7 +849,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_analysis_empty_id() {
-        let handler = AnalysisServiceHandler::new(test_config("/tmp/nonexistent"));
+        let handler = test_handler("/tmp/nonexistent");
         let err = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "".into(),
@@ -766,12 +862,11 @@ mod tests {
     #[tokio::test]
     async fn test_run_analysis_not_found() {
         let tmp = TempDir::new().unwrap();
-        let batch = make_analysis_data(
-            &["exp-1"], &["u1"], &["control"], &["ctr"], &[1.0], &[None],
-        );
+        let batch =
+            make_analysis_data(&["exp-1"], &["u1"], &["control"], &["ctr"], &[1.0], &[None]);
         write_table(tmp.path(), "metric_summaries", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let err = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-999".into(),
@@ -788,17 +883,32 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 11.0, 12.0, 13.0, 14.0, 15.0];
         let covariates: Vec<Option<f64>> = vec![None; n];
 
-        let batch = make_analysis_data(&exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates);
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let resp = handler
             .get_analysis_result(Request::new(GetAnalysisResultRequest {
                 experiment_id: "exp-1".into(),
@@ -822,10 +932,20 @@ mod tests {
         // 10 scores: 7 wins for algo_a, 3 for algo_b → sign test should detect
         let n = 10;
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
-        let user_ids: Vec<&str> = (0..n).map(|i| match i {
-            0 => "u0", 1 => "u1", 2 => "u2", 3 => "u3", 4 => "u4",
-            5 => "u5", 6 => "u6", 7 => "u7", 8 => "u8", _ => "u9",
-        }).collect();
+        let user_ids: Vec<&str> = (0..n)
+            .map(|i| match i {
+                0 => "u0",
+                1 => "u1",
+                2 => "u2",
+                3 => "u3",
+                4 => "u4",
+                5 => "u5",
+                6 => "u6",
+                7 => "u7",
+                8 => "u8",
+                _ => "u9",
+            })
+            .collect();
         let algo_scores: Vec<Vec<(&str, f64)>> = (0..n)
             .map(|i| {
                 if i < 7 {
@@ -836,14 +956,21 @@ mod tests {
             })
             .collect();
         let winners: Vec<Option<&str>> = (0..n)
-            .map(|i| if i < 7 { Some("algo_a") } else { Some("algo_b") })
+            .map(|i| {
+                if i < 7 {
+                    Some("algo_a")
+                } else {
+                    Some("algo_b")
+                }
+            })
             .collect();
         let engagements: Vec<i64> = vec![4; n];
 
-        let batch = make_interleaving_data(&exp_ids, &user_ids, &algo_scores, &winners, &engagements);
+        let batch =
+            make_interleaving_data(&exp_ids, &user_ids, &algo_scores, &winners, &engagements);
         write_table(tmp.path(), "interleaving_scores", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let resp = handler
             .get_interleaving_analysis(Request::new(GetInterleavingAnalysisRequest {
                 experiment_id: "exp-1".into(),
@@ -863,7 +990,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_interleaving_empty_id() {
-        let handler = AnalysisServiceHandler::new(test_config("/tmp/nonexistent"));
+        let handler = test_handler("/tmp/nonexistent");
         let err = handler
             .get_interleaving_analysis(Request::new(GetInterleavingAnalysisRequest {
                 experiment_id: "".into(),
@@ -885,7 +1012,7 @@ mod tests {
         );
         write_table(tmp.path(), "interleaving_scores", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let err = handler
             .get_interleaving_analysis(Request::new(GetInterleavingAnalysisRequest {
                 experiment_id: "exp-999".into(),
@@ -908,13 +1035,15 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let dates: Vec<i32> = (0..n as i32).map(|i| base_date + i).collect();
-        let effects: Vec<f64> = (0..n).map(|i| 5.0 + 3.0 * (-(i as f64) / 4.0).exp()).collect();
+        let effects: Vec<f64> = (0..n)
+            .map(|i| 5.0 + 3.0 * (-(i as f64) / 4.0).exp())
+            .collect();
         let sizes: Vec<i64> = vec![1000; n];
 
         let batch = make_daily_effects_data(&exp_ids, &metric_ids, &dates, &effects, &sizes);
         write_table(tmp.path(), "daily_treatment_effects", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let resp = handler
             .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
                 experiment_id: "exp-1".into(),
@@ -932,7 +1061,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_novelty_empty_id() {
-        let handler = AnalysisServiceHandler::new(test_config("/tmp/nonexistent"));
+        let handler = test_handler("/tmp/nonexistent");
         let err = handler
             .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
                 experiment_id: "".into(),
@@ -945,12 +1074,10 @@ mod tests {
     #[tokio::test]
     async fn test_novelty_not_found() {
         let tmp = TempDir::new().unwrap();
-        let batch = make_daily_effects_data(
-            &["exp-1"], &["ctr"], &[19700], &[5.0], &[1000],
-        );
+        let batch = make_daily_effects_data(&["exp-1"], &["ctr"], &[19700], &[5.0], &[1000]);
         write_table(tmp.path(), "daily_treatment_effects", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let err = handler
             .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
                 experiment_id: "exp-999".into(),
@@ -975,7 +1102,7 @@ mod tests {
         let batch = make_daily_effects_data(&exp_ids, &metric_ids, &dates, &effects, &sizes);
         write_table(tmp.path(), "daily_treatment_effects", batch).await;
 
-        let handler = AnalysisServiceHandler::new(test_config(tmp.path().to_str().unwrap()));
+        let handler = test_handler(tmp.path().to_str().unwrap());
         let err = handler
             .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
                 experiment_id: "exp-1".into(),
@@ -991,7 +1118,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_interference_empty_experiment_id() {
-        let handler = AnalysisServiceHandler::new(test_config("/tmp/nonexistent"));
+        let handler = test_handler("/tmp/nonexistent");
         let err = handler
             .get_interference_analysis(Request::new(GetInterferenceAnalysisRequest {
                 experiment_id: "".into(),
