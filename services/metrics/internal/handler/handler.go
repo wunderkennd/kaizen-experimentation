@@ -24,11 +24,12 @@ type MetricsHandler struct {
 	contentConsumption  *jobs.ContentConsumptionJob
 	surrogateJob        *jobs.SurrogateJob
 	interleavingJob     *jobs.InterleavingJob
+	recalibrationJob    *jobs.RecalibrationJob
 	queryLog            querylog.Writer
 }
 
-func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ilj *jobs.InterleavingJob, ql querylog.Writer) *MetricsHandler {
-	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, interleavingJob: ilj, queryLog: ql}
+func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ilj *jobs.InterleavingJob, rj *jobs.RecalibrationJob, ql querylog.Writer) *MetricsHandler {
+	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, interleavingJob: ilj, recalibrationJob: rj, queryLog: ql}
 }
 
 func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Request[metricsv1.ComputeMetricsRequest]) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
