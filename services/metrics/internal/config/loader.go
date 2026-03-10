@@ -200,6 +200,20 @@ func (c *ConfigStore) GetSurrogateModelForExperiment(experimentID string) *Surro
 	return sm
 }
 
+// GetExperimentsByModelID returns experiment IDs that reference the given surrogate model ID.
+// Returns an empty slice if no experiments use the model.
+func (c *ConfigStore) GetExperimentsByModelID(modelID string) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var ids []string
+	for _, e := range c.experiments {
+		if e.SurrogateModelID == modelID {
+			ids = append(ids, e.ExperimentID)
+		}
+	}
+	return ids
+}
+
 func (c *ConfigStore) RunningExperimentIDs() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

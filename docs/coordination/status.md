@@ -1,10 +1,7 @@
 # Experimentation Platform — Coordination Status
 
-<<<<<<< agent-6/feat/phase4-next
-> **Last updated**: 2026-03-10 by Agent-6 (Phase 4 performance targets — code splitting, caching, syntax highlighting, export worker)
-=======
-> **Last updated**: 2026-03-10 by Agent-4 (PostgreSQL caching for M4a analysis results)
->>>>>>> main
+> **Last updated**: 2026-03-10 by Agent-3 (Kafka-driven surrogate recalibration consumer)
+
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -19,7 +16,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/cold-start-bandit | Cold-start bandit + UniFFI SDKs | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation done. Cold-start bandit: CreateColdStartBandit + ExportAffinityScores RPCs (5s timeout, assert_finite validation). UniFFI SDK LocalProviders for iOS/Android (offline assignment). 95 tests (63 integration + 9 config cache + 12 SDK + 11 lib). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | M2→M3 event contract tests | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85, #99). M2→M3 contract tests: 40 tests (32 protobuf contract + 8 Kafka roundtrip) validating ExposureEvent, MetricEvent, QoEEvent data paths. Delta schema alignment, M3 SQL template field coverage, cross-topic user correlation. 119 tests pass. |
-| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/perf/go-benchmarks | Go benchmarks (Phase 4 load testing) | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77, #98). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). SQL template validation (PR #95). Go benchmarks: 51 benchmarks across 4 packages (PR #101). |
+| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/surrogate-recalibration-job | Surrogate recalibration Kafka consumer | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77, #98). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). SQL template validation (PR #95). Go benchmarks (PR #101). Surrogate recalibration trigger job (PR #105). Kafka-driven recalibration consumer: reads `surrogate_recalibration_requests` from M5, triggers RecalibrationJob per experiment. |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/wire-remaining-analysis-rpcs | PostgreSQL caching for analysis results | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93, #107). Chaos testing merged. **All 5 analysis RPCs wired** + **PostgreSQL caching**: RunAnalysis (always compute + cache write), GetAnalysisResult (cache-first + Delta Lake fallback), novelty/interference (compute + cache write). AnalysisStore with sqlx. 36 tests (31 active + 5 PG-gated). |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/phase4-next | Phase 4 performance targets | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search/filter/sort (PR #90). RBAC UI: auth context, role-based button disabling. Performance: in-memory RPC cache, code-split dynamic imports, React.memo, SQL syntax highlighting, Web Worker notebook export. WCAG 2.1 AA accessibility fixes. 239 tests pass. |
