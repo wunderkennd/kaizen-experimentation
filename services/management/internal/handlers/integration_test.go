@@ -1738,9 +1738,24 @@ func createQoeMetric(t *testing.T, client managementv1connect.ExperimentManageme
 			MetricId:        metricID,
 			Name:            metricID + " (QoE)",
 			Description:     "QoE metric for testing",
-			Type:            commonv1.MetricType_METRIC_TYPE_RATIO,
+			Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
 			SourceEventType: "qoe_rebuffer",
 			IsQoeMetric:     true,
+		},
+	}))
+	require.NoError(t, err)
+}
+
+func createNonQoeMetric(t *testing.T, client managementv1connect.ExperimentManagementServiceClient, metricID string) {
+	t.Helper()
+	_, err := client.CreateMetricDefinition(context.Background(), connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
+		Metric: &commonv1.MetricDefinition{
+			MetricId:        metricID,
+			Name:            metricID + " (non-QoE)",
+			Description:     "Non-QoE metric for testing",
+			Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
+			SourceEventType: "generic_event",
+			IsQoeMetric:     false,
 		},
 	}))
 	require.NoError(t, err)
@@ -1779,10 +1794,15 @@ func TestStartExperiment_QoE_RequiresQoeMetric(t *testing.T) {
 	client := env.client
 	ctx := context.Background()
 
+	// Create a non-QoE metric to use as guardrail (metric must exist, but must NOT be QoE).
+	nonQoeMetricID := "non_qoe_metric_" + t.Name()
+	createNonQoeMetric(t, client, nonQoeMetricID)
+
 	layer := createTestLayer(t, client, "qoe-no-qoe-metric-layer-"+t.Name(), 0)
 
 	// Create a PLAYBACK_QOE experiment with a non-QoE guardrail metric.
 	exp := newQoeExperiment("qoe-no-qoe-metric", layer.LayerId)
+	exp.GuardrailConfigs[0].MetricId = nonQoeMetricID
 
 	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
 		Experiment: exp,
