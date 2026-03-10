@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-6 (Phase 4 experiment list search/filter/sort + results link fix — PR #90)
+> **Last updated**: 2026-03-09 by Agent-5 (Type-specific concluding behavior + QoE type validation — PR #89)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -17,7 +17,7 @@
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward e2e harness + proto field fix | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78). PR #85: health check, W3C traceparent, core telemetry, tonic-web, reward/QoE/session e2e harnesses, synthetic generator proto field name fix. 78 tests pass. |
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/percentile-metric-type | PERCENTILE metric type | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/kafka-reward-consumer | M4b Kafka reward consumer | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b gRPC wiring merged (PR #72). Kafka reward consumer: rdkafka StreamConsumer, protobuf decode, assert_finite, batch commits, 30 tests pass. |
-| Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/test/phase4-stress-tests | Phase 4 stress tests | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: 6 stress tests — 100-goroutine concurrent start, rapid lifecycle cycles, bucket reuse integrity, audit trail completeness. |
+| Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/type-specific-conclude | Type-specific concluding behavior + QoE validation | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude: M4a analysis trigger, M4b policy snapshot, surrogate flagging, analysis_type classification + PLAYBACK_QOE type validation (PR #89). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/qoe-novelty-curve | Phase 4 experiment list UX | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search, filter, sort + results link fix (PR #90). 195 tests pass. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/rbac-integration | Phase 4.4: RBAC integration | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor with role-based permissions — viewer (Get/List/Evaluate), experimenter (Create/Update), admin (Promote). 15 auth tests. DISABLE_AUTH env guard. |
 

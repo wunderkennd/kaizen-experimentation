@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 
+	"github.com/org/experimentation/gen/go/experimentation/analysis/v1/analysisv1connect"
+	"github.com/org/experimentation/gen/go/experimentation/bandit/v1/banditv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
 	"github.com/org/experimentation-platform/services/management/internal/store"
@@ -21,11 +23,32 @@ type ExperimentService struct {
 	targeting  *store.TargetingStore
 	surrogates *store.SurrogateStore
 	notifier   *streaming.Notifier
+
+	// Optional external service clients (nil = graceful degradation).
+	analysisClient analysisv1connect.AnalysisServiceClient
+	banditClient   banditv1connect.BanditPolicyServiceClient
+}
+
+// ServiceOption configures optional dependencies on ExperimentService.
+type ServiceOption func(*ExperimentService)
+
+// WithAnalysisClient sets the M4a analysis service client.
+func WithAnalysisClient(c analysisv1connect.AnalysisServiceClient) ServiceOption {
+	return func(s *ExperimentService) { s.analysisClient = c }
+}
+
+// WithBanditClient sets the M4b bandit policy service client.
+func WithBanditClient(c banditv1connect.BanditPolicyServiceClient) ServiceOption {
+	return func(s *ExperimentService) { s.banditClient = c }
 }
 
 // NewExperimentService creates a new handler with the given stores and notifier.
-func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, ts *store.TargetingStore, ss *store.SurrogateStore, n *streaming.Notifier) *ExperimentService {
-	return &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, targeting: ts, surrogates: ss, notifier: n}
+func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, ts *store.TargetingStore, ss *store.SurrogateStore, n *streaming.Notifier, opts ...ServiceOption) *ExperimentService {
+	svc := &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, targeting: ts, surrogates: ss, notifier: n}
+	for _, o := range opts {
+		o(svc)
+	}
+	return svc
 }
 
 // ConcludeByID implements the sequential.Concluder interface, exposing the

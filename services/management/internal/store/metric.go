@@ -174,6 +174,21 @@ func (s *MetricStore) ExistAll(ctx context.Context, metricIDs []string) (string,
 	return "", nil
 }
 
+// AnyQoeMetric checks whether any metric ID in the given set has is_qoe_metric = true.
+func (s *MetricStore) AnyQoeMetric(ctx context.Context, metricIDs []string) (bool, error) {
+	if len(metricIDs) == 0 {
+		return false, nil
+	}
+	var found bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM metric_definitions
+			WHERE metric_id = ANY($1) AND is_qoe_metric = true
+		)`, metricIDs,
+	).Scan(&found)
+	return found, err
+}
+
 // GetByIDTx retrieves a metric definition within a transaction (for future use).
 func (s *MetricStore) GetByIDTx(ctx context.Context, tx pgx.Tx, metricID string) (MetricDefinitionRow, error) {
 	var out MetricDefinitionRow

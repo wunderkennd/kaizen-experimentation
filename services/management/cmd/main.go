@@ -13,7 +13,9 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/org/experimentation/gen/go/experimentation/analysis/v1/analysisv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/assignment/v1/assignmentv1connect"
+	"github.com/org/experimentation/gen/go/experimentation/bandit/v1/banditv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
 	"github.com/org/experimentation-platform/services/management/internal/auth"
@@ -63,8 +65,21 @@ func main() {
 	notifier.Start(ctx)
 	defer notifier.Stop()
 
+	// Optional external service clients.
+	var serviceOpts []handlers.ServiceOption
+	if addr := os.Getenv("ANALYSIS_SERVICE_URL"); addr != "" {
+		ac := analysisv1connect.NewAnalysisServiceClient(http.DefaultClient, addr)
+		serviceOpts = append(serviceOpts, handlers.WithAnalysisClient(ac))
+		slog.Info("M4a analysis client configured", "url", addr)
+	}
+	if addr := os.Getenv("BANDIT_SERVICE_URL"); addr != "" {
+		bc := banditv1connect.NewBanditPolicyServiceClient(http.DefaultClient, addr)
+		serviceOpts = append(serviceOpts, handlers.WithBanditClient(bc))
+		slog.Info("M4b bandit client configured", "url", addr)
+	}
+
 	// Service handlers (created before consumers because sequential consumer uses expSvc as Concluder).
-	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, surrogateStore, notifier)
+	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, surrogateStore, notifier, serviceOpts...)
 
 	// Kafka consumers (guardrail auto-pause + sequential auto-conclude).
 	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
