@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import type { MetricResult } from '@/lib/types';
 import { formatPValue, formatEffect } from '@/lib/utils';
 
@@ -8,7 +9,7 @@ interface TreatmentEffectsTableProps {
   showCuped: boolean;
 }
 
-export function TreatmentEffectsTable({ metricResults, showCuped }: TreatmentEffectsTableProps) {
+function TreatmentEffectsTableInner({ metricResults, showCuped }: TreatmentEffectsTableProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
@@ -71,3 +72,5 @@ export function TreatmentEffectsTable({ metricResults, showCuped }: TreatmentEff
     </div>
   );
 }
+
+export const TreatmentEffectsTable = memo(TreatmentEffectsTableInner);

@@ -208,8 +208,8 @@ describe('Experiment List Page', () => {
     const user = userEvent.setup();
     await renderAndWait();
 
-    // Click Name header to sort by name ascending
-    const nameHeader = screen.getByText('Name').closest('th')!;
+    // Click Name header button to sort by name ascending
+    const nameHeader = screen.getByRole('button', { name: /Name/ });
     await user.click(nameHeader);
 
     await waitFor(() => {

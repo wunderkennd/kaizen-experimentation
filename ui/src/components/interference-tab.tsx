@@ -27,8 +27,9 @@ export function InterferenceTab({ experimentId }: InterferenceTabProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-8" role="status" aria-label="Loading">
         <div className="h-6 w-6 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -133,6 +134,7 @@ export function InterferenceTab({ experimentId }: InterferenceTabProps) {
           <p className="mb-2 text-xs text-gray-500">
             How evenly content consumption is distributed. The further a curve is from the equality line, the more concentrated consumption is on fewer titles.
           </p>
+          <div role="img" aria-label="Lorenz curve showing content consumption concentration">
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={lorenzChartData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -190,6 +192,7 @@ export function InterferenceTab({ experimentId }: InterferenceTabProps) {
               />
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 

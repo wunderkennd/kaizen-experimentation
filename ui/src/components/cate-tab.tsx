@@ -36,8 +36,9 @@ export function CateTab({ experimentId }: CateTabProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-8" role="status" aria-label="Loading">
         <div className="h-6 w-6 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -117,7 +118,7 @@ export function CateTab({ experimentId }: CateTabProps) {
       {/* Forest plot */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
         <h4 className="mb-3 text-sm font-semibold text-gray-900">Lifecycle Segment Forest Plot</h4>
-        <div style={{ width: '100%', height: 40 + chartData.length * 50 }}>
+        <div style={{ width: '100%', height: 40 + chartData.length * 50 }} role="img" aria-label="Forest plot showing treatment effects by lifecycle segment">
           <ResponsiveContainer>
             <ComposedChart
               layout="vertical"

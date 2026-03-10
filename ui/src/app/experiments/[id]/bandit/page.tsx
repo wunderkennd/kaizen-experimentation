@@ -40,8 +40,9 @@ export default function BanditDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -143,6 +144,7 @@ export default function BanditDashboardPage() {
       <section className="mb-6">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Arm Allocation</h2>
         <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div role="img" aria-label="Arm allocation probabilities">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={allocationData} margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -156,6 +158,7 @@ export default function BanditDashboardPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
           <p className="mt-2 text-xs text-gray-500">
             Min exploration floor: {(dashboard.minExplorationFraction * 100).toFixed(0)}%
           </p>
@@ -166,6 +169,7 @@ export default function BanditDashboardPage() {
       <section className="mb-6">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Reward Rates</h2>
         <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div role="img" aria-label="Reward rates per arm">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={rewardRateData} margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -179,6 +183,7 @@ export default function BanditDashboardPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       </section>
 
@@ -187,6 +192,7 @@ export default function BanditDashboardPage() {
         <section className="mb-6">
           <h2 className="mb-3 text-lg font-semibold text-gray-900">Reward Rate Over Time</h2>
           <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <div role="img" aria-label="Reward rate history">
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={rewardCurveData} margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -198,6 +204,7 @@ export default function BanditDashboardPage() {
                 ))}
               </BarChart>
             </ResponsiveContainer>
+            </div>
           </div>
         </section>
       )}
@@ -226,7 +233,7 @@ export default function BanditDashboardPage() {
               {dashboard.arms.map((arm, i) => (
                 <tr key={arm.armId}>
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                    <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ARM_COLORS[i % ARM_COLORS.length] }} />
+                    <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ARM_COLORS[i % ARM_COLORS.length] }} aria-hidden="true" />
                     {arm.name}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{arm.selectionCount.toLocaleString()}</td>

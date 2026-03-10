@@ -1373,16 +1373,37 @@ impl BanditPolicyService for MockBanditService {
 
     async fn create_cold_start_bandit(
         &self,
-        _request: tonic::Request<CreateColdStartBanditRequest>,
+        request: tonic::Request<CreateColdStartBanditRequest>,
     ) -> Result<tonic::Response<CreateColdStartBanditResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented("not needed for test"))
+        let req = request.into_inner();
+        if let Some(delay) = self.delay {
+            tokio::time::sleep(delay).await;
+        }
+        Ok(tonic::Response::new(CreateColdStartBanditResponse {
+            experiment_id: format!("cold-start:{}", req.content_id),
+            content_id: req.content_id,
+        }))
     }
 
     async fn export_affinity_scores(
         &self,
-        _request: tonic::Request<ExportAffinityScoresRequest>,
+        request: tonic::Request<ExportAffinityScoresRequest>,
     ) -> Result<tonic::Response<ExportAffinityScoresResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented("not needed for test"))
+        let req = request.into_inner();
+        if let Some(delay) = self.delay {
+            tokio::time::sleep(delay).await;
+        }
+        let mut scores = HashMap::new();
+        scores.insert("teens".to_string(), 0.85);
+        scores.insert("adults".to_string(), 0.62);
+        let mut placements = HashMap::new();
+        placements.insert("teens".to_string(), "arm_prominent".to_string());
+        placements.insert("adults".to_string(), "arm_carousel".to_string());
+        Ok(tonic::Response::new(ExportAffinityScoresResponse {
+            content_id: format!("content-for-{}", req.experiment_id),
+            segment_affinity_scores: scores,
+            optimal_placements: placements,
+        }))
     }
 
     async fn get_policy_snapshot(
@@ -1599,4 +1620,175 @@ async fn bandit_contextual_features_forwarded() {
     assert!((features["tenure"] - 2.5).abs() < f64::EPSILON);
     // "country" should NOT be in features (not in context_feature_keys).
     assert!(!features.contains_key("country"));
+}
+
+// ── Cold-Start Bandit Tests ──
+
+#[tokio::test]
+async fn cold_start_create_success() {
+    let (addr, _captured) = start_mock_m4b(None, "arm_a", 0.5).await;
+
+    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
+        "http://{addr}"
+    ))
+    .await
+    .unwrap();
+
+    let mut metadata = HashMap::new();
+    metadata.insert("genre".to_string(), "action".to_string());
+
+    let result = client
+        .create_cold_start_bandit("movie-new-001", metadata, 14)
+        .await
+        .unwrap();
+
+    assert_eq!(result.experiment_id, "cold-start:movie-new-001");
+    assert_eq!(result.content_id, "movie-new-001");
+}
+
+#[tokio::test]
+async fn cold_start_create_timeout() {
+    // Mock sleeps 6s, but cold-start timeout is 5s.
+    let (addr, _captured) =
+        start_mock_m4b(Some(Duration::from_secs(6)), "arm_a", 0.5).await;
+
+    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
+        "http://{addr}"
+    ))
+    .await
+    .unwrap();
+
+    let result = client
+        .create_cold_start_bandit("movie-timeout", HashMap::new(), 7)
+        .await;
+
+    assert!(
+        result.is_err(),
+        "cold-start should timeout after 5s"
+    );
+}
+
+#[tokio::test]
+async fn export_affinity_scores_success() {
+    let (addr, _captured) = start_mock_m4b(None, "arm_a", 0.5).await;
+
+    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
+        "http://{addr}"
+    ))
+    .await
+    .unwrap();
+
+    let result = client
+        .export_affinity_scores("cold-start:movie-001")
+        .await
+        .unwrap();
+
+    assert_eq!(result.content_id, "content-for-cold-start:movie-001");
+    assert_eq!(result.segment_affinity_scores.len(), 2);
+    assert!((result.segment_affinity_scores["teens"] - 0.85).abs() < f64::EPSILON);
+    assert!((result.segment_affinity_scores["adults"] - 0.62).abs() < f64::EPSILON);
+    assert_eq!(result.optimal_placements["teens"], "arm_prominent");
+    assert_eq!(result.optimal_placements["adults"], "arm_carousel");
+}
+
+#[tokio::test]
+async fn cold_start_experiment_assignment() {
+    // The cold-start experiment in dev/config.json should be assignable via
+    // the existing SelectArm path (it's a CONTEXTUAL_BANDIT type).
+    let (addr, captured) = start_mock_m4b(None, "arm_prominent", 0.6).await;
+
+    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
+        "http://{addr}"
+    ))
+    .await
+    .unwrap();
+
+    let config = Config::from_json(DEV_CONFIG).unwrap();
+    let svc = AssignmentServiceImpl::new(
+        experimentation_assignment::config_cache::ConfigCacheHandle::from_static(Arc::new(config)),
+        Some(client),
+    );
+
+    let user_attrs = attrs(&[
+        ("genre_affinity", "0.9"),
+        ("recency_days", "3"),
+        ("tenure_months", "12.5"),
+    ]);
+
+    let resp = svc
+        .assign("cold-start:movie-new-001", "user_42", "", &user_attrs)
+        .await
+        .unwrap();
+
+    assert!(resp.is_active);
+    assert_eq!(resp.variant_id, "arm_prominent");
+    assert!((resp.assignment_probability - 0.6).abs() < 1e-9);
+
+    // Verify context features were forwarded for CONTEXTUAL_BANDIT.
+    let features = captured.lock().await.take().unwrap();
+    assert_eq!(features.len(), 3);
+    assert!((features["genre_affinity"] - 0.9).abs() < f64::EPSILON);
+    assert!((features["recency_days"] - 3.0).abs() < f64::EPSILON);
+    assert!((features["tenure_months"] - 12.5).abs() < f64::EPSILON);
+}
+
+// ── Cold-Start Config Tests ──
+
+#[tokio::test]
+async fn config_cold_start_fields_parse() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "cs_test",
+            "state": "RUNNING",
+            "type": "CONTEXTUAL_BANDIT",
+            "hash_salt": "salt",
+            "layer_id": "layer_1",
+            "variants": [],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [{ "arm_id": "a1", "name": "A1", "payload_json": "{}" }],
+                "reward_metric_id": "clicks",
+                "content_id": "movie-42",
+                "cold_start_window_days": 21
+            }
+        }],
+        "layers": [{ "layer_id": "layer_1", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let exp = &config.experiments_by_id["cs_test"];
+    let bandit = exp.bandit_config.as_ref().unwrap();
+    assert_eq!(bandit.content_id.as_deref(), Some("movie-42"));
+    assert_eq!(bandit.cold_start_window_days, Some(21));
+}
+
+#[tokio::test]
+async fn config_cold_start_fields_default_to_none() {
+    // Existing configs without cold-start fields should still parse.
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "regular_mab",
+            "state": "RUNNING",
+            "type": "MAB",
+            "hash_salt": "salt",
+            "layer_id": "layer_1",
+            "variants": [],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [{ "arm_id": "a1", "name": "A1", "payload_json": "{}" }],
+                "reward_metric_id": "clicks"
+            }
+        }],
+        "layers": [{ "layer_id": "layer_1", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let bandit = config.experiments_by_id["regular_mab"]
+        .bandit_config
+        .as_ref()
+        .unwrap();
+    assert!(bandit.content_id.is_none());
+    assert!(bandit.cold_start_window_days.is_none());
 }

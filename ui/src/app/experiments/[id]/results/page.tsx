@@ -3,23 +3,59 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
 import { getExperiment, getAnalysisResult } from '@/lib/api';
 import { SrmBanner } from '@/components/srm-banner';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
-import { ForestPlot } from '@/components/charts/forest-plot';
-import { SequentialBoundaryPlot } from '@/components/charts/sequential-boundary-plot';
-import { GstTrajectoryChart } from '@/components/charts/gst-trajectory-chart';
-import { NoveltyTab } from '@/components/novelty-tab';
-import { InterferenceTab } from '@/components/interference-tab';
-import { InterleavingTab } from '@/components/interleaving-tab';
-import { SurrogateTab } from '@/components/surrogate-tab';
-import { HoldoutTab } from '@/components/holdout-tab';
-import { GuardrailTab } from '@/components/guardrail-tab';
-import { QoeTab } from '@/components/qoe-tab';
-import { CateTab } from '@/components/cate-tab';
+
+// Dynamic imports — recharts + tab components only load when their tab is active
+const ForestPlot = dynamic(
+  () => import('@/components/charts/forest-plot').then(m => ({ default: m.ForestPlot })),
+  { ssr: false },
+);
+const SequentialBoundaryPlot = dynamic(
+  () => import('@/components/charts/sequential-boundary-plot').then(m => ({ default: m.SequentialBoundaryPlot })),
+  { ssr: false },
+);
+const GstTrajectoryChart = dynamic(
+  () => import('@/components/charts/gst-trajectory-chart').then(m => ({ default: m.GstTrajectoryChart })),
+  { ssr: false },
+);
+const NoveltyTab = dynamic(
+  () => import('@/components/novelty-tab').then(m => ({ default: m.NoveltyTab })),
+  { ssr: false },
+);
+const InterferenceTab = dynamic(
+  () => import('@/components/interference-tab').then(m => ({ default: m.InterferenceTab })),
+  { ssr: false },
+);
+const InterleavingTab = dynamic(
+  () => import('@/components/interleaving-tab').then(m => ({ default: m.InterleavingTab })),
+  { ssr: false },
+);
+const SurrogateTab = dynamic(
+  () => import('@/components/surrogate-tab').then(m => ({ default: m.SurrogateTab })),
+  { ssr: false },
+);
+const HoldoutTab = dynamic(
+  () => import('@/components/holdout-tab').then(m => ({ default: m.HoldoutTab })),
+  { ssr: false },
+);
+const GuardrailTab = dynamic(
+  () => import('@/components/guardrail-tab').then(m => ({ default: m.GuardrailTab })),
+  { ssr: false },
+);
+const QoeTab = dynamic(
+  () => import('@/components/qoe-tab').then(m => ({ default: m.QoeTab })),
+  { ssr: false },
+);
+const CateTab = dynamic(
+  () => import('@/components/cate-tab').then(m => ({ default: m.CateTab })),
+  { ssr: false },
+);
 
 type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle';
 
@@ -46,8 +82,9 @@ export default function ResultsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -122,10 +159,11 @@ export default function ResultsPage() {
 
       {/* Tab navigation */}
       <div className="mb-6 border-b border-gray-200">
-        <nav className="-mb-px flex space-x-6" aria-label="Analysis tabs">
+        <nav className="-mb-px flex space-x-6" aria-label="Analysis tabs" role="tablist">
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              id={`tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={`whitespace-nowrap border-b-2 pb-3 pt-1 text-sm font-medium transition-colors ${
                 activeTab === tab.key
@@ -133,6 +171,7 @@ export default function ResultsPage() {
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
               }`}
               aria-selected={activeTab === tab.key}
+              aria-controls={`tabpanel-${tab.key}`}
               role="tab"
             >
               {tab.label}
@@ -143,7 +182,7 @@ export default function ResultsPage() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
-        <>
+        <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}>
           {/* CUPED Toggle */}
           {hasCupedData && (
             <CupedToggle
@@ -182,39 +221,55 @@ export default function ResultsPage() {
                 ))}
             </>
           )}
-        </>
+        </div>
       )}
 
       {activeTab === 'novelty' && (
-        <NoveltyTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-novelty" aria-labelledby="tab-novelty" tabIndex={0}>
+          <NoveltyTab experimentId={params.id} />
+        </div>
       )}
 
       {activeTab === 'interference' && (
-        <InterferenceTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-interference" aria-labelledby="tab-interference" tabIndex={0}>
+          <InterferenceTab experimentId={params.id} />
+        </div>
       )}
 
       {activeTab === 'interleaving' && (
-        <InterleavingTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-interleaving" aria-labelledby="tab-interleaving" tabIndex={0}>
+          <InterleavingTab experimentId={params.id} />
+        </div>
       )}
 
       {activeTab === 'lifecycle' && (
-        <CateTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-lifecycle" aria-labelledby="tab-lifecycle" tabIndex={0}>
+          <CateTab experimentId={params.id} />
+        </div>
       )}
 
       {activeTab === 'surrogate' && analysisResult.surrogateProjections && (
-        <SurrogateTab projections={analysisResult.surrogateProjections} />
+        <div role="tabpanel" id="tabpanel-surrogate" aria-labelledby="tab-surrogate" tabIndex={0}>
+          <SurrogateTab projections={analysisResult.surrogateProjections} />
+        </div>
       )}
 
       {activeTab === 'holdout' && (
-        <HoldoutTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-holdout" aria-labelledby="tab-holdout" tabIndex={0}>
+          <HoldoutTab experimentId={params.id} />
+        </div>
       )}
 
       {activeTab === 'guardrails' && (
-        <GuardrailTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-guardrails" aria-labelledby="tab-guardrails" tabIndex={0}>
+          <GuardrailTab experimentId={params.id} />
+        </div>
       )}
 
       {activeTab === 'qoe' && (
-        <QoeTab experimentId={params.id} />
+        <div role="tabpanel" id="tabpanel-qoe" aria-labelledby="tab-qoe" tabIndex={0}>
+          <QoeTab experimentId={params.id} />
+        </div>
       )}
     </div>
   );

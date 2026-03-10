@@ -26,8 +26,9 @@ export function HoldoutTab({ experimentId }: HoldoutTabProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-8" role="status" aria-label="Loading">
         <div className="h-6 w-6 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -94,7 +95,7 @@ export function HoldoutTab({ experimentId }: HoldoutTabProps) {
       {result.timeSeries.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="mb-3 text-sm font-semibold text-gray-900">Cumulative Lift Over Time</h4>
-          <div style={{ width: '100%', height: 300 }}>
+          <div style={{ width: '100%', height: 300 }} role="img" aria-label="Chart showing cumulative lift over time">
             <ResponsiveContainer>
               <ComposedChart data={result.timeSeries} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />

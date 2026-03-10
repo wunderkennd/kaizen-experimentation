@@ -1,12 +1,14 @@
 'use client';
 
+import { memo } from 'react';
+
 interface CupedToggleProps {
   enabled: boolean;
   onToggle: () => void;
   varianceReductionPct: number;
 }
 
-export function CupedToggle({ enabled, onToggle, varianceReductionPct }: CupedToggleProps) {
+function CupedToggleInner({ enabled, onToggle, varianceReductionPct }: CupedToggleProps) {
   return (
     <div className="mb-4 flex items-center gap-3">
       <label className="flex cursor-pointer items-center gap-2">
@@ -34,3 +36,5 @@ export function CupedToggle({ enabled, onToggle, varianceReductionPct }: CupedTo
     </div>
   );
 }
+
+export const CupedToggle = memo(CupedToggleInner);

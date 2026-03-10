@@ -239,14 +239,58 @@ export const handlers = [
     return HttpResponse.json({ entries });
   }),
 
-  // ExportNotebook
+  // ExportNotebook — realistic ~200KB payload with 25 cells
   http.post(`${METRICS_SVC}/ExportNotebook`, async ({ request }) => {
     const body = await request.json() as { experimentId: string };
     const experiment = SEED_EXPERIMENTS.find((e) => e.experimentId === body.experimentId);
     const name = experiment?.name || 'experiment';
 
+    // Generate 25 cells with realistic SQL + output rows (~200KB total)
+    const cells = Array.from({ length: 25 }, (_, i) => {
+      const outputRows = Array.from({ length: 50 }, (_, r) =>
+        `variant_${r % 3}\t${(Math.random() * 1000).toFixed(2)}\t${(Math.random() * 100).toFixed(4)}\t${(Math.random() * 50).toFixed(4)}\t${(Math.random()).toFixed(6)}\t${r + 1}\t${Date.now() - r * 86400000}`,
+      ).join('\n');
+
+      return {
+        cell_type: 'code',
+        source: [
+          `# Metric ${i + 1}: ${['completion_rate', 'watch_time', 'ctr', 'rebuffer_ratio', 'search_ndcg'][i % 5]}`,
+          `SELECT variant_id, COUNT(*) as n, AVG(value) as mean,`,
+          `       STDDEV(value) as std, MIN(value) as min_val, MAX(value) as max_val,`,
+          `       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY value) as median`,
+          `FROM experiment_metrics`,
+          `WHERE experiment_id = '${body.experimentId}'`,
+          `  AND metric_id = 'metric_${i + 1}'`,
+          `  AND event_timestamp >= '2026-01-01'`,
+          `  AND event_timestamp < '2026-03-10'`,
+          `GROUP BY variant_id`,
+          `ORDER BY variant_id;`,
+        ].join('\n'),
+        outputs: [{
+          output_type: 'execute_result',
+          data: { 'text/plain': outputRows },
+          metadata: {},
+          execution_count: i + 1,
+        }],
+        metadata: { tags: [] },
+        execution_count: i + 1,
+      };
+    });
+
+    const notebook = {
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: {
+        experiment_id: body.experimentId,
+        experiment_name: name,
+        generated_at: new Date().toISOString(),
+        kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' },
+      },
+      cells,
+    };
+
     return HttpResponse.json({
-      content: btoa(`{"cells": [], "metadata": {"experiment_id": "${body.experimentId}"}}`),
+      content: btoa(JSON.stringify(notebook)),
       filename: `${name}_analysis.ipynb`,
     });
   }),
