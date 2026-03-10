@@ -14,6 +14,8 @@ export default defineConfig({
       NEXT_PUBLIC_METRICS_URL: 'http://localhost:50054',
       NEXT_PUBLIC_ANALYSIS_URL: 'http://localhost:50053',
       NEXT_PUBLIC_BANDIT_URL: 'http://localhost:50056',
+      NEXT_PUBLIC_USER_ROLE: 'experimenter',
+      NEXT_PUBLIC_USER_EMAIL: 'test@streamco.com',
     },
   },
   resolve: {

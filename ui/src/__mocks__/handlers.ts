@@ -5,11 +5,37 @@ import {
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
   SEED_GST_RESULTS, SEED_CATE_RESULTS,
 } from './seed-data';
+import type { UserRole } from '@/lib/auth';
+import { hasAtLeast, isValidRole } from '@/lib/auth';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
 const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
 const BANDIT_SVC = '*/experimentation.bandit.v1.BanditPolicyService';
+
+// --- Mock auth enforcement ---
+let _mockAuthEnabled = false;
+
+export function enableMockAuth(): void {
+  _mockAuthEnabled = true;
+}
+
+export function disableMockAuth(): void {
+  _mockAuthEnabled = false;
+}
+
+function checkAuth(headers: Headers, requiredRole: UserRole) {
+  if (!_mockAuthEnabled) return null;
+  const roleHeader = headers.get('X-User-Role') || '';
+  const role = isValidRole(roleHeader) ? roleHeader : 'viewer';
+  if (!hasAtLeast(role, requiredRole)) {
+    return HttpResponse.json(
+      { code: 'permission_denied', message: `Requires ${requiredRole} role` },
+      { status: 403 },
+    );
+  }
+  return null;
+}
 
 export const handlers = [
   // ListExperiments
@@ -37,6 +63,8 @@ export const handlers = [
 
   // CreateExperiment
   http.post(`${MGMT_SVC}/CreateExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'experimenter');
+    if (denied) return denied;
     const body = await request.json() as Record<string, unknown>;
     const newExperiment = {
       experimentId: crypto.randomUUID(),
@@ -64,6 +92,8 @@ export const handlers = [
 
   // UpdateExperiment
   http.post(`${MGMT_SVC}/UpdateExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'experimenter');
+    if (denied) return denied;
     const body = await request.json() as { experiment: Record<string, unknown> };
     const exp = body.experiment;
     const id = exp.experimentId as string;
@@ -89,6 +119,8 @@ export const handlers = [
 
   // StartExperiment: DRAFT → RUNNING (mock skips STARTING)
   http.post(`${MGMT_SVC}/StartExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'experimenter');
+    if (denied) return denied;
     const body = await request.json() as { experimentId: string };
     const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
 
@@ -116,6 +148,8 @@ export const handlers = [
 
   // ConcludeExperiment: RUNNING → CONCLUDED (mock skips CONCLUDING)
   http.post(`${MGMT_SVC}/ConcludeExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'experimenter');
+    if (denied) return denied;
     const body = await request.json() as { experimentId: string };
     const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
 
@@ -143,6 +177,8 @@ export const handlers = [
 
   // ArchiveExperiment: CONCLUDED → ARCHIVED
   http.post(`${MGMT_SVC}/ArchiveExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'admin');
+    if (denied) return denied;
     const body = await request.json() as { experimentId: string };
     const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
 
