@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,8 +31,20 @@ func (m *mockManagementHandler) CreateExperiment(ctx context.Context, req *conne
 	}
 	m.lastRequest = req.Msg.GetExperiment()
 
-	// Simulate M5 behavior: copy input, assign ID, set state to DRAFT, generate salt.
+	// Contract validation: M5 requires these fields to be non-empty.
 	exp := req.Msg.GetExperiment()
+	if exp.GetLayerId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("layer_id is required"))
+	}
+	if exp.GetName() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("name is required"))
+	}
+	if exp.GetOwnerEmail() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("owner_email is required"))
+	}
+	if exp.GetPrimaryMetricId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("primary_metric_id is required"))
+	}
 	result := &commonv1.Experiment{
 		ExperimentId:       "exp-from-m5-001",
 		Name:               exp.GetName(),
@@ -74,7 +87,7 @@ func setupTestWithM5(t *testing.T) (flagsv1connect.FeatureFlagServiceClient, *st
 
 	// Create flag service with management client.
 	mockStore := store.NewMockStore()
-	svc := NewFlagServiceFull(mockStore, nil, mgmtClient)
+	svc := NewFlagServiceFull(mockStore, nil, mgmtClient, "default")
 	mux := http.NewServeMux()
 	path, handler := flagsv1connect.NewFeatureFlagServiceHandler(svc)
 	mux.Handle(path, handler)
@@ -124,6 +137,7 @@ func TestPromoteToExperiment_LiveM5(t *testing.T) {
 	assert.Contains(t, mgmtHandler.lastRequest.GetName(), "promote-live")
 	assert.Equal(t, commonv1.ExperimentType_EXPERIMENT_TYPE_AB, mgmtHandler.lastRequest.GetType())
 	assert.Equal(t, "click_through_rate", mgmtHandler.lastRequest.GetPrimaryMetricId())
+	assert.Equal(t, "default", mgmtHandler.lastRequest.GetLayerId())
 
 	// Verify variants: control (70%) + treatment (30%) from rollout percentage.
 	variants := mgmtHandler.lastRequest.GetVariants()

@@ -70,7 +70,7 @@ func setupChaosTestWithM5(t *testing.T) (flagsv1connect.FeatureFlagServiceClient
 
 	mock := store.NewMockStore()
 	chaos := store.NewChaosStore(mock)
-	svc := NewFlagServiceFull(chaos, nil, mgmtClient)
+	svc := NewFlagServiceFull(chaos, nil, mgmtClient, "default")
 	mux := http.NewServeMux()
 	path, handler := flagsv1connect.NewFeatureFlagServiceHandler(svc)
 	mux.Handle(path, handler)

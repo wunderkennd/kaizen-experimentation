@@ -12,6 +12,7 @@ type FlagService struct {
 	store            store.Store
 	auditStore       store.AuditStore
 	managementClient managementv1connect.ExperimentManagementServiceClient
+	defaultLayerID   string
 }
 
 // NewFlagService creates a new FlagService.
@@ -25,6 +26,10 @@ func NewFlagServiceWithAudit(s store.Store, a store.AuditStore) *FlagService {
 }
 
 // NewFlagServiceFull creates a FlagService with all dependencies.
-func NewFlagServiceFull(s store.Store, a store.AuditStore, mc managementv1connect.ExperimentManagementServiceClient) *FlagService {
-	return &FlagService{store: s, auditStore: a, managementClient: mc}
+// If defaultLayerID is empty, it defaults to "default".
+func NewFlagServiceFull(s store.Store, a store.AuditStore, mc managementv1connect.ExperimentManagementServiceClient, defaultLayerID string) *FlagService {
+	if defaultLayerID == "" {
+		defaultLayerID = "default"
+	}
+	return &FlagService{store: s, auditStore: a, managementClient: mc, defaultLayerID: defaultLayerID}
 }

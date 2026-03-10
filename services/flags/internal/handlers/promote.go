@@ -53,6 +53,7 @@ func (s *FlagService) PromoteToExperiment(ctx context.Context, req *connect.Requ
 		Description:        fmt.Sprintf("Auto-promoted from feature flag %s (%s)", f.Name, f.FlagID),
 		OwnerEmail:         actor,
 		Type:               expType,
+		LayerId:            s.defaultLayerID,
 		Variants:           variants,
 		PrimaryMetricId:    primaryMetricID,
 		SecondaryMetricIds: req.Msg.GetSecondaryMetricIds(),
