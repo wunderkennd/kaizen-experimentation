@@ -117,6 +117,32 @@
       ]
     },
     {
+      "experiment_id": "e0000000-0000-0000-0000-000000000007",
+      "name": "mixed_qoe_engagement_test",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-01-25",
+      "primary_metric_id": "ttff_mean",
+      "secondary_metric_ids": ["watch_time_minutes"],
+      "session_level": true,
+      "lifecycle_stratification_enabled": true,
+      "lifecycle_segments": ["TRIAL", "NEW", "ESTABLISHED"],
+      "variants": [
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000013",
+          "name": "control",
+          "traffic_fraction": 0.5,
+          "is_control": true
+        },
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000014",
+          "name": "treatment",
+          "traffic_fraction": 0.5,
+          "is_control": false
+        }
+      ]
+    },
+    {
       "experiment_id": "e0000000-0000-0000-0000-000000000004",
       "name": "playback_qoe_test",
       "type": "AB",
