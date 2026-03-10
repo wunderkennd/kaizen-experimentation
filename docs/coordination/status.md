@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-6 (RBAC-aware UI controls — role-based button disabling + auth context)
+> **Last updated**: 2026-03-10 by Agent-4 (Wire remaining analysis RPCs — RunAnalysis, GetInterleavingAnalysis, GetNoveltyAnalysis)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -16,7 +16,7 @@
 | Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/live-bandit-delegation | Live M4b bandit delegation | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation: GrpcBanditClient with 10ms timeout, uniform random fallback, context feature extraction. 57 tests (54 integration + 3 gRPC mock). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward consumer integration tests (M2→M4b) | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85). PR #99: 24 reward consumer integration tests (17 protobuf contract + 7 Kafka roundtrip) validating M2→M4b data path. 95 tests pass. |
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/perf/go-benchmarks | Go benchmarks (Phase 4 load testing) | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77, #98). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). SQL template validation (PR #95). Go benchmarks: 51 benchmarks across 4 packages (PR #101). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/chaos-testing-m4a-m4b | Chaos testing (4.5) | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93). Kafka reward consumer merged. Chaos testing: chaos_test_analysis.sh + chaos_test_policy.sh + 4 crash recovery integration tests (multi-experiment, offset verification, high-volume, recovery timing). 34 tests pass. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/wire-remaining-analysis-rpcs | Wire remaining analysis RPCs | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93). Chaos testing merged. **4/5 analysis RPCs wired**: RunAnalysis/GetAnalysisResult (t-test + SRM + CUPED), GetInterleavingAnalysis (sign test + Bradley-Terry), GetNoveltyAnalysis (decay fitting). 31 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/phase4-next | Phase 4 RBAC-aware UI controls | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search/filter/sort (PR #90). RBAC UI: auth context, role-based button disabling, dev role switcher, permission denied handling. 218 tests pass. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/rbac-integration | Live M5 PromoteToExperiment wiring | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor. Live M5 wiring: layer_id, auth header forwarding, 10s client timeout, mock contract validation. |
@@ -115,7 +115,7 @@
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
 | 4.1 | CATE heterogeneous treatment effects | Agent-4 | 🔵 | Subgroup analysis + Cochran Q + BH-FDR. 22 tests (18 unit/proptest + 4 golden). |
-| 4.2 | Interference detection (content catalog spillover) | Agent-4 | 🟢 | Agent-6 (interference panel from gRPC), M4a service pattern established | PR #93. M4a service scaffolded with GetInterferenceAnalysis RPC wired through Delta Lake → experimentation-stats. 13 tests. |
+| 4.2 | Analysis service — all RPCs wired | Agent-4 | 🟢 | Agent-6 (results dashboard, interleaving tab, novelty tab), Agent-5 (auto-conclude) | PR #93 scaffolded. All 5 RPCs now wired: RunAnalysis, GetAnalysisResult, GetInterleavingAnalysis, GetNoveltyAnalysis, GetInterferenceAnalysis. 31 tests. |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | 🟢 | Agent-6 (role-aware UI controls) | PR #71 merged — ConnectRPC auth interceptor, 4-level role hierarchy, audit trail records real actor |
 | 4.4b | RBAC-aware UI controls | Agent-6 | 🔵 | — | Auth context + role-based button disabling + dev role switcher. Mirrors Agent-5 4-level hierarchy. 218 tests (23 new RBAC tests). |
@@ -135,7 +135,7 @@ Track integration test results between agent pairs.
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟢 | M3 Kafka publisher (PR #64) + M5 consumer (PR #18). 3 schema contract tests (field symmetry, bidirectional deser, zero-value). Kafka roundtrip integration test. Agent-2 guardrail E2E harness (`test_guardrail_e2e.sh`, PR #78) validates topic publish/consume. |
 | 5 | Agent-2 ↔ Agent-4 (reward events: pipeline → bandit policy) | 🟢 | PR #99: 24 integration tests — 17 protobuf contract (encode/decode parity, context_json parsing, key contract) + 7 Kafka roundtrip (headers, partition determinism, consumer group offsets, ordering). |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🔵 | M1 GrpcBanditClient with 10ms timeout + uniform fallback. M4b SelectArm gRPC wired through LMAX core. 3 mock gRPC integration tests pass. Ready for live pairing (set M4B_ADDR env var). |
-| 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🔵 | M4a GetInterferenceAnalysis gRPC available. Agent-6 can now render interference panel from real responses. |
+| 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🔵 | All 5 M4a gRPC RPCs wired. Agent-6 can render results dashboard (t-test + SRM + CUPED), interleaving tab (sign test + Bradley-Terry), novelty tab (decay curves), and interference panel. |
 
 ## Contract Changes Log
 
