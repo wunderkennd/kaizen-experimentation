@@ -67,7 +67,7 @@ func (m *MockAuditStore) GetStaleFlags(ctx context.Context, staleThreshold time.
 	cutoff := time.Now().Add(-staleThreshold)
 	var result []*StaleFlagEntry
 	for _, f := range m.flagStore.flags {
-		if f.Enabled && f.RolloutPercentage >= 1.0 && f.UpdatedAt.Before(cutoff) {
+		if f.Enabled && f.RolloutPercentage >= 1.0 && f.PromotedExperimentID == "" && f.UpdatedAt.Before(cutoff) {
 			result = append(result, &StaleFlagEntry{
 				FlagID:            f.FlagID,
 				Name:              f.Name,
