@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-4 (Chaos testing for M4a/M4b — chaos scripts + crash recovery integration tests)
+> **Last updated**: 2026-03-09 by Agent-2 (Reward consumer integration tests M2→M4b contract — PR #99)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -14,7 +14,7 @@
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/live-bandit-delegation | Live M4b bandit delegation | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation: GrpcBanditClient with 10ms timeout, uniform random fallback, context feature extraction. 57 tests (54 integration + 3 gRPC mock). |
-| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward e2e harness + proto field fix | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78). PR #85: health check, W3C traceparent, core telemetry, tonic-web, reward/QoE/session e2e harnesses, synthetic generator proto field name fix. 78 tests pass. |
+| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward consumer integration tests (M2→M4b) | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85). PR #99: 24 reward consumer integration tests (17 protobuf contract + 7 Kafka roundtrip) validating M2→M4b data path. 95 tests pass. |
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/percentile-metric-type | PERCENTILE metric type | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/chaos-testing-m4a-m4b | Chaos testing (4.5) | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93). Kafka reward consumer merged. Chaos testing: chaos_test_analysis.sh + chaos_test_policy.sh + 4 crash recovery integration tests (multi-experiment, offset verification, high-volume, recovery timing). 34 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
@@ -132,6 +132,7 @@ Track integration test results between agent pairs.
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | 🔵 | 33 contract tests verify M3 SQL output columns match Delta Lake schemas M4a reads. Covers all 4 output tables + ratio delta method variance components. |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟢 | M3 Kafka publisher (PR #64) + M5 consumer (PR #18). 3 schema contract tests (field symmetry, bidirectional deser, zero-value). Kafka roundtrip integration test. Agent-2 guardrail E2E harness (`test_guardrail_e2e.sh`, PR #78) validates topic publish/consume. |
+| 5 | Agent-2 ↔ Agent-4 (reward events: pipeline → bandit policy) | 🟢 | PR #99: 24 integration tests — 17 protobuf contract (encode/decode parity, context_json parsing, key contract) + 7 Kafka roundtrip (headers, partition determinism, consumer group offsets, ordering). |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🔵 | M1 GrpcBanditClient with 10ms timeout + uniform fallback. M4b SelectArm gRPC wired through LMAX core. 3 mock gRPC integration tests pass. Ready for live pairing (set M4B_ADDR env var). |
 | 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🔵 | M4a GetInterferenceAnalysis gRPC available. Agent-6 can now render interference panel from real responses. |
 
