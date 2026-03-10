@@ -26,6 +26,7 @@ import (
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
 	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
+	"github.com/org/experimentation-platform/services/management/internal/surrogate"
 )
 
 type testEnv struct {
@@ -75,6 +76,40 @@ func setupTestServerWithAuth(t *testing.T, email, role string) (testEnv, func())
 	client := managementv1connect.NewExperimentManagementServiceClient(
 		http.DefaultClient, server.URL,
 		withAuth(email, role),
+	)
+
+	return testEnv{client: client, pool: pool}, func() {
+		server.Close()
+		pool.Close()
+	}
+}
+
+// setupTestServerWithOpts creates a test server with custom ServiceOptions (e.g., injecting a MemPublisher).
+func setupTestServerWithOpts(t *testing.T, opts ...handlers.ServiceOption) (testEnv, func()) {
+	t.Helper()
+
+	ctx := context.Background()
+	pool, err := store.NewPool(ctx)
+	require.NoError(t, err)
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	ls := store.NewLayerStore(pool)
+	ms := store.NewMetricStore(pool)
+	ts := store.NewTargetingStore(pool)
+	ss := store.NewSurrogateStore(pool)
+	svc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, nil, opts...)
+
+	mux := http.NewServeMux()
+	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc,
+		connect.WithInterceptors(auth.NewAuthInterceptor()),
+	)
+	mux.Handle(path, handler)
+
+	server := httptest.NewServer(mux)
+	client := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, server.URL,
+		withAuth("test@example.com", "admin"),
 	)
 
 	return testEnv{client: client, pool: pool}, func() {
@@ -1010,6 +1045,39 @@ func TestTriggerSurrogateRecalibration(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+func TestTriggerSurrogateRecalibration_PublishesEvent(t *testing.T) {
+	memPub := surrogate.NewMemPublisher()
+	env, cleanup := setupTestServerWithOpts(t, handlers.WithSurrogatePublisher(memPub))
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	// Create a model first.
+	created, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+		Model: newSurrogateModel(),
+	}))
+	require.NoError(t, err)
+	modelID := created.Msg.ModelId
+
+	// Trigger recalibration → should publish to MemPublisher.
+	_, err = client.TriggerSurrogateRecalibration(ctx, connect.NewRequest(&mgmtv1.TriggerSurrogateRecalibrationRequest{
+		ModelId: modelID,
+	}))
+	require.NoError(t, err)
+
+	// Verify published request.
+	reqs := memPub.Requests()
+	require.Len(t, reqs, 1)
+	assert.Equal(t, modelID, reqs[0].ModelID)
+	assert.Equal(t, "90_day_churn_rate", reqs[0].TargetMetricID)
+	assert.Equal(t, []string{"7d_watch_time", "7d_session_freq"}, reqs[0].InputMetricIDs)
+	assert.Equal(t, "LINEAR", reqs[0].ModelType)
+	assert.Equal(t, int32(7), reqs[0].ObservationWindowDays)
+	assert.Equal(t, int32(90), reqs[0].PredictionHorizonDays)
+	assert.Equal(t, "test@example.com", reqs[0].RequestedBy)
+	assert.NotEmpty(t, reqs[0].RequestedAt)
 }
 
 func TestCreateSurrogateModel_Validation(t *testing.T) {
