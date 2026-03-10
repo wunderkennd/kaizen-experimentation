@@ -94,6 +94,29 @@
       ]
     },
     {
+      "experiment_id": "e0000000-0000-0000-0000-000000000006",
+      "name": "latency_percentile_test",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-01-20",
+      "primary_metric_id": "latency_p50_ms",
+      "secondary_metric_ids": [],
+      "variants": [
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000011",
+          "name": "control",
+          "traffic_fraction": 0.5,
+          "is_control": true
+        },
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000012",
+          "name": "treatment",
+          "traffic_fraction": 0.5,
+          "is_control": false
+        }
+      ]
+    },
+    {
       "experiment_id": "e0000000-0000-0000-0000-000000000004",
       "name": "playback_qoe_test",
       "type": "AB",
@@ -180,7 +203,9 @@
       "metric_id": "latency_p50_ms",
       "name": "Playback Start Latency p50",
       "type": "PERCENTILE",
-      "source_event_type": "playback_start"
+      "source_event_type": "playback_start",
+      "percentile": 0.50,
+      "lower_is_better": true
     },
     {
       "metric_id": "error_rate",
