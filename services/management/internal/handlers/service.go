@@ -9,6 +9,7 @@ import (
 
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
+	"github.com/org/experimentation-platform/services/management/internal/surrogate"
 )
 
 // Compile-time check that ExperimentService implements the handler interface.
@@ -25,8 +26,9 @@ type ExperimentService struct {
 	notifier   *streaming.Notifier
 
 	// Optional external service clients (nil = graceful degradation).
-	analysisClient analysisv1connect.AnalysisServiceClient
-	banditClient   banditv1connect.BanditPolicyServiceClient
+	analysisClient     analysisv1connect.AnalysisServiceClient
+	banditClient       banditv1connect.BanditPolicyServiceClient
+	surrogatePublisher surrogate.Publisher
 }
 
 // ServiceOption configures optional dependencies on ExperimentService.
@@ -40,6 +42,11 @@ func WithAnalysisClient(c analysisv1connect.AnalysisServiceClient) ServiceOption
 // WithBanditClient sets the M4b bandit policy service client.
 func WithBanditClient(c banditv1connect.BanditPolicyServiceClient) ServiceOption {
 	return func(s *ExperimentService) { s.banditClient = c }
+}
+
+// WithSurrogatePublisher sets the Kafka publisher for surrogate recalibration requests.
+func WithSurrogatePublisher(p surrogate.Publisher) ServiceOption {
+	return func(s *ExperimentService) { s.surrogatePublisher = p }
 }
 
 // NewExperimentService creates a new handler with the given stores and notifier.

@@ -76,12 +76,27 @@ kafka-topics.sh --create --topic guardrail_alerts \
   --config max.message.bytes=1048576 \
   --config min.insync.replicas=2
 
+# --- surrogate_recalibration_requests ---
+# Source: M5 Management Service (Go, on TriggerSurrogateRecalibration RPC)
+# Consumers: M3 Metric Engine (Go, triggers surrogate model recalibration)
+# Key: model_id (colocates all requests for one model on same partition)
+# Volume estimate: ~1 event/day (rare; manual or scheduled trigger)
+kafka-topics.sh --create --topic surrogate_recalibration_requests \
+  --partitions 4 \
+  --replication-factor 3 \
+  --config retention.ms=2592000000 \       # 30 days
+  --config cleanup.policy=delete \
+  --config segment.bytes=268435456 \       # 256 MB segments
+  --config max.message.bytes=1048576 \     # 1 MB max message
+  --config min.insync.replicas=2
+
 # ============================================================================
 # Consumer Groups
 # ============================================================================
 # metric-engine-spark       : M3 reads exposures, metric_events, qoe_events (batch)
 # bandit-policy-service     : M4b reads reward_events (real-time, committed offsets for crash recovery)
 # management-guardrail      : M5 reads guardrail_alerts (real-time, auto-pause trigger)
+# metric-engine-surrogate   : M3 reads surrogate_recalibration_requests (on-demand recalibration)
 # delta-lake-sink           : Kafka Connect writes all topics to Delta Lake
 
 # ============================================================================
@@ -95,3 +110,4 @@ kafka-topics.sh --create --topic guardrail_alerts \
 #   reward_events     -> experimentation.common.v1.RewardEvent
 #   qoe_events        -> experimentation.common.v1.QoEEvent
 #   guardrail_alerts  -> experimentation.common.v1.GuardrailAlert
+#   surrogate_recalibration_requests -> JSON (surrogate.RecalibrationRequest)
