@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-2 (Reward consumer integration tests M2→M4b contract — PR #99)
+> **Last updated**: 2026-03-09 by Agent-3 (Go benchmarks for all M3 hot paths — PR #101)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -15,7 +15,7 @@
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/live-bandit-delegation | Live M4b bandit delegation | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation: GrpcBanditClient with 10ms timeout, uniform random fallback, context feature extraction. 57 tests (54 integration + 3 gRPC mock). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward consumer integration tests (M2→M4b) | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85). PR #99: 24 reward consumer integration tests (17 protobuf contract + 7 Kafka roundtrip) validating M2→M4b data path. 95 tests pass. |
-| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/percentile-metric-type | PERCENTILE metric type | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). |
+| Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/perf/go-benchmarks | Go benchmarks (Phase 4 load testing) | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77, #98). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). SQL template validation (PR #95). Go benchmarks: 51 benchmarks across 4 packages (PR #101). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/chaos-testing-m4a-m4b | Chaos testing (4.5) | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93). Kafka reward consumer merged. Chaos testing: chaos_test_analysis.sh + chaos_test_policy.sh + 4 crash recovery integration tests (multi-experiment, offset verification, high-volume, recovery timing). 34 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/qoe-novelty-curve | Phase 4 experiment list UX | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search, filter, sort + results link fix (PR #90). 195 tests pass. |

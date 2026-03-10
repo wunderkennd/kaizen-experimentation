@@ -68,6 +68,13 @@ func (w *MemProjectionWriter) Write(_ context.Context, record ProjectionRecord) 
 	return nil
 }
 
+// Reset clears all stored records (for benchmarks).
+func (w *MemProjectionWriter) Reset() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Records = w.Records[:0]
+}
+
 func (w *MemProjectionWriter) AllRecords() []ProjectionRecord {
 	w.mu.Lock()
 	defer w.mu.Unlock()
