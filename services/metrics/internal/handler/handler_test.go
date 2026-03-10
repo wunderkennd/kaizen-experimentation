@@ -51,7 +51,7 @@ func setupTestServer(t *testing.T) (metricsv1connect.MetricComputationServiceCli
 	projWriter := surrogate.NewMemProjectionWriter()
 	sj := jobs.NewSurrogateJob(cfgStore, renderer, surrInputProvider, qlWriter, modelLoader, projWriter)
 	ilj := jobs.NewInterleavingJob(cfgStore, renderer, executor, qlWriter)
-	h := NewMetricsHandler(stdJob, gj, ccj, sj, ilj, qlWriter)
+	h := NewMetricsHandler(stdJob, gj, ccj, sj, ilj, nil, qlWriter)
 	mux := http.NewServeMux()
 	path, handler := metricsv1connect.NewMetricComputationServiceHandler(h)
 	mux.Handle(path, handler)

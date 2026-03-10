@@ -2,6 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import NewExperimentPage from '@/app/experiments/new/page';
+import { AuthProvider } from '@/lib/auth-context';
+import type { AuthUser } from '@/lib/auth-context';
+
+const experimenterUser: AuthUser = { email: 'test@streamco.com', role: 'experimenter' };
+
+function renderNewPage(user: AuthUser = experimenterUser) {
+  return render(
+    <AuthProvider initialUser={user}>
+      <NewExperimentPage />
+    </AuthProvider>,
+  );
+}
 
 const mockPush = vi.fn();
 
@@ -18,7 +30,7 @@ vi.mock('next/link', () => ({
 
 describe('New Experiment Page', () => {
   it('renders the create experiment form', () => {
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     expect(screen.getByRole('heading', { name: 'Create Experiment' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Name/)).toBeInTheDocument();
@@ -29,14 +41,14 @@ describe('New Experiment Page', () => {
   });
 
   it('shows breadcrumb with link to experiments list', () => {
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     const experimentsLink = screen.getByText('Experiments');
     expect(experimentsLink.closest('a')).toHaveAttribute('href', '/');
   });
 
   it('renders default two variants (control + treatment)', () => {
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     // Default variants: control and treatment
     const nameInputs = screen.getAllByLabelText(/Variant \d+ name/);
@@ -45,7 +57,7 @@ describe('New Experiment Page', () => {
 
   it('shows validation error when submitting empty form', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     const submitBtn = screen.getByRole('button', { name: 'Create Experiment' });
     await user.click(submitBtn);
@@ -55,7 +67,7 @@ describe('New Experiment Page', () => {
 
   it('shows validation error for missing owner email', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     await user.type(screen.getByLabelText(/Name/), 'test_experiment');
     await user.click(screen.getByRole('button', { name: 'Create Experiment' }));
@@ -65,7 +77,7 @@ describe('New Experiment Page', () => {
 
   it('shows validation error for missing layer ID', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     await user.type(screen.getByLabelText(/Name/), 'test_experiment');
     await user.type(screen.getByLabelText(/Owner Email/), 'test@streamco.com');
@@ -76,7 +88,7 @@ describe('New Experiment Page', () => {
 
   it('successfully creates experiment and navigates to detail page', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     // Fill required fields
     await user.type(screen.getByLabelText(/Name/), 'my_new_experiment');
@@ -96,7 +108,7 @@ describe('New Experiment Page', () => {
 
   it('can change experiment type', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     const typeSelect = screen.getByLabelText(/Experiment Type/);
     await user.selectOptions(typeSelect, 'INTERLEAVING');
@@ -106,7 +118,7 @@ describe('New Experiment Page', () => {
 
   it('can add and remove variants', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     // Start with 2 variants
     expect(screen.getAllByLabelText(/Variant \d+ name/)).toHaveLength(2);
@@ -123,7 +135,7 @@ describe('New Experiment Page', () => {
 
   it('can add and remove guardrails', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     // Initially no guardrails
     expect(screen.getByText(/No guardrails configured/)).toBeInTheDocument();
@@ -142,7 +154,7 @@ describe('New Experiment Page', () => {
 
   it('can toggle sequential testing options', async () => {
     const user = userEvent.setup();
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     // Sequential testing is off by default
     expect(screen.queryByLabelText(/Method/)).not.toBeInTheDocument();
@@ -155,7 +167,7 @@ describe('New Experiment Page', () => {
   });
 
   it('shows traffic sum indicator', () => {
-    render(<NewExperimentPage />);
+    renderNewPage();
 
     // Default: 50% + 50% = 100.0%
     expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();
