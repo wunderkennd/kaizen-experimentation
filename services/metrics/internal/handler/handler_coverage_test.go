@@ -90,7 +90,7 @@ func TestComputeMetrics_ContentConsumptionFailure(t *testing.T) {
 	stdJob := jobs.NewStandardJob(cfg, renderer, workingExec, qlWriter)
 	// Content consumption will fail immediately.
 	ccj := jobs.NewContentConsumptionJob(cfg, renderer, failExec, qlWriter)
-	h := NewMetricsHandler(stdJob, nil, ccj, nil, nil, qlWriter)
+	h := NewMetricsHandler(stdJob, nil, ccj, nil, nil, nil, qlWriter)
 
 	_, err := h.ComputeMetrics(context.Background(), connect.NewRequest(
 		&metricsv1.ComputeMetricsRequest{ExperimentId: "e0000000-0000-0000-0000-000000000001"}))
@@ -109,7 +109,7 @@ func TestComputeMetrics_SurrogateJobFailure(t *testing.T) {
 	// Surrogate job with a failing input provider.
 	sj := jobs.NewSurrogateJob(cfg, renderer, &failingInputProvider{},
 		qlWriter, surrogate.NewMockModelLoader(), surrogate.NewMemProjectionWriter())
-	h := NewMetricsHandler(stdJob, nil, ccj, sj, nil, qlWriter)
+	h := NewMetricsHandler(stdJob, nil, ccj, sj, nil, nil, qlWriter)
 
 	// e1 has a surrogate model → surrogate job attempts to fetch → fails.
 	_, err := h.ComputeMetrics(context.Background(), connect.NewRequest(
@@ -128,7 +128,7 @@ func TestComputeMetrics_InterleavingJobFailure(t *testing.T) {
 	stdJob := jobs.NewStandardJob(cfg, renderer, workingExec, qlWriter)
 	// Interleaving job will fail when executing SQL.
 	ilj := jobs.NewInterleavingJob(cfg, renderer, failExec, qlWriter)
-	h := NewMetricsHandler(stdJob, nil, nil, nil, ilj, qlWriter)
+	h := NewMetricsHandler(stdJob, nil, nil, nil, ilj, nil, qlWriter)
 
 	// e3 is INTERLEAVING type → interleaving job attempts to execute → fails.
 	_, err := h.ComputeMetrics(context.Background(), connect.NewRequest(
@@ -156,7 +156,7 @@ func TestComputeMetrics_NilSubJobs(t *testing.T) {
 	vp.SetVariantValue("error_rate", tv, 0.008)
 	gj := jobs.NewGuardrailJob(cfg, renderer, executor, qlWriter, publisher, tracker, vp)
 	// All sub-jobs nil.
-	h := NewMetricsHandler(stdJob, gj, nil, nil, nil, qlWriter)
+	h := NewMetricsHandler(stdJob, gj, nil, nil, nil, nil, qlWriter)
 
 	// ComputeMetrics should succeed without content consumption, surrogate, or interleaving.
 	resp, err := h.ComputeMetrics(context.Background(), connect.NewRequest(
