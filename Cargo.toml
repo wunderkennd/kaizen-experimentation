@@ -71,6 +71,7 @@ uniffi = "0.28"
 # Python
 pyo3 = { version = "0.22", features = ["extension-module"] }
 # Testing
+tempfile = "3"
 assert_approx_eq = "1.1"
 mockall = "0.13"
 tokio-test = "0.4"
@@ -85,7 +86,7 @@ tokio-stream = "0.1"
 # Async utilities (CancellationToken, backoff)
 tokio-util = "0.7"
 # Time
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = ">=0.4, <0.4.40", features = ["serde"] }
 # UUID
 uuid = { version = "1.10", features = ["v4", "serde"] }
 
