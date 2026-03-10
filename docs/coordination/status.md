@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-5 (Chaos test script for management service — PR #96)
+> **Last updated**: 2026-03-09 by Agent-4 (Chaos testing for M4a/M4b — chaos scripts + crash recovery integration tests)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -16,7 +16,7 @@
 | Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/live-bandit-delegation | Live M4b bandit delegation | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation: GrpcBanditClient with 10ms timeout, uniform random fallback, context feature extraction. 57 tests (54 integration + 3 gRPC mock). |
 | Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward e2e harness + proto field fix | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78). PR #85: health check, W3C traceparent, core telemetry, tonic-web, reward/QoE/session e2e harnesses, synthetic generator proto field name fix. 78 tests pass. |
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/feat/percentile-metric-type | PERCENTILE metric type | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 3 In Progress | agent-4/feat/kafka-reward-consumer | M4b Kafka reward consumer | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4b gRPC wiring merged (PR #72). Kafka reward consumer: rdkafka StreamConsumer, protobuf decode, assert_finite, batch commits, 30 tests pass. |
+| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/chaos-testing-m4a-m4b | Chaos testing (4.5) | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93). Kafka reward consumer merged. Chaos testing: chaos_test_analysis.sh + chaos_test_policy.sh + 4 crash recovery integration tests (multi-experiment, offset verification, high-volume, recovery timing). 34 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/qoe-novelty-curve | Phase 4 experiment list UX | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search, filter, sort + results link fix (PR #90). 195 tests pass. |
 | Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/rbac-integration | Phase 4.4: RBAC integration | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor with role-based permissions — viewer (Get/List/Evaluate), experimenter (Create/Update), admin (Promote). 15 auth tests. DISABLE_AUTH env guard. |
@@ -118,7 +118,7 @@
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | 🟢 | Agent-6 (interference panel from gRPC), M4a service pattern established | PR #93. M4a service scaffolded with GetInterferenceAnalysis RPC wired through Delta Lake → experimentation-stats. 13 tests. |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | 🟢 | Agent-6 (role-aware UI controls) | PR #71 merged — ConnectRPC auth interceptor, 4-level role hierarchy, audit trail records real actor |
-| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78). Agent-3: 20 resilience tests (PR #69). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. Other agents: add `scripts/chaos_test_<service>.sh` to plug into framework. |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78). Agent-3: 20 resilience tests (PR #69). Agent-4: chaos_test_analysis.sh (M4a, 6 RPC verification tests) + chaos_test_policy.sh (M4b, cold-start + RocksDB state recovery) + 4 Rust crash recovery integration tests (multi-experiment concurrent restore, Kafka offset verification, high-volume 2200+ rewards, recovery timing <10s SLA). Agent-5: chaos_test_management.sh (PR #96). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. |
 
 ## Pair Integration Schedule
 
