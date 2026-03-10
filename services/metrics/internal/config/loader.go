@@ -65,6 +65,7 @@ type MetricConfig struct {
 	LowerIsBetter        bool   `json:"lower_is_better,omitempty"`
 	IsQoEMetric          bool   `json:"is_qoe_metric,omitempty"`
 	QoEField             string `json:"qoe_field,omitempty"`
+	CustomSQL            string `json:"custom_sql,omitempty"`
 }
 
 type seedFile struct {
