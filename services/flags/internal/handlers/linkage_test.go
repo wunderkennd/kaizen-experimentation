@@ -74,7 +74,7 @@ func setupTestWithLinkage(t *testing.T) (flagsv1connect.FeatureFlagServiceClient
 
 	mockStore := store.NewMockStore()
 	auditStore := store.NewMockAuditStore(mockStore)
-	svc := NewFlagServiceFull(mockStore, auditStore, mgmtClient)
+	svc := NewFlagServiceFull(mockStore, auditStore, mgmtClient, "default")
 
 	mux := http.NewServeMux()
 	path, handler := flagsv1connect.NewFeatureFlagServiceHandler(svc)
