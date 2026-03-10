@@ -18,6 +18,17 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// Mock next/dynamic to eagerly resolve dynamic imports in tests
+vi.mock('next/dynamic', () => ({
+  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) => {
+    let Comp: React.ComponentType<unknown> | null = null;
+    loader().then((mod) => { Comp = mod.default; });
+    return function DynamicMock(props: Record<string, unknown>) {
+      return Comp ? <Comp {...props} /> : null;
+    };
+  },
+}));
+
 describe('SQL Page', () => {
   beforeEach(() => {
     mockExperimentId = '11111111-1111-1111-1111-111111111111';

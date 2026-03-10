@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -19,7 +19,7 @@ const METHOD_LABELS: Record<string, string> = {
   GST_POCOCK: 'Pocock',
 };
 
-export function GstTrajectoryChart({ experimentId, metricId }: GstTrajectoryChartProps) {
+function GstTrajectoryChartInner({ experimentId, metricId }: GstTrajectoryChartProps) {
   const [result, setResult] = useState<GstTrajectoryResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,3 +124,5 @@ export function GstTrajectoryChart({ experimentId, metricId }: GstTrajectoryChar
     </div>
   );
 }
+
+export const GstTrajectoryChart = memo(GstTrajectoryChartInner);

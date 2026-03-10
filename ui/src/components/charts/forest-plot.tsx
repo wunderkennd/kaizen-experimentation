@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import {
   ComposedChart,
   Scatter,
@@ -18,7 +19,7 @@ interface ForestPlotProps {
   showCuped: boolean;
 }
 
-export function ForestPlot({ metricResults, showCuped }: ForestPlotProps) {
+function ForestPlotInner({ metricResults, showCuped }: ForestPlotProps) {
   const data = metricResults.map((m) => {
     const useCuped = showCuped && m.varianceReductionPct > 0;
     const effect = useCuped ? m.cupedAdjustedEffect : m.absoluteEffect;
@@ -71,3 +72,5 @@ export function ForestPlot({ metricResults, showCuped }: ForestPlotProps) {
     </section>
   );
 }
+
+export const ForestPlot = memo(ForestPlotInner);

@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { QueryLogEntry } from '@/lib/types';
+import type { ExportPhase } from '@/lib/export-notebook';
+
+const SqlHighlighter = dynamic(
+  () => import('@/components/sql-highlighter').then(m => ({ default: m.SqlHighlighter })),
+  { ssr: false, loading: () => <pre className="animate-pulse mt-2 rounded bg-gray-50 p-3 font-mono text-xs">Loading...</pre> },
+);
 
 function formatDuration(ms: number): string {
   if (ms >= 1000) {
@@ -24,13 +31,20 @@ function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
+const EXPORT_PHASE_LABELS: Record<ExportPhase, string> = {
+  fetching: 'Fetching data…',
+  decoding: 'Processing…',
+  downloading: 'Exporting…',
+};
+
 interface QueryLogTableProps {
   entries: QueryLogEntry[];
   onExport: () => void;
   exporting: boolean;
+  exportPhase?: ExportPhase | null;
 }
 
-export function QueryLogTable({ entries, onExport, exporting }: QueryLogTableProps) {
+export function QueryLogTable({ entries, onExport, exporting, exportPhase }: QueryLogTableProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   return (
@@ -42,7 +56,7 @@ export function QueryLogTable({ entries, onExport, exporting }: QueryLogTablePro
           disabled={exporting}
           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
-          {exporting ? 'Exporting…' : 'Export Notebook'}
+          {exporting ? (exportPhase ? EXPORT_PHASE_LABELS[exportPhase] : 'Exporting…') : 'Export Notebook'}
         </button>
       </div>
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
@@ -82,9 +96,7 @@ export function QueryLogTable({ entries, onExport, exporting }: QueryLogTablePro
                     {entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}
                   </button>
                   {expandedIndex === i && (
-                    <pre className="mt-2 overflow-x-auto rounded bg-gray-50 p-3 font-mono text-xs text-gray-800">
-                      {entry.sqlText}
-                    </pre>
+                    <SqlHighlighter sql={entry.sqlText} />
                   )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">

@@ -3,23 +3,59 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
 import { getExperiment, getAnalysisResult } from '@/lib/api';
 import { SrmBanner } from '@/components/srm-banner';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
-import { ForestPlot } from '@/components/charts/forest-plot';
-import { SequentialBoundaryPlot } from '@/components/charts/sequential-boundary-plot';
-import { GstTrajectoryChart } from '@/components/charts/gst-trajectory-chart';
-import { NoveltyTab } from '@/components/novelty-tab';
-import { InterferenceTab } from '@/components/interference-tab';
-import { InterleavingTab } from '@/components/interleaving-tab';
-import { SurrogateTab } from '@/components/surrogate-tab';
-import { HoldoutTab } from '@/components/holdout-tab';
-import { GuardrailTab } from '@/components/guardrail-tab';
-import { QoeTab } from '@/components/qoe-tab';
-import { CateTab } from '@/components/cate-tab';
+
+// Dynamic imports — recharts + tab components only load when their tab is active
+const ForestPlot = dynamic(
+  () => import('@/components/charts/forest-plot').then(m => ({ default: m.ForestPlot })),
+  { ssr: false },
+);
+const SequentialBoundaryPlot = dynamic(
+  () => import('@/components/charts/sequential-boundary-plot').then(m => ({ default: m.SequentialBoundaryPlot })),
+  { ssr: false },
+);
+const GstTrajectoryChart = dynamic(
+  () => import('@/components/charts/gst-trajectory-chart').then(m => ({ default: m.GstTrajectoryChart })),
+  { ssr: false },
+);
+const NoveltyTab = dynamic(
+  () => import('@/components/novelty-tab').then(m => ({ default: m.NoveltyTab })),
+  { ssr: false },
+);
+const InterferenceTab = dynamic(
+  () => import('@/components/interference-tab').then(m => ({ default: m.InterferenceTab })),
+  { ssr: false },
+);
+const InterleavingTab = dynamic(
+  () => import('@/components/interleaving-tab').then(m => ({ default: m.InterleavingTab })),
+  { ssr: false },
+);
+const SurrogateTab = dynamic(
+  () => import('@/components/surrogate-tab').then(m => ({ default: m.SurrogateTab })),
+  { ssr: false },
+);
+const HoldoutTab = dynamic(
+  () => import('@/components/holdout-tab').then(m => ({ default: m.HoldoutTab })),
+  { ssr: false },
+);
+const GuardrailTab = dynamic(
+  () => import('@/components/guardrail-tab').then(m => ({ default: m.GuardrailTab })),
+  { ssr: false },
+);
+const QoeTab = dynamic(
+  () => import('@/components/qoe-tab').then(m => ({ default: m.QoeTab })),
+  { ssr: false },
+);
+const CateTab = dynamic(
+  () => import('@/components/cate-tab').then(m => ({ default: m.CateTab })),
+  { ssr: false },
+);
 
 type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle';
 

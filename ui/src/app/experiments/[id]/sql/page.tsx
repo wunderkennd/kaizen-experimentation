@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { QueryLogEntry } from '@/lib/types';
-import { getQueryLog, exportNotebook } from '@/lib/api';
+import { getQueryLog } from '@/lib/api';
+import { downloadNotebook, type ExportPhase } from '@/lib/export-notebook';
 import { QueryLogTable } from '@/components/query-log-table';
 
 export default function SqlPage() {
@@ -13,6 +14,7 @@ export default function SqlPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<ExportPhase | null>(null);
 
   useEffect(() => {
     if (!params.id) return;
@@ -26,19 +28,20 @@ export default function SqlPage() {
   const handleExport = useCallback(async () => {
     if (!params.id) return;
     setExporting(true);
+    setExportPhase(null);
     try {
-      const result = await exportNotebook(params.id);
-      const blob = new Blob([atob(result.content)], { type: 'application/x-ipynb+json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = result.filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setError('Failed to export notebook');
+      await downloadNotebook(params.id, {
+        onProgress: (phase) => setExportPhase(phase),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Export timed out — notebook may be too large');
+      } else {
+        setError('Failed to export notebook');
+      }
     } finally {
       setExporting(false);
+      setExportPhase(null);
     }
   }, [params.id]);
 
@@ -85,7 +88,7 @@ export default function SqlPage() {
           <p className="text-sm text-gray-500">No query log entries found for this experiment.</p>
         </div>
       ) : (
-        <QueryLogTable entries={entries} onExport={handleExport} exporting={exporting} />
+        <QueryLogTable entries={entries} onExport={handleExport} exporting={exporting} exportPhase={exportPhase} />
       )}
     </div>
   );

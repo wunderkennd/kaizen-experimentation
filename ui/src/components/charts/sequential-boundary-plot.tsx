@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import {
   BarChart,
   Bar,
@@ -18,7 +19,7 @@ interface SequentialBoundaryPlotProps {
   overallAlpha: number;
 }
 
-export function SequentialBoundaryPlot({ metricResults, overallAlpha }: SequentialBoundaryPlotProps) {
+function SequentialBoundaryPlotInner({ metricResults, overallAlpha }: SequentialBoundaryPlotProps) {
   const sequentialMetrics = metricResults.filter((m) => m.sequentialResult);
 
   if (sequentialMetrics.length === 0) return null;
@@ -74,3 +75,5 @@ export function SequentialBoundaryPlot({ metricResults, overallAlpha }: Sequenti
     </section>
   );
 }
+
+export const SequentialBoundaryPlot = memo(SequentialBoundaryPlotInner);
