@@ -73,7 +73,7 @@ func (s *FlagService) handleGetStaleFlags(w http.ResponseWriter, r *http.Request
 		Suggestion        string  `json:"suggestion"`
 	}
 
-	var resp []staleFlagResponse
+	resp := make([]staleFlagResponse, 0, len(staleFlags))
 	for _, sf := range staleFlags {
 		daysSinceUpdate := int(sf.StaleDuration.Hours() / 24)
 		resp = append(resp, staleFlagResponse{
@@ -83,10 +83,22 @@ func (s *FlagService) handleGetStaleFlags(w http.ResponseWriter, r *http.Request
 			Type:              sf.Type,
 			RolloutPercentage: sf.RolloutPercentage,
 			DaysSinceUpdate:   daysSinceUpdate,
-			Suggestion:        fmt.Sprintf("Flag '%s' has been at 100%% rollout for %d days. Consider removing the flag and making the behavior permanent.", sf.Name, daysSinceUpdate),
+			Suggestion:        staleSuggestion(sf.Name, daysSinceUpdate),
 		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// staleSuggestion returns a tiered suggestion based on how long the flag has been stale.
+func staleSuggestion(name string, days int) string {
+	switch {
+	case days >= 365:
+		return fmt.Sprintf("Critical: flag '%s' appears abandoned (%d days unchanged) — remove to reduce technical debt.", name, days)
+	case days >= 180:
+		return fmt.Sprintf("Strongly recommend removing flag '%s' — flag has been unchanged for %d days.", name, days)
+	default:
+		return fmt.Sprintf("Flag '%s' has been at 100%% rollout for %d days. Consider removing the flag and making the behavior permanent.", name, days)
+	}
 }

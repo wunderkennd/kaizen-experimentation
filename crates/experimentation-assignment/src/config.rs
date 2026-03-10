@@ -105,6 +105,12 @@ pub struct BanditConfig {
     /// Uniform-random observations before policy activates. Default 1000.
     #[serde(default = "default_warmup_observations")]
     pub warmup_observations: i32,
+    /// Content ID for cold-start bandit experiments.
+    #[serde(default)]
+    pub content_id: Option<String>,
+    /// Cold-start exploration window in days.
+    #[serde(default)]
+    pub cold_start_window_days: Option<i32>,
 }
 
 fn default_min_exploration() -> f64 {

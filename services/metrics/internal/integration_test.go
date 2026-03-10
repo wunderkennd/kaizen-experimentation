@@ -120,7 +120,7 @@ func setupIntegration(t *testing.T) testEnv {
 	sj := jobs.NewSurrogateJob(cfgStore, renderer, surrInputProvider, pgWriter, modelLoader, projWriter)
 	ilj := jobs.NewInterleavingJob(cfgStore, renderer, executor, pgWriter)
 
-	h := handler.NewMetricsHandler(stdJob, gj, ccj, sj, ilj, pgWriter)
+	h := handler.NewMetricsHandler(stdJob, gj, ccj, sj, ilj, nil, pgWriter)
 	mux := http.NewServeMux()
 	path, svcHandler := metricsv1connect.NewMetricComputationServiceHandler(h)
 	mux.Handle(path, svcHandler)

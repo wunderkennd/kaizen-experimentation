@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/alerts"
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
@@ -312,6 +313,70 @@ func BenchmarkSurrogateJob_Run_NoModel(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// e3 has no surrogate model
+		_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000003")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// --- RecalibrationJob benchmarks ---
+
+// BenchmarkRecalibrationJob_Run benchmarks recalibration with pre-loaded
+// projections and actual values.
+func BenchmarkRecalibrationJob_Run(b *testing.B) {
+	cfg := loadBenchConfig(b)
+	renderer := newBenchRenderer(b)
+	qlWriter := querylog.NewMemWriter()
+
+	actuals := surrogate.InputMetrics{
+		"f0000000-0000-0000-0000-000000000001": {"churn_7d": 0.15},
+		"f0000000-0000-0000-0000-000000000002": {"churn_7d": 0.035},
+		"f0000000-0000-0000-0000-extra-variant": {"churn_7d": 0.08},
+	}
+	inputProvider := &MockInputMetricsProvider{Inputs: actuals}
+	projWriter := surrogate.NewMemProjectionWriter()
+	calibUpdater := surrogate.NewMemCalibrationUpdater()
+
+	// Pre-load projections.
+	ctx := context.Background()
+	projections := []surrogate.ProjectionRecord{
+		{ExperimentID: "e0000000-0000-0000-0000-000000000001", VariantID: "f0000000-0000-0000-0000-000000000002", ModelID: "sm-churn-predictor-001", ProjectedEffect: -0.1175, ComputedAt: time.Now()},
+		{ExperimentID: "e0000000-0000-0000-0000-000000000001", VariantID: "f0000000-0000-0000-0000-extra-variant", ModelID: "sm-churn-predictor-001", ProjectedEffect: -0.07, ComputedAt: time.Now()},
+	}
+	for _, p := range projections {
+		_ = projWriter.Write(ctx, p)
+	}
+
+	job := NewRecalibrationJob(cfg, renderer, inputProvider, qlWriter, projWriter, calibUpdater)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		qlWriter.Reset()
+		calibUpdater.Reset()
+		_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkRecalibrationJob_Run_NoModel benchmarks early exit when experiment
+// has no surrogate model.
+func BenchmarkRecalibrationJob_Run_NoModel(b *testing.B) {
+	cfg := loadBenchConfig(b)
+	renderer := newBenchRenderer(b)
+	qlWriter := querylog.NewMemWriter()
+	inputProvider := &MockInputMetricsProvider{}
+	projWriter := surrogate.NewMemProjectionWriter()
+	calibUpdater := surrogate.NewMemCalibrationUpdater()
+
+	job := NewRecalibrationJob(cfg, renderer, inputProvider, qlWriter, projWriter, calibUpdater)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// e3 has no surrogate model → fast exit.
 		_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000003")
 		if err != nil {
 			b.Fatal(err)

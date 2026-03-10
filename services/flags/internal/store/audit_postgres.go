@@ -65,6 +65,7 @@ func (s *PostgresAuditStore) GetStaleFlags(ctx context.Context, staleThreshold t
 		 FROM feature_flags
 		 WHERE enabled = TRUE
 		   AND rollout_percentage >= 1.0
+		   AND promoted_experiment_id IS NULL
 		   AND updated_at < NOW() - $1::interval
 		 ORDER BY updated_at ASC`, staleThreshold.String(),
 	)

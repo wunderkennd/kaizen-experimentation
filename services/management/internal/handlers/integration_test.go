@@ -26,6 +26,7 @@ import (
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
 	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
+	"github.com/org/experimentation-platform/services/management/internal/surrogate"
 )
 
 type testEnv struct {
@@ -75,6 +76,40 @@ func setupTestServerWithAuth(t *testing.T, email, role string) (testEnv, func())
 	client := managementv1connect.NewExperimentManagementServiceClient(
 		http.DefaultClient, server.URL,
 		withAuth(email, role),
+	)
+
+	return testEnv{client: client, pool: pool}, func() {
+		server.Close()
+		pool.Close()
+	}
+}
+
+// setupTestServerWithOpts creates a test server with custom ServiceOptions (e.g., injecting a MemPublisher).
+func setupTestServerWithOpts(t *testing.T, opts ...handlers.ServiceOption) (testEnv, func()) {
+	t.Helper()
+
+	ctx := context.Background()
+	pool, err := store.NewPool(ctx)
+	require.NoError(t, err)
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	ls := store.NewLayerStore(pool)
+	ms := store.NewMetricStore(pool)
+	ts := store.NewTargetingStore(pool)
+	ss := store.NewSurrogateStore(pool)
+	svc := handlers.NewExperimentService(es, as, ls, ms, ts, ss, nil, opts...)
+
+	mux := http.NewServeMux()
+	path, handler := managementv1connect.NewExperimentManagementServiceHandler(svc,
+		connect.WithInterceptors(auth.NewAuthInterceptor()),
+	)
+	mux.Handle(path, handler)
+
+	server := httptest.NewServer(mux)
+	client := managementv1connect.NewExperimentManagementServiceClient(
+		http.DefaultClient, server.URL,
+		withAuth("test@example.com", "admin"),
 	)
 
 	return testEnv{client: client, pool: pool}, func() {
@@ -1012,6 +1047,39 @@ func TestTriggerSurrogateRecalibration(t *testing.T) {
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
+func TestTriggerSurrogateRecalibration_PublishesEvent(t *testing.T) {
+	memPub := surrogate.NewMemPublisher()
+	env, cleanup := setupTestServerWithOpts(t, handlers.WithSurrogatePublisher(memPub))
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	// Create a model first.
+	created, err := client.CreateSurrogateModel(ctx, connect.NewRequest(&mgmtv1.CreateSurrogateModelRequest{
+		Model: newSurrogateModel(),
+	}))
+	require.NoError(t, err)
+	modelID := created.Msg.ModelId
+
+	// Trigger recalibration → should publish to MemPublisher.
+	_, err = client.TriggerSurrogateRecalibration(ctx, connect.NewRequest(&mgmtv1.TriggerSurrogateRecalibrationRequest{
+		ModelId: modelID,
+	}))
+	require.NoError(t, err)
+
+	// Verify published request.
+	reqs := memPub.Requests()
+	require.Len(t, reqs, 1)
+	assert.Equal(t, modelID, reqs[0].ModelID)
+	assert.Equal(t, "90_day_churn_rate", reqs[0].TargetMetricID)
+	assert.Equal(t, []string{"7d_watch_time", "7d_session_freq"}, reqs[0].InputMetricIDs)
+	assert.Equal(t, "LINEAR", reqs[0].ModelType)
+	assert.Equal(t, int32(7), reqs[0].ObservationWindowDays)
+	assert.Equal(t, int32(90), reqs[0].PredictionHorizonDays)
+	assert.Equal(t, "test@example.com", reqs[0].RequestedBy)
+	assert.NotEmpty(t, reqs[0].RequestedAt)
+}
+
 func TestCreateSurrogateModel_Validation(t *testing.T) {
 	env, cleanup := setupTestServer(t)
 	defer cleanup()
@@ -1868,4 +1936,322 @@ func TestConclude_QoE_TypeDetails(t *testing.T) {
 
 	assert.Equal(t, "qoe_engagement_correlation", details["analysis_type"])
 	assert.Equal(t, "skipped_no_client", details["analysis_trigger"])
+}
+
+// --- Audit Trail Completeness Validation (Phase 4) ---
+
+// auditRow represents a row read back from the audit_trail table.
+type auditRow struct {
+	Action        string
+	ActorEmail    string
+	PreviousState *string
+	NewState      *string
+	DetailsJSON   []byte
+}
+
+// fetchAuditRows retrieves all audit entries for an experiment, ordered chronologically.
+func fetchAuditRows(t *testing.T, pool *pgxpool.Pool, experimentID string) []auditRow {
+	t.Helper()
+	rows, err := pool.Query(context.Background(),
+		`SELECT action, actor_email, previous_state, new_state, details_json
+		 FROM audit_trail WHERE experiment_id = $1 ORDER BY created_at ASC`, experimentID)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var result []auditRow
+	for rows.Next() {
+		var r auditRow
+		require.NoError(t, rows.Scan(&r.Action, &r.ActorEmail, &r.PreviousState, &r.NewState, &r.DetailsJSON))
+		result = append(result, r)
+	}
+	require.NoError(t, rows.Err())
+	return result
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestAuditTrail_FullLifecycleCompleteness(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "audit-lifecycle-"+t.Name(), 0)
+
+	// 1. Create → DRAFT
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("audit-lifecycle-test", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// 2. Start → DRAFT → STARTING → RUNNING
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// 3. Pause (RUNNING → RUNNING, traffic-preserving)
+	_, err = client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+		ExperimentId: id,
+		Reason:       "audit completeness check",
+	}))
+	require.NoError(t, err)
+
+	// 4. Resume (RUNNING → RUNNING)
+	_, err = client.ResumeExperiment(ctx, connect.NewRequest(&mgmtv1.ResumeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// 5. Conclude → RUNNING → CONCLUDING → CONCLUDED
+	_, err = client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// 6. Archive → CONCLUDED → ARCHIVED
+	_, err = client.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	// Fetch all audit entries chronologically.
+	entries := fetchAuditRows(t, env.pool, id)
+
+	// Expected: create, start(DRAFT→STARTING), start(STARTING→RUNNING),
+	// pause, resume, conclude(RUNNING→CONCLUDING), conclude(CONCLUDING→CONCLUDED), archive.
+	require.Len(t, entries, 8, "full lifecycle should produce exactly 8 audit entries, got actions: %v",
+		auditActions(entries))
+
+	// Entry 0: create
+	assert.Equal(t, "create", entries[0].Action)
+	assert.Nil(t, entries[0].PreviousState)
+	assert.Equal(t, strPtr("DRAFT"), entries[0].NewState)
+	assert.Equal(t, "test@example.com", entries[0].ActorEmail)
+
+	// Entry 1: start phase 1 (DRAFT → STARTING)
+	assert.Equal(t, "start", entries[1].Action)
+	assert.Equal(t, strPtr("DRAFT"), entries[1].PreviousState)
+	assert.Equal(t, strPtr("STARTING"), entries[1].NewState)
+	assert.Contains(t, string(entries[1].DetailsJSON), "validation_begin")
+
+	// Entry 2: start phase 2 (STARTING → RUNNING)
+	assert.Equal(t, "start", entries[2].Action)
+	assert.Equal(t, strPtr("STARTING"), entries[2].PreviousState)
+	assert.Equal(t, strPtr("RUNNING"), entries[2].NewState)
+	assert.Contains(t, string(entries[2].DetailsJSON), "activated")
+	assert.Contains(t, string(entries[2].DetailsJSON), "allocation_id")
+
+	// Entry 3: pause (RUNNING → RUNNING)
+	assert.Equal(t, "pause", entries[3].Action)
+	assert.Equal(t, strPtr("RUNNING"), entries[3].PreviousState)
+	assert.Equal(t, strPtr("RUNNING"), entries[3].NewState)
+	assert.Contains(t, string(entries[3].DetailsJSON), "audit completeness check")
+
+	// Entry 4: resume (RUNNING → RUNNING)
+	assert.Equal(t, "resume", entries[4].Action)
+	assert.Equal(t, strPtr("RUNNING"), entries[4].PreviousState)
+	assert.Equal(t, strPtr("RUNNING"), entries[4].NewState)
+
+	// Entry 5: conclude phase 1 (RUNNING → CONCLUDING)
+	assert.Equal(t, "conclude", entries[5].Action)
+	assert.Equal(t, strPtr("RUNNING"), entries[5].PreviousState)
+	assert.Equal(t, strPtr("CONCLUDING"), entries[5].NewState)
+	assert.Contains(t, string(entries[5].DetailsJSON), "final_analysis_begin")
+
+	// Entry 6: conclude phase 2 (CONCLUDING → CONCLUDED)
+	assert.Equal(t, "conclude", entries[6].Action)
+	assert.Equal(t, strPtr("CONCLUDING"), entries[6].PreviousState)
+	assert.Equal(t, strPtr("CONCLUDED"), entries[6].NewState)
+	assert.Contains(t, string(entries[6].DetailsJSON), "analysis_complete")
+	assert.Contains(t, string(entries[6].DetailsJSON), "allocation_released")
+
+	// Entry 7: archive (CONCLUDED → ARCHIVED)
+	assert.Equal(t, "archive", entries[7].Action)
+	assert.Equal(t, strPtr("CONCLUDED"), entries[7].PreviousState)
+	assert.Equal(t, strPtr("ARCHIVED"), entries[7].NewState)
+
+	// Verify all user-initiated entries have correct actor.
+	for _, e := range entries {
+		assert.Equal(t, "test@example.com", e.ActorEmail,
+			"all lifecycle entries should have the authenticated actor, action=%s", e.Action)
+	}
+}
+
+func TestAuditTrail_ConfigUpdateCompleteness(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "audit-config-"+t.Name(), 0)
+	exp := newABExperimentInLayer("audit-config-test", layer.LayerId)
+
+	// Create.
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: exp,
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// Update name in DRAFT.
+	updated := created.Msg
+	updated.Name = "audit-config-renamed"
+	_, err = client.UpdateExperiment(ctx, connect.NewRequest(&mgmtv1.UpdateExperimentRequest{
+		Experiment: updated,
+	}))
+	require.NoError(t, err)
+
+	entries := fetchAuditRows(t, env.pool, id)
+
+	// create + config_update = 2 entries
+	require.Len(t, entries, 2, "create + update should produce exactly 2 audit entries, got: %v",
+		auditActions(entries))
+
+	assert.Equal(t, "create", entries[0].Action)
+	assert.Equal(t, strPtr("DRAFT"), entries[0].NewState)
+
+	assert.Equal(t, "config_update", entries[1].Action)
+	assert.Equal(t, strPtr("DRAFT"), entries[1].PreviousState)
+	assert.Equal(t, strPtr("DRAFT"), entries[1].NewState)
+	assert.Contains(t, string(entries[1].DetailsJSON), "source")
+}
+
+func TestAuditTrail_ConcurrentStartAtomicity(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "audit-concurrent-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("audit-concurrent-start", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err == nil {
+				successes.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), successes.Load(), "exactly one concurrent start should succeed")
+
+	entries := fetchAuditRows(t, env.pool, id)
+
+	// Exactly 3: create + start(DRAFT→STARTING) + start(STARTING→RUNNING)
+	// No duplicates from concurrent losers.
+	startEntries := 0
+	for _, e := range entries {
+		if e.Action == "start" {
+			startEntries++
+		}
+	}
+	assert.Equal(t, 2, startEntries,
+		"exactly 2 start audit entries (validation_begin + activated), got actions: %v",
+		auditActions(entries))
+	assert.Len(t, entries, 3,
+		"create + 2 start phases = 3 total entries, got actions: %v",
+		auditActions(entries))
+}
+
+func TestAuditTrail_FailedTransitionsNoEntries(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "audit-negative-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("audit-negative-test", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// Baseline: 1 entry (create).
+	baseline := fetchAuditRows(t, env.pool, id)
+	require.Len(t, baseline, 1)
+
+	// Attempt conclude on DRAFT → should fail.
+	_, err = client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+
+	// Attempt archive on DRAFT → should fail.
+	_, err = client.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+
+	// Attempt pause on DRAFT → should fail.
+	_, err = client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+		ExperimentId: id,
+		Reason:       "should not work",
+	}))
+	require.Error(t, err)
+
+	// Attempt resume on DRAFT → should fail.
+	_, err = client.ResumeExperiment(ctx, connect.NewRequest(&mgmtv1.ResumeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+
+	// Verify no new audit entries were created.
+	afterInvalid := fetchAuditRows(t, env.pool, id)
+	assert.Len(t, afterInvalid, 1,
+		"failed transitions must not create audit entries, got actions: %v",
+		auditActions(afterInvalid))
+
+	// Now start the experiment and try invalid transitions from RUNNING.
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	afterStart := fetchAuditRows(t, env.pool, id)
+	startCount := len(afterStart) // create + start×2 = 3
+
+	// Start again on RUNNING → FAILED_PRECONDITION.
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+
+	// Archive on RUNNING → FAILED_PRECONDITION.
+	_, err = client.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.Error(t, err)
+
+	afterRunningInvalid := fetchAuditRows(t, env.pool, id)
+	assert.Len(t, afterRunningInvalid, startCount,
+		"failed transitions from RUNNING must not create audit entries, got actions: %v",
+		auditActions(afterRunningInvalid))
+}
+
+// auditActions extracts just the action names for debugging output.
+func auditActions(entries []auditRow) []string {
+	actions := make([]string, len(entries))
+	for i, e := range entries {
+		actions[i] = e.Action
+	}
+	return actions
 }
