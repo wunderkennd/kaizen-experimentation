@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	mgmtv1 "github.com/org/experimentation/gen/go/experimentation/management/v1"
 
 	"github.com/org/experimentation-platform/services/management/internal/store"
+	surrogatepkg "github.com/org/experimentation-platform/services/management/internal/surrogate"
 	"github.com/org/experimentation-platform/services/management/internal/validation"
 )
 
@@ -93,16 +95,42 @@ func (s *ExperimentService) TriggerSurrogateRecalibration(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	// Verify model exists.
-	_, err := s.surrogates.GetByID(ctx, id)
+	// Verify model exists and capture row for the Kafka envelope.
+	model, err := s.surrogates.GetByID(ctx, id)
 	if err != nil {
 		return nil, wrapDBError(err, "surrogate_model", id)
 	}
 
-	// NOTE: audit_trail.experiment_id has a FK to experiments — surrogate model
-	// operations are logged via slog until the schema supports non-experiment auditing.
-	// TODO: Publish Kafka event or call Agent-3 to trigger actual recalibration.
-	slog.Info("surrogate recalibration triggered", "model_id", id)
+	actor := actorFromContext(ctx)
+	published := false
+
+	if s.surrogatePublisher != nil {
+		req := surrogatepkg.RecalibrationRequest{
+			ModelID:               model.ModelID,
+			TargetMetricID:        model.TargetMetricID,
+			InputMetricIDs:        model.InputMetricIDs,
+			ModelType:             model.ModelType,
+			ObservationWindowDays: model.ObservationWindowDays,
+			PredictionHorizonDays: model.PredictionHorizonDays,
+			RequestedBy:           actor,
+			RequestedAt:           time.Now().UTC().Format(time.RFC3339),
+		}
+		if pubErr := s.surrogatePublisher.Publish(ctx, req); pubErr != nil {
+			slog.Warn("surrogate recalibration publish failed (best-effort)",
+				"model_id", id, "error", pubErr)
+		} else {
+			published = true
+		}
+	} else {
+		slog.Warn("surrogate recalibration publisher not configured", "model_id", id)
+	}
+
+	slog.Info("surrogate recalibration triggered",
+		"model_id", model.ModelID,
+		"target_metric_id", model.TargetMetricID,
+		"model_type", model.ModelType,
+		"requested_by", actor,
+		"kafka_published", published)
 
 	return connect.NewResponse(&emptypb.Empty{}), nil
 }

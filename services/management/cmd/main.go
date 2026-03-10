@@ -24,6 +24,7 @@ import (
 	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
+	"github.com/org/experimentation-platform/services/management/internal/surrogate"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -78,26 +79,40 @@ func main() {
 		slog.Info("M4b bandit client configured", "url", addr)
 	}
 
+	// Parse Kafka brokers once for both publisher and consumers.
+	var brokerList []string
+	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
+		brokerList = strings.Split(brokers, ",")
+	}
+
+	// Surrogate recalibration publisher (Kafka → M3).
+	var surrogatePub *surrogate.KafkaPublisher
+	if len(brokerList) > 0 {
+		surrogatePub = surrogate.NewKafkaPublisher(brokerList)
+		serviceOpts = append(serviceOpts, handlers.WithSurrogatePublisher(surrogatePub))
+		slog.Info("surrogate recalibration publisher configured", "topic", surrogate.Topic)
+	}
+	defer surrogatePub.Close()
+
 	// Service handlers (created before consumers because sequential consumer uses expSvc as Concluder).
 	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, surrogateStore, notifier, serviceOpts...)
 
 	// Kafka consumers (guardrail auto-pause + sequential auto-conclude).
-	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
-		brokerList := strings.Split(brokers, ",")
+	if len(brokerList) > 0 {
 
 		// Guardrail alert consumer (Kafka → auto-pause).
 		grProcessor := guardrail.NewProcessor(experimentStore, auditStore, notifier)
 		grConsumer := guardrail.NewConsumer(brokerList, grProcessor)
 		grConsumer.Start(ctx)
 		defer grConsumer.Stop()
-		slog.Info("guardrail consumer started", "brokers", brokers)
+		slog.Info("guardrail consumer started", "brokers", brokerList)
 
 		// Sequential boundary alert consumer (Kafka → auto-conclude).
 		seqProcessor := sequential.NewProcessor(experimentStore, auditStore, notifier, expSvc)
 		seqConsumer := sequential.NewConsumer(brokerList, seqProcessor)
 		seqConsumer.Start(ctx)
 		defer seqConsumer.Stop()
-		slog.Info("sequential consumer started", "brokers", brokers)
+		slog.Info("sequential consumer started", "brokers", brokerList)
 	} else {
 		slog.Info("kafka consumers disabled (KAFKA_BROKERS not set)")
 	}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,13 +57,20 @@ func main() {
 	var svc *handlers.FlagService
 
 	mgmtURL := os.Getenv("MANAGEMENT_SERVICE_URL")
+	defaultLayerID := os.Getenv("FLAG_PROMOTION_LAYER_ID")
 	if mgmtURL != "" {
+		httpClient := &http.Client{Timeout: 10 * time.Second}
+		var clientOpts []connect.ClientOption
+		if os.Getenv("DISABLE_AUTH") != "true" {
+			clientOpts = append(clientOpts, connect.WithInterceptors(auth.NewAuthForwardInterceptor()))
+		}
 		mgmtClient := managementv1connect.NewExperimentManagementServiceClient(
-			http.DefaultClient,
+			httpClient,
 			mgmtURL,
+			clientOpts...,
 		)
-		svc = handlers.NewFlagServiceFull(flagStore, auditStore, mgmtClient)
-		slog.Info("management client configured", "url", mgmtURL)
+		svc = handlers.NewFlagServiceFull(flagStore, auditStore, mgmtClient, defaultLayerID)
+		slog.Info("management client configured", "url", mgmtURL, "layer_id", defaultLayerID)
 	} else {
 		svc = handlers.NewFlagServiceWithAudit(flagStore, auditStore)
 		slog.Warn("no MANAGEMENT_SERVICE_URL set — PromoteToExperiment will use mock mode")
