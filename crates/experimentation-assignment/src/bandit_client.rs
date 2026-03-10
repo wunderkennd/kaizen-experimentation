@@ -12,12 +12,17 @@ use tonic::transport::Channel;
 
 use crate::config::{BanditArmConfig, BanditConfig};
 
+use experimentation_core::error::assert_finite;
 use experimentation_proto::experimentation::bandit::v1::{
-    bandit_policy_service_client::BanditPolicyServiceClient, SelectArmRequest,
+    bandit_policy_service_client::BanditPolicyServiceClient, CreateColdStartBanditRequest,
+    ExportAffinityScoresRequest, SelectArmRequest,
 };
 
 /// Default timeout for M4b SelectArm RPC (per onboarding pitfall #4).
 const BANDIT_TIMEOUT: Duration = Duration::from_millis(10);
+
+/// Timeout for cold-start management RPCs (not hot-path, can be slower).
+const COLD_START_TIMEOUT: Duration = Duration::from_millis(5000);
 
 /// Result of selecting an arm from a bandit experiment.
 #[derive(Debug, Clone)]
@@ -84,6 +89,86 @@ impl GrpcBanditClient {
             all_arm_probabilities: arm.all_arm_probabilities,
         })
     }
+
+    /// Create a cold-start bandit for new content via M4b.
+    ///
+    /// Uses a 5s timeout (management operation, not hot-path).
+    pub async fn create_cold_start_bandit(
+        &self,
+        content_id: &str,
+        content_metadata: HashMap<String, String>,
+        window_days: i32,
+    ) -> Result<ColdStartCreated, BanditClientError> {
+        let req = CreateColdStartBanditRequest {
+            content_id: content_id.to_string(),
+            content_metadata,
+            window_days,
+        };
+
+        let mut client = self.client.clone();
+        let resp = tokio::time::timeout(COLD_START_TIMEOUT, client.create_cold_start_bandit(req))
+            .await
+            .map_err(|_| BanditClientError::Timeout)?
+            .map_err(BanditClientError::Grpc)?;
+
+        let inner = resp.into_inner();
+        Ok(ColdStartCreated {
+            experiment_id: inner.experiment_id,
+            content_id: inner.content_id,
+        })
+    }
+
+    /// Export learned affinity scores after a cold-start window closes.
+    ///
+    /// Uses a 5s timeout (management operation, not hot-path).
+    /// All returned scores are validated with `assert_finite!()`.
+    pub async fn export_affinity_scores(
+        &self,
+        experiment_id: &str,
+    ) -> Result<AffinityScoresResult, BanditClientError> {
+        let req = ExportAffinityScoresRequest {
+            experiment_id: experiment_id.to_string(),
+        };
+
+        let mut client = self.client.clone();
+        let resp = tokio::time::timeout(COLD_START_TIMEOUT, client.export_affinity_scores(req))
+            .await
+            .map_err(|_| BanditClientError::Timeout)?
+            .map_err(BanditClientError::Grpc)?;
+
+        let inner = resp.into_inner();
+
+        // Validate all scores are finite (fail-fast data integrity).
+        for (segment, score) in &inner.segment_affinity_scores {
+            assert_finite(*score, &format!("affinity score for segment '{segment}'"));
+        }
+
+        Ok(AffinityScoresResult {
+            content_id: inner.content_id,
+            segment_affinity_scores: inner.segment_affinity_scores,
+            optimal_placements: inner.optimal_placements,
+        })
+    }
+}
+
+/// Result of creating a cold-start bandit for new content.
+#[derive(Debug, Clone)]
+pub struct ColdStartCreated {
+    /// The auto-created experiment ID.
+    pub experiment_id: String,
+    /// The content ID the bandit was created for.
+    pub content_id: String,
+}
+
+/// Result of exporting affinity scores after a cold-start window closes.
+#[derive(Debug, Clone)]
+pub struct AffinityScoresResult {
+    /// The content ID the scores are for.
+    pub content_id: String,
+    /// Per-segment affinity scores: which user segments respond best.
+    pub segment_affinity_scores: HashMap<String, f64>,
+    /// Optimal placement per segment (arm with highest reward).
+    pub optimal_placements: HashMap<String, String>,
 }
 
 /// Raw result from M4b (no payload — that comes from local config).
@@ -194,6 +279,8 @@ mod tests {
             context_feature_keys: vec![],
             min_exploration_fraction: 0.1,
             warmup_observations: 1000,
+            content_id: None,
+            cold_start_window_days: None,
         }
     }
 
@@ -308,6 +395,8 @@ mod tests {
             ],
             min_exploration_fraction: 0.1,
             warmup_observations: 1000,
+            content_id: None,
+            cold_start_window_days: None,
         };
         let mut attrs = HashMap::new();
         attrs.insert("age".to_string(), "25.0".to_string());
@@ -329,6 +418,8 @@ mod tests {
             context_feature_keys: vec!["age".to_string(), "country".to_string()],
             min_exploration_fraction: 0.1,
             warmup_observations: 1000,
+            content_id: None,
+            cold_start_window_days: None,
         };
         let mut attrs = HashMap::new();
         attrs.insert("age".to_string(), "25".to_string());
