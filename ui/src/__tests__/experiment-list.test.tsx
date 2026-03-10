@@ -2,6 +2,10 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
 import ExperimentListPage from '@/app/page';
+import { AuthProvider } from '@/lib/auth-context';
+import type { AuthUser } from '@/lib/auth-context';
+
+const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'experimenter' };
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -17,8 +21,12 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-async function renderAndWait() {
-  render(<ExperimentListPage />);
+async function renderAndWait(user: AuthUser = defaultUser) {
+  render(
+    <AuthProvider initialUser={user}>
+      <ExperimentListPage />
+    </AuthProvider>,
+  );
   await waitFor(() => {
     expect(screen.getByText('homepage_recs_v2')).toBeInTheDocument();
   });

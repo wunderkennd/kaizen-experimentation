@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Experiment, Variant } from '@/lib/types';
-import { getExperiment, updateExperiment, startExperiment, concludeExperiment, archiveExperiment } from '@/lib/api';
+import { getExperiment, updateExperiment, startExperiment, concludeExperiment, archiveExperiment, isPermissionDenied } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
 import { StateBadge } from '@/components/state-badge';
 import { TypeBadge } from '@/components/type-badge';
 import { VariantTable } from '@/components/variant-table';
@@ -19,6 +20,8 @@ export default function ExperimentDetailPage() {
   const [experiment, setExperiment] = useState<Experiment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { canAtLeast } = useAuth();
+  const canEdit = canAtLeast('experimenter');
 
   useEffect(() => {
     if (!params.id) return;
@@ -38,19 +41,27 @@ export default function ExperimentDetailPage() {
   const handleTransition = useCallback(async (action: 'start' | 'conclude' | 'archive') => {
     if (!experiment) return;
     const id = experiment.experimentId;
-    let updated: Experiment;
-    switch (action) {
-      case 'start':
-        updated = await startExperiment(id);
-        break;
-      case 'conclude':
-        updated = await concludeExperiment(id);
-        break;
-      case 'archive':
-        updated = await archiveExperiment(id);
-        break;
+    try {
+      let updated: Experiment;
+      switch (action) {
+        case 'start':
+          updated = await startExperiment(id);
+          break;
+        case 'conclude':
+          updated = await concludeExperiment(id);
+          break;
+        case 'archive':
+          updated = await archiveExperiment(id);
+          break;
+      }
+      setExperiment(updated);
+    } catch (err) {
+      if (isPermissionDenied(err)) {
+        setError('Permission denied: your role does not allow this action.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Transition failed');
+      }
     }
-    setExperiment(updated);
   }, [experiment]);
 
   if (loading) {
@@ -157,7 +168,7 @@ export default function ExperimentDetailPage() {
       <section className="mb-6">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Variants</h2>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          {experiment.state === 'DRAFT' ? (
+          {experiment.state === 'DRAFT' && canEdit ? (
             <VariantForm
               variants={experiment.variants}
               experimentType={experiment.type}

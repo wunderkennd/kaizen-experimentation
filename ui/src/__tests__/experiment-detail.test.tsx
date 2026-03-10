@@ -2,6 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ExperimentDetailPage from '@/app/experiments/[id]/page';
+import { AuthProvider } from '@/lib/auth-context';
+import type { AuthUser } from '@/lib/auth-context';
+
+const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'admin' };
+
+function renderDetail(user: AuthUser = defaultUser) {
+  return render(
+    <AuthProvider initialUser={user}>
+      <ExperimentDetailPage />
+    </AuthProvider>,
+  );
+}
 
 // Mutable ref to control which experiment ID is returned
 let mockExperimentId = '11111111-1111-1111-1111-111111111111';
@@ -23,7 +35,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('renders experiment name and description', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'homepage_recs_v2' })).toBeInTheDocument();
@@ -35,7 +47,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('renders state and type badges', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Running')).toBeInTheDocument();
@@ -45,7 +57,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('renders variant table with control badge', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('control')).toBeInTheDocument();
@@ -57,7 +69,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('renders metadata fields', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('alice@streamco.com')).toBeInTheDocument();
@@ -67,7 +79,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('renders guardrails', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('crash_rate')).toBeInTheDocument();
@@ -77,7 +89,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('renders breadcrumb with link back to list', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'homepage_recs_v2' })).toBeInTheDocument();
@@ -88,7 +100,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('shows read-only variant table for RUNNING experiment', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('control')).toBeInTheDocument();
@@ -101,7 +113,7 @@ describe('Experiment Detail Page', () => {
   });
 
   it('shows "Conclude Experiment" button for RUNNING experiment', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Conclude Experiment')).toBeInTheDocument();
@@ -115,7 +127,7 @@ describe('Experiment Detail Page - DRAFT experiment', () => {
   });
 
   it('shows variant editing form for DRAFT experiment', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('control')).toBeInTheDocument();
@@ -127,7 +139,7 @@ describe('Experiment Detail Page - DRAFT experiment', () => {
   });
 
   it('shows "Start Experiment" button for DRAFT experiment', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Start Experiment')).toBeInTheDocument();
@@ -136,7 +148,7 @@ describe('Experiment Detail Page - DRAFT experiment', () => {
 
   it('transitions DRAFT to RUNNING on start', async () => {
     const user = userEvent.setup();
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Start Experiment')).toBeInTheDocument();
@@ -157,7 +169,7 @@ describe('Experiment Detail Page - STARTING experiment', () => {
   });
 
   it('shows starting checklist for STARTING experiment', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Starting Experiment')).toBeInTheDocument();
@@ -174,7 +186,7 @@ describe('Experiment Detail Page - CONCLUDING experiment', () => {
   });
 
   it('shows concluding progress for CONCLUDING experiment', async () => {
-    render(<ExperimentDetailPage />);
+    renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Concluding Experiment')).toBeInTheDocument();

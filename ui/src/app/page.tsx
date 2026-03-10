@@ -7,6 +7,8 @@ import { listExperiments } from '@/lib/api';
 import { ExperimentCard } from '@/components/experiment-card';
 import { ExperimentFiltersToolbar } from '@/components/experiment-filters';
 import { useExperimentFilters, type SortField } from '@/lib/use-experiment-filters';
+import { useAuth } from '@/lib/auth-context';
+import { ROLE_LABELS } from '@/lib/auth';
 
 function SortableHeader({
   label,
@@ -46,6 +48,8 @@ export default function ExperimentListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const filters = useExperimentFilters();
+  const { canAtLeast, user } = useAuth();
+  const canCreate = canAtLeast('experimenter');
 
   useEffect(() => {
     listExperiments()
@@ -90,12 +94,23 @@ export default function ExperimentListPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Experiments</h1>
-        <Link
-          href="/experiments/new"
-          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
-        >
-          New Experiment
-        </Link>
+        {canCreate ? (
+          <Link
+            href="/experiments/new"
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+            data-testid="new-experiment-link"
+          >
+            New Experiment
+          </Link>
+        ) : (
+          <span
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
+            data-testid="new-experiment-disabled"
+          >
+            New Experiment
+          </span>
+        )}
       </div>
 
       <ExperimentFiltersToolbar

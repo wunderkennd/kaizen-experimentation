@@ -21,6 +21,30 @@ const ANALYSIS_SVC = 'experimentation.analysis.v1.AnalysisService';
 const BANDIT_URL = process.env.NEXT_PUBLIC_BANDIT_URL || '/api/rpc/bandit';
 const BANDIT_SVC = 'experimentation.bandit.v1.BanditPolicyService';
 
+// --- Auth header injection ---
+let _authEmail = '';
+let _authRole = '';
+
+/** Set auth credentials injected into all RPC calls. Called by AuthProvider. */
+export function setApiAuth(email: string, role: string): void {
+  _authEmail = email;
+  _authRole = role;
+}
+
+export class RpcError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'RpcError';
+    this.status = status;
+  }
+}
+
+/** Check if an error represents a 403 Permission Denied response. */
+export function isPermissionDenied(error: unknown): boolean {
+  return error instanceof RpcError && error.status === 403;
+}
+
 /** Parse ConnectRPC error response for a human-readable message. */
 async function parseRpcError(res: Response, method: string): Promise<string> {
   try {
@@ -34,12 +58,18 @@ async function parseRpcError(res: Response, method: string): Promise<string> {
 }
 
 async function callRpc<Req, Res>(baseUrl: string, service: string, method: string, request: Req): Promise<Res> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (_authEmail) headers['X-User-Email'] = _authEmail;
+  if (_authRole) headers['X-User-Role'] = _authRole;
+
   const res = await fetch(`${baseUrl}/${service}/${method}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(request),
   });
-  if (!res.ok) throw new Error(await parseRpcError(res, method));
+  if (!res.ok) {
+    throw new RpcError(await parseRpcError(res, method), res.status);
+  }
   return res.json();
 }
 
