@@ -74,6 +74,22 @@ func TestGetMetricsForExperiment_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
+func TestGetExperimentsByModelID(t *testing.T) {
+	cs, err := LoadFromFile("testdata/seed_config.json")
+	require.NoError(t, err)
+
+	t.Run("known model returns experiments", func(t *testing.T) {
+		ids := cs.GetExperimentsByModelID("sm-churn-predictor-001")
+		require.Len(t, ids, 1)
+		assert.Equal(t, "e0000000-0000-0000-0000-000000000001", ids[0])
+	})
+
+	t.Run("unknown model returns empty", func(t *testing.T) {
+		ids := cs.GetExperimentsByModelID("nonexistent-model")
+		assert.Empty(t, ids)
+	})
+}
+
 func TestGetGuardrailsForExperiment_NotFound(t *testing.T) {
 	cs, err := LoadFromFile("testdata/seed_config.json")
 	require.NoError(t, err)
