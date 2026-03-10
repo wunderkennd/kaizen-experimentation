@@ -118,7 +118,7 @@
 | 4.2 | Interference detection (content catalog spillover) | Agent-4 | 🟢 | Agent-6 (interference panel from gRPC), M4a service pattern established | PR #93. M4a service scaffolded with GetInterferenceAnalysis RPC wired through Delta Lake → experimentation-stats. 13 tests. |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | 🟢 | Agent-6 (role-aware UI controls) | PR #71 merged — ConnectRPC auth interceptor, 4-level role hierarchy, audit trail records real actor |
-| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78). Agent-3: 20 resilience tests (PR #69). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. Other agents: add `scripts/chaos_test_<service>.sh` to plug into framework. |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-1: `chaos_test_assignment.sh` (E2E framework hook) + `chaos_kill_assignment.sh` (standalone kill-9 + determinism verification). Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78). Agent-3: 20 resilience tests (PR #69). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. Other agents: add `scripts/chaos_test_<service>.sh` to plug into framework. |
 
 ## Pair Integration Schedule
 
