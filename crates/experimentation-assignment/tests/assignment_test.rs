@@ -1271,6 +1271,69 @@ async fn bandit_targeting_still_applies() {
 
 // ── Live Bandit gRPC Integration Tests ──
 
+// ── Session-Level Locked Variant Tests (allow_cross_session_variation=false) ──
+
+#[tokio::test]
+async fn session_level_locked_variant_same_across_sessions() {
+    let svc = make_service();
+    let user_id = "locked_user_42";
+
+    // Assign with 50 different session_ids — all should return the same variant.
+    let first = svc
+        .assign("exp_dev_008", user_id, "session_0", &no_attrs())
+        .await
+        .unwrap();
+    assert!(first.is_active);
+    assert!(!first.variant_id.is_empty());
+
+    for i in 1..50 {
+        let session = format!("session_{i}");
+        let resp = svc
+            .assign("exp_dev_008", user_id, &session, &no_attrs())
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.variant_id, first.variant_id,
+            "locked variant must be the same across sessions (session_{i} got {} vs {})",
+            resp.variant_id, first.variant_id,
+        );
+    }
+}
+
+#[tokio::test]
+async fn session_level_locked_variant_different_users() {
+    let svc = make_service();
+    let session_id = "shared_session";
+
+    let mut variants = std::collections::HashSet::new();
+    for i in 0..100 {
+        let user = format!("locked_user_{i}");
+        let resp = svc
+            .assign("exp_dev_008", &user, session_id, &no_attrs())
+            .await
+            .unwrap();
+        assert!(resp.is_active);
+        variants.insert(resp.variant_id);
+    }
+
+    assert!(
+        variants.len() >= 2,
+        "100 different users should produce at least 2 distinct variants, got {:?}",
+        variants,
+    );
+}
+
+#[tokio::test]
+async fn session_level_locked_still_requires_session_id() {
+    let svc = make_service();
+    let err = svc
+        .assign("exp_dev_008", "user_1", "", &no_attrs())
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert!(err.message().contains("session_id"));
+}
+
 /// Mock M4b BanditPolicyService that returns a fixed arm selection.
 struct MockBanditService {
     /// If Some, sleep this long before responding (to test timeout).
