@@ -4,7 +4,9 @@
 //! domain structs for the stats crate.
 
 use anyhow::{bail, Context};
-use deltalake::arrow::array::{Array, Date32Array, Float64Array, Int64Array, MapArray, StringArray};
+use deltalake::arrow::array::{
+    Array, Date32Array, Float64Array, Int64Array, MapArray, StringArray,
+};
 use deltalake::arrow::record_batch::RecordBatch;
 use deltalake::DeltaTable;
 use experimentation_stats::interference::{ContentConsumption, InterferenceInput};
@@ -48,7 +50,10 @@ pub async fn read_content_consumption(
 }
 
 /// Extract matching rows from the Delta table filtered by experiment_id.
-async fn extract_rows(table: &DeltaTable, experiment_id: &str) -> anyhow::Result<Vec<ConsumptionRow>> {
+async fn extract_rows(
+    table: &DeltaTable,
+    experiment_id: &str,
+) -> anyhow::Result<Vec<ConsumptionRow>> {
     let mut rows = Vec::new();
 
     // Read all record batches and filter by experiment_id in-process.
@@ -146,7 +151,10 @@ fn build_interference_input(
     // Group by variant_id.
     let mut by_variant: HashMap<String, Vec<ConsumptionRow>> = HashMap::new();
     for row in rows {
-        by_variant.entry(row.variant_id.clone()).or_default().push(row);
+        by_variant
+            .entry(row.variant_id.clone())
+            .or_default()
+            .push(row);
     }
 
     if by_variant.len() < 2 {
@@ -450,10 +458,7 @@ pub async fn read_daily_treatment_effects(
     }
 
     // Pick metric with most data points.
-    let (best_metric, mut rows) = by_metric
-        .into_iter()
-        .max_by_key(|(_, v)| v.len())
-        .unwrap();
+    let (best_metric, mut rows) = by_metric.into_iter().max_by_key(|(_, v)| v.len()).unwrap();
 
     // Sort by date, convert to sequential days from minimum.
     rows.sort_by_key(|(date, _, _)| *date);
@@ -506,8 +511,8 @@ fn downcast_i64<'a>(batch: &'a RecordBatch, name: &str) -> anyhow::Result<&'a In
 mod tests {
     use super::*;
     use deltalake::arrow::array::{
-        Date32Array, Float64Array, Int64Array, StringArray,
         builder::{Float64Builder, MapBuilder, StringBuilder},
+        Date32Array, Float64Array, Int64Array, StringArray,
     };
     use deltalake::arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
     use deltalake::arrow::record_batch::RecordBatch;
@@ -777,19 +782,15 @@ mod tests {
     #[tokio::test]
     async fn test_read_metric_summaries_empty() {
         let tmp = TempDir::new().unwrap();
-        let batch = make_metric_batch(
-            &["exp-1"],
-            &["u1"],
-            &["control"],
-            &["ctr"],
-            &[0.1],
-            &[None],
-        );
+        let batch = make_metric_batch(&["exp-1"], &["u1"], &["control"], &["ctr"], &[0.1], &[None]);
         write_named_test_table(tmp.path(), "metric_summaries", batch).await;
 
         let result = read_metric_summaries(tmp.path().to_str().unwrap(), "exp-999").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no metric_summaries data"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no metric_summaries data"));
     }
 
     #[tokio::test]
@@ -825,8 +826,7 @@ mod tests {
         winners: &[Option<&str>],
         engagements: &[i64],
     ) -> RecordBatch {
-        let mut map_builder =
-            MapBuilder::new(None, StringBuilder::new(), Float64Builder::new());
+        let mut map_builder = MapBuilder::new(None, StringBuilder::new(), Float64Builder::new());
 
         for row_scores in algo_scores {
             for &(k, v) in row_scores {
@@ -903,7 +903,10 @@ mod tests {
 
         let result = read_interleaving_scores(tmp.path().to_str().unwrap(), "exp-999").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no interleaving_scores data"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no interleaving_scores data"));
     }
 
     // -----------------------------------------------------------------------
@@ -947,7 +950,9 @@ mod tests {
         // 10 days of data for one metric (days since epoch: 19700+)
         let base_date = 19700i32;
         let dates: Vec<i32> = (0..10).map(|i| base_date + i).collect();
-        let effects: Vec<f64> = (0..10).map(|i| 5.0 + 3.0 * (-(i as f64) / 4.0).exp()).collect();
+        let effects: Vec<f64> = (0..10)
+            .map(|i| 5.0 + 3.0 * (-(i as f64) / 4.0).exp())
+            .collect();
         let sizes: Vec<i64> = vec![1000; 10];
         let exp_ids: Vec<&str> = vec!["exp-1"; 10];
         let metric_ids: Vec<&str> = vec!["ctr"; 10];
@@ -996,17 +1001,14 @@ mod tests {
     #[tokio::test]
     async fn test_read_daily_effects_empty() {
         let tmp = TempDir::new().unwrap();
-        let batch = make_daily_effects_batch(
-            &["exp-1"],
-            &["ctr"],
-            &[19700],
-            &[5.0],
-            &[1000],
-        );
+        let batch = make_daily_effects_batch(&["exp-1"], &["ctr"], &[19700], &[5.0], &[1000]);
         write_named_test_table(tmp.path(), "daily_treatment_effects", batch).await;
 
         let result = read_daily_treatment_effects(tmp.path().to_str().unwrap(), "exp-999").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no daily_treatment_effects data"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no daily_treatment_effects data"));
     }
 }
