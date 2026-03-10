@@ -8,13 +8,16 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 	mgmtv1 "github.com/org/experimentation/gen/go/experimentation/management/v1"
+	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 )
 
 // --- Phase 4 Stress Tests ---
@@ -469,4 +472,397 @@ func TestStress_ConcurrentLifecycleOperations(t *testing.T) {
 		assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_CONCLUDED, got.Msg.State,
 			"experiment %d should be CONCLUDED", i)
 	}
+}
+
+// --- Phase 4: Bucket Reuse Stress Tests ---
+
+// createTestLayerWithBuckets creates a test layer with configurable total buckets
+// and cooldown. Useful for tests that need non-default bucket counts.
+func createTestLayerWithBuckets(
+	t *testing.T,
+	client managementv1connect.ExperimentManagementServiceClient,
+	name string,
+	totalBuckets int32,
+	cooldownSeconds int64,
+) *commonv1.Layer {
+	t.Helper()
+	resp, err := client.CreateLayer(context.Background(), connect.NewRequest(&mgmtv1.CreateLayerRequest{
+		Layer: &commonv1.Layer{
+			Name:                name,
+			Description:         "test layer",
+			TotalBuckets:        totalBuckets,
+			BucketReuseCooldown: &durationpb.Duration{Seconds: cooldownSeconds},
+		},
+	}))
+	require.NoError(t, err)
+	return resp.Msg
+}
+
+// assertNoOverlap checks that no two active allocations overlap bucket ranges.
+func assertNoOverlap(t *testing.T, allocs []*commonv1.LayerAllocation, context string) {
+	t.Helper()
+	active := filterActiveAllocations(allocs)
+	for i := 0; i < len(active); i++ {
+		for j := i + 1; j < len(active); j++ {
+			a := active[i]
+			b := active[j]
+			overlaps := a.StartBucket <= b.EndBucket && b.StartBucket <= a.EndBucket
+			assert.False(t, overlaps,
+				"%s: allocations [%d-%d] (exp %s) and [%d-%d] (exp %s) overlap",
+				context, a.StartBucket, a.EndBucket, a.ExperimentId,
+				b.StartBucket, b.EndBucket, b.ExperimentId)
+		}
+	}
+}
+
+// TestStress_CooldownBlocksReuse verifies that concluded experiments with a
+// cooldown period block bucket reuse until the cooldown expires.
+func TestStress_CooldownBlocksReuse(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	pool := env.pool
+	ctx := context.Background()
+
+	// Layer with 5-second cooldown.
+	layer := createTestLayerWithBuckets(t, client, "stress-cooldown-"+t.Name(), 10000, 5)
+
+	// Create 2 experiments at 50% each → 100% capacity.
+	exp1, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("cooldown-a", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, exp1.Msg.ExperimentId, 0.5)
+
+	exp2, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("cooldown-b", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, exp2.Msg.ExperimentId, 0.5)
+
+	// Start both.
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: exp1.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: exp2.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+
+	// Conclude experiment-1 → released but in cooldown.
+	_, err = client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: exp1.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+
+	// Verify SQL: reusable_after > NOW() for experiment-1's allocation.
+	var reusableAfter time.Time
+	err = pool.QueryRow(ctx,
+		`SELECT reusable_after FROM layer_allocations
+		 WHERE experiment_id = $1 AND released_at IS NOT NULL`,
+		exp1.Msg.ExperimentId).Scan(&reusableAfter)
+	require.NoError(t, err, "should find released allocation with reusable_after")
+	assert.True(t, reusableAfter.After(time.Now()),
+		"reusable_after should be in the future during cooldown")
+
+	// Try to start experiment-3 at 50% → must fail (cooling slots still occupied).
+	exp3, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("cooldown-c", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, exp3.Msg.ExperimentId, 0.5)
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: exp3.Msg.ExperimentId,
+	}))
+	require.Error(t, err, "starting during cooldown should fail")
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err),
+		"should get FAILED_PRECONDITION for insufficient capacity during cooldown")
+
+	// Wait for cooldown to expire.
+	time.Sleep(6 * time.Second)
+
+	// Now start experiment-3 → should succeed.
+	started, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: exp3.Msg.ExperimentId,
+	}))
+	require.NoError(t, err, "starting after cooldown should succeed")
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, started.Msg.State)
+
+	// Verify no overlap between experiment-2 and experiment-3.
+	allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
+		LayerId: layer.LayerId,
+	}))
+	require.NoError(t, err)
+	assertNoOverlap(t, allocs.Msg.Allocations, "post-cooldown")
+}
+
+// TestStress_LayerExhaustionAndRecovery fills a layer to 100%, verifies that
+// an 11th experiment fails, then concludes half and starts 5 new ones.
+func TestStress_LayerExhaustionAndRecovery(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	pool := env.pool
+	ctx := context.Background()
+
+	// Layer with 0-second cooldown, 5000 total buckets.
+	layer := createTestLayerWithBuckets(t, client, "stress-exhaust-"+t.Name(), 5000, 0)
+
+	// Create and start 10 experiments at 10% each → 100%.
+	const numExperiments = 10
+	ids := make([]string, numExperiments)
+	for i := 0; i < numExperiments; i++ {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("exhaust-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		ids[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, ids[i], 0.1)
+	}
+
+	// Start all concurrently.
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < numExperiments; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+				ExperimentId: ids[idx],
+			}))
+			if err == nil {
+				successes.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(numExperiments), successes.Load(),
+		"all 10 experiments should start (10%% each = 100%% of 5000 buckets)")
+
+	// 11th experiment at 10% → must fail.
+	exp11, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("exhaust-overflow", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, exp11.Msg.ExperimentId, 0.1)
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: exp11.Msg.ExperimentId,
+	}))
+	require.Error(t, err, "11th experiment should fail — layer at 100%%")
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+
+	// Conclude first 5 experiments.
+	for i := 0; i < 5; i++ {
+		_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+			ExperimentId: ids[i],
+		}))
+		require.NoError(t, err, "conclude experiment %d", i)
+	}
+
+	// Start 5 new experiments at 10% each.
+	newIDs := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("exhaust-new-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		newIDs[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, newIDs[i], 0.1)
+	}
+
+	for i, id := range newIDs {
+		_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+			ExperimentId: id,
+		}))
+		require.NoError(t, err, "new experiment %d should start after recovery", i)
+	}
+
+	// Verify no overlapping allocations across all active experiments.
+	allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
+		LayerId: layer.LayerId,
+	}))
+	require.NoError(t, err)
+	assertNoOverlap(t, allocs.Msg.Allocations, "post-recovery")
+
+	activeAllocs := filterActiveAllocations(allocs.Msg.Allocations)
+	assert.Len(t, activeAllocs, 10,
+		"should have 10 active allocations (5 original + 5 new)")
+}
+
+// TestStress_FragmentationRecovery creates 8 experiments with varied traffic
+// percentages, concludes non-contiguous ones to create fragmentation, then
+// verifies a new larger experiment can still be allocated.
+func TestStress_FragmentationRecovery(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	pool := env.pool
+	ctx := context.Background()
+
+	layer := createTestLayerWithBuckets(t, client, "stress-frag-"+t.Name(), 10000, 0)
+
+	// 8 experiments with varied traffic: 5%, 10%, 15%, 20%, 10%, 15%, 5%, 20% = 100%.
+	fractions := []float64{0.05, 0.10, 0.15, 0.20, 0.10, 0.15, 0.05, 0.20}
+	ids := make([]string, len(fractions))
+
+	for i, frac := range fractions {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("frag-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		ids[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, ids[i], frac)
+	}
+
+	// Start all sequentially (deterministic allocation order for predictable fragmentation).
+	for i, id := range ids {
+		_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+			ExperimentId: id,
+		}))
+		require.NoError(t, err, "start experiment %d", i)
+	}
+
+	// Conclude indices 1, 3, 5 (10% + 20% + 15% = 45% freed in non-contiguous gaps).
+	concludeIndices := []int{1, 3, 5}
+	for _, idx := range concludeIndices {
+		_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+			ExperimentId: ids[idx],
+		}))
+		require.NoError(t, err, "conclude experiment at index %d", idx)
+	}
+
+	// Start new 30% experiment → should succeed (allocator finds space in freed gaps).
+	expNew, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("frag-new-30pct", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, expNew.Msg.ExperimentId, 0.30)
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: expNew.Msg.ExperimentId,
+	}))
+	require.NoError(t, err, "30%% experiment should fit in 45%% freed space")
+
+	// Verify no overlap with remaining active allocations.
+	allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
+		LayerId: layer.LayerId,
+	}))
+	require.NoError(t, err)
+	assertNoOverlap(t, allocs.Msg.Allocations, "fragmentation-recovery")
+
+	// 5 original active (indices 0, 2, 4, 6, 7) + 1 new = 6 active.
+	activeAllocs := filterActiveAllocations(allocs.Msg.Allocations)
+	assert.Len(t, activeAllocs, 6,
+		"should have 6 active allocations (5 surviving + 1 new)")
+}
+
+// TestStress_ConcurrentAllocDuringCooldown races allocation attempts against
+// cooldown expiration. All attempts during cooldown must fail; after cooldown
+// they must all succeed.
+func TestStress_ConcurrentAllocDuringCooldown(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	pool := env.pool
+	ctx := context.Background()
+
+	// Layer with 3-second cooldown.
+	layer := createTestLayerWithBuckets(t, client, "stress-concurrent-cool-"+t.Name(), 10000, 3)
+
+	// Create and start 5 experiments at 20% each → 100%.
+	const numExperiments = 5
+	ids := make([]string, numExperiments)
+	for i := 0; i < numExperiments; i++ {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("cc-orig-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		ids[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, ids[i], 0.2)
+	}
+
+	for i, id := range ids {
+		_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+			ExperimentId: id,
+		}))
+		require.NoError(t, err, "start original experiment %d", i)
+	}
+
+	// Conclude all → all in cooldown.
+	for i, id := range ids {
+		_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+			ExperimentId: id,
+		}))
+		require.NoError(t, err, "conclude original experiment %d", i)
+	}
+
+	// Immediately create 5 new experiments and try to start them concurrently → all must fail.
+	duringCooldownIDs := make([]string, numExperiments)
+	for i := 0; i < numExperiments; i++ {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("cc-during-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		duringCooldownIDs[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, duringCooldownIDs[i], 0.2)
+	}
+
+	var failsDuringCooldown atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < numExperiments; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+				ExperimentId: duringCooldownIDs[idx],
+			}))
+			if err != nil && connect.CodeOf(err) == connect.CodeFailedPrecondition {
+				failsDuringCooldown.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(numExperiments), failsDuringCooldown.Load(),
+		"all 5 experiments should fail during cooldown")
+
+	// Wait for cooldown to expire.
+	time.Sleep(4 * time.Second)
+
+	// Create 5 fresh experiments and start them concurrently → all must succeed.
+	afterCooldownIDs := make([]string, numExperiments)
+	for i := 0; i < numExperiments; i++ {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("cc-after-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		afterCooldownIDs[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, afterCooldownIDs[i], 0.2)
+	}
+
+	var successesAfter atomic.Int32
+	for i := 0; i < numExperiments; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+				ExperimentId: afterCooldownIDs[idx],
+			}))
+			if err == nil {
+				successesAfter.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(numExperiments), successesAfter.Load(),
+		"all 5 experiments should succeed after cooldown expires")
+
+	// Verify no overlapping allocations.
+	allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
+		LayerId: layer.LayerId,
+	}))
+	require.NoError(t, err)
+	assertNoOverlap(t, allocs.Msg.Allocations, "post-cooldown-concurrent")
 }
