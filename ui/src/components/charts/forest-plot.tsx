@@ -39,6 +39,7 @@ export function ForestPlot({ metricResults, showCuped }: ForestPlotProps) {
     <section className="mb-6">
       <h3 className="mb-3 text-lg font-semibold text-gray-900">Treatment Effects</h3>
       <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div role="img" aria-label="Forest plot showing treatment effects with confidence intervals">
         <ResponsiveContainer width="100%" height={Math.max(200, data.length * 60 + 60)}>
           <ComposedChart layout="vertical" data={data} margin={{ left: 140, right: 40, top: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -65,6 +66,7 @@ export function ForestPlot({ metricResults, showCuped }: ForestPlotProps) {
             </Scatter>
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
       </div>
     </section>
   );

@@ -26,19 +26,22 @@ function SortableHeader({
   const isActive = currentField === field;
   return (
     <th
-      className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
-      onClick={() => onToggle(field)}
+      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
       aria-sort={isActive ? (currentDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onToggle(field)}
+        className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-gray-700"
+      >
         {label}
         {isActive && (
-          <span className="text-indigo-600">{currentDir === 'asc' ? '\u25B2' : '\u25BC'}</span>
+          <span aria-hidden="true" className="text-indigo-600">{currentDir === 'asc' ? '\u25B2' : '\u25BC'}</span>
         )}
         {!isActive && (
-          <span className="text-gray-300">{'\u25B2'}</span>
+          <span aria-hidden="true" className="text-gray-300">{'\u25B2'}</span>
         )}
-      </span>
+      </button>
     </th>
   );
 }
@@ -66,8 +69,9 @@ export default function ExperimentListPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }

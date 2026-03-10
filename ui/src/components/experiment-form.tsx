@@ -185,6 +185,7 @@ export function ExperimentForm({ onSubmit }: ExperimentFormProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., homepage_recs_v3"
+              aria-required="true"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
@@ -198,6 +199,7 @@ export function ExperimentForm({ onSubmit }: ExperimentFormProps) {
               value={ownerEmail}
               onChange={(e) => setOwnerEmail(e.target.value)}
               placeholder="e.g., alice@streamco.com"
+              aria-required="true"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
@@ -222,6 +224,7 @@ export function ExperimentForm({ onSubmit }: ExperimentFormProps) {
               id="exp-type"
               value={type}
               onChange={(e) => setType(e.target.value as ExperimentType)}
+              aria-required="true"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
               {EXPERIMENT_TYPES.map((t) => (
@@ -239,6 +242,7 @@ export function ExperimentForm({ onSubmit }: ExperimentFormProps) {
               value={layerId}
               onChange={(e) => setLayerId(e.target.value)}
               placeholder="e.g., layer-homepage"
+              aria-required="true"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
@@ -259,6 +263,7 @@ export function ExperimentForm({ onSubmit }: ExperimentFormProps) {
               value={primaryMetricId}
               onChange={(e) => setPrimaryMetricId(e.target.value)}
               placeholder="e.g., click_through_rate"
+              aria-required="true"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>

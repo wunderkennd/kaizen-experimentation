@@ -10,7 +10,7 @@ export function NavHeader() {
 
   return (
     <header className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <nav aria-label="Main navigation" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="text-lg font-semibold text-gray-900">
           Experimentation Platform
         </Link>
@@ -39,7 +39,7 @@ export function NavHeader() {
             {user.email}
           </span>
         </div>
-      </div>
+      </nav>
     </header>
   );
 }

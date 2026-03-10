@@ -70,8 +70,8 @@ describe('SQL Page', () => {
       expect(screen.getByText('click_through_rate')).toBeInTheDocument();
     });
 
-    // Click the SQL preview button for the first entry
-    const sqlPreviews = screen.getAllByRole('button', { name: /SELECT/i });
+    // Click the SQL preview toggle button for the first entry
+    const sqlPreviews = screen.getAllByRole('button', { name: /Toggle SQL preview/i });
     await user.click(sqlPreviews[0]);
 
     // Should show the full SQL in a <pre> block

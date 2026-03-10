@@ -33,8 +33,9 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-8" role="status" aria-label="Loading">
         <div className="h-6 w-6 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -86,6 +87,7 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
       {/* Win rates chart */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
         <h4 className="mb-3 text-sm font-semibold text-gray-900">Algorithm Win Rates</h4>
+        <div role="img" aria-label="Bar chart showing algorithm win rates">
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={winRateData} margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -99,6 +101,7 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Bradley-Terry strengths table */}

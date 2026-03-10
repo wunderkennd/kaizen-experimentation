@@ -52,8 +52,9 @@ export function QoeTab({ experimentId }: QoeTabProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-8" role="status" aria-label="Loading">
         <div className="h-6 w-6 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -73,7 +74,7 @@ export function QoeTab({ experimentId }: QoeTabProps) {
       {/* Overall status banner */}
       <div className={`rounded-md ${overallStyle.bg} border ${overallStyle.border} p-4`}>
         <div className="flex items-center gap-2">
-          <span className={`inline-flex h-3 w-3 rounded-full ${overallStyle.dot}`} />
+          <span className={`inline-flex h-3 w-3 rounded-full ${overallStyle.dot}`} aria-hidden="true" />
           <h4 className={`text-sm font-semibold ${overallStyle.text}`}>
             Overall QoE: {overallStyle.label}
           </h4>
@@ -98,7 +99,7 @@ export function QoeTab({ experimentId }: QoeTabProps) {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium uppercase text-gray-500">{snapshot.label}</span>
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${style.bg} ${style.text}`}>
-                  <span className={`inline-flex h-2 w-2 rounded-full ${style.dot}`} />
+                  <span className={`inline-flex h-2 w-2 rounded-full ${style.dot}`} aria-hidden="true" />
                   {style.label}
                 </span>
               </div>

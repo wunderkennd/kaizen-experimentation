@@ -75,6 +75,8 @@ export function QueryLogTable({ entries, onExport, exporting }: QueryLogTablePro
                 <td className="px-4 py-3 text-sm text-gray-600">
                   <button
                     onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                    aria-expanded={expandedIndex === i}
+                    aria-label={`Toggle SQL preview for ${entry.metricId}`}
                     className="max-w-md truncate text-left font-mono text-xs text-gray-600 hover:text-indigo-600"
                   >
                     {entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}

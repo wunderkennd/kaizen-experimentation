@@ -33,8 +33,9 @@ export function GstTrajectoryChart({ experimentId, metricId }: GstTrajectoryChar
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-6">
+      <div className="flex items-center justify-center py-6" role="status" aria-label="Loading">
         <div className="h-5 w-5 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -74,6 +75,7 @@ export function GstTrajectoryChart({ experimentId, metricId }: GstTrajectoryChar
         </div>
       )}
 
+      <div role="img" aria-label="Line chart showing stopping boundary trajectory">
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -113,6 +115,7 @@ export function GstTrajectoryChart({ experimentId, metricId }: GstTrajectoryChar
           />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
 
       <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
         <span>Planned looks: {result.plannedLooks}</span>

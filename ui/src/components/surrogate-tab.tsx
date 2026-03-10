@@ -84,15 +84,15 @@ export function SurrogateTab({ projections }: SurrogateTabProps) {
         <h4 className="text-sm font-semibold text-gray-900">Calibration Guide</h4>
         <div className="mt-2 flex items-center gap-6 text-xs text-gray-600">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" aria-hidden="true" />
             High (R&sup2; &ge; 0.7)
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-500" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-500" aria-hidden="true" />
             Medium (0.5 &le; R&sup2; &lt; 0.7)
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
             Low (R&sup2; &lt; 0.5)
           </span>
         </div>

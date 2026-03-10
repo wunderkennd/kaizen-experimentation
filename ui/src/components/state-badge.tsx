@@ -16,6 +16,7 @@ export function StateBadge({ state }: StateBadgeProps) {
     >
       <span
         className={`h-2 w-2 rounded-full ${config.dotColor} ${config.animate ? 'animate-pulse-slow' : ''}`}
+        aria-hidden="true"
       />
       {config.label}
     </span>
