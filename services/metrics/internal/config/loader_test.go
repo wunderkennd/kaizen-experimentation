@@ -110,7 +110,7 @@ func TestLoadFromFile(t *testing.T) {
 
 	t.Run("running experiments", func(t *testing.T) {
 		ids := cs.RunningExperimentIDs()
-		assert.Len(t, ids, 5)
+		assert.Len(t, ids, 6)
 	})
 
 	t.Run("not found", func(t *testing.T) {
