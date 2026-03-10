@@ -102,7 +102,7 @@
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
 | 3.1 | LinUCB contextual bandit | Agent-4 | 🟢 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) | PR #54 merged |
-| 3.2 | Content cold-start bandit | Agent-4 | 🔵 | Agent-6 (cold-start widget on bandit dashboard) |
+| 3.2 | Content cold-start bandit | Agent-4 | 🟢 | Agent-6 (cold-start widget on bandit dashboard) | PR #62 merged. Cold-start bandit + gRPC RPCs (CreateColdStartBandit, ExportAffinityScores) wired in PR #72. |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🟢 | PR #60 merged — arm allocation chart, reward rates, Thompson Sampling params, reward history |
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🟢 | — | Agent-2 done (session_id keyed events + `test_session_pipeline_e2e.sh` e2e harness). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration + 11 e2e tests in PR #79). Agent-1 done: enforce `allow_cross_session_variation` flag — `false` hashes on user_id for locked variant, `true` hashes on session_id (existing). 3 new tests. E2e harness validates cross-topic session_id correlation (exposure/metric/QoE). |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟢 | — | Agent-2 done (QoE validation + ingestion PR #40 + `test_qoe_pipeline_e2e.sh` e2e harness). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl + e2e tests PR #79). Pipeline e2e verified. |
@@ -115,7 +115,7 @@
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
 | 4.1 | CATE heterogeneous treatment effects | Agent-4 | 🔵 | Subgroup analysis + Cochran Q + BH-FDR. 22 tests (18 unit/proptest + 4 golden). |
-| 4.2 | Interference detection (content catalog spillover) | Agent-4 | ⚪ | — |
+| 4.2 | Interference detection (content catalog spillover) | Agent-4 | 🟢 | Agent-6 (interference panel from gRPC), M4a service pattern established | PR #93. M4a service scaffolded with GetInterferenceAnalysis RPC wired through Delta Lake → experimentation-stats. 13 tests. |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | 🟢 | Agent-6 (role-aware UI controls) | PR #71 merged — ConnectRPC auth interceptor, 4-level role hierarchy, audit trail records real actor |
 | 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78). Agent-3: 20 resilience tests (PR #69). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. Other agents: add `scripts/chaos_test_<service>.sh` to plug into framework. |
@@ -133,7 +133,7 @@ Track integration test results between agent pairs.
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | 🔵 | 33 contract tests verify M3 SQL output columns match Delta Lake schemas M4a reads. Covers all 4 output tables + ratio delta method variance components. |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟢 | M3 Kafka publisher (PR #64) + M5 consumer (PR #18). 3 schema contract tests (field symmetry, bidirectional deser, zero-value). Kafka roundtrip integration test. Agent-2 guardrail E2E harness (`test_guardrail_e2e.sh`, PR #78) validates topic publish/consume. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🔵 | M1 GrpcBanditClient with 10ms timeout + uniform fallback. M4b SelectArm gRPC wired through LMAX core. 3 mock gRPC integration tests pass. Ready for live pairing (set M4B_ADDR env var). |
-| 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | ⚪ | — |
+| 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🔵 | M4a GetInterferenceAnalysis gRPC available. Agent-6 can now render interference panel from real responses. |
 
 ## Contract Changes Log
 
