@@ -150,6 +150,34 @@
       ],
       "allocation": { "start_bucket": 0, "end_bucket": 9999 },
       "session_config": { "session_id_attribute": "session_id", "allow_cross_session_variation": false }
+    },
+    {
+      "experiment_id": "cold-start:movie-new-001",
+      "name": "Cold Start New Movie Placement",
+      "state": "RUNNING",
+      "type": "CONTEXTUAL_BANDIT",
+      "hash_salt": "dev_salt_cold_001",
+      "layer_id": "layer_cold_start",
+      "variants": [
+        { "variant_id": "arm_prominent", "traffic_fraction": 0.34, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "arm_carousel", "traffic_fraction": 0.33, "is_control": false, "payload_json": "{}" },
+        { "variant_id": "arm_subtle", "traffic_fraction": 0.33, "is_control": false, "payload_json": "{}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "bandit_config": {
+        "algorithm": "THOMPSON_SAMPLING",
+        "arms": [
+          { "arm_id": "arm_prominent", "name": "Prominent Hero", "payload_json": "{\"placement\": \"hero\", \"size\": \"large\"}" },
+          { "arm_id": "arm_carousel", "name": "Carousel Row", "payload_json": "{\"placement\": \"carousel\", \"size\": \"medium\"}" },
+          { "arm_id": "arm_subtle", "name": "Subtle Tile", "payload_json": "{\"placement\": \"tile\", \"size\": \"small\"}" }
+        ],
+        "reward_metric_id": "engagement_minutes",
+        "context_feature_keys": ["genre_affinity", "recency_days", "tenure_months"],
+        "min_exploration_fraction": 0.15,
+        "warmup_observations": 500,
+        "content_id": "movie-new-001",
+        "cold_start_window_days": 14
+      }
     }
   ],
   "layers": [
@@ -159,6 +187,7 @@
     { "layer_id": "layer_bandit", "total_buckets": 10000 },
     { "layer_id": "layer_interleave_opt", "total_buckets": 10000 },
     { "layer_id": "layer_interleave_multi", "total_buckets": 10000 },
-    { "layer_id": "layer_session_locked", "total_buckets": 10000 }
+    { "layer_id": "layer_session_locked", "total_buckets": 10000 },
+    { "layer_id": "layer_cold_start", "total_buckets": 10000 }
   ]
 }
