@@ -415,6 +415,7 @@ impl PolicyCore {
 mod tests {
     use super::*;
     use experimentation_bandit::cold_start::ColdStartConfig;
+    use experimentation_bandit::policy::Policy;
     use std::path::PathBuf;
 
     fn temp_db_path(name: &str) -> PathBuf {
@@ -973,6 +974,406 @@ mod tests {
             drop(_mgmt_tx);
             handle.await.unwrap();
         }
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_multi_experiment_concurrent_crash_recovery() {
+        // Verify that Thompson, LinUCB, and cold-start experiments all restore
+        // correctly from the same RocksDB instance after a simulated crash.
+        let db_path = temp_db_path("multi-crash");
+        let ctx: HashMap<String, f64> = [("f0".into(), 1.0), ("f1".into(), 0.5)]
+            .into_iter()
+            .collect();
+
+        // Phase 1: Register three different policy types and train them
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+            let mut core = PolicyCore::new(store, config);
+
+            // Thompson Sampling
+            core.register_experiment("thompson-1".into(), vec!["a".into(), "b".into()]);
+
+            // LinUCB
+            core.register_linucb_experiment(
+                "linucb-1".into(),
+                vec!["x".into(), "y".into()],
+                vec!["f0".into(), "f1".into()],
+                1.0,
+                0.05,
+            );
+
+            let (_policy_tx, reward_tx, mgmt_tx, handle) = spawn_core(core);
+
+            // Create cold-start bandit via management channel
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            mgmt_tx
+                .send(ManagementCommand::CreateColdStart(CreateColdStartRequest {
+                    config: ColdStartConfig {
+                        content_id: "multi-movie".into(),
+                        content_metadata: HashMap::new(),
+                        window_days: 7,
+                        arm_ids: vec!["p".into(), "q".into()],
+                        feature_keys: vec!["f0".into(), "f1".into()],
+                        alpha: 1.0,
+                        min_exploration_fraction: 0.05,
+                    },
+                    reply_tx,
+                }))
+                .await
+                .unwrap();
+            reply_rx.await.unwrap().unwrap();
+
+            // Train all three: arm "a"/"x"/"p" always wins
+            for i in 0..30 {
+                // Thompson
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "thompson-1".into(),
+                        arm_id: "a".into(),
+                        reward: 1.0,
+                        context: None,
+                        kafka_offset: i * 3,
+                    })
+                    .await
+                    .unwrap();
+                // LinUCB
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "linucb-1".into(),
+                        arm_id: "x".into(),
+                        reward: 1.0,
+                        context: Some(ctx.clone()),
+                        kafka_offset: i * 3 + 1,
+                    })
+                    .await
+                    .unwrap();
+                // Cold-start
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "cold-start:multi-movie".into(),
+                        arm_id: "p".into(),
+                        reward: 1.0,
+                        context: Some(ctx.clone()),
+                        kafka_offset: i * 3 + 2,
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            drop(reward_tx);
+            drop(_policy_tx);
+            drop(mgmt_tx);
+            handle.await.unwrap();
+        }
+
+        // Phase 2: Reopen and restore all three experiments
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+            let mut core = PolicyCore::new(store, config);
+            let restored = core.restore_from_snapshots().unwrap();
+            assert_eq!(restored, 3, "should restore all 3 experiments");
+
+            let (policy_tx, _reward_tx, _mgmt_tx, handle) = spawn_core(core);
+
+            // Verify Thompson prefers "a"
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            policy_tx
+                .send(SelectArmRequest {
+                    experiment_id: "thompson-1".into(),
+                    context: None,
+                    reply_tx,
+                })
+                .await
+                .unwrap();
+            let resp = reply_rx.await.unwrap().unwrap();
+            assert_eq!(resp.arm_id, "a", "Thompson should prefer arm 'a'");
+
+            // Verify LinUCB prefers "x"
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            policy_tx
+                .send(SelectArmRequest {
+                    experiment_id: "linucb-1".into(),
+                    context: Some(ctx.clone()),
+                    reply_tx,
+                })
+                .await
+                .unwrap();
+            let resp = reply_rx.await.unwrap().unwrap();
+            assert_eq!(resp.arm_id, "x", "LinUCB should prefer arm 'x'");
+
+            // Verify cold-start prefers "p"
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            policy_tx
+                .send(SelectArmRequest {
+                    experiment_id: "cold-start:multi-movie".into(),
+                    context: Some(ctx),
+                    reply_tx,
+                })
+                .await
+                .unwrap();
+            let resp = reply_rx.await.unwrap().unwrap();
+            assert_eq!(resp.arm_id, "p", "Cold-start should prefer arm 'p'");
+
+            drop(policy_tx);
+            drop(_reward_tx);
+            drop(_mgmt_tx);
+            handle.await.unwrap();
+        }
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_kafka_offset_preserved() {
+        // Verify that the Kafka offset stored in the snapshot matches the last
+        // offset processed, so that replay after crash resumes from the right point.
+        let db_path = temp_db_path("offset-verify");
+        let expected_last_offset: i64 = 999;
+
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+            let mut core = PolicyCore::new(store, config);
+            core.register_experiment("offset-exp".into(), vec!["a".into(), "b".into()]);
+
+            let (_policy_tx, reward_tx, _mgmt_tx, handle) = spawn_core(core);
+
+            // Send rewards with incrementing offsets, ending at expected_last_offset
+            for i in 0..=expected_last_offset {
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "offset-exp".into(),
+                        arm_id: if i % 2 == 0 { "a" } else { "b" }.into(),
+                        reward: 1.0,
+                        context: None,
+                        kafka_offset: i,
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            drop(reward_tx);
+            drop(_policy_tx);
+            drop(_mgmt_tx);
+            handle.await.unwrap();
+        }
+
+        // Verify the snapshot contains the correct offset
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let envelope = store.load_latest("offset-exp").unwrap().unwrap();
+            // The last snapshot might not be exactly at expected_last_offset because
+            // snapshots fire every `snapshot_interval` (5) rewards. But it should be
+            // close and <= expected_last_offset.
+            assert!(
+                envelope.kafka_offset <= expected_last_offset,
+                "snapshot offset {} should be <= last processed {}",
+                envelope.kafka_offset,
+                expected_last_offset
+            );
+            // With 1000 rewards and snapshot_interval=5, the last snapshot is at reward 1000
+            // (1000 % 5 == 0), so offset should be exactly 999.
+            assert_eq!(
+                envelope.kafka_offset, expected_last_offset,
+                "snapshot offset should be exactly {expected_last_offset} since 1000 is divisible by snapshot_interval=5"
+            );
+            assert_eq!(
+                envelope.total_rewards_processed, 1000,
+                "total rewards should reflect all 1000 processed rewards"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_high_volume_crash_recovery() {
+        // Process 2000+ rewards across 2 experiments, crash, restore, and verify
+        // that the learned preferences are maintained.
+        let db_path = temp_db_path("high-volume");
+        let ctx: HashMap<String, f64> = [("f0".into(), 1.0)].into_iter().collect();
+
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+            let mut core = PolicyCore::new(store, config);
+            core.register_experiment(
+                "ts-high".into(),
+                vec!["a".into(), "b".into(), "c".into()],
+            );
+            core.register_linucb_experiment(
+                "lu-high".into(),
+                vec!["x".into(), "y".into(), "z".into()],
+                vec!["f0".into()],
+                0.5,
+                0.05,
+            );
+
+            let (_policy_tx, reward_tx, _mgmt_tx, handle) = spawn_core(core);
+
+            // 1200 rewards for Thompson (arm "a" wins heavily)
+            for i in 0..1200i64 {
+                let (arm, reward) = if i % 3 == 0 {
+                    ("a", 1.0)
+                } else if i % 3 == 1 {
+                    ("b", 0.1)
+                } else {
+                    ("c", 0.0)
+                };
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "ts-high".into(),
+                        arm_id: arm.into(),
+                        reward,
+                        context: None,
+                        kafka_offset: i,
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            // 1000 rewards for LinUCB (arm "x" wins heavily)
+            for i in 0..1000i64 {
+                let (arm, reward) = if i % 3 == 0 {
+                    ("x", 1.0)
+                } else if i % 3 == 1 {
+                    ("y", 0.1)
+                } else {
+                    ("z", 0.0)
+                };
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "lu-high".into(),
+                        arm_id: arm.into(),
+                        reward,
+                        context: Some(ctx.clone()),
+                        kafka_offset: 1200 + i,
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+            drop(reward_tx);
+            drop(_policy_tx);
+            drop(_mgmt_tx);
+            handle.await.unwrap();
+        }
+
+        // Restore and verify learned preferences survive crash
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+            let mut core = PolicyCore::new(store, config);
+            let restored = core.restore_from_snapshots().unwrap();
+            assert_eq!(restored, 2);
+
+            let (policy_tx, _reward_tx, _mgmt_tx, handle) = spawn_core(core);
+
+            // Thompson: "a" should dominate after 400 wins
+            let mut a_count = 0;
+            for _ in 0..20 {
+                let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+                policy_tx
+                    .send(SelectArmRequest {
+                        experiment_id: "ts-high".into(),
+                        context: None,
+                        reply_tx,
+                    })
+                    .await
+                    .unwrap();
+                if reply_rx.await.unwrap().unwrap().arm_id == "a" {
+                    a_count += 1;
+                }
+            }
+            assert!(
+                a_count >= 16,
+                "Thompson should pick 'a' at least 16/20 times after heavy training, got {a_count}"
+            );
+
+            // LinUCB: "x" should dominate
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            policy_tx
+                .send(SelectArmRequest {
+                    experiment_id: "lu-high".into(),
+                    context: Some(ctx),
+                    reply_tx,
+                })
+                .await
+                .unwrap();
+            let resp = reply_rx.await.unwrap().unwrap();
+            assert_eq!(
+                resp.arm_id, "x",
+                "LinUCB should prefer 'x' after heavy training"
+            );
+
+            drop(policy_tx);
+            drop(_reward_tx);
+            drop(_mgmt_tx);
+            handle.await.unwrap();
+        }
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_recovery_timing_under_10s() {
+        // Verify that restoring from RocksDB completes within the 10s SLA,
+        // even with multiple experiments and many snapshots.
+        let db_path = temp_db_path("recovery-timing");
+
+        // Pre-populate RocksDB with snapshots for 10 experiments using real policies
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            for exp_idx in 0..10 {
+                let exp_id = format!("timing-exp-{exp_idx}");
+                let policy = ThompsonSamplingPolicy::new(
+                    exp_id.clone(),
+                    vec!["a".into(), "b".into(), "c".into()],
+                );
+                let state = policy.serialize();
+                for snap_idx in 0..3u64 {
+                    let envelope = SnapshotStore::make_envelope(
+                        exp_id.clone(),
+                        "thompson_sampling".into(),
+                        state.clone(),
+                        (snap_idx + 1) * 100,
+                        (snap_idx * 50) as i64,
+                    );
+                    store.write_snapshot(&envelope).unwrap();
+                }
+            }
+        }
+
+        // Measure restore time
+        let start = std::time::Instant::now();
+        let store = SnapshotStore::open(&db_path).unwrap();
+        let config = test_config(db_path.to_str().unwrap());
+        let mut core = PolicyCore::new(store, config);
+        let restored = core.restore_from_snapshots().unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(restored, 10, "should restore all 10 experiments");
+        assert!(
+            elapsed.as_secs() < 10,
+            "Recovery took {:?}, exceeds 10s SLA",
+            elapsed
+        );
+        // In practice, this should be well under 1 second for 10 experiments
+        assert!(
+            elapsed.as_millis() < 1000,
+            "Recovery took {:?}, should be under 1s for 10 experiments",
+            elapsed
+        );
 
         let _ = std::fs::remove_dir_all(&db_path);
     }
