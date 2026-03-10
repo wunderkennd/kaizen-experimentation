@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import {
   BarChart,
   Bar,
@@ -18,7 +19,7 @@ interface SequentialBoundaryPlotProps {
   overallAlpha: number;
 }
 
-export function SequentialBoundaryPlot({ metricResults, overallAlpha }: SequentialBoundaryPlotProps) {
+function SequentialBoundaryPlotInner({ metricResults, overallAlpha }: SequentialBoundaryPlotProps) {
   const sequentialMetrics = metricResults.filter((m) => m.sequentialResult);
 
   if (sequentialMetrics.length === 0) return null;
@@ -35,6 +36,7 @@ export function SequentialBoundaryPlot({ metricResults, overallAlpha }: Sequenti
     <section className="mb-6">
       <h3 className="mb-3 text-lg font-semibold text-gray-900">Sequential Testing (Alpha Spending)</h3>
       <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div role="img" aria-label="Bar chart showing alpha spending by metric">
         <ResponsiveContainer width="100%" height={Math.max(200, data.length * 60 + 60)}>
           <BarChart layout="vertical" data={data} margin={{ left: 140, right: 40, top: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -55,6 +57,7 @@ export function SequentialBoundaryPlot({ metricResults, overallAlpha }: Sequenti
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
         <div className="mt-3 flex flex-wrap gap-3">
           {data.map((d) => (
             <div key={d.metric} className="flex items-center gap-2 text-xs text-gray-600">
@@ -72,3 +75,5 @@ export function SequentialBoundaryPlot({ metricResults, overallAlpha }: Sequenti
     </section>
   );
 }
+
+export const SequentialBoundaryPlot = memo(SequentialBoundaryPlotInner);

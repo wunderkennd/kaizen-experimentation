@@ -141,12 +141,15 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     onChange={(e) => updateVariant(i, 'name', e.target.value)}
                     onBlur={() => handleBlur(i, 'name')}
                     aria-label={`Variant ${i + 1} name`}
+                    aria-required="true"
+                    aria-invalid={!!getError(i, 'name')}
+                    aria-describedby={getError(i, 'name') ? `variant-${i}-name-error` : undefined}
                     className={`w-full rounded border px-2 py-1 text-sm ${
                       getError(i, 'name') ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
                   {getError(i, 'name') && (
-                    <p className="mt-1 text-xs text-red-600">{getError(i, 'name')}</p>
+                    <p id={`variant-${i}-name-error`} className="mt-1 text-xs text-red-600">{getError(i, 'name')}</p>
                   )}
                 </td>
                 <td className="px-4 py-2">
@@ -159,12 +162,14 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     onChange={(e) => updateVariant(i, 'trafficFraction', parseFloat(e.target.value) || 0)}
                     onBlur={() => handleBlur(i, 'trafficFraction')}
                     aria-label={`Variant ${i + 1} traffic`}
+                    aria-invalid={!!getError(i, 'trafficFraction')}
+                    aria-describedby={getError(i, 'trafficFraction') ? `variant-${i}-traffic-error` : undefined}
                     className={`w-24 rounded border px-2 py-1 text-sm ${
                       getError(i, 'trafficFraction') ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
                   {getError(i, 'trafficFraction') && (
-                    <p className="mt-1 text-xs text-red-600">{getError(i, 'trafficFraction')}</p>
+                    <p id={`variant-${i}-traffic-error`} className="mt-1 text-xs text-red-600">{getError(i, 'trafficFraction')}</p>
                   )}
                 </td>
                 <td className="px-4 py-2 text-center">
@@ -182,13 +187,15 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     onChange={(e) => updateVariant(i, 'payloadJson', e.target.value)}
                     onBlur={() => handleBlur(i, 'payloadJson')}
                     aria-label={`Variant ${i + 1} payload`}
+                    aria-invalid={!!getError(i, 'payloadJson')}
+                    aria-describedby={getError(i, 'payloadJson') ? `variant-${i}-payload-error` : undefined}
                     rows={2}
                     className={`w-full rounded border px-2 py-1 font-mono text-xs ${
                       getError(i, 'payloadJson') ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
                   {getError(i, 'payloadJson') && (
-                    <p className="mt-1 text-xs text-red-600">{getError(i, 'payloadJson')}</p>
+                    <p id={`variant-${i}-payload-error`} className="mt-1 text-xs text-red-600">{getError(i, 'payloadJson')}</p>
                   )}
                 </td>
                 <td className="px-4 py-2">
