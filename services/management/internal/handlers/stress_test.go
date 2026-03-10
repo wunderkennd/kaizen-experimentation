@@ -577,8 +577,8 @@ func TestStress_CooldownBlocksReuse(t *testing.T) {
 		ExperimentId: exp3.Msg.ExperimentId,
 	}))
 	require.Error(t, err, "starting during cooldown should fail")
-	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err),
-		"should get FAILED_PRECONDITION for insufficient capacity during cooldown")
+	assert.Equal(t, connect.CodeResourceExhausted, connect.CodeOf(err),
+		"should get ResourceExhausted for insufficient capacity during cooldown")
 
 	// Wait for cooldown to expire.
 	time.Sleep(6 * time.Second)
@@ -652,7 +652,7 @@ func TestStress_LayerExhaustionAndRecovery(t *testing.T) {
 		ExperimentId: exp11.Msg.ExperimentId,
 	}))
 	require.Error(t, err, "11th experiment should fail — layer at 100%%")
-	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeResourceExhausted, connect.CodeOf(err))
 
 	// Conclude first 5 experiments.
 	for i := 0; i < 5; i++ {
@@ -726,6 +726,11 @@ func TestStress_FragmentationRecovery(t *testing.T) {
 	}
 
 	// Conclude indices 1, 3, 5 (10% + 20% + 15% = 45% freed in non-contiguous gaps).
+	// With sequential allocation the gaps are:
+	//   [500, 1499]  = 1000 buckets (10%, from index 1)
+	//   [3000, 4999] = 2000 buckets (20%, from index 3)
+	//   [6000, 7499] = 1500 buckets (15%, from index 5)
+	// Allocator uses first-fit contiguous, so a 15% (1500 bucket) request fits in the 2000-bucket gap.
 	concludeIndices := []int{1, 3, 5}
 	for _, idx := range concludeIndices {
 		_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
@@ -734,17 +739,17 @@ func TestStress_FragmentationRecovery(t *testing.T) {
 		require.NoError(t, err, "conclude experiment at index %d", idx)
 	}
 
-	// Start new 30% experiment → should succeed (allocator finds space in freed gaps).
+	// Start new 15% experiment → should succeed (first-fit finds the 2000-bucket gap at [3000, 4999]).
 	expNew, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
-		Experiment: newABExperimentInLayer("frag-new-30pct", layer.LayerId),
+		Experiment: newABExperimentInLayer("frag-new-15pct", layer.LayerId),
 	}))
 	require.NoError(t, err)
-	setTrafficPercentage(t, pool, expNew.Msg.ExperimentId, 0.30)
+	setTrafficPercentage(t, pool, expNew.Msg.ExperimentId, 0.15)
 
 	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
 		ExperimentId: expNew.Msg.ExperimentId,
 	}))
-	require.NoError(t, err, "30%% experiment should fit in 45%% freed space")
+	require.NoError(t, err, "15%% experiment should fit in largest contiguous gap")
 
 	// Verify no overlap with remaining active allocations.
 	allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
@@ -819,7 +824,7 @@ func TestStress_ConcurrentAllocDuringCooldown(t *testing.T) {
 			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
 				ExperimentId: duringCooldownIDs[idx],
 			}))
-			if err != nil && connect.CodeOf(err) == connect.CodeFailedPrecondition {
+			if err != nil && connect.CodeOf(err) == connect.CodeResourceExhausted {
 				failsDuringCooldown.Add(1)
 			}
 		}(i)
