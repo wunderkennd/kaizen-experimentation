@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-10 by Agent-4 (Wire remaining analysis RPCs — RunAnalysis, GetInterleavingAnalysis, GetNoveltyAnalysis)
+> **Last updated**: 2026-03-10 by Agent-2 (M2→M3 event contract tests — ExposureEvent, MetricEvent, QoEEvent)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -14,7 +14,7 @@
 | Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
 |-------|--------|--------|----------------|-------------------|------------|-------|
 | Agent-1 | M1 Assignment | 🔵 Phase 3 In Progress | agent-1/feat/cold-start-bandit | Cold-start bandit + UniFFI SDKs | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation done. Cold-start bandit: CreateColdStartBandit + ExportAffinityScores RPCs (5s timeout, assert_finite validation). UniFFI SDK LocalProviders for iOS/Android (offline assignment). 95 tests (63 integration + 9 config cache + 12 SDK + 11 lib). |
-| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | Reward consumer integration tests (M2→M4b) | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85). PR #99: 24 reward consumer integration tests (17 protobuf contract + 7 Kafka roundtrip) validating M2→M4b data path. 95 tests pass. |
+| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/feat/e2e-pipeline-tests | M2→M3 event contract tests | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85, #99). M2→M3 contract tests: 40 tests (32 protobuf contract + 8 Kafka roundtrip) validating ExposureEvent, MetricEvent, QoEEvent data paths. Delta schema alignment, M3 SQL template field coverage, cross-topic user correlation. 119 tests pass. |
 | Agent-3 | M3 Metrics | 🔵 Phase 4 In Progress | agent-3/perf/go-benchmarks | Go benchmarks (Phase 4 load testing) | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77, #98). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). SQL template validation (PR #95). Go benchmarks: 51 benchmarks across 4 packages (PR #101). |
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/wire-remaining-analysis-rpcs | Wire remaining analysis RPCs | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93). Chaos testing merged. **4/5 analysis RPCs wired**: RunAnalysis/GetAnalysisResult (t-test + SRM + CUPED), GetInterleavingAnalysis (sign test + Bradley-Terry), GetNoveltyAnalysis (decay fitting). 31 tests pass. |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
@@ -129,7 +129,7 @@ Track integration test results between agent pairs.
 |------|------|--------|-------|
 | 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🔵 | Agent-6 live API integration PR in progress — Next.js rewrites proxy, ConnectRPC error parsing, enum prefix stripping, 24 contract tests. Ready for end-to-end pair testing with Agent-5 backend. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
-| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟢 | Merged (PR #51): SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log, notebook export, guardrail alert contract. |
+| 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟢 | Merged (PR #51): SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log, notebook export, guardrail alert contract. Extended: 40 M2→M3 contract tests (ExposureEvent, MetricEvent, QoEEvent) — Delta schema alignment, M3 SQL template field coverage (exposure_join, session_level_mean, interleaving_score, qoe_metric), cross-topic user correlation, Kafka key contracts. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
 | 5 | Agent-3 ↔ Agent-4 (metric summaries → analysis) | 🔵 | 33 contract tests verify M3 SQL output columns match Delta Lake schemas M4a reads. Covers all 4 output tables + ratio delta method variance components. |
 | 5 | Agent-5 ↔ Agent-3 (guardrail alerts → auto-pause) | 🟢 | M3 Kafka publisher (PR #64) + M5 consumer (PR #18). 3 schema contract tests (field symmetry, bidirectional deser, zero-value). Kafka roundtrip integration test. Agent-2 guardrail E2E harness (`test_guardrail_e2e.sh`, PR #78) validates topic publish/consume. |
