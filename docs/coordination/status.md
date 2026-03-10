@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-09 by Agent-6 (Phase 4 experiment list search/filter/sort + results link fix — PR #90)
+> **Last updated**: 2026-03-09 by Agent-4 (M4a analysis service scaffolding + GetInterferenceAnalysis RPC — PR #93)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -102,7 +102,7 @@
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
 | 3.1 | LinUCB contextual bandit | Agent-4 | 🟢 | Agent-1 (contextual bandit arm selection via SelectArm RPC), Agent-6 (bandit dashboard) | PR #54 merged |
-| 3.2 | Content cold-start bandit | Agent-4 | 🟢 | Agent-6 (cold-start widget on bandit dashboard) | Cold-start bandit + gRPC RPCs (CreateColdStartBandit, ExportAffinityScores) merged. |
+| 3.2 | Content cold-start bandit | Agent-4 | 🟢 | Agent-6 (cold-start widget on bandit dashboard) | PR #62 merged. Cold-start bandit + gRPC RPCs (CreateColdStartBandit, ExportAffinityScores) wired in PR #72. |
 | 3.3 | Bandit dashboard (arm allocation, reward curves) | Agent-6 | 🟢 | PR #60 merged — arm allocation chart, reward rates, Thompson Sampling params, reward history |
 | 3.4 | Session-level experiment support (full pipeline) | Agent-1/2/3 | 🔵 | — | Agent-2 done (session_id keyed events + `test_session_pipeline_e2e.sh` e2e harness). Agent-3 done (session_level_mean.sql.tmpl + StandardJob orchestration + 11 e2e tests in PR #79). Agent-1 part pending. E2e harness validates cross-topic session_id correlation (exposure/metric/QoE). |
 | 3.5 | Playback QoE experiment pipeline | Agent-2/3 | 🟢 | — | Agent-2 done (QoE validation + ingestion PR #40 + `test_qoe_pipeline_e2e.sh` e2e harness). Agent-3 done (qoe_metric.sql.tmpl + qoe_engagement_correlation.sql.tmpl + e2e tests PR #79). Pipeline e2e verified. |
@@ -115,7 +115,7 @@
 | # | Milestone | Owner | Status | Unblocks |
 |---|-----------|-------|--------|----------|
 | 4.1 | CATE heterogeneous treatment effects | Agent-4 | 🔵 | Subgroup analysis + Cochran Q + BH-FDR. 22 tests (18 unit/proptest + 4 golden). |
-| 4.2 | Interference detection (content catalog spillover) | Agent-4 | 🟢 | Agent-6 (interference panel from gRPC), M4a service pattern established | M4a service scaffolded with GetInterferenceAnalysis RPC wired through Delta Lake → experimentation-stats. 13 tests. |
+| 4.2 | Interference detection (content catalog spillover) | Agent-4 | 🟢 | Agent-6 (interference panel from gRPC), M4a service pattern established | PR #93. M4a service scaffolded with GetInterferenceAnalysis RPC wired through Delta Lake → experimentation-stats. 13 tests. |
 | 4.3 | PGO-optimized builds for M1 + M4b | Agent-1/4 | ⚪ | — |
 | 4.4 | Full RBAC integration | Agent-5 | 🟢 | Agent-6 (role-aware UI controls) | PR #71 merged — ConnectRPC auth interceptor, 4-level role hierarchy, audit trail records real actor |
 | 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78). Agent-3: 20 resilience tests (PR #69). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. Other agents: add `scripts/chaos_test_<service>.sh` to plug into framework. |
