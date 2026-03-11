@@ -161,9 +161,34 @@ function adaptExperiment(proto: Record<string, unknown>): Experiment {
   };
 }
 
-export async function listExperiments(): Promise<ListExperimentsResponse> {
-  const raw = await callRpc<object, { experiments?: Record<string, unknown>[]; nextPageToken?: string }>(
-    MGMT_URL, MGMT_SVC, 'ListExperiments', {},
+export interface ListExperimentsFilters {
+  stateFilter?: ExperimentState;
+  typeFilter?: ExperimentType;
+  ownerEmailFilter?: string;
+  pageSize?: number;
+  pageToken?: string;
+}
+
+export async function listExperiments(filters?: ListExperimentsFilters): Promise<ListExperimentsResponse> {
+  const request: Record<string, unknown> = {};
+  if (filters?.stateFilter) {
+    request.stateFilter = `EXPERIMENT_STATE_${filters.stateFilter}`;
+  }
+  if (filters?.typeFilter) {
+    request.typeFilter = `EXPERIMENT_TYPE_${filters.typeFilter}`;
+  }
+  if (filters?.ownerEmailFilter) {
+    request.ownerEmailFilter = filters.ownerEmailFilter;
+  }
+  if (filters?.pageSize) {
+    request.pageSize = filters.pageSize;
+  }
+  if (filters?.pageToken) {
+    request.pageToken = filters.pageToken;
+  }
+
+  const raw = await callRpc<Record<string, unknown>, { experiments?: Record<string, unknown>[]; nextPageToken?: string }>(
+    MGMT_URL, MGMT_SVC, 'ListExperiments', request,
   );
   return {
     experiments: (raw.experiments || []).map(adaptExperiment),
@@ -205,6 +230,22 @@ export async function concludeExperiment(id: string): Promise<Experiment> {
 export async function archiveExperiment(id: string): Promise<Experiment> {
   const raw = await callRpc<{ experimentId: string }, { experiment?: Record<string, unknown> }>(
     MGMT_URL, MGMT_SVC, 'ArchiveExperiment', { experimentId: id },
+    { skipCache: true, clearCacheOnSuccess: true },
+  );
+  return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
+}
+
+export async function pauseExperiment(id: string): Promise<Experiment> {
+  const raw = await callRpc<{ experimentId: string }, { experiment?: Record<string, unknown> }>(
+    MGMT_URL, MGMT_SVC, 'PauseExperiment', { experimentId: id },
+    { skipCache: true, clearCacheOnSuccess: true },
+  );
+  return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
+}
+
+export async function resumeExperiment(id: string): Promise<Experiment> {
+  const raw = await callRpc<{ experimentId: string }, { experiment?: Record<string, unknown> }>(
+    MGMT_URL, MGMT_SVC, 'ResumeExperiment', { experimentId: id },
     { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
@@ -270,9 +311,13 @@ export async function getCumulativeHoldoutResult(experimentId: string): Promise<
 }
 
 export async function getGstTrajectory(experimentId: string, metricId: string): Promise<GstTrajectoryResult> {
-  return callRpc<{ experimentId: string; metricId: string }, GstTrajectoryResult>(
+  const raw = await callRpc<{ experimentId: string; metricId: string }, GstTrajectoryResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetGstTrajectory', { experimentId, metricId },
   );
+  return {
+    ...raw,
+    method: stripEnumPrefix(raw.method, 'SEQUENTIAL_METHOD_') as GstTrajectoryResult['method'],
+  };
 }
 
 export async function getQoeDashboard(experimentId: string): Promise<QoeDashboardResult> {
@@ -288,9 +333,16 @@ export async function getGuardrailStatus(experimentId: string): Promise<Guardrai
 }
 
 export async function getCateAnalysis(experimentId: string): Promise<CateAnalysisResult> {
-  return callRpc<{ experimentId: string }, CateAnalysisResult>(
+  const raw = await callRpc<{ experimentId: string }, CateAnalysisResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetCateAnalysis', { experimentId },
   );
+  return {
+    ...raw,
+    subgroupEffects: (raw.subgroupEffects || []).map((sg) => ({
+      ...sg,
+      segment: stripEnumPrefix(sg.segment, 'LIFECYCLE_SEGMENT_') as CateAnalysisResult['subgroupEffects'][number]['segment'],
+    })),
+  };
 }
 
 export async function getLayer(layerId: string): Promise<Layer> {
