@@ -128,7 +128,7 @@ Track integration test results between agent pairs.
 
 | Week | Pair | Status | Notes |
 |------|------|--------|-------|
-| 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🔵 | Agent-6 live API integration PR in progress — Next.js rewrites proxy, ConnectRPC error parsing, enum prefix stripping, 24 contract tests. Ready for end-to-end pair testing with Agent-5 backend. |
+| 3 | Agent-5 ↔ Agent-6 (management API + UI) | 🟢 | 11 wire-format contract tests (m5m6_contract_test.go): raw HTTP/JSON validates camelCase fields, enum prefixed strings, proto3 zero-value omission, response envelope, RFC 3339 timestamps, ConnectRPC error format, RBAC 403. Agent-6 has 24 MSW contract tests. |
 | 3 | Agent-1 ↔ Agent-5 (config streaming) | 🟡 | M5 StreamConfigUpdates ready (PR #15). Agent-1 can subscribe. |
 | 4 | Agent-2 ↔ Agent-3 (event pipeline → metrics) | 🟢 | Merged (PR #51): SQL template ↔ M2 Delta Lake schema alignment, PgWriter query_log, notebook export, guardrail alert contract. Extended: 40 M2→M3 contract tests (ExposureEvent, MetricEvent, QoEEvent) — Delta schema alignment, M3 SQL template field coverage (exposure_join, session_level_mean, interleaving_score, qoe_metric), cross-topic user correlation, Kafka key contracts. |
 | 4 | Agent-1 ↔ Agent-7 (hash parity via CGo) | 🟢 | CGo bridge parity confirmed — 10K vectors. Justfile target: `test-flags-cgo`. |
