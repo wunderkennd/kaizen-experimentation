@@ -60,6 +60,10 @@ func (s *FlagService) PromoteToExperiment(ctx context.Context, req *connect.Requ
 		TargetingRuleId:    f.TargetingRuleID,
 	}
 
+	if err := applyTypeConfig(experiment, f); err != nil {
+		return nil, err
+	}
+
 	var result *commonv1.Experiment
 
 	if s.managementClient != nil {
@@ -128,6 +132,71 @@ func (s *FlagService) createExperimentMock(exp *commonv1.Experiment, f *store.Fl
 	)
 
 	return exp
+}
+
+// applyTypeConfig sets type-specific experiment configuration based on ExperimentType.
+func applyTypeConfig(exp *commonv1.Experiment, f *store.Flag) error {
+	switch exp.Type {
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_AB,
+		commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE,
+		commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE:
+		// No additional config needed.
+
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING:
+		if len(f.Variants) < 2 {
+			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("interleaving requires at least 2 variants (algorithm_ids)"))
+		}
+		algorithmIDs := make([]string, len(f.Variants))
+		for i, v := range f.Variants {
+			algorithmIDs[i] = v.Value
+		}
+		exp.InterleavingConfig = &commonv1.InterleavingConfig{
+			Method:           commonv1.InterleavingMethod_INTERLEAVING_METHOD_TEAM_DRAFT,
+			AlgorithmIds:     algorithmIDs,
+			MaxListSize:      50,
+			CreditAssignment: commonv1.CreditAssignment_CREDIT_ASSIGNMENT_BINARY_WIN,
+		}
+
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL:
+		exp.SessionConfig = &commonv1.SessionConfig{
+			SessionIdAttribute:          "session_id",
+			AllowCrossSessionVariation:  true,
+		}
+
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_MAB:
+		if len(f.Variants) < 2 {
+			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("MAB requires at least 2 variants (arms)"))
+		}
+		exp.BanditConfig = buildBanditConfig(commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING, f)
+
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT:
+		if len(f.Variants) < 2 {
+			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("contextual bandit requires at least 2 variants (arms)"))
+		}
+		exp.BanditConfig = buildBanditConfig(commonv1.BanditAlgorithm_BANDIT_ALGORITHM_LINEAR_UCB, f)
+
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT:
+		exp.IsCumulativeHoldout = true
+	}
+
+	return nil
+}
+
+// buildBanditConfig creates a BanditConfig from flag variants.
+func buildBanditConfig(algo commonv1.BanditAlgorithm, f *store.Flag) *commonv1.BanditConfig {
+	arms := make([]*commonv1.BanditArm, len(f.Variants))
+	for i, v := range f.Variants {
+		arms[i] = &commonv1.BanditArm{
+			ArmId:       v.VariantID,
+			Name:        v.Value,
+			PayloadJson: fmt.Sprintf(`{"value": %q}`, v.Value),
+		}
+	}
+	return &commonv1.BanditConfig{
+		Algorithm:              algo,
+		Arms:                   arms,
+		MinExplorationFraction: 0.1,
+	}
 }
 
 // buildVariants creates experiment variants from a flag's configuration.
