@@ -233,6 +233,15 @@ bench-crate crate:
     @echo "  Running benchmarks for {{ crate }}..."
     {{ cargo }} bench -p {{ crate }}
 
+# Build assignment service with PGO optimization (instrument → profile → optimize)
+pgo-build:
+    @echo "  Building PGO-optimized assignment service..."
+    bash scripts/pgo_build.sh
+
+# Build assignment service release binary (no PGO)
+build-assignment-release:
+    {{ cargo }} build --release --package experimentation-assignment
+
 # ==============================================================================
 # Seed Data
 # ==============================================================================
