@@ -34,12 +34,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools
 
       - name: Run benchmarks
         working-directory: crates
         run: |
           cargo bench --package experimentation-hash -- --output-format bencher | tee bench.txt
           cargo bench --package experimentation-stats -- --output-format bencher | tee -a bench.txt
+          cargo bench --package experimentation-assignment -- --output-format bencher | tee -a bench.txt
 
       - uses: actions/upload-artifact@v4
         with:

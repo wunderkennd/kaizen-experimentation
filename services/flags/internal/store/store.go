@@ -23,6 +23,9 @@ type Flag struct {
 	// Flag-experiment linkage (Phase 3): set when PromoteToExperiment succeeds.
 	PromotedExperimentID string
 	PromotedAt           time.Time
+	// ResolvedAt tracks when a promoted flag was resolved (auto or manual).
+	// Zero value means not yet resolved.
+	ResolvedAt time.Time
 }
 
 // FlagVariant is a variant within a feature flag.

@@ -18,6 +18,7 @@
 package metrics_test
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"testing"
@@ -25,6 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/org/experimentation-platform/services/metrics/internal/config"
+	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
+	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 )
 
@@ -78,6 +82,26 @@ var ratioDeltaMethodColumns = []string{
 	"user_count", "mean_numerator", "mean_denominator",
 	"var_numerator", "var_denominator", "cov_numerator_denominator",
 	"computation_date",
+}
+
+// guardrailMetricColumns are the columns produced by the guardrail_metric template.
+// Guardrail metrics are variant-level (no user_id) — M5 reads these for breach detection.
+var guardrailMetricColumns = []string{
+	"experiment_id", "variant_id", "metric_id", "current_value", "computation_date",
+}
+
+// qoeCorrelationColumns are the columns produced by the qoe_engagement_correlation template.
+// M4a reads these for QoE-engagement impact analysis.
+var qoeCorrelationColumns = []string{
+	"experiment_id", "qoe_metric", "engagement_metric", "variant_id",
+	"pearson_correlation", "sample_size", "avg_qoe_value", "avg_engagement_value",
+	"stddev_qoe", "stddev_engagement", "computation_date",
+}
+
+// surrogateInputColumns are the columns produced by the surrogate_input template.
+// M4a reads these to feed surrogate model predictions.
+var surrogateInputColumns = []string{
+	"variant_id", "metric_id", "avg_value", "user_count",
 }
 
 // ---------------------------------------------------------------------------
@@ -749,4 +773,331 @@ func TestContract_AllTemplatesProduceValidSQL(t *testing.T) {
 				"template must produce SQL with FROM")
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 1: Missing column contracts for PERCENTILE, CUSTOM, guardrail,
+//        QoE-correlation, and surrogate-input templates.
+// ---------------------------------------------------------------------------
+
+func TestContract_MetricSummaries_PercentileTemplate(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderPercentile(spark.TemplateParams{
+		ExperimentID:    "exp-1",
+		MetricID:        "latency_p95",
+		SourceEventType: "playback_start",
+		Percentile:      0.95,
+		ComputationDate: "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "percentile", cols, metricSummariesRequired)
+	allAllowed := append(metricSummariesRequired, metricSummariesOptional...)
+	assertNoExtraColumns(t, "percentile", cols, allAllowed)
+
+	// Must use PERCENTILE_APPROX (Spark's approximate percentile function).
+	assert.Contains(t, strings.ToUpper(sql), "PERCENTILE_APPROX",
+		"percentile template must use PERCENTILE_APPROX — M4a expects per-user percentile as DOUBLE")
+
+	// Must pass the configured percentile value.
+	assert.Contains(t, sql, "0.95",
+		"percentile template must pass the percentile parameter value")
+}
+
+func TestContract_MetricSummaries_CustomTemplate(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderCustom(spark.TemplateParams{
+		ExperimentID:    "exp-1",
+		MetricID:        "power_users",
+		CustomSQL:       "SELECT user_id, AVG(value) AS metric_value FROM delta.metric_events WHERE event_type = 'heartbeat' GROUP BY user_id HAVING COUNT(*) >= 10",
+		ComputationDate: "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "custom", cols, metricSummariesRequired)
+
+	// Custom template wraps user SQL in a custom_result CTE.
+	assert.Contains(t, sql, "custom_result",
+		"custom template must wrap user SQL in a custom_result CTE")
+
+	// Must join with exposures for variant attribution.
+	assert.Contains(t, sql, "delta.exposures",
+		"custom template must join with exposures for variant assignment")
+}
+
+func TestContract_MetricSummaries_GuardrailTemplate(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderGuardrailMetric(spark.TemplateParams{
+		ExperimentID:    "exp-1",
+		MetricID:        "error_rate",
+		SourceEventType: "playback_error",
+		ComputationDate: "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "guardrail_metric", cols, guardrailMetricColumns)
+
+	// Guardrail metrics are variant-level (no user_id) — M5 reads aggregated values.
+	for _, col := range cols {
+		assert.NotEqual(t, "user_id", strings.ToLower(col),
+			"guardrail_metric must NOT output user_id — it is variant-level, not user-level")
+	}
+
+	// Must use AVG for current_value.
+	assert.Contains(t, strings.ToUpper(sql), "AVG(",
+		"guardrail_metric must use AVG for current_value — M5 compares against threshold")
+}
+
+func TestContract_QoEEngagementCorrelation(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderQoEEngagementCorrelation(spark.TemplateParams{
+		ExperimentID:         "exp-1",
+		QoEFieldA:            "time_to_first_frame_ms",
+		EngagementSourceType: "heartbeat",
+		ComputationDate:      "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "qoe_engagement_correlation", cols, qoeCorrelationColumns)
+
+	// Must compute Pearson correlation using CORR.
+	assert.Contains(t, strings.ToUpper(sql), "CORR(",
+		"qoe_engagement_correlation must use CORR for Pearson correlation")
+
+	// Must compute standard deviations using STDDEV_SAMP (sample, not population).
+	assert.Contains(t, strings.ToUpper(sql), "STDDEV_SAMP(",
+		"qoe_engagement_correlation must use STDDEV_SAMP for sample standard deviation")
+}
+
+func TestContract_SurrogateInput(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderSurrogateInput(spark.TemplateParams{
+		ExperimentID:          "exp-1",
+		InputMetricIDs:        []string{"watch_time_minutes", "stream_start_rate"},
+		ObservationWindowDays: 7,
+		ComputationDate:       "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "surrogate_input", cols, surrogateInputColumns)
+
+	// Must read from delta.metric_summaries (downstream of M3's own output).
+	assert.Contains(t, sql, "delta.metric_summaries",
+		"surrogate_input must read from delta.metric_summaries — not raw events")
+}
+
+// ---------------------------------------------------------------------------
+// Gap 2: End-to-end StandardJob output schema validation.
+// Runs StandardJob.Run() for each seed experiment and validates every SQL
+// query's columns against the schema matching its JobType.
+// ---------------------------------------------------------------------------
+
+func TestContract_StandardJob_FullOutputSchema(t *testing.T) {
+	cfgStore := loadContractConfig(t)
+	renderer := newRenderer(t)
+
+	experiments := []struct {
+		id   string
+		name string
+	}{
+		{"e0000000-0000-0000-0000-000000000001", "homepage_recs_v2"},
+		{"e0000000-0000-0000-0000-000000000003", "search_ranking_interleave"},
+		{"e0000000-0000-0000-0000-000000000004", "playback_qoe_test"},
+		{"e0000000-0000-0000-0000-000000000005", "custom_metric_test"},
+		{"e0000000-0000-0000-0000-000000000006", "latency_percentile_test"},
+		{"e0000000-0000-0000-0000-000000000007", "mixed_qoe_engagement_test"},
+	}
+
+	for _, exp := range experiments {
+		t.Run(exp.name, func(t *testing.T) {
+			executor := spark.NewMockExecutor(100)
+			qlWriter := querylog.NewMemWriter()
+			job := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter)
+			ctx := context.Background()
+
+			_, err := job.Run(ctx, exp.id)
+			require.NoError(t, err)
+
+			entries := qlWriter.AllEntries()
+			require.NotEmpty(t, entries, "StandardJob must produce at least one query")
+
+			for i, entry := range entries {
+				cols := extractSQLColumns(entry.SQLText)
+				switch entry.JobType {
+				case "daily_metric", "qoe_metric":
+					assertColumnsPresent(t, entry.JobType, cols, metricSummariesRequired)
+				case "cuped_covariate":
+					assert.Contains(t, strings.ToLower(entry.SQLText), "cuped_covariate",
+						"entry[%d] cuped_covariate query must contain cuped_covariate column", i)
+				case "delta_method":
+					assertColumnsPresent(t, "delta_method", cols, ratioDeltaMethodColumns)
+				case "daily_treatment_effect":
+					assertColumnsPresent(t, "daily_treatment_effect", cols, dailyTreatmentEffectsRequired)
+				case "session_level_metric":
+					assert.Contains(t, strings.ToLower(entry.SQLText), "session_id",
+						"entry[%d] session_level_metric must contain session_id", i)
+				case "lifecycle_metric":
+					assert.Contains(t, strings.ToLower(entry.SQLText), "lifecycle_segment",
+						"entry[%d] lifecycle_metric must contain lifecycle_segment", i)
+				case "qoe_engagement_correlation":
+					assert.Contains(t, strings.ToLower(entry.SQLText), "pearson_correlation",
+						"entry[%d] qoe_engagement_correlation must contain pearson_correlation", i)
+				default:
+					t.Errorf("entry[%d] unexpected job_type %q", i, entry.JobType)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 3: Cross-table consistency — metric_ids match across metric_summaries
+// and daily_treatment_effects for the same experiment.
+// ---------------------------------------------------------------------------
+
+func TestContract_CrossTable_ExperimentMetricConsistency(t *testing.T) {
+	cfgStore := loadContractConfig(t)
+	renderer := newRenderer(t)
+	executor := spark.NewMockExecutor(100)
+	qlWriter := querylog.NewMemWriter()
+	job := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter)
+	ctx := context.Background()
+
+	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
+	require.NoError(t, err)
+
+	entries := qlWriter.AllEntries()
+
+	// Collect metric_ids from daily_metric entries.
+	dailyMetricIDs := make(map[string]bool)
+	for _, e := range entries {
+		if e.JobType == "daily_metric" || e.JobType == "qoe_metric" {
+			mid := extractMetricIDFromSQL(e.SQLText)
+			if mid != "" {
+				dailyMetricIDs[mid] = true
+			}
+		}
+	}
+
+	// Collect metric_ids from daily_treatment_effect entries.
+	treatmentEffectMetricIDs := make(map[string]bool)
+	for _, e := range entries {
+		if e.JobType == "daily_treatment_effect" {
+			mid := extractMetricIDFromSQL(e.SQLText)
+			if mid != "" {
+				treatmentEffectMetricIDs[mid] = true
+			}
+		}
+	}
+
+	// Every metric with a daily_metric entry should also have a daily_treatment_effect.
+	require.NotEmpty(t, dailyMetricIDs, "should have daily_metric entries")
+	require.NotEmpty(t, treatmentEffectMetricIDs, "should have daily_treatment_effect entries")
+	for mid := range dailyMetricIDs {
+		assert.True(t, treatmentEffectMetricIDs[mid],
+			"metric_id %q has daily_metric but no daily_treatment_effect — cross-table inconsistency", mid)
+	}
+	for mid := range treatmentEffectMetricIDs {
+		assert.True(t, dailyMetricIDs[mid],
+			"metric_id %q has daily_treatment_effect but no daily_metric — cross-table inconsistency", mid)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 4: Semantic data shape — user-level GROUP BY granularity.
+// M4a requires per-user observations. The final GROUP BY must include
+// user_id and variant_id to ensure one row per user per variant.
+// ---------------------------------------------------------------------------
+
+func TestContract_DataShape_UserLevelGranularity(t *testing.T) {
+	r := newRenderer(t)
+
+	tests := []struct {
+		name   string
+		render func() (string, error)
+	}{
+		{"mean", func() (string, error) {
+			return r.RenderMean(spark.TemplateParams{
+				ExperimentID: "exp-1", MetricID: "m1",
+				SourceEventType: "e", ComputationDate: "2024-01-15",
+			})
+		}},
+		{"proportion", func() (string, error) {
+			return r.RenderProportion(spark.TemplateParams{
+				ExperimentID: "exp-1", MetricID: "m1",
+				SourceEventType: "e", ComputationDate: "2024-01-15",
+			})
+		}},
+		{"count", func() (string, error) {
+			return r.RenderCount(spark.TemplateParams{
+				ExperimentID: "exp-1", MetricID: "m1",
+				SourceEventType: "e", ComputationDate: "2024-01-15",
+			})
+		}},
+		{"ratio", func() (string, error) {
+			return r.RenderRatio(spark.TemplateParams{
+				ExperimentID: "exp-1", MetricID: "m1",
+				NumeratorEventType: "n", DenominatorEventType: "d",
+				ComputationDate: "2024-01-15",
+			})
+		}},
+		{"percentile", func() (string, error) {
+			return r.RenderPercentile(spark.TemplateParams{
+				ExperimentID: "exp-1", MetricID: "m1",
+				SourceEventType: "e", Percentile: 0.50,
+				ComputationDate: "2024-01-15",
+			})
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sql, err := tc.render()
+			require.NoError(t, err)
+
+			assertGroupByContains(t, tc.name, sql, "user_id")
+			assertGroupByContains(t, tc.name, sql, "variant_id")
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Additional helpers for Gap 2–4 tests
+// ---------------------------------------------------------------------------
+
+// loadContractConfig loads the seed config used by contract tests.
+func loadContractConfig(t *testing.T) *config.ConfigStore {
+	t.Helper()
+	cfgStore, err := config.LoadFromFile("config/testdata/seed_config.json")
+	require.NoError(t, err)
+	return cfgStore
+}
+
+// extractMetricIDFromSQL extracts the metric_id from a SQL template's output.
+// Templates use the pattern: 'value' AS metric_id
+var metricIDRe = regexp.MustCompile(`'([^']+)'\s+AS\s+metric_id`)
+
+func extractMetricIDFromSQL(sql string) string {
+	m := metricIDRe.FindStringSubmatch(sql)
+	if len(m) >= 2 {
+		return m[1]
+	}
+	return ""
+}
+
+// assertGroupByContains asserts that the last GROUP BY clause in sql contains
+// the given column name (case-insensitive).
+func assertGroupByContains(t *testing.T, name, sql, col string) {
+	t.Helper()
+	upper := strings.ToUpper(sql)
+	idx := strings.LastIndex(upper, "GROUP BY")
+	require.True(t, idx >= 0, "%s: SQL must have a GROUP BY clause", name)
+	groupByClause := upper[idx:]
+	assert.Contains(t, groupByClause, strings.ToUpper(col),
+		"%s: GROUP BY must contain %s — M4a requires per-user granularity", name, col)
 }
