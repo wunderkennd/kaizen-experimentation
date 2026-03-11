@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import type { AnalysisResult, Experiment } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
@@ -8,7 +9,7 @@ interface ResultsSummaryProps {
   experiment: Experiment;
 }
 
-export function ResultsSummary({ analysisResult, experiment }: ResultsSummaryProps) {
+function ResultsSummaryInner({ analysisResult, experiment }: ResultsSummaryProps) {
   const significantCount = analysisResult.metricResults.filter((m) => m.isSignificant).length;
   const totalCount = analysisResult.metricResults.length;
 
@@ -31,3 +32,5 @@ export function ResultsSummary({ analysisResult, experiment }: ResultsSummaryPro
     </div>
   );
 }
+
+export const ResultsSummary = memo(ResultsSummaryInner);

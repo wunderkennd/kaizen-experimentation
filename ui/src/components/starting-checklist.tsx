@@ -29,10 +29,11 @@ export function StartingChecklist() {
               <span
                 className="inline-block h-3 w-3 animate-pulse rounded-full bg-yellow-500"
                 data-testid="check-progress"
+                aria-hidden="true"
               />
             )}
             {item.status === 'pending' && (
-              <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300" />
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300" aria-hidden="true" />
             )}
             <span className={item.status === 'done' ? 'text-gray-600' : 'text-gray-900'}>
               {item.label}

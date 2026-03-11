@@ -16,6 +16,17 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// Mock next/dynamic to eagerly resolve dynamic imports in tests
+vi.mock('next/dynamic', () => ({
+  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) => {
+    let Comp: React.ComponentType<unknown> | null = null;
+    loader().then((mod) => { Comp = mod.default; });
+    return function DynamicMock(props: Record<string, unknown>) {
+      return Comp ? <Comp {...props} /> : null;
+    };
+  },
+}));
+
 // Mock recharts to avoid SVG rendering issues in jsdom
 vi.mock('recharts', async () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => (

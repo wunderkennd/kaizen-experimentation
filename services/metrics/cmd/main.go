@@ -21,6 +21,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/handler"
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
+	"github.com/org/experimentation-platform/services/metrics/internal/recalconsumer"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 	"github.com/org/experimentation-platform/services/metrics/internal/surrogate"
 )
@@ -76,6 +77,10 @@ func main() {
 	srv := &http.Server{Addr: ":" + port, Handler: h2c.NewHandler(mux, &http2.Server{})}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// Start Kafka consumer for surrogate recalibration requests from M5.
+	recalConsumer := recalconsumer.NewConsumer(brokers, recalJob, cfgStore)
+	recalConsumer.Start(ctx)
+	defer recalConsumer.Close()
 	go func() {
 		slog.Info("metrics service starting", "port", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed { slog.Error("server failed", "error", err); os.Exit(1) }

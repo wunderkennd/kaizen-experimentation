@@ -2,7 +2,7 @@ import type {
   AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse,
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
 } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
@@ -31,6 +31,20 @@ export function setApiAuth(email: string, role: string): void {
   _authRole = role;
 }
 
+// --- In-memory request cache with TTL ---
+interface CacheEntry<T> { data: T; expiresAt: number; }
+const _cache = new Map<string, CacheEntry<unknown>>();
+const DEFAULT_TTL_MS = 30_000;
+
+function getCacheKey(baseUrl: string, service: string, method: string, request: unknown): string {
+  return `${baseUrl}/${service}/${method}:${JSON.stringify(request)}`;
+}
+
+/** Clear the in-memory RPC cache. Call in test teardown. */
+export function clearApiCache(): void {
+  _cache.clear();
+}
+
 export class RpcError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -57,7 +71,28 @@ async function parseRpcError(res: Response, method: string): Promise<string> {
   return `RPC ${method} failed: ${res.status}`;
 }
 
-async function callRpc<Req, Res>(baseUrl: string, service: string, method: string, request: Req): Promise<Res> {
+interface CallRpcOptions {
+  skipCache?: boolean;
+  clearCacheOnSuccess?: boolean;
+}
+
+async function callRpc<Req, Res>(
+  baseUrl: string,
+  service: string,
+  method: string,
+  request: Req,
+  options: CallRpcOptions = {},
+): Promise<Res> {
+  const cacheKey = getCacheKey(baseUrl, service, method, request);
+
+  // Check cache for read-only calls
+  if (!options.skipCache) {
+    const cached = _cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as Res;
+    }
+  }
+
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (_authEmail) headers['X-User-Email'] = _authEmail;
   if (_authRole) headers['X-User-Role'] = _authRole;
@@ -70,7 +105,16 @@ async function callRpc<Req, Res>(baseUrl: string, service: string, method: strin
   if (!res.ok) {
     throw new RpcError(await parseRpcError(res, method), res.status);
   }
-  return res.json();
+  const data: Res = await res.json();
+
+  // Cache read-only responses; clear cache on mutating calls
+  if (options.clearCacheOnSuccess) {
+    _cache.clear();
+  } else if (!options.skipCache) {
+    _cache.set(cacheKey, { data, expiresAt: Date.now() + DEFAULT_TTL_MS });
+  }
+
+  return data;
 }
 
 /** Strip proto enum prefix if present. e.g. "EXPERIMENT_STATE_DRAFT" → "DRAFT" */
@@ -137,6 +181,7 @@ export async function getExperiment(id: string): Promise<Experiment> {
 export async function updateExperiment(experiment: Experiment): Promise<Experiment> {
   const raw = await callRpc<{ experiment: Experiment }, { experiment?: Record<string, unknown> }>(
     MGMT_URL, MGMT_SVC, 'UpdateExperiment', { experiment },
+    { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
@@ -144,6 +189,7 @@ export async function updateExperiment(experiment: Experiment): Promise<Experime
 export async function startExperiment(id: string): Promise<Experiment> {
   const raw = await callRpc<{ experimentId: string }, { experiment?: Record<string, unknown> }>(
     MGMT_URL, MGMT_SVC, 'StartExperiment', { experimentId: id },
+    { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
@@ -151,6 +197,7 @@ export async function startExperiment(id: string): Promise<Experiment> {
 export async function concludeExperiment(id: string): Promise<Experiment> {
   const raw = await callRpc<{ experimentId: string }, { experiment?: Record<string, unknown> }>(
     MGMT_URL, MGMT_SVC, 'ConcludeExperiment', { experimentId: id },
+    { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
@@ -158,6 +205,7 @@ export async function concludeExperiment(id: string): Promise<Experiment> {
 export async function archiveExperiment(id: string): Promise<Experiment> {
   const raw = await callRpc<{ experimentId: string }, { experiment?: Record<string, unknown> }>(
     MGMT_URL, MGMT_SVC, 'ArchiveExperiment', { experimentId: id },
+    { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
@@ -172,6 +220,7 @@ export async function getQueryLog(experimentId: string, metricId?: string): Prom
 export async function exportNotebook(experimentId: string): Promise<{ content: string; filename: string }> {
   const raw = await callRpc<{ experimentId: string }, { content: string; filename: string }>(
     METRICS_URL, METRICS_SVC, 'ExportNotebook', { experimentId },
+    { skipCache: true },
   );
   return raw;
 }
@@ -179,6 +228,7 @@ export async function exportNotebook(experimentId: string): Promise<{ content: s
 export async function createExperiment(request: CreateExperimentRequest): Promise<Experiment> {
   const raw = await callRpc<CreateExperimentRequest, { experiment?: Record<string, unknown> }>(
     MGMT_URL, MGMT_SVC, 'CreateExperiment', request,
+    { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
@@ -241,4 +291,21 @@ export async function getCateAnalysis(experimentId: string): Promise<CateAnalysi
   return callRpc<{ experimentId: string }, CateAnalysisResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetCateAnalysis', { experimentId },
   );
+}
+
+export async function getLayer(layerId: string): Promise<Layer> {
+  return callRpc<{ layerId: string }, Layer>(
+    MGMT_URL, MGMT_SVC, 'GetLayer', { layerId },
+  );
+}
+
+export async function getLayerAllocations(
+  layerId: string,
+  includeReleased = false,
+): Promise<LayerAllocation[]> {
+  const raw = await callRpc<
+    { layerId: string; includeReleased: boolean },
+    { allocations?: LayerAllocation[] }
+  >(MGMT_URL, MGMT_SVC, 'GetLayerAllocations', { layerId, includeReleased });
+  return raw.allocations || [];
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import type { SrmResult } from '@/lib/types';
 import { formatPValue } from '@/lib/utils';
 
@@ -7,7 +8,7 @@ interface SrmBannerProps {
   srmResult: SrmResult;
 }
 
-export function SrmBanner({ srmResult }: SrmBannerProps) {
+function SrmBannerInner({ srmResult }: SrmBannerProps) {
   if (!srmResult.isMismatch) return null;
 
   const observed = Object.entries(srmResult.observedCounts);
@@ -50,3 +51,5 @@ export function SrmBanner({ srmResult }: SrmBannerProps) {
     </div>
   );
 }
+
+export const SrmBanner = memo(SrmBannerInner);
