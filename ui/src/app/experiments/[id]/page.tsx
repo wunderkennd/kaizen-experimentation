@@ -14,6 +14,7 @@ import { VariantForm } from '@/components/variant-form';
 import { StateActions } from '@/components/state-actions';
 import { StartingChecklist } from '@/components/starting-checklist';
 import { ConcludingProgress } from '@/components/concluding-progress';
+import { LayerAllocationChart } from '@/components/layer-allocation-chart';
 
 export default function ExperimentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -180,6 +181,19 @@ export default function ExperimentDetailPage() {
           )}
         </div>
       </section>
+
+      {/* Layer Allocation */}
+      {experiment.layerId && (
+        <section className="mb-6">
+          <h2 className="mb-3 text-lg font-semibold text-gray-900">Layer Allocation</h2>
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4">
+            <LayerAllocationChart
+              layerId={experiment.layerId}
+              currentExperimentId={experiment.experimentId}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Guardrails */}
       {experiment.guardrailConfigs.length > 0 && (

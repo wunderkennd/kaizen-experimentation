@@ -2,7 +2,7 @@ import type {
   AnalysisResult, CreateExperimentRequest, Experiment, ListExperimentsResponse,
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
 } from './types';
 import type { ExperimentState, ExperimentType } from './types';
 
@@ -291,4 +291,21 @@ export async function getCateAnalysis(experimentId: string): Promise<CateAnalysi
   return callRpc<{ experimentId: string }, CateAnalysisResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetCateAnalysis', { experimentId },
   );
+}
+
+export async function getLayer(layerId: string): Promise<Layer> {
+  return callRpc<{ layerId: string }, Layer>(
+    MGMT_URL, MGMT_SVC, 'GetLayer', { layerId },
+  );
+}
+
+export async function getLayerAllocations(
+  layerId: string,
+  includeReleased = false,
+): Promise<LayerAllocation[]> {
+  const raw = await callRpc<
+    { layerId: string; includeReleased: boolean },
+    { allocations?: LayerAllocation[] }
+  >(MGMT_URL, MGMT_SVC, 'GetLayerAllocations', { layerId, includeReleased });
+  return raw.allocations || [];
 }

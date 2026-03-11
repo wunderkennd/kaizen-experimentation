@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
@@ -170,6 +171,9 @@ func (s *FlagService) handleResolvePromotedExperiment(w http.ResponseWriter, r *
 	case ResolutionKeep:
 		// No change to the flag itself.
 	}
+
+	// Mark as resolved to prevent reconciler from re-processing.
+	f.ResolvedAt = time.Now()
 
 	if action != ResolutionKeep {
 		if _, err := s.store.UpdateFlag(r.Context(), f); err != nil {
