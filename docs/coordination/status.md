@@ -1,7 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-10 by Agent-3 (Kafka-driven surrogate recalibration consumer)
-
+> **Last updated**: 2026-03-11 by Agent-7 (PromoteToExperiment all 8 types + auto-conclude reconciler)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -20,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/wire-remaining-analysis-rpcs | PostgreSQL caching for analysis results | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93, #107). Chaos testing merged. **All 5 analysis RPCs wired** + **PostgreSQL caching**: RunAnalysis (always compute + cache write), GetAnalysisResult (cache-first + Delta Lake fallback), novelty/interference (compute + cache write). AnalysisStore with sqlx. 36 tests (31 active + 5 PG-gated). |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/feat/chaos-test-management | Chaos test script (4.5) | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script: crash recovery, state integrity, lifecycle verification (PR #96). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/phase4-next | Phase 4 performance targets | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search/filter/sort (PR #90). RBAC UI: auth context, role-based button disabling. Performance: in-memory RPC cache, code-split dynamic imports, React.memo, SQL syntax highlighting, Web Worker notebook export. WCAG 2.1 AA accessibility fixes. 239 tests pass. |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/rbac-integration | Live M5 PromoteToExperiment wiring | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor. Live M5 wiring: layer_id, auth header forwarding, 10s client timeout, mock contract validation. |
+| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/promote-all-types-reconciler | PromoteToExperiment all types + auto-conclude | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor. **Phase 5**: PromoteToExperiment sets type-specific configs for all 8 experiment types (InterleavingConfig, SessionConfig, BanditConfig, is_cumulative_holdout). Auto-conclude reconciler polls M5 and resolves promoted flags when experiments reach CONCLUDED/ARCHIVED. 14 new tests (6 promote + 8 reconciler). |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
