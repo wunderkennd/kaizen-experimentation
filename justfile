@@ -335,6 +335,10 @@ loadtest-soak:
     @command -v {{ k6 }} >/dev/null 2>&1 || { echo "  Error: 'k6' not found."; exit 1; }
     {{ k6 }} run scripts/loadtest.js --env SCENARIO=soak
 
+# Run M1 assignment service load test: p99 < 5ms at 10K rps (builds, starts server, validates SLA)
+loadtest-assignment:
+    bash scripts/loadtest_assignment.sh
+
 # ==============================================================================
 # Convenience
 # ==============================================================================
