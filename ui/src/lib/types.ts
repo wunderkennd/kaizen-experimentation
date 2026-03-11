@@ -359,6 +359,25 @@ export interface CateAnalysisResult {
 }
 // --- Bandit Dashboard (M3.3) ---
 
+// --- Layer Allocation (M6 bucket visualization) ---
+
+export interface Layer {
+  layerId: string;
+  name: string;
+  description: string;
+  totalBuckets: number;
+}
+
+export interface LayerAllocation {
+  allocationId: string;
+  layerId: string;
+  experimentId: string;
+  startBucket: number;
+  endBucket: number;
+  activatedAt?: string;
+  releasedAt?: string;
+}
+
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';
 
 export interface BanditArmStats {

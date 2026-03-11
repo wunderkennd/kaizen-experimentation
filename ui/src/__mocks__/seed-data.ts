@@ -2,7 +2,7 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -1009,6 +1009,150 @@ const INITIAL_CATE_RESULTS: Record<string, CateAnalysisResult> = {
   },
 };
 
+/** Layer definitions for bucket allocation visualization. */
+const INITIAL_LAYERS: Record<string, Layer> = {
+  'layer-homepage': {
+    layerId: 'layer-homepage',
+    name: 'Homepage',
+    description: 'Homepage recommendations',
+    totalBuckets: 10000,
+  },
+  'layer-playback': {
+    layerId: 'layer-playback',
+    name: 'Playback',
+    description: 'Playback QoE experiments',
+    totalBuckets: 10000,
+  },
+  'layer-search': {
+    layerId: 'layer-search',
+    name: 'Search',
+    description: 'Search ranking experiments',
+    totalBuckets: 10000,
+  },
+  'layer-content-placement': {
+    layerId: 'layer-content-placement',
+    name: 'Content Placement',
+    description: 'Content placement optimization',
+    totalBuckets: 10000,
+  },
+  'layer-onboarding': {
+    layerId: 'layer-onboarding',
+    name: 'Onboarding',
+    description: 'User onboarding flows',
+    totalBuckets: 10000,
+  },
+  'layer-content': {
+    layerId: 'layer-content',
+    name: 'Content',
+    description: 'Content presentation experiments',
+    totalBuckets: 10000,
+  },
+  'layer-holdout': {
+    layerId: 'layer-holdout',
+    name: 'Holdout',
+    description: 'Cumulative holdout experiments',
+    totalBuckets: 10000,
+  },
+  'layer-engagement': {
+    layerId: 'layer-engagement',
+    name: 'Engagement',
+    description: 'User engagement experiments',
+    totalBuckets: 10000,
+  },
+  'layer-browse': {
+    layerId: 'layer-browse',
+    name: 'Browse',
+    description: 'Browse page layout experiments',
+    totalBuckets: 10000,
+  },
+};
+
+/** Layer allocations showing which experiments own which bucket ranges. */
+const INITIAL_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = {
+  'layer-homepage': [
+    {
+      allocationId: 'alloc-1',
+      layerId: 'layer-homepage',
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      startBucket: 0,
+      endBucket: 4999,
+      activatedAt: '2026-02-16T08:00:00Z',
+    },
+  ],
+  'layer-search': [
+    {
+      allocationId: 'alloc-2',
+      layerId: 'layer-search',
+      experimentId: '33333333-3333-3333-3333-333333333333',
+      startBucket: 0,
+      endBucket: 4999,
+      activatedAt: '2026-02-21T06:00:00Z',
+    },
+    {
+      allocationId: 'alloc-3',
+      layerId: 'layer-search',
+      experimentId: 'archived-search-exp',
+      startBucket: 5000,
+      endBucket: 7499,
+      activatedAt: '2026-01-10T00:00:00Z',
+      releasedAt: '2026-02-01T00:00:00Z',
+    },
+  ],
+  'layer-playback': [],
+  'layer-content-placement': [],
+  'layer-onboarding': [
+    {
+      allocationId: 'alloc-4',
+      layerId: 'layer-onboarding',
+      experimentId: '55555555-5555-5555-5555-555555555555',
+      startBucket: 0,
+      endBucket: 9999,
+      activatedAt: '2026-03-04T08:00:00Z',
+    },
+  ],
+  'layer-content': [
+    {
+      allocationId: 'alloc-5',
+      layerId: 'layer-content',
+      experimentId: '66666666-6666-6666-6666-666666666666',
+      startBucket: 0,
+      endBucket: 4999,
+      activatedAt: '2026-02-11T06:00:00Z',
+    },
+  ],
+  'layer-holdout': [
+    {
+      allocationId: 'alloc-6',
+      layerId: 'layer-holdout',
+      experimentId: '77777777-7777-7777-7777-777777777777',
+      startBucket: 0,
+      endBucket: 9999,
+      activatedAt: '2026-01-02T00:00:00Z',
+    },
+  ],
+  'layer-engagement': [
+    {
+      allocationId: 'alloc-7',
+      layerId: 'layer-engagement',
+      experimentId: '88888888-8888-8888-8888-888888888888',
+      startBucket: 0,
+      endBucket: 5999,
+      activatedAt: '2026-01-21T06:00:00Z',
+    },
+  ],
+  'layer-browse': [
+    {
+      allocationId: 'alloc-8',
+      layerId: 'layer-browse',
+      experimentId: '99999999-9999-9999-9999-999999999999',
+      startBucket: 0,
+      endBucket: 9999,
+      activatedAt: '2025-11-16T06:00:00Z',
+      releasedAt: '2025-12-20T18:00:00Z',
+    },
+  ],
+};
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -1022,6 +1166,8 @@ export let SEED_GUARDRAIL_STATUS: Record<string, GuardrailStatusResult> = struct
 export let SEED_QOE_RESULTS: Record<string, QoeDashboardResult> = structuredClone(INITIAL_QOE_RESULTS);
 export let SEED_GST_RESULTS: Record<string, GstTrajectoryResult[]> = structuredClone(INITIAL_GST_RESULTS);
 export let SEED_CATE_RESULTS: Record<string, CateAnalysisResult> = structuredClone(INITIAL_CATE_RESULTS);
+export let SEED_LAYERS: Record<string, Layer> = structuredClone(INITIAL_LAYERS);
+export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structuredClone(INITIAL_LAYER_ALLOCATIONS);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -1037,4 +1183,6 @@ export function resetSeedData(): void {
   SEED_QOE_RESULTS = structuredClone(INITIAL_QOE_RESULTS);
   SEED_GST_RESULTS = structuredClone(INITIAL_GST_RESULTS);
   SEED_CATE_RESULTS = structuredClone(INITIAL_CATE_RESULTS);
+  SEED_LAYERS = structuredClone(INITIAL_LAYERS);
+  SEED_LAYER_ALLOCATIONS = structuredClone(INITIAL_LAYER_ALLOCATIONS);
 }
