@@ -11,3 +11,11 @@ chrono = { workspace = true }
 prost-types = { workspace = true }
 prometheus = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+prost = { workspace = true }
+
+[[bench]]
+name = "ingest_bench"
+harness = false

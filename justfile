@@ -233,6 +233,15 @@ bench-crate crate:
     @echo "  Running benchmarks for {{ crate }}..."
     {{ cargo }} bench -p {{ crate }}
 
+# Build assignment service with PGO optimization (instrument → profile → optimize)
+pgo-build:
+    @echo "  Building PGO-optimized assignment service..."
+    bash scripts/pgo_build.sh
+
+# Build assignment service release binary (no PGO)
+build-assignment-release:
+    {{ cargo }} build --release --package experimentation-assignment
+
 # ==============================================================================
 # Seed Data
 # ==============================================================================
@@ -325,6 +334,10 @@ loadtest-spike:
 loadtest-soak:
     @command -v {{ k6 }} >/dev/null 2>&1 || { echo "  Error: 'k6' not found."; exit 1; }
     {{ k6 }} run scripts/loadtest.js --env SCENARIO=soak
+
+# Run M1 assignment service load test: p99 < 5ms at 10K rps (builds, starts server, validates SLA)
+loadtest-assignment:
+    bash scripts/loadtest_assignment.sh
 
 # ==============================================================================
 # Convenience

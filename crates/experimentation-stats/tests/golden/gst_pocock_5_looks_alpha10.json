@@ -1,0 +1,45 @@
+{
+  "test_name": "gst_pocock_5_looks_alpha10",
+  "spending_function": "Pocock",
+  "planned_looks": 5,
+  "overall_alpha": 0.1,
+  "source": "recursive_integration_python",
+  "r_command": "gsDesign(k=5, test.type=2, alpha=0.1, sfu=sfLDPocock)",
+  "boundaries": [
+    {
+      "look": 1,
+      "information_fraction": 0.2,
+      "cumulative_alpha": 0.029539452912034764,
+      "incremental_alpha": 0.029539452912034764,
+      "critical_value": 2.1762114530886807
+    },
+    {
+      "look": 2,
+      "information_fraction": 0.4,
+      "cumulative_alpha": 0.05231371636115855,
+      "incremental_alpha": 0.022774263449123786,
+      "critical_value": 2.1437476982527337
+    },
+    {
+      "look": 3,
+      "information_fraction": 0.6,
+      "cumulative_alpha": 0.0708513066862315,
+      "incremental_alpha": 0.018537590325072954,
+      "critical_value": 2.113281163617071
+    },
+    {
+      "look": 4,
+      "information_fraction": 0.8,
+      "cumulative_alpha": 0.08648397251631904,
+      "incremental_alpha": 0.01563266583008753,
+      "critical_value": 2.0895655324923914
+    },
+    {
+      "look": 5,
+      "information_fraction": 1.0,
+      "cumulative_alpha": 0.1,
+      "incremental_alpha": 0.01351602748368097,
+      "critical_value": 2.0708940552508546
+    }
+  ]
+}
