@@ -3,6 +3,8 @@
   "spending_function": "Pocock",
   "planned_looks": 3,
   "overall_alpha": 0.05,
+  "source": "recursive_integration_python",
+  "r_command": "gsDesign(k=3, test.type=2, alpha=0.05, sfu=sfLDPocock)",
   "boundaries": [
     {
       "look": 1,
@@ -16,14 +18,14 @@
       "information_fraction": 0.6666666666666666,
       "cumulative_alpha": 0.03816912576950707,
       "incremental_alpha": 0.015527504506310002,
-      "critical_value": 2.4198360875552964
+      "critical_value": 2.294911132375699
     },
     {
       "look": 3,
       "information_fraction": 1.0,
       "cumulative_alpha": 0.05,
       "incremental_alpha": 0.011830874230492935,
-      "critical_value": 2.5171491268496147
+      "critical_value": 2.2959383587160236
     }
   ]
 }
