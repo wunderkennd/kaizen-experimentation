@@ -349,6 +349,10 @@ loadtest-soak:
 loadtest-assignment:
     bash scripts/loadtest_assignment.sh
 
+# Run M7 flag service load test: p99 < 10ms at 20K rps (builds, starts server, seeds flags, validates SLA)
+loadtest-flags:
+    bash scripts/loadtest_flags.sh
+
 # ==============================================================================
 # Convenience
 # ==============================================================================
