@@ -119,3 +119,91 @@ func TestMockModelLoader_Load_NonLinear(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "LINEAR")
 }
+
+func TestLinearModel_Predict_AllCoefficientsMissing(t *testing.T) {
+	model := &LinearModel{
+		Coefficients:        map[string]float64{"x": 1.0, "y": 2.0},
+		Intercept:           5.0,
+		CalibrationRSquared: 0.8,
+	}
+	// Both variants lack coefficient keys — predict falls back to intercept only.
+	inputs := InputMetrics{
+		"ctrl": {"z": 10.0}, // z not in coefficients
+		"tx":   {"z": 20.0},
+	}
+	projections, err := model.Predict(inputs, "ctrl")
+	require.NoError(t, err)
+	require.Len(t, projections, 1)
+	// Both ctrl and tx predict intercept=5.0 (no matching coefficients), effect = 0.
+	assert.InDelta(t, 0.0, projections[0].ProjectedEffect, 1e-9)
+}
+
+func TestLinearModel_Predict_ZeroEffect(t *testing.T) {
+	model := &LinearModel{
+		Coefficients:        map[string]float64{"x": 2.0},
+		Intercept:           1.0,
+		CalibrationRSquared: 0.8,
+	}
+	// Identical inputs → effect = 0, CI symmetric around 0.
+	inputs := InputMetrics{
+		"ctrl": {"x": 5.0},
+		"tx":   {"x": 5.0},
+	}
+	projections, err := model.Predict(inputs, "ctrl")
+	require.NoError(t, err)
+	require.Len(t, projections, 1)
+
+	p := projections[0]
+	assert.InDelta(t, 0.0, p.ProjectedEffect, 1e-9)
+	// With effect=0, SE=|0|*sqrt(...)=0, so CI=[0, 0].
+	assert.InDelta(t, 0.0, p.ProjectionCILower, 1e-9)
+	assert.InDelta(t, 0.0, p.ProjectionCIUpper, 1e-9)
+}
+
+func TestLinearModel_Predict_ControlVariantMissing(t *testing.T) {
+	model := &LinearModel{
+		Coefficients:        map[string]float64{"x": 1.0},
+		CalibrationRSquared: 0.8,
+	}
+	inputs := InputMetrics{
+		"tx": {"x": 5.0},
+	}
+	_, err := model.Predict(inputs, "ctrl")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "control variant")
+	assert.Contains(t, err.Error(), "ctrl")
+}
+
+func TestMockModelLoader_Load_UnsupportedType(t *testing.T) {
+	loader := NewMockModelLoader()
+	cfg := &config.SurrogateModelConfig{
+		ModelID:      "nn-model",
+		ModelType:    "NEURAL",
+		Coefficients: map[string]float64{"x": 1.0},
+	}
+	_, err := loader.Load(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LINEAR")
+	assert.Contains(t, err.Error(), "NEURAL")
+}
+
+func TestMockModelLoader_Load_HappyPath(t *testing.T) {
+	loader := NewMockModelLoader()
+	cfg := &config.SurrogateModelConfig{
+		ModelID:             "test-linear",
+		ModelType:           "LINEAR",
+		CalibrationRSquared: 0.9,
+		Coefficients:        map[string]float64{"a": 1.5, "b": -0.5},
+		Intercept:           2.0,
+	}
+
+	model, err := loader.Load(cfg)
+	require.NoError(t, err)
+
+	lm, ok := model.(*LinearModel)
+	require.True(t, ok, "should return *LinearModel")
+	assert.Equal(t, 0.9, lm.CalibrationRSquared)
+	assert.Equal(t, 2.0, lm.Intercept)
+	assert.Equal(t, 1.5, lm.Coefficients["a"])
+	assert.Equal(t, -0.5, lm.Coefficients["b"])
+}
