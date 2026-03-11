@@ -1,0 +1,24 @@
+{
+  "test_name": "gst_obf_2_looks",
+  "spending_function": "OBrienFleming",
+  "planned_looks": 2,
+  "overall_alpha": 0.05,
+  "source": "recursive_integration_python",
+  "r_command": "gsDesign(k=2, test.type=2, alpha=0.05, sfu=sfLDOF)",
+  "boundaries": [
+    {
+      "look": 1,
+      "information_fraction": 0.5,
+      "cumulative_alpha": 0.005574596680784305,
+      "incremental_alpha": 0.005574596680784305,
+      "critical_value": 2.771807648699362
+    },
+    {
+      "look": 2,
+      "information_fraction": 1.0,
+      "cumulative_alpha": 0.05,
+      "incremental_alpha": 0.0444254033192157,
+      "critical_value": 1.9793113426784357
+    }
+  ]
+}

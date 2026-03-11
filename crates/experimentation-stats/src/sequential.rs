@@ -12,7 +12,7 @@
 //! Validated against R's gsDesign package and scipy to 4+ decimal places.
 
 use experimentation_core::error::{assert_finite, Error, Result};
-use statrs::distribution::{ContinuousCDF, Normal};
+use statrs::distribution::{Continuous, ContinuousCDF, Normal};
 
 // ---------------------------------------------------------------------------
 // mSPRT (mixture Sequential Probability Ratio Test)
@@ -188,9 +188,7 @@ pub fn spending_function_alpha(spending: SpendingFunction, t: f64, overall_alpha
             let z_alpha_half = z.inverse_cdf(1.0 - overall_alpha / 2.0);
             2.0 * (1.0 - z.cdf(z_alpha_half / t.sqrt()))
         }
-        SpendingFunction::Pocock => {
-            overall_alpha * (1.0 + (std::f64::consts::E - 1.0) * t).ln()
-        }
+        SpendingFunction::Pocock => overall_alpha * (1.0 + (std::f64::consts::E - 1.0) * t).ln(),
     };
 
     // Clamp to [0, overall_alpha]
@@ -198,6 +196,10 @@ pub fn spending_function_alpha(spending: SpendingFunction, t: f64, overall_alpha
 }
 
 /// Evaluate the GST boundary at a specific look.
+///
+/// Uses the Armitage-McPherson-Rowe recursive integration to compute
+/// the correct critical value that accounts for correlation between
+/// sequential test statistics.
 ///
 /// # Arguments
 /// * `z_stat` — Z-statistic at the current look.
@@ -239,6 +241,11 @@ pub fn gst_evaluate(
     let z = Normal::new(0.0, 1.0)
         .map_err(|e| Error::Numerical(format!("failed to create Normal: {e}")))?;
 
+    // Compute all boundaries up to the current look via recursive integration
+    let all_boundaries = gst_boundaries(planned_looks, overall_alpha, spending)?;
+    let critical_value = all_boundaries[(current_look - 1) as usize];
+    assert_finite(critical_value, "critical_value");
+
     // Information fraction at this look
     let t = current_look as f64 / planned_looks as f64;
 
@@ -246,30 +253,17 @@ pub fn gst_evaluate(
     let cumulative_alpha = spending_function_alpha(spending, t, overall_alpha);
     assert_finite(cumulative_alpha, "cumulative_alpha");
 
-    // Incremental alpha for this look
-    let incremental_alpha = (cumulative_alpha - prev_alpha_spent).max(0.0);
-    assert_finite(incremental_alpha, "incremental_alpha");
-
-    // Critical value: z-boundary for two-sided test at incremental alpha level
-    let critical_value = if incremental_alpha > 0.0 {
-        z.inverse_cdf(1.0 - incremental_alpha / 2.0)
-    } else {
-        f64::INFINITY
-    };
-    assert_finite(critical_value, "critical_value");
-
     // Nominal p-value (two-sided)
     let nominal_p_value = 2.0 * (1.0 - z.cdf(z_stat.abs()));
     assert_finite(nominal_p_value, "nominal_p_value");
 
     let boundary_crossed = z_stat.abs() > critical_value;
 
-    // Adjusted p-value: the smallest overall alpha for which this look
-    // would have crossed the boundary. Approximate by scaling nominal p.
+    // Adjusted p-value approximation
+    let incremental_alpha = (cumulative_alpha - prev_alpha_spent).max(0.0);
     let adjusted_p_value = if boundary_crossed {
         cumulative_alpha.min(1.0)
     } else {
-        // Conservative: report the nominal p-value scaled by the spending factor
         (nominal_p_value * overall_alpha / incremental_alpha.max(f64::MIN_POSITIVE)).min(1.0)
     };
     assert_finite(adjusted_p_value, "adjusted_p_value");
@@ -290,10 +284,148 @@ pub fn gst_evaluate(
     })
 }
 
-/// Compute all GST boundaries for a given spending function and number of looks.
+/// Compute all GST boundaries using the Armitage-McPherson-Rowe recursive
+/// numerical integration algorithm.
+///
+/// This correctly accounts for the multivariate normal correlation between
+/// sequential test statistics: `Corr(Z_i, Z_j) = sqrt(t_i / t_j)`.
 ///
 /// Returns the critical z-values at each look. Useful for plotting boundary curves.
+///
+/// # Algorithm
+///
+/// At each look k, the critical value c_k satisfies:
+///   P(|Z_1| ≤ c_1, ..., |Z_k| ≤ c_k | H0) = 1 - α*(t_k)
+///
+/// The continuation probability is computed recursively via Gauss-Legendre
+/// quadrature over the transition density:
+///   Z_k | Z_{k-1} = w ~ N(w · √(t_{k-1}/t_k), 1 - t_{k-1}/t_k)
 pub fn gst_boundaries(
+    planned_looks: u32,
+    overall_alpha: f64,
+    spending: SpendingFunction,
+) -> Result<Vec<f64>> {
+    if planned_looks < 2 {
+        return Err(Error::Validation(
+            "GST requires at least 2 planned looks".into(),
+        ));
+    }
+    if overall_alpha <= 0.0 || overall_alpha >= 1.0 {
+        return Err(Error::Validation("overall_alpha must be in (0, 1)".into()));
+    }
+
+    let z = Normal::new(0.0, 1.0)
+        .map_err(|e| Error::Numerical(format!("failed to create Normal: {e}")))?;
+
+    let k = planned_looks as usize;
+
+    // Pre-compute cumulative spending at each look
+    let mut cum_alphas = Vec::with_capacity(k);
+    for i in 1..=planned_looks {
+        let t = i as f64 / planned_looks as f64;
+        let ca = spending_function_alpha(spending, t, overall_alpha);
+        cum_alphas.push(ca);
+    }
+
+    // Pre-compute Gauss-Legendre reference nodes and weights on [-1, 1]
+    let (gl_ref_nodes, gl_ref_weights) = gauss_legendre_nodes(N_GL_NODES);
+
+    let mut boundaries = Vec::with_capacity(k);
+
+    // State for recursive integration: quadrature representation of the
+    // continuation density g_{k-1} at GL nodes on [-c_{k-1}, c_{k-1}].
+    let mut prev_nodes: Vec<f64> = Vec::new();
+    let mut prev_dens: Vec<f64> = Vec::new();
+    let mut prev_wts: Vec<f64> = Vec::new();
+    let mut prev_t: f64 = 0.0;
+
+    for (look, &cum_alpha) in cum_alphas.iter().enumerate() {
+        let t = (look + 1) as f64 / planned_looks as f64;
+
+        if look == 0 {
+            // Look 1: simple quantile (no prior correlation)
+            let c_k = z.inverse_cdf(1.0 - cum_alpha / 2.0);
+            assert_finite(c_k, "gst_boundary_look1");
+
+            // Set up quadrature on [-c_k, c_k]
+            let (nodes, wts) = gl_on_interval(&gl_ref_nodes, &gl_ref_weights, -c_k, c_k);
+            let dens: Vec<f64> = nodes.iter().map(|&x| z.pdf(x)).collect();
+
+            prev_nodes = nodes;
+            prev_dens = dens;
+            prev_wts = wts;
+            boundaries.push(c_k);
+        } else {
+            // Transition parameters: Z_k | Z_{k-1}=w ~ N(w*r, sigma_t)
+            let ratio = prev_t / t;
+            let r = ratio.sqrt();
+            let sigma_t = (1.0 - ratio).sqrt();
+            assert_finite(r, "transition_mean_scale");
+            assert_finite(sigma_t, "transition_sd");
+
+            let trans = Normal::new(0.0, sigma_t).map_err(|e| {
+                Error::Numerical(format!("failed to create transition Normal: {e}"))
+            })?;
+
+            // Pre-compute conditional means for previous nodes
+            let prev_means: Vec<f64> = prev_nodes.iter().map(|&w| w * r).collect();
+
+            // Closure: evaluate g_k at a set of z values
+            let eval_gk = |z_values: &[f64]| -> Vec<f64> {
+                z_values
+                    .iter()
+                    .map(|&z_j| {
+                        let mut sum = 0.0;
+                        for i in 0..prev_nodes.len() {
+                            // f(z_j | w_i) = phi((z_j - w_i*r) / sigma_t) / sigma_t
+                            let t_density = trans.pdf(z_j - prev_means[i]);
+                            sum += prev_dens[i] * t_density * prev_wts[i];
+                        }
+                        sum
+                    })
+                    .collect()
+            };
+
+            // Closure: continuation probability for a candidate c
+            let continuation_prob = |c: f64| -> f64 {
+                let (nodes_c, wts_c) = gl_on_interval(&gl_ref_nodes, &gl_ref_weights, -c, c);
+                let gk_vals = eval_gk(&nodes_c);
+                let mut sum = 0.0;
+                for j in 0..nodes_c.len() {
+                    sum += gk_vals[j] * wts_c[j];
+                }
+                sum
+            };
+
+            let target = 1.0 - cum_alpha;
+
+            // Bisection to find c_k such that continuation_prob(c_k) = target
+            let c_k = bisect(|c| continuation_prob(c) - target, 0.5, 7.5, 1e-12, 200)
+                .map_err(Error::Numerical)?;
+            assert_finite(c_k, "gst_boundary");
+
+            // Store g_k at GL nodes on [-c_k, c_k] for next step
+            let (nodes, wts) = gl_on_interval(&gl_ref_nodes, &gl_ref_weights, -c_k, c_k);
+            let dens = eval_gk(&nodes);
+
+            prev_nodes = nodes;
+            prev_dens = dens;
+            prev_wts = wts;
+            boundaries.push(c_k);
+        }
+
+        prev_t = t;
+    }
+
+    Ok(boundaries)
+}
+
+/// Old incremental-alpha boundary computation (treats each look as independent).
+///
+/// Kept for documentation and comparison. The recursive integration in
+/// [`gst_boundaries`] is the correct algorithm that matches gsDesign.
+#[allow(dead_code)]
+fn gst_boundaries_incremental(
     planned_looks: u32,
     overall_alpha: f64,
     spending: SpendingFunction,
@@ -327,6 +459,129 @@ pub fn gst_boundaries(
     }
 
     Ok(boundaries)
+}
+
+// ---------------------------------------------------------------------------
+// Gauss-Legendre quadrature helpers
+// ---------------------------------------------------------------------------
+
+/// Number of Gauss-Legendre quadrature nodes. 101 is sufficient for 1e-8
+/// accuracy on smooth integrands like the normal density.
+const N_GL_NODES: usize = 101;
+
+/// Compute Gauss-Legendre quadrature nodes and weights on [-1, 1].
+///
+/// Uses Newton's method to find roots of the n-th Legendre polynomial,
+/// then computes weights from the derivative at each root.
+fn gauss_legendre_nodes(n: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut nodes = vec![0.0; n];
+    let mut weights = vec![0.0; n];
+
+    // Legendre polynomials are symmetric: we only need to find roots for
+    // the positive half and mirror them.
+    let m = n.div_ceil(2);
+
+    for i in 0..m {
+        // Initial guess: Chebyshev approximation to the i-th root
+        let mut x = ((i as f64 + 0.75) / (n as f64 + 0.5) * std::f64::consts::PI).cos();
+
+        // Newton iteration: x_{k+1} = x_k - P_n(x_k) / P'_n(x_k)
+        for _ in 0..100 {
+            let (p_n, p_n_deriv) = legendre_eval(n, x);
+            let dx = p_n / p_n_deriv;
+            x -= dx;
+            if dx.abs() < 1e-15 {
+                break;
+            }
+        }
+
+        let (_, p_n_deriv) = legendre_eval(n, x);
+        let w = 2.0 / ((1.0 - x * x) * p_n_deriv * p_n_deriv);
+
+        // Use symmetry: node i and node n-1-i are mirrors
+        nodes[i] = -x;
+        nodes[n - 1 - i] = x;
+        weights[i] = w;
+        weights[n - 1 - i] = w;
+    }
+
+    (nodes, weights)
+}
+
+/// Evaluate the n-th Legendre polynomial and its derivative at x.
+///
+/// Returns (P_n(x), P'_n(x)) using the three-term recurrence.
+fn legendre_eval(n: usize, x: f64) -> (f64, f64) {
+    if n == 0 {
+        return (1.0, 0.0);
+    }
+    let mut p_prev = 1.0; // P_0(x)
+    let mut p_curr = x; // P_1(x)
+
+    for k in 2..=n {
+        let kf = k as f64;
+        let p_next = ((2.0 * kf - 1.0) * x * p_curr - (kf - 1.0) * p_prev) / kf;
+        p_prev = p_curr;
+        p_curr = p_next;
+    }
+
+    // P'_n(x) = n * (x * P_n(x) - P_{n-1}(x)) / (x^2 - 1)
+    let nf = n as f64;
+    let deriv = nf * (x * p_curr - p_prev) / (x * x - 1.0);
+
+    (p_curr, deriv)
+}
+
+/// Map Gauss-Legendre nodes and weights from [-1,1] to [lo, hi].
+fn gl_on_interval(
+    ref_nodes: &[f64],
+    ref_weights: &[f64],
+    lo: f64,
+    hi: f64,
+) -> (Vec<f64>, Vec<f64>) {
+    let half_len = 0.5 * (hi - lo);
+    let mid = 0.5 * (lo + hi);
+    let nodes: Vec<f64> = ref_nodes.iter().map(|&x| half_len * x + mid).collect();
+    let weights: Vec<f64> = ref_weights.iter().map(|&w| half_len * w).collect();
+    (nodes, weights)
+}
+
+/// Simple bisection root-finder.
+///
+/// Finds x in [lo, hi] such that f(x) ≈ 0 to within `tol`.
+fn bisect<F: Fn(f64) -> f64>(
+    f: F,
+    mut lo: f64,
+    mut hi: f64,
+    tol: f64,
+    max_iter: usize,
+) -> std::result::Result<f64, String> {
+    let f_lo = f(lo);
+    let f_hi = f(hi);
+
+    if f_lo * f_hi > 0.0 {
+        return Err(format!(
+            "bisection: f(lo={lo})={f_lo} and f(hi={hi})={f_hi} have the same sign"
+        ));
+    }
+
+    for _ in 0..max_iter {
+        let mid = 0.5 * (lo + hi);
+        if (hi - lo) < tol {
+            return Ok(mid);
+        }
+        let f_mid = f(mid);
+        if f_mid == 0.0 {
+            return Ok(mid);
+        }
+        if f_lo * f_mid < 0.0 {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+
+    Ok(0.5 * (lo + hi))
 }
 
 #[cfg(test)]
@@ -364,10 +619,10 @@ mod tests {
     fn test_msprt_from_samples() {
         let result = msprt_from_samples(
             10.0, 10.5, // means
-            4.0, 4.0,   // variances
+            4.0, 4.0, // variances
             500.0, 500.0, // sample sizes
-            0.1,  // tau_sq
-            0.05, // alpha
+            0.1,   // tau_sq
+            0.05,  // alpha
         )
         .unwrap();
         // With moderate effect, may or may not cross
@@ -383,7 +638,10 @@ mod tests {
 
         assert!(early < 0.001, "OBF early alpha should be tiny, got {early}");
         assert!(mid < 0.02, "OBF mid alpha should be small, got {mid}");
-        assert!((final_ - 0.05).abs() < 1e-6, "OBF final alpha should equal overall, got {final_}");
+        assert!(
+            (final_ - 0.05).abs() < 1e-6,
+            "OBF final alpha should equal overall, got {final_}"
+        );
     }
 
     #[test]
@@ -393,9 +651,18 @@ mod tests {
         let mid = spending_function_alpha(SpendingFunction::Pocock, 0.5, 0.05);
         let final_ = spending_function_alpha(SpendingFunction::Pocock, 1.0, 0.05);
 
-        assert!(early > 0.005, "Pocock early alpha should be moderate, got {early}");
-        assert!(mid > 0.02, "Pocock mid alpha should be substantial, got {mid}");
-        assert!((final_ - 0.05).abs() < 1e-6, "Pocock final alpha should equal overall, got {final_}");
+        assert!(
+            early > 0.005,
+            "Pocock early alpha should be moderate, got {early}"
+        );
+        assert!(
+            mid > 0.02,
+            "Pocock mid alpha should be substantial, got {mid}"
+        );
+        assert!(
+            (final_ - 0.05).abs() < 1e-6,
+            "Pocock final alpha should equal overall, got {final_}"
+        );
     }
 
     #[test]
@@ -404,8 +671,12 @@ mod tests {
         assert_eq!(bounds.len(), 4);
         // OBF: boundaries should decrease over looks
         for i in 1..bounds.len() {
-            assert!(bounds[i] <= bounds[i - 1],
-                "OBF boundaries should decrease: {} > {}", bounds[i], bounds[i-1]);
+            assert!(
+                bounds[i] <= bounds[i - 1],
+                "OBF boundaries should decrease: {} > {}",
+                bounds[i],
+                bounds[i - 1]
+            );
         }
     }
 
@@ -416,7 +687,10 @@ mod tests {
         // Pocock: boundaries should be more uniform
         let range = bounds.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
             - bounds.iter().cloned().fold(f64::INFINITY, f64::min);
-        assert!(range < 1.0, "Pocock boundaries should be relatively uniform, range={range}");
+        assert!(
+            range < 1.0,
+            "Pocock boundaries should be relatively uniform, range={range}"
+        );
     }
 
     #[test]

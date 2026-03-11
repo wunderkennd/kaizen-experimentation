@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/org/experimentation-platform/services/flags/internal/store"
 	"github.com/org/experimentation/gen/go/experimentation/flags/v1/flagsv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
@@ -32,4 +34,9 @@ func NewFlagServiceFull(s store.Store, a store.AuditStore, mc managementv1connec
 		defaultLayerID = "default"
 	}
 	return &FlagService{store: s, auditStore: a, managementClient: mc, defaultLayerID: defaultLayerID}
+}
+
+// NewReconcilerFromService creates a Reconciler using the FlagService's dependencies.
+func (s *FlagService) NewReconciler(interval time.Duration, defaultAction ResolutionAction) *Reconciler {
+	return NewReconciler(s.store, s.auditStore, s.managementClient, interval, defaultAction)
 }
