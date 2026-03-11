@@ -8,6 +8,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -102,7 +103,7 @@ func createLayerRaw(t *testing.T, serverURL, name string) string {
 		withAuth("test@example.com", "admin"),
 	)
 
-	resp, err := client.CreateLayer(t.Context(), connect.NewRequest(&mgmtv1.CreateLayerRequest{
+	resp, err := client.CreateLayer(context.Background(), connect.NewRequest(&mgmtv1.CreateLayerRequest{
 		Layer: &commonv1.Layer{
 			Name:         name,
 			Description:  "contract test layer",
