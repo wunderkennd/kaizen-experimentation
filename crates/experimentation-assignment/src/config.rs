@@ -41,6 +41,8 @@ pub struct ExperimentConfig {
     pub interleaving_config: Option<InterleavingConfig>,
     #[serde(default)]
     pub bandit_config: Option<BanditConfig>,
+    #[serde(default)]
+    pub is_cumulative_holdout: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

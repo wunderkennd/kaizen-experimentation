@@ -43,6 +43,7 @@ fn make_test_config() -> Config {
             session_config: None,
             interleaving_config: None,
             bandit_config: None,
+            is_cumulative_holdout: false,
         }],
         vec![LayerConfig {
             layer_id: "layer_default".to_string(),
@@ -269,6 +270,7 @@ fn test_layers_preserved() {
             session_config: None,
             interleaving_config: None,
             bandit_config: None,
+            is_cumulative_holdout: false,
         }],
         vec![
             LayerConfig {
