@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use experimentation_assignment::config::Config;
 use experimentation_assignment::service::AssignmentServiceImpl;
-use experimentation_proto::experimentation::assignment::v1::RankedList;
+use experimentation_proto::experimentation::assignment::v1::{
+    assignment_service_server::AssignmentService, GetAssignmentsRequest, RankedList,
+};
 use experimentation_proto::experimentation::bandit::v1::bandit_policy_service_server::{
     BanditPolicyService, BanditPolicyServiceServer,
 };
@@ -1649,8 +1651,7 @@ async fn cold_start_create_success() {
 #[tokio::test]
 async fn cold_start_create_timeout() {
     // Mock sleeps 6s, but cold-start timeout is 5s.
-    let (addr, _captured) =
-        start_mock_m4b(Some(Duration::from_secs(6)), "arm_a", 0.5).await;
+    let (addr, _captured) = start_mock_m4b(Some(Duration::from_secs(6)), "arm_a", 0.5).await;
 
     let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
         "http://{addr}"
@@ -1662,10 +1663,7 @@ async fn cold_start_create_timeout() {
         .create_cold_start_bandit("movie-timeout", HashMap::new(), 7)
         .await;
 
-    assert!(
-        result.is_err(),
-        "cold-start should timeout after 5s"
-    );
+    assert!(result.is_err(), "cold-start should timeout after 5s");
 }
 
 #[tokio::test]
@@ -1791,4 +1789,240 @@ async fn config_cold_start_fields_default_to_none() {
         .unwrap();
     assert!(bandit.content_id.is_none());
     assert!(bandit.cold_start_window_days.is_none());
+}
+
+// ── Cumulative Holdout Priority Tests ──
+
+/// Helper: build a config with a holdout and an AB experiment in the same layer.
+fn make_holdout_config() -> Config {
+    let json = r#"{
+        "experiments": [
+            {
+                "experiment_id": "ab_exp",
+                "state": "RUNNING",
+                "type": "AB",
+                "hash_salt": "ab_salt",
+                "layer_id": "layer_shared",
+                "variants": [
+                    { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+                    { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"feature\": true}" }
+                ],
+                "allocation": { "start_bucket": 0, "end_bucket": 9999 }
+            },
+            {
+                "experiment_id": "holdout_exp",
+                "state": "RUNNING",
+                "type": "CUMULATIVE_HOLDOUT",
+                "hash_salt": "holdout_salt",
+                "layer_id": "layer_shared",
+                "is_cumulative_holdout": true,
+                "variants": [
+                    { "variant_id": "holdout", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{\"baseline\": true}" }
+                ],
+                "allocation": { "start_bucket": 0, "end_bucket": 499 }
+            },
+            {
+                "experiment_id": "other_layer_exp",
+                "state": "RUNNING",
+                "type": "AB",
+                "hash_salt": "other_salt",
+                "layer_id": "layer_other",
+                "variants": [
+                    { "variant_id": "v1", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{}" }
+                ],
+                "allocation": { "start_bucket": 0, "end_bucket": 9999 }
+            }
+        ],
+        "layers": [
+            { "layer_id": "layer_shared", "total_buckets": 10000 },
+            { "layer_id": "layer_other", "total_buckets": 10000 }
+        ]
+    }"#;
+    Config::from_json(json).unwrap()
+}
+
+#[tokio::test]
+async fn holdout_priority_excludes_layer_experiments() {
+    let config = make_holdout_config();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    // Find a user that lands in the holdout allocation (bucket 0–499).
+    // With hash_salt "holdout_salt" and total_buckets 10000, iterate to find one.
+    let mut holdout_user = None;
+    for i in 0..200 {
+        let uid = format!("holdout_test_user_{i}");
+        let bucket = experimentation_hash::bucket(&uid, "holdout_salt", 10000);
+        if bucket <= 499 {
+            holdout_user = Some(uid);
+            break;
+        }
+    }
+    let user_id = holdout_user.expect("should find a user in holdout allocation within 200 tries");
+
+    let req = tonic::Request::new(GetAssignmentsRequest {
+        user_id: user_id.clone(),
+        session_id: String::new(),
+        attributes: HashMap::new(),
+    });
+    let resp = svc.get_assignments(req).await.unwrap().into_inner();
+
+    // User should get the holdout assignment.
+    let holdout_assignment = resp
+        .assignments
+        .iter()
+        .find(|a| a.experiment_id == "holdout_exp");
+    assert!(holdout_assignment.is_some(), "holdout assignment missing");
+    assert_eq!(holdout_assignment.unwrap().variant_id, "holdout");
+
+    // User should NOT get the AB experiment in the same layer.
+    let ab_assignment = resp
+        .assignments
+        .iter()
+        .find(|a| a.experiment_id == "ab_exp");
+    assert!(
+        ab_assignment.is_none(),
+        "AB experiment in same layer should be excluded for holdout user"
+    );
+
+    // User should still get the experiment in a different layer.
+    let other_assignment = resp
+        .assignments
+        .iter()
+        .find(|a| a.experiment_id == "other_layer_exp");
+    assert!(
+        other_assignment.is_some(),
+        "experiment in different layer should not be excluded"
+    );
+}
+
+#[tokio::test]
+async fn holdout_user_outside_allocation_gets_regular() {
+    let config = make_holdout_config();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    // Find a user outside the holdout allocation (bucket > 499).
+    let mut non_holdout_user = None;
+    for i in 0..200 {
+        let uid = format!("non_holdout_user_{i}");
+        let bucket = experimentation_hash::bucket(&uid, "holdout_salt", 10000);
+        if bucket > 499 {
+            non_holdout_user = Some(uid);
+            break;
+        }
+    }
+    let user_id =
+        non_holdout_user.expect("should find a user outside holdout allocation within 200 tries");
+
+    let req = tonic::Request::new(GetAssignmentsRequest {
+        user_id: user_id.clone(),
+        session_id: String::new(),
+        attributes: HashMap::new(),
+    });
+    let resp = svc.get_assignments(req).await.unwrap().into_inner();
+
+    // Holdout assignment should exist but with empty variant (not in allocation).
+    let holdout_assignment = resp
+        .assignments
+        .iter()
+        .find(|a| a.experiment_id == "holdout_exp");
+    assert!(holdout_assignment.is_some());
+    assert!(
+        holdout_assignment.unwrap().variant_id.is_empty(),
+        "user outside holdout allocation should get empty variant_id"
+    );
+
+    // AB experiment should be present (holdout didn't claim the layer).
+    let ab_assignment = resp
+        .assignments
+        .iter()
+        .find(|a| a.experiment_id == "ab_exp");
+    assert!(
+        ab_assignment.is_some(),
+        "AB experiment should be included when user is outside holdout"
+    );
+}
+
+#[tokio::test]
+async fn holdout_different_layer_no_exclusion() {
+    let config = make_holdout_config();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    // Find a holdout user.
+    let mut holdout_user = None;
+    for i in 0..200 {
+        let uid = format!("layer_test_user_{i}");
+        let bucket = experimentation_hash::bucket(&uid, "holdout_salt", 10000);
+        if bucket <= 499 {
+            holdout_user = Some(uid);
+            break;
+        }
+    }
+    let user_id = holdout_user.expect("should find a holdout user");
+
+    let req = tonic::Request::new(GetAssignmentsRequest {
+        user_id: user_id.clone(),
+        session_id: String::new(),
+        attributes: HashMap::new(),
+    });
+    let resp = svc.get_assignments(req).await.unwrap().into_inner();
+
+    // other_layer_exp is in layer_other — should NOT be excluded.
+    let other_assignment = resp
+        .assignments
+        .iter()
+        .find(|a| a.experiment_id == "other_layer_exp");
+    assert!(
+        other_assignment.is_some(),
+        "holdout in layer_shared must not block experiments in layer_other"
+    );
+    assert!(
+        !other_assignment.unwrap().variant_id.is_empty(),
+        "other layer experiment should assign a variant"
+    );
+}
+
+#[tokio::test]
+async fn holdout_single_assign_works() {
+    let config = make_holdout_config();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    // Single GetAssignment for the holdout — should work like any static experiment.
+    let mut holdout_user = None;
+    for i in 0..200 {
+        let uid = format!("single_assign_user_{i}");
+        let bucket = experimentation_hash::bucket(&uid, "holdout_salt", 10000);
+        if bucket <= 499 {
+            holdout_user = Some(uid);
+            break;
+        }
+    }
+    let user_id = holdout_user.expect("should find a holdout user");
+
+    let resp = svc
+        .assign("holdout_exp", &user_id, "", &no_attrs())
+        .await
+        .unwrap();
+    assert!(resp.is_active);
+    assert_eq!(resp.variant_id, "holdout");
+    assert_eq!(resp.experiment_id, "holdout_exp");
+}
+
+#[tokio::test]
+async fn holdout_deterministic() {
+    let config = make_holdout_config();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    // Same user always gets same holdout result.
+    let user_id = "deterministic_holdout_user_42";
+    let r1 = svc
+        .assign("holdout_exp", user_id, "", &no_attrs())
+        .await
+        .unwrap();
+    let r2 = svc
+        .assign("holdout_exp", user_id, "", &no_attrs())
+        .await
+        .unwrap();
+    assert_eq!(r1.variant_id, r2.variant_id);
+    assert_eq!(r1.is_active, r2.is_active);
+    assert_eq!(r1.experiment_id, r2.experiment_id);
 }

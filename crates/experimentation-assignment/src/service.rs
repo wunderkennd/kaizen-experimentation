@@ -3,7 +3,7 @@
 //! Core logic: deterministic hash-based bucketing using experimentation-hash.
 //! Config is read from a live cache backed by `tokio::sync::watch`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use rand::rngs::StdRng;
@@ -112,7 +112,11 @@ impl AssignmentServiceImpl {
                 .session_config
                 .as_ref()
                 .is_none_or(|sc| sc.allow_cross_session_variation);
-            if cross_session { session_id } else { user_id }
+            if cross_session {
+                session_id
+            } else {
+                user_id
+            }
         } else {
             user_id
         };
@@ -396,8 +400,37 @@ impl AssignmentService for AssignmentServiceImpl {
         let config = self.config.snapshot();
         let mut assignments = Vec::new();
 
-        for exp in &config.experiments {
-            // Best-effort: skip experiments that fail assignment.
+        // Two-phase evaluation: holdouts first, then regular experiments.
+        // Holdout users are excluded from other experiments in the same layer.
+        let (holdouts, regular): (Vec<_>, Vec<_>) = config
+            .experiments
+            .iter()
+            .partition(|e| e.is_cumulative_holdout);
+
+        // Phase 1: Evaluate holdout experiments. Track layers claimed by holdouts.
+        let mut holdout_layers: HashSet<String> = HashSet::new();
+        for exp in &holdouts {
+            if let Ok(resp) = self
+                .assign(
+                    &exp.experiment_id,
+                    &req.user_id,
+                    &req.session_id,
+                    &req.attributes,
+                )
+                .await
+            {
+                if !resp.variant_id.is_empty() {
+                    holdout_layers.insert(exp.layer_id.clone());
+                }
+                assignments.push(resp);
+            }
+        }
+
+        // Phase 2: Evaluate regular experiments, skipping layers claimed by holdouts.
+        for exp in &regular {
+            if holdout_layers.contains(&exp.layer_id) {
+                continue;
+            }
             if let Ok(resp) = self
                 .assign(
                     &exp.experiment_id,
