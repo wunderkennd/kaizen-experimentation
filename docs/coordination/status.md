@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-11 by Agent-6 (Live API integration prep — port fix, pause/resume RPCs, proto wire-format contract tests)
+> **Last updated**: 2026-03-11 by Agent-7 (Phase 4 performance + CGo bridge overhead measurement)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -19,7 +19,7 @@
 | Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/feat/gst-recursive | GST recursive integration (ADR-004) | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.1 CATE in PR #70. M4.2 analysis service (PR #93, #107). Chaos testing merged. **All 5 analysis RPCs wired** + **PostgreSQL caching** (PR #107). GST recursive numerical integration matching gsDesign (PR #125) — Armitage-McPherson-Rowe method, 10 golden file configs. 36 tests (31 active + 5 PG-gated). |
 | Agent-5 | M5 Management | 🔵 Phase 4 In Progress | agent-5/test/m5m6-contract | Agent-5 ↔ Agent-6 wire-format contracts | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script (PR #96). Agent-5 ↔ Agent-6 wire-format contract tests: 11 integration tests validating ConnectRPC JSON wire format (PR #126, open). |
 | Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/feat/phase4-next | Live API integration prep | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search/filter/sort (PR #90). RBAC UI: auth context, role-based button disabling. Performance targets merged (PR #108). Layer allocation bucket chart on experiment detail (PR #121). WCAG 2.1 AA accessibility fixes. Live API integration: fixed metrics/bandit port swap, added PauseExperiment/ResumeExperiment RPCs, server-side ListExperiments filters, CATE/GST enum prefix stripping, 37 proto wire-format contract tests. 281 tests pass. |
-| Agent-7 | M7 Flags | 🔵 In Progress | agent-7/feat/k6-load-test | k6 load test + SLA validation | — | M1.28–1.30 merged (PR #13). Phases 1–4.5 complete. Phase 4.4: RBAC interceptor. PromoteToExperiment all 8 types + auto-conclude reconciler merged (PR #123). k6 load test + Go SLA validation for flag evaluation (PR #129, open). |
+| Agent-7 | M7 Flags | 🟢 All Phases Complete | agent-7/perf/loadtest-flags | All Phase 4 onboarding items complete | — | M1.28–1.30 merged (PR #13). Phases 1–5 complete (PR #123: all-types promote + reconciler). **Phase 4 perf** (PR #129): k6 load test (20K rps, p99 < 10ms EvaluateFlag, p99 < 50ms bulk), Go SLA validation (5 tests), CGo bridge overhead (280ns/call, target < 1μs), concurrent updates (50 writers + 250 readers), `just loadtest-flags` recipe. CI-aware thresholds for GitHub Actions. |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
