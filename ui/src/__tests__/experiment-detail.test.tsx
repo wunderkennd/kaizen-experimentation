@@ -29,6 +29,24 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// Mock recharts to avoid ResizeObserver errors from LayerAllocationChart
+vi.mock('recharts', async () => {
+  const Passthrough = ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="responsive-container">{children}</div>
+  );
+  const Noop = () => null;
+
+  return {
+    ResponsiveContainer: Passthrough,
+    BarChart: Passthrough,
+    Bar: Noop,
+    XAxis: Noop,
+    YAxis: Noop,
+    Tooltip: Noop,
+    Cell: Noop,
+  };
+});
+
 describe('Experiment Detail Page', () => {
   beforeEach(() => {
     mockExperimentId = '11111111-1111-1111-1111-111111111111';

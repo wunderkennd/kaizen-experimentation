@@ -3,7 +3,7 @@ import {
   SEED_EXPERIMENTS, SEED_QUERY_LOG, SEED_ANALYSIS_RESULTS,
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
-  SEED_GST_RESULTS, SEED_CATE_RESULTS,
+  SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -418,5 +418,28 @@ export const handlers = [
       );
     }
     return HttpResponse.json(result);
+  }),
+
+  // GetLayer
+  http.post(`${MGMT_SVC}/GetLayer`, async ({ request }) => {
+    const body = await request.json() as { layerId: string };
+    const layer = SEED_LAYERS[body.layerId];
+    if (!layer) {
+      return HttpResponse.json(
+        { code: 'not_found', message: `Layer ${body.layerId} not found` },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(layer);
+  }),
+
+  // GetLayerAllocations
+  http.post(`${MGMT_SVC}/GetLayerAllocations`, async ({ request }) => {
+    const body = await request.json() as { layerId: string; includeReleased?: boolean };
+    let allocations = SEED_LAYER_ALLOCATIONS[body.layerId] || [];
+    if (!body.includeReleased) {
+      allocations = allocations.filter((a) => !a.releasedAt);
+    }
+    return HttpResponse.json({ allocations });
   }),
 ];
