@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ExperimentDetailPage from '@/app/experiments/[id]/page';
@@ -83,7 +83,8 @@ describe('Experiment Detail Page', () => {
 
     expect(screen.getByText('neural_recs')).toBeInTheDocument();
     expect(screen.getByText('Control')).toBeInTheDocument();
-    expect(screen.getAllByText('50.0%')).toHaveLength(2);
+    const variantsSection = screen.getByText('Variants').closest('section')!;
+    expect(within(variantsSection).getAllByText('50.0%')).toHaveLength(2);
   });
 
   it('renders metadata fields', async () => {
@@ -126,8 +127,10 @@ describe('Experiment Detail Page', () => {
 
     // Should NOT have editable name inputs
     expect(screen.queryByDisplayValue('control')).not.toBeInTheDocument();
-    // Should show the read-only table with traffic percentages
-    expect(screen.getAllByText('50.0%')).toHaveLength(2);
+    // Should show the read-only table with traffic percentages (scoped to Variants section,
+    // since LayerAllocationChart also renders 50.0% for bucket ranges)
+    const variantsSection = screen.getByText('Variants').closest('section')!;
+    expect(within(variantsSection).getAllByText('50.0%')).toHaveLength(2);
   });
 
   it('shows "Conclude Experiment" button for RUNNING experiment', async () => {

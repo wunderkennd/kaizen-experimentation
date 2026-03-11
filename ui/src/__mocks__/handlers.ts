@@ -38,11 +38,33 @@ function checkAuth(headers: Headers, requiredRole: UserRole) {
 }
 
 export const handlers = [
-  // ListExperiments
-  http.post(`${MGMT_SVC}/ListExperiments`, async () => {
+  // ListExperiments (with optional server-side filters)
+  http.post(`${MGMT_SVC}/ListExperiments`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    let filtered = [...SEED_EXPERIMENTS];
+
+    if (body.stateFilter) {
+      const stateVal = (body.stateFilter as string).replace('EXPERIMENT_STATE_', '');
+      filtered = filtered.filter((e) => e.state === stateVal);
+    }
+    if (body.typeFilter) {
+      const typeVal = (body.typeFilter as string).replace('EXPERIMENT_TYPE_', '');
+      filtered = filtered.filter((e) => e.type === typeVal);
+    }
+    if (body.ownerEmailFilter) {
+      filtered = filtered.filter((e) => e.ownerEmail === body.ownerEmailFilter);
+    }
+
+    const pageSize = (body.pageSize as number) || filtered.length;
+    const pageToken = (body.pageToken as string) || '';
+    const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+    const page = filtered.slice(startIndex, startIndex + pageSize);
+    const nextIndex = startIndex + pageSize;
+    const nextPageToken = nextIndex < filtered.length ? String(nextIndex) : '';
+
     return HttpResponse.json({
-      experiments: SEED_EXPERIMENTS,
-      nextPageToken: '',
+      experiments: page,
+      nextPageToken,
     });
   }),
 
@@ -199,6 +221,62 @@ export const handlers = [
     SEED_EXPERIMENTS[idx] = {
       ...SEED_EXPERIMENTS[idx],
       state: 'ARCHIVED',
+    };
+    return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
+  }),
+
+  // PauseExperiment: RUNNING → PAUSED (mock adds PAUSED state)
+  http.post(`${MGMT_SVC}/PauseExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'experimenter');
+    if (denied) return denied;
+    const body = await request.json() as { experimentId: string };
+    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
+
+    if (idx === -1) {
+      return HttpResponse.json(
+        { code: 'not_found', message: `Experiment ${body.experimentId} not found` },
+        { status: 404 },
+      );
+    }
+
+    if (SEED_EXPERIMENTS[idx].state !== 'RUNNING') {
+      return HttpResponse.json(
+        { code: 'failed_precondition', message: 'Only RUNNING experiments can be paused' },
+        { status: 400 },
+      );
+    }
+
+    SEED_EXPERIMENTS[idx] = {
+      ...SEED_EXPERIMENTS[idx],
+      state: 'PAUSED' as typeof SEED_EXPERIMENTS[number]['state'],
+    };
+    return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
+  }),
+
+  // ResumeExperiment: PAUSED → RUNNING
+  http.post(`${MGMT_SVC}/ResumeExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers,'experimenter');
+    if (denied) return denied;
+    const body = await request.json() as { experimentId: string };
+    const idx = SEED_EXPERIMENTS.findIndex((e) => e.experimentId === body.experimentId);
+
+    if (idx === -1) {
+      return HttpResponse.json(
+        { code: 'not_found', message: `Experiment ${body.experimentId} not found` },
+        { status: 404 },
+      );
+    }
+
+    if (SEED_EXPERIMENTS[idx].state !== ('PAUSED' as string)) {
+      return HttpResponse.json(
+        { code: 'failed_precondition', message: 'Only PAUSED experiments can be resumed' },
+        { status: 400 },
+      );
+    }
+
+    SEED_EXPERIMENTS[idx] = {
+      ...SEED_EXPERIMENTS[idx],
+      state: 'RUNNING',
     };
     return HttpResponse.json({ experiment: SEED_EXPERIMENTS[idx] });
   }),

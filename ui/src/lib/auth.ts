@@ -31,6 +31,8 @@ export const UI_PERMISSIONS = {
   updateExperiment: 'experimenter' as UserRole,
   startExperiment: 'experimenter' as UserRole,
   concludeExperiment: 'experimenter' as UserRole,
+  pauseExperiment: 'experimenter' as UserRole,
+  resumeExperiment: 'experimenter' as UserRole,
   archiveExperiment: 'admin' as UserRole,
 } as const;
 
