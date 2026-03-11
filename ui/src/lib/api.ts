@@ -361,20 +361,3 @@ export async function getLayerAllocations(
   >(MGMT_URL, MGMT_SVC, 'GetLayerAllocations', { layerId, includeReleased });
   return raw.allocations || [];
 }
-
-export async function getLayer(layerId: string): Promise<Layer> {
-  return callRpc<{ layerId: string }, Layer>(
-    MGMT_URL, MGMT_SVC, 'GetLayer', { layerId },
-  );
-}
-
-export async function getLayerAllocations(
-  layerId: string,
-  includeReleased = false,
-): Promise<LayerAllocation[]> {
-  const raw = await callRpc<
-    { layerId: string; includeReleased: boolean },
-    { allocations?: LayerAllocation[] }
-  >(MGMT_URL, MGMT_SVC, 'GetLayerAllocations', { layerId, includeReleased });
-  return raw.allocations || [];
-}
