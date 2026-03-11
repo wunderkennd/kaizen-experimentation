@@ -3,6 +3,8 @@
   "spending_function": "OBrienFleming",
   "planned_looks": 5,
   "overall_alpha": 0.1,
+  "source": "recursive_integration_python",
+  "r_command": "gsDesign(k=5, test.type=2, alpha=0.1, sfu=sfLDOF)",
   "boundaries": [
     {
       "look": 1,
@@ -16,28 +18,28 @@
       "information_fraction": 0.4,
       "cumulative_alpha": 0.009302239997693196,
       "incremental_alpha": 0.00906717420510783,
-      "critical_value": 2.6095109578682845
+      "critical_value": 2.604312056774928
     },
     {
       "look": 3,
       "information_fraction": 0.6,
       "cumulative_alpha": 0.033712234877398384,
       "incremental_alpha": 0.024409994879705188,
-      "critical_value": 2.2506140165772104
+      "critical_value": 2.166850450025514
     },
     {
       "look": 4,
       "information_fraction": 0.8,
       "cumulative_alpha": 0.06591485344808312,
       "incremental_alpha": 0.03220261857068474,
-      "critical_value": 2.1418864738275065
+      "critical_value": 1.9346160767660747
     },
     {
       "look": 5,
       "information_fraction": 1.0,
-      "cumulative_alpha": 0.10000000000000009,
-      "incremental_alpha": 0.03408514655191697,
-      "critical_value": 2.119062959192151
+      "cumulative_alpha": 0.1,
+      "incremental_alpha": 0.034085146551916884,
+      "critical_value": 1.7900592314667776
     }
   ]
 }
