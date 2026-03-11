@@ -3,6 +3,7 @@ package recalconsumer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/segmentio/kafka-go"
@@ -151,4 +152,67 @@ func TestConsumer_ProcessMessage_EmptyModelID(t *testing.T) {
 
 	entries := qlWriter.AllEntries()
 	assert.Empty(t, entries)
+}
+
+// FailingInputMetricsProvider always returns an error from Fetch.
+type FailingInputMetricsProvider struct {
+	Err error
+}
+
+func (f *FailingInputMetricsProvider) Fetch(_ context.Context, _ string) (surrogate.InputMetrics, error) {
+	return nil, f.Err
+}
+
+func setupFailingConsumer(t *testing.T) *Consumer {
+	t.Helper()
+
+	cfgStore, err := config.LoadFromFile("../config/testdata/seed_config.json")
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	failProvider := &FailingInputMetricsProvider{Err: fmt.Errorf("spark cluster unavailable")}
+	qlWriter := querylog.NewMemWriter()
+	projWriter := surrogate.NewMemProjectionWriter()
+	calibUpdater := surrogate.NewMemCalibrationUpdater()
+
+	recalJob := jobs.NewRecalibrationJob(cfgStore, renderer, failProvider, qlWriter, projWriter, calibUpdater)
+
+	return &Consumer{
+		job:    recalJob,
+		config: cfgStore,
+		done:   make(chan struct{}),
+	}
+}
+
+func TestConsumer_ProcessMessage_JobRunError(t *testing.T) {
+	c := setupFailingConsumer(t)
+	ctx := context.Background()
+
+	req := RecalibrationRequest{
+		ModelID:        "sm-churn-predictor-001",
+		TargetMetricID: "churn_7d",
+		ModelType:      "LINEAR",
+	}
+
+	err := c.processMessage(ctx, makeMsg(t, req))
+	require.Error(t, err, "job failure should propagate as error")
+	assert.Contains(t, err.Error(), "spark cluster unavailable")
+}
+
+func TestConsumer_ProcessMessage_CancelledContext(t *testing.T) {
+	c, _, _ := setupTestConsumer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	req := RecalibrationRequest{
+		ModelID:        "sm-churn-predictor-001",
+		TargetMetricID: "churn_7d",
+		ModelType:      "LINEAR",
+	}
+
+	// Should not panic; MockInputMetricsProvider ignores context so job still succeeds.
+	err := c.processMessage(ctx, makeMsg(t, req))
+	assert.NoError(t, err, "cancelled context with mock provider should not panic or error")
 }

@@ -149,3 +149,63 @@ func TestMemWriter_GetLogs_EmptyMetricReturnsAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, logs, 3, "empty metric filter should return all entries for experiment")
 }
+
+func TestMemWriter_Reset(t *testing.T) {
+	w := NewMemWriter()
+	ctx := context.Background()
+
+	_ = w.Log(ctx, Entry{ExperimentID: "e1", MetricID: "m1", SQLText: "A", JobType: "daily_metric"})
+	_ = w.Log(ctx, Entry{ExperimentID: "e2", MetricID: "m2", SQLText: "B", JobType: "daily_metric"})
+	_ = w.Log(ctx, Entry{ExperimentID: "e3", MetricID: "m3", SQLText: "C", JobType: "daily_metric"})
+	require.Len(t, w.AllEntries(), 3)
+
+	w.Reset()
+	assert.Empty(t, w.AllEntries(), "Reset should clear all entries")
+}
+
+func TestMemWriter_Reset_ThenLog(t *testing.T) {
+	w := NewMemWriter()
+	ctx := context.Background()
+
+	_ = w.Log(ctx, Entry{ExperimentID: "e1", MetricID: "m1", SQLText: "old", JobType: "daily_metric"})
+	_ = w.Log(ctx, Entry{ExperimentID: "e2", MetricID: "m2", SQLText: "old", JobType: "daily_metric"})
+
+	w.Reset()
+
+	_ = w.Log(ctx, Entry{ExperimentID: "e3", MetricID: "m3", SQLText: "new", JobType: "hourly_guardrail"})
+
+	entries := w.AllEntries()
+	require.Len(t, entries, 1)
+	assert.Equal(t, "e3", entries[0].ExperimentID)
+	assert.Equal(t, "new", entries[0].SQLText)
+}
+
+func TestMemWriter_GetLogs_MetricFilterNoMatch(t *testing.T) {
+	w := NewMemWriter()
+	ctx := context.Background()
+
+	_ = w.Log(ctx, Entry{ExperimentID: "exp-A", MetricID: "m1", SQLText: "SELECT 1", JobType: "daily_metric"})
+
+	// Query for same experiment but different metric.
+	logs, err := w.GetLogs(ctx, "exp-A", "m2")
+	require.NoError(t, err)
+	assert.Empty(t, logs, "metric filter m2 should not match entry with m1")
+}
+
+func TestMemWriter_Log_ZeroValues(t *testing.T) {
+	w := NewMemWriter()
+	err := w.Log(context.Background(), Entry{
+		ExperimentID: "exp-zero",
+		MetricID:     "m0",
+		SQLText:      "SELECT COUNT(*) FROM empty_table",
+		RowCount:     0,
+		DurationMs:   0,
+		JobType:      "daily_metric",
+	})
+	require.NoError(t, err)
+
+	e := w.AllEntries()[0]
+	assert.Equal(t, int64(0), e.RowCount, "zero RowCount should be preserved")
+	assert.Equal(t, int64(0), e.DurationMs, "zero DurationMs should be preserved")
+	assert.Equal(t, "exp-zero", e.ExperimentID)
+}
