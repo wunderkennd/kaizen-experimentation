@@ -317,8 +317,10 @@ func TestM5M6_VariantFieldContract(t *testing.T) {
 	t.Logf("Proto3 zero-value omission: treatment isControl present=%v (Agent-6 uses || false fallback)",
 		treatmentHasIsControl)
 
-	// Payload must be present on treatment
-	assert.Equal(t, `{"color":"blue"}`, treatment["payloadJson"])
+	// Payload must be present on treatment.
+	// Use JSONEq because PostgreSQL JSONB normalizes whitespace on output
+	// (e.g., {"color":"blue"} → {"color": "blue"}).
+	assert.JSONEq(t, `{"color":"blue"}`, treatment["payloadJson"].(string))
 }
 
 // TestM5M6_LifecycleTimestamps verifies that lifecycle timestamps are RFC 3339
