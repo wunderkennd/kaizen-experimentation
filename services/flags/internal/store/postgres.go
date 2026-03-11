@@ -35,7 +35,7 @@ func (s *PostgresStore) CreateFlag(ctx context.Context, f *Flag) (*Flag, error) 
 	row := tx.QueryRow(ctx,
 		`INSERT INTO feature_flags (name, description, type, default_value, enabled, rollout_percentage, targeting_rule_id)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at, resolved_at`,
+		 RETURNING flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at`,
 		f.Name, f.Description, f.Type, f.DefaultValue, f.Enabled, f.RolloutPercentage, targetingRuleID,
 	)
 
