@@ -35,7 +35,7 @@ func (s *PostgresStore) CreateFlag(ctx context.Context, f *Flag) (*Flag, error) 
 	row := tx.QueryRow(ctx,
 		`INSERT INTO feature_flags (name, description, type, default_value, enabled, rollout_percentage, targeting_rule_id)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at`,
+		 RETURNING flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at`,
 		f.Name, f.Description, f.Type, f.DefaultValue, f.Enabled, f.RolloutPercentage, targetingRuleID,
 	)
 
@@ -66,7 +66,7 @@ func (s *PostgresStore) CreateFlag(ctx context.Context, f *Flag) (*Flag, error) 
 
 func (s *PostgresStore) GetFlag(ctx context.Context, flagID string) (*Flag, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 		 FROM feature_flags WHERE flag_id = $1`, flagID,
 	)
 
@@ -168,12 +168,12 @@ func (s *PostgresStore) ListFlags(ctx context.Context, pageSize int, pageToken s
 	var err error
 	if cursor == "" {
 		rows, err = s.pool.Query(ctx,
-			`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+			`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 			 FROM feature_flags ORDER BY flag_id LIMIT $1`, pageSize+1,
 		)
 	} else {
 		rows, err = s.pool.Query(ctx,
-			`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+			`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 			 FROM feature_flags WHERE flag_id > $1 ORDER BY flag_id LIMIT $2`, cursor, pageSize+1,
 		)
 	}
@@ -211,7 +211,7 @@ func (s *PostgresStore) ListFlags(ctx context.Context, pageSize int, pageToken s
 
 func (s *PostgresStore) GetAllEnabledFlags(ctx context.Context) ([]*Flag, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 		 FROM feature_flags WHERE enabled = TRUE ORDER BY flag_id`,
 	)
 	if err != nil {
@@ -269,10 +269,11 @@ func scanFlag(row scannable) (*Flag, error) {
 	var targetingRuleID *string
 	var promotedExperimentID *string
 	var promotedAt *time.Time
+	var resolvedAt *time.Time
 	err := row.Scan(
 		&f.FlagID, &f.Name, &f.Description, &f.Type, &f.DefaultValue,
 		&f.Enabled, &f.RolloutPercentage, &f.Salt, &targetingRuleID,
-		&f.CreatedAt, &f.UpdatedAt, &promotedExperimentID, &promotedAt,
+		&f.CreatedAt, &f.UpdatedAt, &promotedExperimentID, &promotedAt, &resolvedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -285,6 +286,9 @@ func scanFlag(row scannable) (*Flag, error) {
 	}
 	if promotedAt != nil {
 		f.PromotedAt = *promotedAt
+	}
+	if resolvedAt != nil {
+		f.ResolvedAt = *resolvedAt
 	}
 	return &f, nil
 }
@@ -294,10 +298,11 @@ func scanFlagFromRows(rows pgx.Rows) (*Flag, error) {
 	var targetingRuleID *string
 	var promotedExperimentID *string
 	var promotedAt *time.Time
+	var resolvedAt *time.Time
 	err := rows.Scan(
 		&f.FlagID, &f.Name, &f.Description, &f.Type, &f.DefaultValue,
 		&f.Enabled, &f.RolloutPercentage, &f.Salt, &targetingRuleID,
-		&f.CreatedAt, &f.UpdatedAt, &promotedExperimentID, &promotedAt,
+		&f.CreatedAt, &f.UpdatedAt, &promotedExperimentID, &promotedAt, &resolvedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -310,6 +315,9 @@ func scanFlagFromRows(rows pgx.Rows) (*Flag, error) {
 	}
 	if promotedAt != nil {
 		f.PromotedAt = *promotedAt
+	}
+	if resolvedAt != nil {
+		f.ResolvedAt = *resolvedAt
 	}
 	return &f, nil
 }
@@ -334,7 +342,7 @@ func (s *PostgresStore) LinkFlagToExperiment(ctx context.Context, flagID, experi
 
 func (s *PostgresStore) GetFlagByExperiment(ctx context.Context, experimentID string) (*Flag, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 		 FROM feature_flags WHERE promoted_experiment_id = $1`, experimentID,
 	)
 
@@ -358,7 +366,7 @@ func (s *PostgresStore) GetFlagByExperiment(ctx context.Context, experimentID st
 
 func (s *PostgresStore) GetFlagsByTargetingRule(ctx context.Context, targetingRuleID string) ([]*Flag, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 		 FROM feature_flags WHERE targeting_rule_id = $1 ORDER BY name`, targetingRuleID,
 	)
 	if err != nil {
@@ -387,7 +395,7 @@ func (s *PostgresStore) GetFlagsByTargetingRule(ctx context.Context, targetingRu
 
 func (s *PostgresStore) GetPromotedFlags(ctx context.Context) ([]*Flag, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at
+		`SELECT flag_id, name, description, type, default_value, enabled, rollout_percentage, salt, targeting_rule_id, created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
 		 FROM feature_flags WHERE promoted_experiment_id IS NOT NULL ORDER BY promoted_at DESC`,
 	)
 	if err != nil {
