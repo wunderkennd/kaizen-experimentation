@@ -192,6 +192,11 @@ test-crate crate:
     @echo "  Running tests for {{ crate }}..."
     {{ cargo }} test -p {{ crate }}
 
+# Run bootstrap coverage validation (1000 datasets × 4 scenarios, ~30s in release)
+test-bootstrap-coverage:
+    @echo "  Running bootstrap coverage validation (release mode)..."
+    {{ cargo }} test --release -p experimentation-stats --test bootstrap_coverage -- --ignored --nocapture
+
 # ==============================================================================
 # Linting
 # ==============================================================================
