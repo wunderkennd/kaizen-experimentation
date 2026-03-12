@@ -128,8 +128,12 @@ func (n *Notifier) Subscribe() (<-chan Notification, func()) {
 
 	unsubscribe := func() {
 		n.mu.Lock()
+		_, ok := n.subscribers[id]
 		delete(n.subscribers, id)
 		n.mu.Unlock()
+		if ok {
+			close(ch)
+		}
 	}
 
 	return ch, unsubscribe
