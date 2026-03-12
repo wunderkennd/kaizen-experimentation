@@ -660,20 +660,20 @@ describe('Proto wire format — ListExperiments server-side filters', () => {
 
   it('returns all when no filters provided', async () => {
     const res = await listExperiments();
-    expect(res.experiments.length).toBe(9); // 9 seed experiments
+    expect(res.experiments.length).toBe(10); // 10 seed experiments
   });
 
   it('supports pagination with pageSize and pageToken', async () => {
-    const first = await listExperiments({ pageSize: 3 });
-    expect(first.experiments).toHaveLength(3);
+    const first = await listExperiments({ pageSize: 4 });
+    expect(first.experiments).toHaveLength(4);
     expect(first.nextPageToken).toBeTruthy();
 
-    const second = await listExperiments({ pageSize: 3, pageToken: first.nextPageToken });
-    expect(second.experiments).toHaveLength(3);
+    const second = await listExperiments({ pageSize: 4, pageToken: first.nextPageToken });
+    expect(second.experiments).toHaveLength(4);
     expect(second.nextPageToken).toBeTruthy();
 
-    const third = await listExperiments({ pageSize: 3, pageToken: second.nextPageToken });
-    expect(third.experiments).toHaveLength(3);
+    const third = await listExperiments({ pageSize: 4, pageToken: second.nextPageToken });
+    expect(third.experiments).toHaveLength(2);
     expect(third.nextPageToken).toBe('');
   });
 });

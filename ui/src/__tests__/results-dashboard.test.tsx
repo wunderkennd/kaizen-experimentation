@@ -197,7 +197,7 @@ describe('Results Dashboard - thumbnail_selection_v1 (experiment 666..., SRM mis
 
 describe('Results Dashboard - error state', () => {
   beforeEach(() => {
-    mockExperimentId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    mockExperimentId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
   });
 
   it('shows error state for experiment without analysis data', async () => {

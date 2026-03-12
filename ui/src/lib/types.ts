@@ -147,6 +147,15 @@ export interface MetricResult {
   cupedCiUpper: number;
   varianceReductionPct: number;
   sequentialResult?: SequentialResult;
+  sessionLevelResult?: SessionLevelResult;
+}
+
+export interface SessionLevelResult {
+  naiveSe: number;
+  clusteredSe: number;
+  designEffect: number;
+  naivePValue: number;
+  clusteredPValue: number;
 }
 
 export interface SrmResult {
