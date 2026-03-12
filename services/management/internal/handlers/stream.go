@@ -44,6 +44,12 @@ func (s *ConfigStreamService) StreamConfigUpdates(
 ) error {
 	slog.Info("stream: client connected", "last_known_version", req.Msg.GetLastKnownVersion())
 
+	// Subscribe to notifications BEFORE sending the snapshot so that any
+	// changes published while the snapshot is in flight are buffered in the
+	// channel and delivered after the snapshot completes.
+	ch, unsubscribe := s.notifier.Subscribe()
+	defer unsubscribe()
+
 	// Phase 1: Send snapshot of all RUNNING experiments.
 	experiments, allVariants, allGuardrails, err := s.store.ListRunning(ctx)
 	if err != nil {
@@ -64,9 +70,7 @@ func (s *ConfigStreamService) StreamConfigUpdates(
 
 	slog.Info("stream: snapshot sent", "experiment_count", len(experiments))
 
-	// Phase 2: Subscribe to notifications and stream deltas.
-	ch, unsubscribe := s.notifier.Subscribe()
-	defer unsubscribe()
+	// Phase 2: Stream delta updates from buffered and future notifications.
 
 	for {
 		select {
