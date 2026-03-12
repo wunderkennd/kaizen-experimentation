@@ -1,0 +1,16 @@
+{
+  "test_name": "gst_evaluate_obf_4_look1_no_cross",
+  "description": "OBF K=4, z=2.0 at look 1 \u2014 well below OBF boundary (~3.92), no crossing",
+  "z_stat": 2.0,
+  "current_look": 1,
+  "planned_looks": 4,
+  "overall_alpha": 0.05,
+  "spending_function": "OBrienFleming",
+  "prev_alpha_spent": 0.0,
+  "expected": {
+    "boundary_crossed": false,
+    "critical_value": 3.919927969080382,
+    "alpha_spent": 8.857543832130332e-05,
+    "alpha_remaining": 0.0499114245616787
+  }
+}

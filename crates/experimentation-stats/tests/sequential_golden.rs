@@ -7,7 +7,7 @@
 //! Update: UPDATE_GOLDEN=1 cargo test -p experimentation-stats --test sequential_golden
 
 use experimentation_stats::sequential::{
-    gst_boundaries, msprt_normal, spending_function_alpha, SpendingFunction,
+    gst_boundaries, gst_evaluate, msprt_normal, spending_function_alpha, SpendingFunction,
 };
 use std::path::PathBuf;
 
@@ -166,6 +166,80 @@ fn run_gst_golden(filename: &str) {
     }
 }
 
+// ----- GST evaluate golden types + runner -----
+
+#[derive(serde::Deserialize)]
+struct GoldenGstEvaluate {
+    test_name: String,
+    z_stat: f64,
+    current_look: u32,
+    planned_looks: u32,
+    overall_alpha: f64,
+    spending_function: String,
+    prev_alpha_spent: f64,
+    expected: GstEvaluateExpected,
+}
+
+#[derive(serde::Deserialize)]
+struct GstEvaluateExpected {
+    boundary_crossed: bool,
+    critical_value: f64,
+    alpha_spent: f64,
+    alpha_remaining: f64,
+}
+
+fn load_gst_evaluate(filename: &str) -> GoldenGstEvaluate {
+    let path = golden_dir().join(filename);
+    let data = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to read golden file {}: {e}", path.display()));
+    serde_json::from_str(&data)
+        .unwrap_or_else(|e| panic!("Failed to parse golden file {}: {e}", path.display()))
+}
+
+fn run_gst_evaluate_golden(filename: &str) {
+    let golden = load_gst_evaluate(filename);
+    let spending = match golden.spending_function.as_str() {
+        "OBrienFleming" => SpendingFunction::OBrienFleming,
+        "Pocock" => SpendingFunction::Pocock,
+        other => panic!("Unknown spending function: {other}"),
+    };
+
+    let result = gst_evaluate(
+        golden.z_stat,
+        golden.current_look,
+        golden.planned_looks,
+        golden.overall_alpha,
+        spending,
+        golden.prev_alpha_spent,
+    )
+    .unwrap_or_else(|e| panic!("[{}] gst_evaluate failed: {e}", golden.test_name));
+
+    let name = &golden.test_name;
+    assert_eq!(
+        result.boundary_crossed, golden.expected.boundary_crossed,
+        "[{name}] boundary_crossed mismatch: expected {}, got {}",
+        golden.expected.boundary_crossed, result.boundary_crossed
+    );
+    assert_close(
+        result.critical_value,
+        golden.expected.critical_value,
+        "critical_value",
+        name,
+    );
+    assert_close(
+        result.alpha_spent,
+        golden.expected.alpha_spent,
+        "alpha_spent",
+        name,
+    );
+    assert_close(
+        result.alpha_remaining,
+        golden.expected.alpha_remaining,
+        "alpha_remaining",
+        name,
+    );
+}
+
 // ----- mSPRT golden tests -----
 
 #[test]
@@ -285,4 +359,31 @@ fn obf_boundaries_decreasing() {
             bounds[i - 1]
         );
     }
+}
+
+// ----- GST evaluate golden tests -----
+
+#[test]
+fn golden_gst_evaluate_obf_4_look1_no_cross() {
+    run_gst_evaluate_golden("gst_evaluate_obf_4_look1_no_cross.json");
+}
+
+#[test]
+fn golden_gst_evaluate_obf_4_look1_cross() {
+    run_gst_evaluate_golden("gst_evaluate_obf_4_look1_cross.json");
+}
+
+#[test]
+fn golden_gst_evaluate_obf_4_look4_cross() {
+    run_gst_evaluate_golden("gst_evaluate_obf_4_look4_cross.json");
+}
+
+#[test]
+fn golden_gst_evaluate_pocock_3_look2_cross() {
+    run_gst_evaluate_golden("gst_evaluate_pocock_3_look2_cross.json");
+}
+
+#[test]
+fn golden_gst_evaluate_pocock_3_look3_no_cross() {
+    run_gst_evaluate_golden("gst_evaluate_pocock_3_look3_no_cross.json");
 }

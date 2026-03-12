@@ -3,7 +3,7 @@
   "spending_function": "OBrienFleming",
   "planned_looks": 4,
   "overall_alpha": 0.05,
-  "source": "recursive_integration_python",
+  "source": "scipy_gauss_legendre_201_nodes",
   "r_command": "gsDesign(k=4, test.type=2, alpha=0.05, sfu=sfLDOF)",
   "boundaries": [
     {
@@ -18,21 +18,21 @@
       "information_fraction": 0.5,
       "cumulative_alpha": 0.005574596680784305,
       "incremental_alpha": 0.005486021242463002,
-      "critical_value": 2.7739525452438825
+      "critical_value": 2.7739525452435316
     },
     {
       "look": 3,
       "information_fraction": 0.75,
       "cumulative_alpha": 0.023625121317601305,
       "incremental_alpha": 0.018050524636817,
-      "critical_value": 2.298242500688246
+      "critical_value": 2.2982425006879055
     },
     {
       "look": 4,
       "information_fraction": 1.0,
       "cumulative_alpha": 0.05,
       "incremental_alpha": 0.026374878682398697,
-      "critical_value": 2.042638485279324
+      "critical_value": 2.042638485279184
     }
   ]
 }
