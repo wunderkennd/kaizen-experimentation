@@ -362,6 +362,10 @@ loadtest-assignment-50k:
 loadtest-flags:
     bash scripts/loadtest_flags.sh
 
+# Run M4b policy service load test: p99 < 15ms at 10K rps (builds, starts server, seeds experiments, validates SLA)
+loadtest-policy:
+    bash scripts/loadtest_policy.sh
+
 # ==============================================================================
 # Convenience
 # ==============================================================================
