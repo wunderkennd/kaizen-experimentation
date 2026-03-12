@@ -80,35 +80,23 @@ func setupStreamTestWithPool(t *testing.T) (
 	return mgmtClient, streamClient, notifier, pool, cleanup
 }
 
-// receiveUpdate reads from the stream until predicate matches or timeout. Returns the matching ConfigUpdate.
+// receiveUpdate reads from the stream synchronously until predicate matches.
+// The stream's context timeout controls the deadline — no goroutines are spawned.
 func receiveUpdate(
 	t *testing.T,
 	stream *connect.ServerStreamForClient[assignmentv1.ConfigUpdate],
 	predicate func(*assignmentv1.ConfigUpdate) bool,
-	timeout time.Duration,
 ) *assignmentv1.ConfigUpdate {
 	t.Helper()
 
-	deadline := time.After(timeout)
-	ch := make(chan *assignmentv1.ConfigUpdate, 1)
-
-	go func() {
-		for stream.Receive() {
-			msg := stream.Msg()
-			if predicate(msg) {
-				ch <- msg
-				return
-			}
+	for stream.Receive() {
+		msg := stream.Msg()
+		if predicate(msg) {
+			return msg
 		}
-	}()
-
-	select {
-	case update := <-ch:
-		return update
-	case <-deadline:
-		t.Fatalf("timed out waiting for matching config update after %v", timeout)
-		return nil
 	}
+	t.Fatalf("stream ended without matching config update: %v", stream.Err())
+	return nil
 }
 
 // TestM1M5_ConfigUpdate_RequiredFields validates that all fields M1's experiment_from_proto()
@@ -132,7 +120,7 @@ func TestM1M5_ConfigUpdate_RequiredFields(t *testing.T) {
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
-	}, 10*time.Second)
+	})
 
 	exp := update.GetExperiment()
 	require.NotNil(t, exp, "experiment must not be nil")
@@ -211,7 +199,7 @@ func TestM1M5_ConfigUpdate_HoldoutFlag(t *testing.T) {
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == holdoutID
-	}, 10*time.Second)
+	})
 
 	assert.True(t, update.GetExperiment().GetIsCumulativeHoldout(),
 		"is_cumulative_holdout must be true for holdout experiments; M1 uses this for holdout prioritization")
@@ -291,7 +279,7 @@ func TestM1M5_ConfigUpdate_DeletionOnConclude(t *testing.T) {
 	// Wait for snapshot to include our experiment.
 	receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
-	}, 10*time.Second)
+	})
 
 	// Conclude the experiment.
 	_, err = mgmt.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
@@ -302,7 +290,7 @@ func TestM1M5_ConfigUpdate_DeletionOnConclude(t *testing.T) {
 	// Assert next relevant update is a deletion.
 	deletion := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetIsDeletion()
-	}, 10*time.Second)
+	})
 
 	assert.True(t, deletion.GetIsDeletion(),
 		"concluding a running experiment must produce is_deletion=true; M1 calls experiments.remove()")
@@ -351,7 +339,7 @@ func TestM1M5_ConfigUpdate_VariantContract(t *testing.T) {
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
-	}, 10*time.Second)
+	})
 
 	variants := update.GetExperiment().GetVariants()
 	require.Len(t, variants, 2)
@@ -400,7 +388,7 @@ func TestM1M5_ConfigUpdate_StateIsRunning(t *testing.T) {
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
-	}, 10*time.Second)
+	})
 
 	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, update.GetExperiment().GetState(),
 		"streamed experiment state must be RUNNING (int32=3); M1 uses try_from(proto.state)")
@@ -453,7 +441,7 @@ func TestM1M5_ConfigUpdate_HashSaltStable(t *testing.T) {
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
-	}, 10*time.Second)
+	})
 
 	assert.Equal(t, creationSalt, update.GetExperiment().GetHashSalt(),
 		"hash_salt must be stable between creation and streaming; changing it would break M1's deterministic bucketing")
@@ -480,7 +468,7 @@ func TestM1M5_ConfigUpdate_EnumValues(t *testing.T) {
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
-	}, 10*time.Second)
+	})
 
 	exp := update.GetExperiment()
 
@@ -522,44 +510,28 @@ func TestM1M5_ConfigUpdate_SnapshotIncludesAllRunning(t *testing.T) {
 	require.NoError(t, err)
 	defer stream.Close()
 
-	// Collect all snapshot updates until no more arrive within 3s.
-	timeout := time.After(5 * time.Second)
-	ch := make(chan *assignmentv1.ConfigUpdate, 100)
-	go func() {
-		for stream.Receive() {
-			ch <- stream.Msg()
+	// Read snapshot synchronously. The context timeout (20s) controls the deadline.
+	for stream.Receive() {
+		if exp := stream.Msg().GetExperiment(); exp != nil {
+			if _, ok := expIDs[exp.GetExperimentId()]; ok {
+				expIDs[exp.GetExperimentId()] = true
+			}
 		}
-	}()
+		// Check if we found all 3.
+		allFound := true
+		for _, found := range expIDs {
+			if !found {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
+			break
+		}
+	}
 
-	for {
-		select {
-		case update := <-ch:
-			if exp := update.GetExperiment(); exp != nil {
-				if _, ok := expIDs[exp.GetExperimentId()]; ok {
-					expIDs[exp.GetExperimentId()] = true
-				}
-			}
-			// Check if we found all 3.
-			allFound := true
-			for _, found := range expIDs {
-				if !found {
-					allFound = false
-					break
-				}
-			}
-			if allFound {
-				// All found — success.
-				for id := range expIDs {
-					assert.True(t, expIDs[id], "experiment %s must be in snapshot", id)
-				}
-				return
-			}
-		case <-timeout:
-			for id, found := range expIDs {
-				assert.True(t, found, "experiment %s must be in snapshot for M1 cold-start recovery", id)
-			}
-			return
-		}
+	for id, found := range expIDs {
+		assert.True(t, found, "experiment %s must be in snapshot for M1 cold-start recovery", id)
 	}
 }
 
@@ -602,37 +574,25 @@ func TestM1M5_ConfigUpdate_NonRunningExcluded(t *testing.T) {
 	require.NoError(t, err)
 	defer stream.Close()
 
-	// Collect updates until we find the running one, then verify draft is absent.
+	// Read snapshot synchronously. The handler sends all RUNNING experiments first,
+	// so once we find ours the snapshot is consumed. DRAFT experiments are never sent.
 	foundRunning := false
 	foundDraft := false
-	timeout := time.After(5 * time.Second)
-	ch := make(chan *assignmentv1.ConfigUpdate, 100)
-	go func() {
-		for stream.Receive() {
-			ch <- stream.Msg()
+	for stream.Receive() {
+		if exp := stream.Msg().GetExperiment(); exp != nil {
+			if exp.GetExperimentId() == runningID {
+				foundRunning = true
+			}
+			if exp.GetExperimentId() == draftID {
+				foundDraft = true
+			}
 		}
-	}()
-
-	for {
-		select {
-		case update := <-ch:
-			if exp := update.GetExperiment(); exp != nil {
-				if exp.GetExperimentId() == runningID {
-					foundRunning = true
-				}
-				if exp.GetExperimentId() == draftID {
-					foundDraft = true
-				}
-			}
-			if foundRunning {
-				// We found the running one; wait a bit more to check for draft.
-				continue
-			}
-		case <-timeout:
-			assert.True(t, foundRunning, "RUNNING experiment %s must appear in stream", runningID)
-			assert.False(t, foundDraft,
-				"DRAFT experiment %s must NOT appear in stream; M1 only processes RUNNING experiments", draftID)
-			return
+		if foundRunning {
+			break
 		}
 	}
+
+	assert.True(t, foundRunning, "RUNNING experiment %s must appear in stream", runningID)
+	assert.False(t, foundDraft,
+		"DRAFT experiment %s must NOT appear in stream; M1 only processes RUNNING experiments", draftID)
 }
