@@ -3,7 +3,7 @@
   "spending_function": "Pocock",
   "planned_looks": 4,
   "overall_alpha": 0.05,
-  "source": "recursive_integration_python",
+  "source": "scipy_gauss_legendre_201_nodes",
   "r_command": "gsDesign(k=4, test.type=2, alpha=0.05, sfu=sfLDPocock)",
   "boundaries": [
     {
@@ -18,21 +18,21 @@
       "information_fraction": 0.5,
       "cumulative_alpha": 0.031005725347913876,
       "incremental_alpha": 0.013137024372474455,
-      "critical_value": 2.3675242946634434
+      "critical_value": 2.367524294663525
     },
     {
       "look": 3,
       "information_fraction": 0.75,
       "cumulative_alpha": 0.04139944696214349,
       "incremental_alpha": 0.010393721614229613,
-      "critical_value": 2.3581677349904093
+      "critical_value": 2.3581677349901327
     },
     {
       "look": 4,
       "information_fraction": 1.0,
       "cumulative_alpha": 0.05,
       "incremental_alpha": 0.008600553037856513,
-      "critical_value": 2.3500295372908657
+      "critical_value": 2.350029537291249
     }
   ]
 }
