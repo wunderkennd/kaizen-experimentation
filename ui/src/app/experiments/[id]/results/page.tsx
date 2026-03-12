@@ -56,8 +56,12 @@ const CateTab = dynamic(
   () => import('@/components/cate-tab').then(m => ({ default: m.CateTab })),
   { ssr: false },
 );
+const SessionLevelTab = dynamic(
+  () => import('@/components/session-level-tab').then(m => ({ default: m.SessionLevelTab })),
+  { ssr: false },
+);
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -114,6 +118,7 @@ export default function ResultsPage() {
   const isHoldout = experiment.type === 'CUMULATIVE_HOLDOUT';
   const hasGuardrails = experiment.guardrailConfigs.length > 0;
   const isQoe = experiment.type === 'PLAYBACK_QOE';
+  const hasSessionLevel = analysisResult.metricResults.some(m => m.sessionLevelResult);
 
   // Build tabs dynamically based on experiment features
   const tabs: { key: AnalysisTab; label: string }[] = [
@@ -127,6 +132,9 @@ export default function ResultsPage() {
   }
   if (experiment.type === 'AB' || experiment.type === 'MULTIVARIATE') {
     tabs.push({ key: 'lifecycle', label: 'Lifecycle Segments' });
+  }
+  if (hasSessionLevel) {
+    tabs.push({ key: 'session', label: 'Session-Level' });
   }
   if (hasSurrogateProjections) {
     tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
@@ -245,6 +253,14 @@ export default function ResultsPage() {
       {activeTab === 'lifecycle' && (
         <div role="tabpanel" id="tabpanel-lifecycle" aria-labelledby="tab-lifecycle" tabIndex={0}>
           <CateTab experimentId={params.id} />
+        </div>
+      )}
+
+      {activeTab === 'session' && (
+        <div role="tabpanel" id="tabpanel-session" aria-labelledby="tab-session" tabIndex={0}>
+          <SessionLevelTab
+            metricResults={analysisResult.metricResults.filter(m => m.sessionLevelResult)}
+          />
         </div>
       )}
 
