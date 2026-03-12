@@ -107,7 +107,6 @@ func TestM1M5_ConfigUpdate_RequiredFields(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-required-fields-"+t.Name())
 	expID := createAndStartExperiment(t, mgmt, "m1m5-required-fields-test", layerID)
@@ -116,7 +115,7 @@ func TestM1M5_ConfigUpdate_RequiredFields(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
@@ -158,7 +157,6 @@ func TestM1M5_ConfigUpdate_HoldoutFlag(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-holdout-"+t.Name())
 
@@ -195,7 +193,7 @@ func TestM1M5_ConfigUpdate_HoldoutFlag(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == holdoutID
@@ -213,7 +211,6 @@ func TestM1M5_ConfigUpdate_VersionMonotonicity(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	// Create 3 experiments in separate layers to get 3 distinct updates.
 	var expIDs []string
@@ -227,7 +224,7 @@ func TestM1M5_ConfigUpdate_VersionMonotonicity(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	// Collect versions from the 3 experiment updates.
 	var versions []int64
@@ -264,7 +261,6 @@ func TestM1M5_ConfigUpdate_DeletionOnConclude(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-deletion-"+t.Name())
 	expID := createAndStartExperiment(t, mgmt, "m1m5-deletion-test", layerID)
@@ -274,7 +270,7 @@ func TestM1M5_ConfigUpdate_DeletionOnConclude(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	// Wait for snapshot to include our experiment.
 	receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
@@ -304,7 +300,6 @@ func TestM1M5_ConfigUpdate_VariantContract(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-variant-"+t.Name())
 
@@ -335,7 +330,7 @@ func TestM1M5_ConfigUpdate_VariantContract(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
@@ -375,7 +370,6 @@ func TestM1M5_ConfigUpdate_StateIsRunning(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-state-running-"+t.Name())
 	expID := createAndStartExperiment(t, mgmt, "m1m5-state-running-test", layerID)
@@ -384,7 +378,7 @@ func TestM1M5_ConfigUpdate_StateIsRunning(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
@@ -404,7 +398,6 @@ func TestM1M5_ConfigUpdate_HashSaltStable(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-hashsalt-"+t.Name())
 
@@ -437,7 +430,7 @@ func TestM1M5_ConfigUpdate_HashSaltStable(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
@@ -455,7 +448,6 @@ func TestM1M5_ConfigUpdate_EnumValues(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	layerID := createStreamTestLayer(t, mgmt, "m1m5-enums-"+t.Name())
 	expID := createAndStartExperiment(t, mgmt, "m1m5-enum-test", layerID)
@@ -464,7 +456,7 @@ func TestM1M5_ConfigUpdate_EnumValues(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	update := receiveUpdate(t, stream, func(u *assignmentv1.ConfigUpdate) bool {
 		return u.GetExperiment() != nil && u.GetExperiment().GetExperimentId() == expID
@@ -493,7 +485,6 @@ func TestM1M5_ConfigUpdate_SnapshotIncludesAllRunning(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 
 	// Create 3 experiments in different layers and start them.
 	expIDs := make(map[string]bool)
@@ -508,7 +499,7 @@ func TestM1M5_ConfigUpdate_SnapshotIncludesAllRunning(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	// Read snapshot synchronously. The context timeout (20s) controls the deadline.
 	for stream.Receive() {
@@ -542,7 +533,6 @@ func TestM1M5_ConfigUpdate_NonRunningExcluded(t *testing.T) {
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	// Create a DRAFT experiment (do NOT start it).
 	draftLayerID := createStreamTestLayer(t, mgmt, "m1m5-draft-"+t.Name())
@@ -572,7 +562,7 @@ func TestM1M5_ConfigUpdate_NonRunningExcluded(t *testing.T) {
 		&assignmentv1.StreamConfigUpdatesRequest{LastKnownVersion: 0},
 	))
 	require.NoError(t, err)
-	defer stream.Close()
+	defer func() { cancel(); stream.Close() }()
 
 	// Read snapshot synchronously. The handler sends all RUNNING experiments first,
 	// so once we find ours the snapshot is consumed. DRAFT experiments are never sent.
