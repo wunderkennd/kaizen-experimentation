@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Load Test: M1 Assignment Service — p99 < 5ms at 10K rps
+# Load Test: M1 Assignment Service — p99 < 5ms at configurable rps
 # =============================================================================
-# Phase 1 SLA validation. Builds the release binary, starts the server,
-# runs k6 gRPC load at 10K rps for 60s, and validates:
+# SLA validation. Builds the release binary, starts the server,
+# runs k6 gRPC load at TARGET_RPS for DURATION, and validates:
 #   - GetAssignment p99 < 5ms
 #   - GetInterleavedList p99 < 15ms
 #   - Error rate < 0.1%
+#
+# For 50K rps, use a PGO-optimized binary for best results:
+#   just pgo-build && TARGET_RPS=50000 ./scripts/loadtest_assignment.sh
 #
 # Prerequisites:
 #   - k6 installed (brew install k6)
@@ -14,7 +17,7 @@
 #
 # Usage:
 #   ./scripts/loadtest_assignment.sh
-#   TARGET_RPS=5000 ./scripts/loadtest_assignment.sh
+#   TARGET_RPS=50000 ./scripts/loadtest_assignment.sh
 #   DURATION=30s ./scripts/loadtest_assignment.sh
 # =============================================================================
 
@@ -27,7 +30,9 @@ PORT="${ASSIGNMENT_PORT:-50051}"
 TARGET_RPS="${TARGET_RPS:-10000}"
 DURATION="${DURATION:-60s}"
 CONFIG_PATH="${CONFIG_PATH:-$REPO_ROOT/dev/config.json}"
-ASSIGNMENT_BIN="$REPO_ROOT/target/release/experimentation-assignment"
+# Prefer PGO-optimized binary if available
+PGO_BIN="$REPO_ROOT/target/release/experimentation-assignment"
+ASSIGNMENT_BIN="$PGO_BIN"
 RESULTS_FILE="$REPO_ROOT/loadtest_assignment_results.json"
 
 # Colors
@@ -77,6 +82,10 @@ if [[ ! -f "$ASSIGNMENT_BIN" ]]; then
 fi
 ok "Release binary ready: $ASSIGNMENT_BIN"
 
+if [[ "$TARGET_RPS" -ge 50000 ]]; then
+    warn "High RPS target ($TARGET_RPS). For best results, build with PGO: just pgo-build"
+fi
+
 # ---------------------------------------------------------------------------
 # Start assignment server
 # ---------------------------------------------------------------------------
@@ -110,6 +119,7 @@ echo ""
 
 cd "$REPO_ROOT"
 k6 run \
+    --summary-trend-stats="p(50),p(90),p(95),p(99),p(99.9)" \
     --env "ASSIGNMENT_ADDR=localhost:${PORT}" \
     --env "TARGET_RPS=${TARGET_RPS}" \
     --env "DURATION=${DURATION}" \

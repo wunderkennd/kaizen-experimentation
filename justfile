@@ -349,6 +349,10 @@ loadtest-soak:
 loadtest-assignment:
     bash scripts/loadtest_assignment.sh
 
+# Run M1 assignment service load test at 50K rps (Phase 4 SLA validation)
+loadtest-assignment-50k:
+    TARGET_RPS=50000 DURATION=60s bash scripts/loadtest_assignment.sh
+
 # Run M7 flag service load test: p99 < 10ms at 20K rps (builds, starts server, seeds flags, validates SLA)
 loadtest-flags:
     bash scripts/loadtest_flags.sh
