@@ -182,6 +182,7 @@ pub fn experiment_from_proto(
         session_config,
         interleaving_config,
         bandit_config,
+        is_cumulative_holdout: proto.is_cumulative_holdout,
     }
 }
 
@@ -268,6 +269,7 @@ mod tests {
             session_config: None,
             interleaving_config: None,
             bandit_config: None,
+            is_cumulative_holdout: false,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

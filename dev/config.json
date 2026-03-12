@@ -178,6 +178,19 @@
         "content_id": "movie-new-001",
         "cold_start_window_days": 14
       }
+    },
+    {
+      "experiment_id": "exp_dev_holdout_001",
+      "name": "Cumulative Holdout — Recommendation Quality",
+      "state": "RUNNING",
+      "type": "CUMULATIVE_HOLDOUT",
+      "hash_salt": "dev_salt_holdout_001",
+      "layer_id": "layer_default",
+      "is_cumulative_holdout": true,
+      "variants": [
+        { "variant_id": "holdout", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{\"baseline\": true}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 499 }
     }
   ],
   "layers": [

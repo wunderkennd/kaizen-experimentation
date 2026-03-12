@@ -238,6 +238,16 @@ pgo-build:
     @echo "  Building PGO-optimized assignment service..."
     bash scripts/pgo_build.sh
 
+# Build policy service with PGO optimization (instrument → profile → optimize)
+pgo-build-policy:
+    @echo "  Building PGO-optimized policy service..."
+    bash scripts/pgo_build_policy.sh
+
+# Build analysis service with PGO optimization (instrument → profile → optimize)
+pgo-build-analysis:
+    @echo "  Building PGO-optimized analysis service..."
+    bash scripts/pgo_build_analysis.sh
+
 # Build assignment service release binary (no PGO)
 build-assignment-release:
     {{ cargo }} build --release --package experimentation-assignment
@@ -338,6 +348,10 @@ loadtest-soak:
 # Run M1 assignment service load test: p99 < 5ms at 10K rps (builds, starts server, validates SLA)
 loadtest-assignment:
     bash scripts/loadtest_assignment.sh
+
+# Run M7 flag service load test: p99 < 10ms at 20K rps (builds, starts server, seeds flags, validates SLA)
+loadtest-flags:
+    bash scripts/loadtest_flags.sh
 
 # ==============================================================================
 # Convenience

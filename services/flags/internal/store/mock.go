@@ -102,6 +102,7 @@ func (m *MockStore) UpdateFlag(ctx context.Context, f *Flag) (*Flag, error) {
 	existing.Enabled = f.Enabled
 	existing.RolloutPercentage = f.RolloutPercentage
 	existing.TargetingRuleID = f.TargetingRuleID
+	existing.ResolvedAt = f.ResolvedAt
 	existing.UpdatedAt = time.Now()
 
 	// Replace variants.
@@ -249,6 +250,15 @@ func (m *MockStore) SetUpdatedAt(flagID string, t time.Time) {
 	defer m.mu.Unlock()
 	if f, ok := m.flags[flagID]; ok {
 		f.UpdatedAt = t
+	}
+}
+
+// SetResolvedAt sets the resolved_at timestamp for a flag (for testing reconciler).
+func (m *MockStore) SetResolvedAt(flagID string, t time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if f, ok := m.flags[flagID]; ok {
+		f.ResolvedAt = t
 	}
 }
 

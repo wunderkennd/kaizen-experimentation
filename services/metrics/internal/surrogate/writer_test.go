@@ -76,6 +76,75 @@ func TestMemProjectionWriter_ConcurrentAccess(t *testing.T) {
 	assert.Len(t, w.AllRecords(), goroutines)
 }
 
+func TestMemProjectionWriter_ReadForExperiment(t *testing.T) {
+	w := NewMemProjectionWriter()
+	ctx := context.Background()
+
+	_ = w.Write(ctx, ProjectionRecord{ExperimentID: "exp-A", VariantID: "tx1", ModelID: "m1"})
+	_ = w.Write(ctx, ProjectionRecord{ExperimentID: "exp-A", VariantID: "tx2", ModelID: "m1"})
+	_ = w.Write(ctx, ProjectionRecord{ExperimentID: "exp-B", VariantID: "tx1", ModelID: "m2"})
+
+	records, err := w.ReadForExperiment(ctx, "exp-A")
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	for _, r := range records {
+		assert.Equal(t, "exp-A", r.ExperimentID)
+	}
+}
+
+func TestMemProjectionWriter_ReadForExperiment_NoMatch(t *testing.T) {
+	w := NewMemProjectionWriter()
+	ctx := context.Background()
+
+	_ = w.Write(ctx, ProjectionRecord{ExperimentID: "exp-A", VariantID: "tx1"})
+
+	records, err := w.ReadForExperiment(ctx, "nonexistent")
+	require.NoError(t, err)
+	assert.Empty(t, records)
+}
+
+func TestMemProjectionWriter_Reset(t *testing.T) {
+	w := NewMemProjectionWriter()
+	ctx := context.Background()
+
+	_ = w.Write(ctx, ProjectionRecord{ExperimentID: "exp-A"})
+	_ = w.Write(ctx, ProjectionRecord{ExperimentID: "exp-B"})
+	require.Len(t, w.AllRecords(), 2)
+
+	w.Reset()
+	assert.Empty(t, w.AllRecords(), "Reset should clear all records")
+}
+
+func TestMemCalibrationUpdater_UpdateCalibration(t *testing.T) {
+	u := NewMemCalibrationUpdater()
+	ctx := context.Background()
+
+	err := u.UpdateCalibration(ctx, "m1", 0.85)
+	require.NoError(t, err)
+	assert.Equal(t, 0.85, u.Updates["m1"])
+}
+
+func TestMemCalibrationUpdater_UpdateCalibration_Overwrite(t *testing.T) {
+	u := NewMemCalibrationUpdater()
+	ctx := context.Background()
+
+	_ = u.UpdateCalibration(ctx, "m1", 0.70)
+	_ = u.UpdateCalibration(ctx, "m1", 0.85)
+	assert.Equal(t, 0.85, u.Updates["m1"], "latest value should win")
+}
+
+func TestMemCalibrationUpdater_Reset(t *testing.T) {
+	u := NewMemCalibrationUpdater()
+	ctx := context.Background()
+
+	_ = u.UpdateCalibration(ctx, "m1", 0.85)
+	_ = u.UpdateCalibration(ctx, "m2", 0.72)
+	require.Len(t, u.Updates, 2)
+
+	u.Reset()
+	assert.Empty(t, u.Updates, "Reset should clear all updates")
+}
+
 func TestLinearModel_EstimateSE_EdgeCases(t *testing.T) {
 	t.Run("R²=0 uses fallback", func(t *testing.T) {
 		model := &LinearModel{
