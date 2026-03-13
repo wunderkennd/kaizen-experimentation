@@ -522,22 +522,47 @@ export const handlers = [
     return HttpResponse.json({ allocations });
   }),
 
-  // ListMetricDefinitions
+  // ListMetricDefinitions — mirrors Agent-5 proto wire format:
+  //   - Enum values use METRIC_TYPE_ prefix (adapter strips on client)
+  //   - Proto3 zero-value omission: false booleans and 0 numbers are absent from JSON
+  //   - typeFilter field pending Agent-5 proto addition (additive, field 3)
   http.post(`${MGMT_SVC}/ListMetricDefinitions`, async ({ request }) => {
     const body = await request.json() as Record<string, unknown>;
-    let filtered = [...SEED_METRIC_DEFINITIONS];
 
+    // Convert seed data to proto wire format
+    let metrics = SEED_METRIC_DEFINITIONS.map((m) => {
+      const wire: Record<string, unknown> = {
+        metricId: m.metricId,
+        name: m.name,
+        description: m.description,
+        type: `METRIC_TYPE_${m.type}`,
+        sourceEventType: m.sourceEventType,
+      };
+      // Proto3: only include non-default values
+      if (m.lowerIsBetter) wire.lowerIsBetter = true;
+      if (m.isQoeMetric) wire.isQoeMetric = true;
+      if (m.numeratorEventType) wire.numeratorEventType = m.numeratorEventType;
+      if (m.denominatorEventType) wire.denominatorEventType = m.denominatorEventType;
+      if (m.percentile) wire.percentile = m.percentile;
+      if (m.customSql) wire.customSql = m.customSql;
+      if (m.surrogateTargetMetricId) wire.surrogateTargetMetricId = m.surrogateTargetMetricId;
+      if (m.cupedCovariateMetricId) wire.cupedCovariateMetricId = m.cupedCovariateMetricId;
+      if (m.minimumDetectableEffect) wire.minimumDetectableEffect = m.minimumDetectableEffect;
+      return wire;
+    });
+
+    // Server-side type filter (pending Agent-5 proto addition)
     if (body.typeFilter) {
-      const typeVal = (body.typeFilter as string).replace('METRIC_TYPE_', '');
-      filtered = filtered.filter((m) => m.type === typeVal);
+      const typeVal = body.typeFilter as string;
+      metrics = metrics.filter((m) => m.type === typeVal);
     }
 
-    const pageSize = (body.pageSize as number) || filtered.length;
+    const pageSize = (body.pageSize as number) || metrics.length;
     const pageToken = (body.pageToken as string) || '';
     const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
-    const page = filtered.slice(startIndex, startIndex + pageSize);
+    const page = metrics.slice(startIndex, startIndex + pageSize);
     const nextIndex = startIndex + pageSize;
-    const nextPageToken = nextIndex < filtered.length ? String(nextIndex) : '';
+    const nextPageToken = nextIndex < metrics.length ? String(nextIndex) : '';
 
     return HttpResponse.json({ metrics: page, nextPageToken });
   }),
