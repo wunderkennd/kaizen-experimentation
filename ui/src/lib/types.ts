@@ -148,6 +148,7 @@ export interface MetricResult {
   varianceReductionPct: number;
   sequentialResult?: SequentialResult;
   sessionLevelResult?: SessionLevelResult;
+  segmentResults?: SegmentResult[];
 }
 
 export interface SessionLevelResult {
@@ -166,11 +167,21 @@ export interface SrmResult {
   expectedCounts: Record<string, number>;
 }
 
+export interface SegmentResult {
+  segment: LifecycleSegment;
+  effect: number;
+  ciLower: number;
+  ciUpper: number;
+  pValue: number;
+  sampleSize: number;
+}
+
 export interface AnalysisResult {
   experimentId: string;
   metricResults: MetricResult[];
   srmResult: SrmResult;
   surrogateProjections?: SurrogateProjection[];
+  cochranQPValue?: number;
   computedAt: string;
 }
 
@@ -246,6 +257,10 @@ export interface SurrogateProjection {
   projectionCiLower: number;
   projectionCiUpper: number;
   calibrationRSquared: number;
+  /** Proto field — present in wire format, mapped to metricId/surrogateMetricId by adapter */
+  modelId?: string;
+  /** Proto field — present in wire format, not used directly by UI */
+  variantId?: string;
 }
 
 // --- Cumulative Holdout (M2.10) ---

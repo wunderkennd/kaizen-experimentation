@@ -150,9 +150,30 @@ describe('M4a wire format: GetAnalysisResult', () => {
     expect(mr.sessionLevelResult!.designEffect).toBe(2.1);
     expect(mr.sessionLevelResult!.clusteredPValue).toBe(0.039);
 
-    // SRM result
+    // SRM result — int64 counts coerced to numbers by adapter
     expect(result.srmResult.isMismatch).toBe(false);
     expect(result.srmResult.chiSquared).toBe(0.42);
+    expect(typeof result.srmResult.observedCounts['v1-control']).toBe('number');
+    expect(result.srmResult.observedCounts['v1-control']).toBe(50102);
+
+    // cochranQPValue — proto field now in UI type
+    expect(result.cochranQPValue).toBe(0.006);
+
+    // segmentResults — adapted with enum prefix stripping and int64 coercion
+    expect(mr.segmentResults).toHaveLength(2);
+    expect(mr.segmentResults![0].segment).toBe('TRIAL'); // stripped LIFECYCLE_SEGMENT_
+    expect(mr.segmentResults![0].sampleSize).toBe(8350); // coerced from string
+    expect(typeof mr.segmentResults![0].sampleSize).toBe('number');
+    expect(mr.segmentResults![1].segment).toBe('MATURE');
+    expect(mr.segmentResults![1].sampleSize).toBe(31700);
+
+    // SurrogateProjection — adapted from proto fields
+    expect(result.surrogateProjections).toHaveLength(1);
+    const sp = result.surrogateProjections![0];
+    expect(sp.metricId).toBe('surrogate-homepage-ltv'); // adapted from modelId
+    expect(sp.surrogateMetricId).toBe('v1-treatment'); // adapted from variantId
+    expect(sp.modelId).toBe('surrogate-homepage-ltv'); // proto field preserved
+    expect(sp.projectedEffect).toBe(0.008);
   });
 
   it('handles proto3 zero-value omission gracefully', async () => {
@@ -177,13 +198,14 @@ describe('M4a wire format: GetAnalysisResult', () => {
 
     const result = await getAnalysisResult('zero-test');
     expect(result.experimentId).toBe('zero-test');
-    // metricResults should be undefined (proto3 omits empty arrays)
-    // Our UI handles this — the results page checks array length
-    expect(result.metricResults).toBeUndefined();
-    // SRM fields default to zero/false when omitted
-    expect(result.srmResult.chiSquared).toBeUndefined();
-    expect(result.srmResult.pValue).toBeUndefined();
-    expect(result.srmResult.isMismatch).toBeUndefined();
+    // metricResults: empty array after adapter (proto3 omits empty arrays → undefined → adapter defaults to [])
+    expect(result.metricResults).toEqual([]);
+    // SRM fields default to zero/false after adapter
+    expect(result.srmResult.chiSquared).toBe(0);
+    expect(result.srmResult.pValue).toBe(0);
+    expect(result.srmResult.isMismatch).toBe(false);
+    // cochranQPValue: 0.0 omitted by proto3 → undefined
+    expect(result.cochranQPValue).toBeUndefined();
   });
 
   it('handles int64 string coercion in SRM counts', async () => {
@@ -208,17 +230,14 @@ describe('M4a wire format: GetAnalysisResult', () => {
     );
 
     const result = await getAnalysisResult('int64-test');
-    // The values arrive as strings from proto3 — document this contract.
-    // The UI must coerce or tolerate string counts.
     expect(result.srmResult.isMismatch).toBe(true);
     expect(result.srmResult.observedCounts).toBeDefined();
-    // NOTE: Proto3 sends int64 as strings. Our SRM display should handle this.
-    // Currently the UI just displays these via .toLocaleString() which works
-    // on both string and number in JavaScript contexts.
+    // Adapter coerces int64 strings to numbers
     const controlCount = result.srmResult.observedCounts['v1-control'];
-    expect(controlCount).toBeDefined();
-    // Type is string from proto3 JSON
-    expect(typeof controlCount === 'string' || typeof controlCount === 'number').toBe(true);
+    expect(controlCount).toBe(52300);
+    expect(typeof controlCount).toBe('number');
+    expect(result.srmResult.expectedCounts['v1-control']).toBe(50000);
+    expect(typeof result.srmResult.expectedCounts['v1-control']).toBe('number');
   });
 });
 
@@ -641,7 +660,7 @@ describe('M4a wire format: GetGstTrajectory — enum prefix stripping', () => {
 describe('M4a wire format: response envelope patterns', () => {
   it('analysis responses are flat (no { result: {...} } wrapper)', async () => {
     // Unlike management RPCs which wrap in { experiment: {...} },
-    // analysis RPCs return the result directly (flat).
+    // analysis RPCs return the result directly (flat), then adapted.
     server.use(
       http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, () =>
         HttpResponse.json({
@@ -656,6 +675,9 @@ describe('M4a wire format: response envelope patterns', () => {
     const result = await getAnalysisResult('flat-test');
     // Should parse directly — not try to unwrap from a nested key
     expect(result.experimentId).toBe('flat-test');
+    // Adapter applies defaults for missing fields
+    expect(result.srmResult.isMismatch).toBe(false);
+    expect(result.srmResult.observedCounts).toEqual({});
   });
 
   it('novelty analysis is flat', async () => {
@@ -695,29 +717,10 @@ describe('M4a wire format: response envelope patterns', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('M4a wire format: SurrogateProjection contract', () => {
-  it('documents proto vs UI type mismatch for SurrogateProjection', async () => {
+  it('adapts proto SurrogateProjection fields to UI type', async () => {
     // Proto SurrogateProjection has: experiment_id, variant_id, model_id
-    // UI SurrogateProjection has: metricId, surrogateMetricId
-    // These are DIFFERENT schemas. The MSW mocks currently use the UI schema.
-    // When integrating with real Agent-4, an adapter will be needed.
-    //
-    // Proto fields:
-    //   experiment_id: string    → not in UI type
-    //   variant_id: string       → not in UI type
-    //   model_id: string         → not in UI type
-    //   projected_effect: double  → projectedEffect (matches)
-    //   projection_ci_lower: double → projectionCiLower (matches)
-    //   projection_ci_upper: double → projectionCiUpper (matches)
-    //   calibration_r_squared: double → calibrationRSquared (matches)
-    //   computed_at: Timestamp   → not in UI type (it's on AnalysisResult level)
-    //
-    // UI fields:
-    //   metricId: string          → NOT in proto
-    //   surrogateMetricId: string → NOT in proto
-    //
-    // RECOMMENDATION: Add adaptSurrogateProjection() to api.ts that maps
-    // proto fields to UI fields. The model_id can be used to look up metric
-    // mappings from the SurrogateModelConfig.
+    // UI SurrogateProjection needs: metricId, surrogateMetricId
+    // The adapter maps: modelId → metricId, variantId → surrogateMetricId
 
     server.use(
       http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, () =>
@@ -727,7 +730,7 @@ describe('M4a wire format: SurrogateProjection contract', () => {
           srmResult: {},
           surrogateProjections: [
             {
-              // Proto-shaped payload
+              // Proto-shaped payload (no metricId/surrogateMetricId)
               experimentId: 'surrogate-test',
               variantId: 'v1-treatment',
               modelId: 'model-ltv',
@@ -753,13 +756,42 @@ describe('M4a wire format: SurrogateProjection contract', () => {
     expect(sp.projectionCiUpper).toBe(0.014);
     expect(sp.calibrationRSquared).toBe(0.78);
 
-    // GAP: Proto sends experimentId/variantId/modelId, UI expects metricId/surrogateMetricId
-    // These fields will be undefined when reading proto fields with UI type
-    expect(sp.metricId).toBeUndefined();
-    expect(sp.surrogateMetricId).toBeUndefined();
-    // Proto fields that exist but aren't in UI type get passed through as extra properties
-    expect((sp as unknown as Record<string, unknown>).modelId).toBe('model-ltv');
-    expect((sp as unknown as Record<string, unknown>).variantId).toBe('v1-treatment');
+    // Adapter maps proto fields → UI fields
+    expect(sp.metricId).toBe('model-ltv'); // adapted from modelId
+    expect(sp.surrogateMetricId).toBe('v1-treatment'); // adapted from variantId
+    // Proto fields preserved for debugging
+    expect(sp.modelId).toBe('model-ltv');
+    expect(sp.variantId).toBe('v1-treatment');
+  });
+
+  it('preserves metricId/surrogateMetricId when already present (MSW mocks)', async () => {
+    // MSW mocks use UI-style fields directly. Adapter should prefer them.
+    server.use(
+      http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, () =>
+        HttpResponse.json({
+          experimentId: 'surrogate-msw',
+          metricResults: [],
+          srmResult: {},
+          surrogateProjections: [
+            {
+              metricId: 'monthly_retention_rate',
+              surrogateMetricId: 'click_through_rate',
+              projectedEffect: 0.008,
+              projectionCiLower: 0.002,
+              projectionCiUpper: 0.014,
+              calibrationRSquared: 0.78,
+            },
+          ],
+          computedAt: '2026-03-05T12:00:00Z',
+        }),
+      ),
+    );
+
+    const result = await getAnalysisResult('surrogate-msw');
+    const sp = result.surrogateProjections![0];
+    // When metricId is already present, adapter keeps it
+    expect(sp.metricId).toBe('monthly_retention_rate');
+    expect(sp.surrogateMetricId).toBe('click_through_rate');
   });
 });
 
@@ -856,23 +888,17 @@ describe('M4a wire format: UI fields absent from proto', () => {
     expect(true).toBe(true); // documentation test
   });
 
-  it('AnalysisResult.cochranQPValue — in proto but not in UI type', () => {
+  it('AnalysisResult.cochranQPValue — RESOLVED: now in UI type + adapter', () => {
     // Proto has cochran_q_p_value on AnalysisResult (field 5).
-    // UI's AnalysisResult type does NOT include cochranQPValue.
-    // The value comes through in the raw JSON but gets ignored.
-    // RECOMMENDATION: Add to UI type:
-    //   cochranQPValue?: number;
-    // Note: already used in CATE tab heterogeneity display, but from
-    // CateAnalysisResult.heterogeneity.pValue instead.
-    expect(true).toBe(true); // documentation test
+    // FIXED: UI AnalysisResult now includes cochranQPValue?: number.
+    // Adapter preserves the value from proto JSON.
+    expect(true).toBe(true); // documented as resolved
   });
 
-  it('MetricResult.segmentResults — in proto but not adapted in UI', () => {
+  it('MetricResult.segmentResults — RESOLVED: now in UI type + adapter', () => {
     // Proto MetricResult has repeated SegmentResult segment_results = 16.
-    // UI's MetricResult type does NOT include segmentResults.
-    // The per-segment data is available via the separate GetCateAnalysis RPC.
-    // RECOMMENDATION: Either add to UI MetricResult type or document that
-    // CATE analysis is the canonical source for per-segment results.
-    expect(true).toBe(true); // documentation test
+    // FIXED: UI MetricResult now includes segmentResults?: SegmentResult[].
+    // Adapter strips LIFECYCLE_SEGMENT_ prefix and coerces int64 sampleSize.
+    expect(true).toBe(true); // documented as resolved
   });
 });
