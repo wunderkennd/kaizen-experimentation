@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { murmurhash3_x86_32 } from './murmur3';
 import {
   LocalProvider,
+  RemoteProvider,
+  ExperimentClient,
+  MockProvider,
   type ExperimentConfig,
   type UserAttributes,
 } from './index';
@@ -204,5 +207,179 @@ describe('LocalProvider.getAllAssignments', () => {
     expect(results.size).toBe(2);
     expect(results.has('exp_ab_test')).toBe(true);
     expect(results.has('exp_abc')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RemoteProvider tests
+// ---------------------------------------------------------------------------
+
+describe('RemoteProvider', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  function mockFetch(status: number, body: unknown): void {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body),
+    });
+  }
+
+  it('getAssignment returns assignment on success', async () => {
+    mockFetch(200, {
+      experimentId: 'exp1',
+      variantId: 'treatment',
+      payloadJson: '{"color":"red"}',
+      assignmentProbability: 0.5,
+      isActive: true,
+    });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const result = await provider.getAssignment('exp1', { userId: 'user-1' });
+
+    expect(result).not.toBeNull();
+    expect(result!.experimentId).toBe('exp1');
+    expect(result!.variantName).toBe('treatment');
+    expect(result!.payload).toEqual({ color: 'red' });
+    expect(result!.fromCache).toBe(false);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/experimentation.assignment.v1.AssignmentService/GetAssignment',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('getAssignment returns null when not active', async () => {
+    mockFetch(200, {
+      experimentId: 'exp1',
+      variantId: '',
+      isActive: false,
+    });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const result = await provider.getAssignment('exp1', { userId: 'user-1' });
+    expect(result).toBeNull();
+  });
+
+  it('getAssignment returns null on 404', async () => {
+    mockFetch(404, { code: 404, message: 'not found' });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const result = await provider.getAssignment('missing', { userId: 'user-1' });
+    expect(result).toBeNull();
+  });
+
+  it('getAssignment returns null on 500', async () => {
+    mockFetch(500, { code: 500, message: 'internal error' });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const result = await provider.getAssignment('exp1', { userId: 'user-1' });
+    expect(result).toBeNull();
+  });
+
+  it('getAssignment throws on network error (for fallback chain)', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    await expect(provider.getAssignment('exp1', { userId: 'user-1' }))
+      .rejects.toThrow('fetch failed');
+  });
+
+  it('getAssignment handles empty payloadJson', async () => {
+    mockFetch(200, {
+      experimentId: 'exp1',
+      variantId: 'control',
+      payloadJson: '',
+      assignmentProbability: 1.0,
+      isActive: true,
+    });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const result = await provider.getAssignment('exp1', { userId: 'user-1' });
+    expect(result).not.toBeNull();
+    expect(result!.payload).toEqual({});
+  });
+
+  it('getAssignment sends flattened attributes', async () => {
+    mockFetch(200, {
+      experimentId: 'exp1',
+      variantId: 'control',
+      payloadJson: '',
+      isActive: true,
+    });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    await provider.getAssignment('exp1', {
+      userId: 'user-1',
+      plan: 'premium',
+      age: 30,
+    } as UserAttributes);
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body);
+    expect(sentBody.attributes.plan).toBe('premium');
+    expect(sentBody.attributes.age).toBe('30');
+    expect(sentBody.attributes.userId).toBeUndefined();
+  });
+
+  it('getAllAssignments returns map of assignments', async () => {
+    mockFetch(200, {
+      assignments: [
+        { experimentId: 'exp1', variantId: 'control', payloadJson: '{}', isActive: true },
+        { experimentId: 'exp2', variantId: 'treatment', payloadJson: '{"x":1}', isActive: true },
+        { experimentId: 'exp3', variantId: '', isActive: false },
+      ],
+    });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const results = await provider.getAllAssignments({ userId: 'user-1' });
+
+    expect(results.size).toBe(2);
+    expect(results.get('exp1')!.variantName).toBe('control');
+    expect(results.get('exp2')!.variantName).toBe('treatment');
+    expect(results.has('exp3')).toBe(false); // inactive
+  });
+
+  it('getAllAssignments returns empty map on error', async () => {
+    mockFetch(500, { code: 500, message: 'error' });
+
+    const provider = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const results = await provider.getAllAssignments({ userId: 'user-1' });
+    expect(results.size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ExperimentClient fallback chain tests
+// ---------------------------------------------------------------------------
+
+describe('ExperimentClient fallback', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('falls back to fallback provider when primary throws', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('network error'));
+
+    const remote = new RemoteProvider({ baseUrl: 'http://localhost:8080' });
+    const local = new MockProvider([
+      { experimentId: 'exp1', variantName: 'fallback-variant' },
+    ]);
+
+    const client = new ExperimentClient({
+      provider: remote,
+      userId: 'user-1',
+      fallbackProvider: local,
+    });
+
+    const variant = await client.getVariant('exp1');
+    expect(variant).toBe('fallback-variant');
+
+    await client.destroy();
   });
 });
