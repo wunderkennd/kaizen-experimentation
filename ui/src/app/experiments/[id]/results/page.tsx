@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
 import { getExperiment, getAnalysisResult } from '@/lib/api';
+import { RetryableError } from '@/components/retryable-error';
 import { SrmBanner } from '@/components/srm-banner';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
@@ -72,9 +73,10 @@ export default function ResultsPage() {
   const [showCuped, setShowCuped] = useState(false);
   const [activeTab, setActiveTab] = useState<AnalysisTab>('overview');
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!params.id) return;
-
+    setLoading(true);
+    setError(null);
     Promise.all([getExperiment(params.id), getAnalysisResult(params.id)])
       .then(([exp, analysis]) => {
         setExperiment(exp);
@@ -83,6 +85,8 @@ export default function ResultsPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -103,11 +107,11 @@ export default function ResultsPage() {
           <span className="mx-2">/</span>
           <span className="text-gray-900">Results</span>
         </nav>
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-700">
-            {error || 'No analysis results available for this experiment.'}
-          </p>
-        </div>
+        <RetryableError
+          message={error || 'No analysis results available for this experiment.'}
+          onRetry={fetchData}
+          context="analysis results"
+        />
       </div>
     );
   }

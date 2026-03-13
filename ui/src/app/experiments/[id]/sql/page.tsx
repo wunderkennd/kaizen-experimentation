@@ -7,6 +7,7 @@ import type { QueryLogEntry } from '@/lib/types';
 import { getQueryLog } from '@/lib/api';
 import { downloadNotebook, type ExportPhase } from '@/lib/export-notebook';
 import { QueryLogTable } from '@/components/query-log-table';
+import { RetryableError } from '@/components/retryable-error';
 
 export default function SqlPage() {
   const params = useParams<{ id: string }>();
@@ -16,14 +17,17 @@ export default function SqlPage() {
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<ExportPhase | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!params.id) return;
-
+    setLoading(true);
+    setError(null);
     getQueryLog(params.id)
       .then(setEntries)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleExport = useCallback(async () => {
     if (!params.id) return;
@@ -64,9 +68,7 @@ export default function SqlPage() {
           <span className="mx-2">/</span>
           <span className="text-gray-900">SQL</span>
         </nav>
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
+        <RetryableError message={error} onRetry={fetchData} context="query log" />
       </div>
     );
   }

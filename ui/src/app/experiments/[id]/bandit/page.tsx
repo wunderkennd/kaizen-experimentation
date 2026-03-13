@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -16,6 +16,7 @@ import {
 import type { Experiment, BanditDashboardResult } from '@/lib/types';
 import { getExperiment, getBanditDashboard } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { RetryableError } from '@/components/retryable-error';
 
 const ARM_COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed'];
 
@@ -26,9 +27,10 @@ export default function BanditDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!params.id) return;
-
+    setLoading(true);
+    setError(null);
     Promise.all([getExperiment(params.id), getBanditDashboard(params.id)])
       .then(([exp, bd]) => {
         setExperiment(exp);
@@ -37,6 +39,8 @@ export default function BanditDashboardPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -57,11 +61,11 @@ export default function BanditDashboardPage() {
           <span className="mx-2">/</span>
           <span className="text-gray-900">Bandit</span>
         </nav>
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-700">
-            {error || 'No bandit dashboard available for this experiment.'}
-          </p>
-        </div>
+        <RetryableError
+          message={error || 'No bandit dashboard available for this experiment.'}
+          onRetry={fetchData}
+          context="bandit dashboard"
+        />
       </div>
     );
   }
