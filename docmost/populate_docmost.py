@@ -16,34 +16,35 @@ Requirements:
     pip install requests
 """
 
-import json
 import os
 import sys
-import time
+
 import requests
 
 BASE_URL = os.environ.get("DOCMOST_URL", "http://localhost:3000")
 TOKEN_FILE = os.environ.get("DOCMOST_TOKEN_FILE", "/tmp/docmost_token.txt")
 REPO_ROOT = os.environ.get("REPO_ROOT", os.path.join(os.path.dirname(__file__), ".."))
 
-def get_token():
+
+def _get_token():
     """Read auth token from file."""
     if os.path.exists(TOKEN_FILE):
-        return open(TOKEN_FILE).read().strip()
-    print(f"Error: Token file not found at {TOKEN_FILE}")
-    print("Please log in via the DocMost API and save the token.")
-    sys.exit(1)
-
-AUTH_TOKEN = get_token()
-HEADERS = {
-    "Authorization": f"Bearer {AUTH_TOKEN}",
-    "Content-Type": "application/json",
-}
+        with open(TOKEN_FILE, "r") as f:
+            return f.read().strip()
+    return None
 
 
-def api_post(endpoint, data):
+def _build_headers(token):
+    """Build request headers with auth token."""
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+def api_post(endpoint, data, headers):
     """Make a POST request to the DocMost API."""
-    resp = requests.post(f"{BASE_URL}/api/{endpoint}", json=data, headers=HEADERS)
+    resp = requests.post(f"{BASE_URL}/api/{endpoint}", json=data, headers=headers)
     if resp.status_code not in (200, 201):
         print(f"  ERROR {resp.status_code}: {resp.text[:200]}")
         return None
@@ -54,21 +55,21 @@ def api_post(endpoint, data):
     return None
 
 
-def create_space(name, slug, description=""):
+def create_space(name, slug, headers, description=""):
     """Create a DocMost space."""
     print(f"Creating space: {name}")
     data = api_post("spaces/create", {
         "name": name,
         "slug": slug,
         "description": description,
-    })
+    }, headers)
     if data:
         print(f"  Created space: {data['id']}")
         return data["id"]
     return None
 
 
-def create_page(space_id, title, content_md, parent_page_id=None):
+def create_page(space_id, title, content_md, headers, parent_page_id=None):
     """Create a page with markdown content."""
     print(f"  Creating page: {title}")
     payload = {
@@ -79,7 +80,7 @@ def create_page(space_id, title, content_md, parent_page_id=None):
     }
     if parent_page_id:
         payload["parentPageId"] = parent_page_id
-    data = api_post("pages/create", payload)
+    data = api_post("pages/create", payload, headers)
     if data:
         return data["id"]
     return None
@@ -94,7 +95,7 @@ def read_file(path):
     return f"*File not found: {path}*"
 
 
-def populate_general_space(space_id):
+def populate_general_space(space_id, headers):
     """Populate the General space with overview documentation."""
     welcome_md = """# Kaizen Experimentation Platform
 
@@ -122,21 +123,21 @@ Welcome to the **Kaizen Experimentation Platform** documentation. This is a full
 - **Schema-First**: All interfaces defined in Protobuf with buf toolchain enforcement
 - **Guardrails-Default-Safe**: Guardrail breaches auto-pause experiments by default
 """
-    create_page(space_id, "Welcome to Kaizen Experimentation", welcome_md)
+    create_page(space_id, "Welcome to Kaizen Experimentation", welcome_md, headers)
 
     # Contributing guide from repo
     contributing_md = read_file("CONTRIBUTING.md")
-    create_page(space_id, "Contributing Guide", contributing_md)
+    create_page(space_id, "Contributing Guide", contributing_md, headers)
 
     # Development workflow (synthesized from CLAUDE.md)
     dev_md = read_file("CLAUDE.md")
-    create_page(space_id, "Development Workflow (CLAUDE.md)", dev_md)
+    create_page(space_id, "Development Workflow (CLAUDE.md)", dev_md, headers)
 
 
-def populate_architecture_space(space_id):
+def populate_architecture_space(space_id, headers):
     """Populate Architecture space with design documentation."""
     design_doc = read_file("docs/design/design_doc_v5.1.md")
-    create_page(space_id, "System Design Document v5.1", design_doc)
+    create_page(space_id, "System Design Document v5.1", design_doc, headers)
 
     # Mermaid diagrams as separate pages
     mermaid_files = [
@@ -151,19 +152,19 @@ def populate_architecture_space(space_id):
         content = read_file(filepath)
         if not content.startswith("*File not found"):
             md = f"# {title}\n\n```mermaid\n{content}\n```"
-            create_page(space_id, title, md)
+            create_page(space_id, title, md, headers)
 
 
-def populate_modules_space(space_id):
+def populate_modules_space(space_id, headers):
     """Populate Modules space with per-module documentation."""
     readme_md = read_file("README.md")
-    create_page(space_id, "Platform Overview (README)", readme_md)
+    create_page(space_id, "Platform Overview (README)", readme_md, headers)
 
 
-def populate_adrs_space(space_id):
+def populate_adrs_space(space_id, headers):
     """Populate ADR space with architecture decision records."""
     adr_readme = read_file("adrs/README.md")
-    create_page(space_id, "ADR Overview", adr_readme)
+    create_page(space_id, "ADR Overview", adr_readme, headers)
 
     adr_files = sorted([
         f for f in os.listdir(os.path.join(REPO_ROOT, "adrs"))
@@ -176,13 +177,13 @@ def populate_adrs_space(space_id):
             if line.startswith("# "):
                 title = line[2:].strip()
                 break
-        create_page(space_id, title, content)
+        create_page(space_id, title, content, headers)
 
 
-def populate_onboarding_space(space_id):
+def populate_onboarding_space(space_id, headers):
     """Populate Onboarding space with agent guides."""
     onboarding_readme = read_file("docs/onboarding/README.md")
-    create_page(space_id, "Agent Onboarding Overview", onboarding_readme)
+    create_page(space_id, "Agent Onboarding Overview", onboarding_readme, headers)
 
     onboarding_dir = os.path.join(REPO_ROOT, "docs", "onboarding")
     if os.path.isdir(onboarding_dir):
@@ -194,26 +195,27 @@ def populate_onboarding_space(space_id):
                     if line.startswith("# "):
                         title = line[2:].strip()
                         break
-                create_page(space_id, title, content)
+                create_page(space_id, title, content, headers)
 
 
-def populate_coordination_space(space_id):
+def populate_coordination_space(space_id, headers):
     """Populate Coordination space with status and playbook."""
     status_md = read_file("docs/coordination/status.md")
-    create_page(space_id, "Coordination Status", status_md)
+    create_page(space_id, "Coordination Status", status_md, headers)
 
     playbook_md = read_file("docs/coordination/playbook.md")
-    create_page(space_id, "Coordinator Playbook", playbook_md)
+    create_page(space_id, "Coordinator Playbook", playbook_md, headers)
 
     continuation_md = read_file("docs/coordination/continuation-prompts.md")
     if not continuation_md.startswith("*File not found"):
-        create_page(space_id, "Continuation Prompts", continuation_md)
+        create_page(space_id, "Continuation Prompts", continuation_md, headers)
 
     # Agent prompts
     prompts_dir = os.path.join(REPO_ROOT, "docs", "coordination", "prompts")
     if os.path.isdir(prompts_dir):
         parent = create_page(space_id, "Agent Prompts",
-                             "# Agent System Prompts\n\nSystem prompts for each specialized agent.")
+                             "# Agent System Prompts\n\nSystem prompts for each specialized agent.",
+                             headers)
         for f in sorted(os.listdir(prompts_dir)):
             if f.endswith(".md"):
                 content = read_file(f"docs/coordination/prompts/{f}")
@@ -222,38 +224,49 @@ def populate_coordination_space(space_id):
                     if line.startswith("# "):
                         title = line[2:].strip()
                         break
-                create_page(space_id, title, content, parent_page_id=parent)
+                create_page(space_id, title, content, headers, parent_page_id=parent)
 
 
 def main():
+    token = _get_token()
+    if not token:
+        print(f"Error: Token file not found at {TOKEN_FILE}")
+        print("Please log in via the DocMost API and save the token.")
+        sys.exit(1)
+
+    headers = _build_headers(token)
+
     print("=" * 60)
     print("Populating DocMost with Kaizen Experimentation Documentation")
     print("=" * 60)
     print(f"DocMost URL: {BASE_URL}")
     print(f"Repo root:   {REPO_ROOT}")
     print()
+    print("WARNING: This script is not idempotent. Running it multiple")
+    print("times will create duplicate spaces and pages.")
+    print()
 
     # Create spaces
-    general_id = create_space("General", "general", "Overview and getting started")
-    arch_id = create_space("Architecture", "architecture", "System design and architectural patterns")
-    modules_id = create_space("Modules", "modules", "Module documentation (M1-M7)")
-    adr_id = create_space("Architecture Decision Records", "adrs", "ADRs documenting settled decisions")
-    onboarding_id = create_space("Agent Onboarding", "onboarding", "Per-agent quickstart guides")
-    coord_id = create_space("Project Coordination", "coordination", "Multi-agent coordination")
+    general_id = create_space("General", "general", headers, "Overview and getting started")
+    arch_id = create_space("Architecture", "architecture", headers, "System design and architectural patterns")
+    modules_id = create_space("Modules", "modules", headers, "Module documentation (M1-M7)")
+    adr_id = create_space("Architecture Decision Records", "adrs", headers, "ADRs documenting settled decisions")
+    onboarding_id = create_space("Agent Onboarding", "onboarding", headers, "Per-agent quickstart guides")
+    coord_id = create_space("Project Coordination", "coordination", headers, "Multi-agent coordination")
 
     # Populate each space
     if general_id:
-        populate_general_space(general_id)
+        populate_general_space(general_id, headers)
     if arch_id:
-        populate_architecture_space(arch_id)
+        populate_architecture_space(arch_id, headers)
     if modules_id:
-        populate_modules_space(modules_id)
+        populate_modules_space(modules_id, headers)
     if adr_id:
-        populate_adrs_space(adr_id)
+        populate_adrs_space(adr_id, headers)
     if onboarding_id:
-        populate_onboarding_space(onboarding_id)
+        populate_onboarding_space(onboarding_id, headers)
     if coord_id:
-        populate_coordination_space(coord_id)
+        populate_coordination_space(coord_id, headers)
 
     print("\n" + "=" * 60)
     print("Documentation population complete!")
