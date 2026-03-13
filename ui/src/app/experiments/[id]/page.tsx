@@ -7,6 +7,7 @@ import type { Experiment, Variant } from '@/lib/types';
 import { getExperiment, updateExperiment, startExperiment, concludeExperiment, archiveExperiment, isPermissionDenied } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
+import { RetryableError } from '@/components/retryable-error';
 import { StateBadge } from '@/components/state-badge';
 import { TypeBadge } from '@/components/type-badge';
 import { VariantTable } from '@/components/variant-table';
@@ -24,14 +25,17 @@ export default function ExperimentDetailPage() {
   const { canAtLeast } = useAuth();
   const canEdit = canAtLeast('experimenter');
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!params.id) return;
-
+    setLoading(true);
+    setError(null);
     getExperiment(params.id)
       .then(setExperiment)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSaveVariants = useCallback(async (variants: Variant[]) => {
     if (!experiment) return;
@@ -75,13 +79,7 @@ export default function ExperimentDetailPage() {
   }
 
   if (error || !experiment) {
-    return (
-      <div className="rounded-md bg-red-50 p-4">
-        <p className="text-sm text-red-700">
-          {error || 'Experiment not found'}
-        </p>
-      </div>
-    );
+    return <RetryableError message={error || 'Experiment not found'} onRetry={fetchData} context="experiment" />;
   }
 
   return (

@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, ErrorBar, Cell,
 } from 'recharts';
 import type { CateAnalysisResult } from '@/lib/types';
-import { getCateAnalysis } from '@/lib/api';
+import { getCateAnalysis, RpcError } from '@/lib/api';
 import { formatPValue } from '@/lib/utils';
+import { RetryableError } from '@/components/retryable-error';
 
 interface CateTabProps {
   experimentId: string;
@@ -27,12 +28,19 @@ export function CateTab({ experimentId }: CateTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getCateAnalysis(experimentId)
       .then(setResult)
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        if (err instanceof RpcError && err.status === 404) return;
+        setError(err.message);
+      })
       .finally(() => setLoading(false));
   }, [experimentId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -43,7 +51,11 @@ export function CateTab({ experimentId }: CateTabProps) {
     );
   }
 
-  if (error || !result) {
+  if (error) {
+    return <RetryableError message={error} onRetry={fetchData} context="lifecycle segment analysis" />;
+  }
+
+  if (!result) {
     return (
       <div className="rounded-md bg-gray-50 p-4 text-sm text-gray-500">
         No lifecycle segment analysis available for this experiment.

@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ComposedChart, Line, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ReferenceLine, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { NoveltyAnalysisResult } from '@/lib/types';
-import { getNoveltyAnalysis } from '@/lib/api';
+import { getNoveltyAnalysis, RpcError } from '@/lib/api';
 import { formatEffect } from '@/lib/utils';
+import { RetryableError } from '@/components/retryable-error';
 
 interface NoveltyTabProps {
   experimentId: string;
@@ -18,12 +19,19 @@ export function NoveltyTab({ experimentId }: NoveltyTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getNoveltyAnalysis(experimentId)
       .then(setResult)
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        if (err instanceof RpcError && err.status === 404) return;
+        setError(err.message);
+      })
       .finally(() => setLoading(false));
   }, [experimentId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -34,7 +42,11 @@ export function NoveltyTab({ experimentId }: NoveltyTabProps) {
     );
   }
 
-  if (error || !result) {
+  if (error) {
+    return <RetryableError message={error} onRetry={fetchData} context="novelty analysis" />;
+  }
+
+  if (!result) {
     return (
       <div className="rounded-md bg-gray-50 p-4 text-sm text-gray-500">
         No novelty analysis available for this experiment.

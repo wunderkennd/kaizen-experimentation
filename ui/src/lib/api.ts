@@ -85,7 +85,7 @@ interface CallRpcOptions {
 }
 
 /** Returns true for errors caused by network-level failures (no connection, timeout). */
-function isNetworkError(err: unknown): boolean {
+export function isNetworkError(err: unknown): boolean {
   if (err instanceof DOMException && err.name === 'AbortError') return true;
   if (err instanceof TypeError) return true; // fetch throws TypeError on network failure
   return false;

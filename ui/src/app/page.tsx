@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { Experiment } from '@/lib/types';
 import { listExperiments } from '@/lib/api';
@@ -9,6 +9,7 @@ import { ExperimentFiltersToolbar } from '@/components/experiment-filters';
 import { useExperimentFilters, type SortField } from '@/lib/use-experiment-filters';
 import { useAuth } from '@/lib/auth-context';
 import { ROLE_LABELS } from '@/lib/auth';
+import { RetryableError } from '@/components/retryable-error';
 
 function SortableHeader({
   label,
@@ -54,7 +55,9 @@ export default function ExperimentListPage() {
   const { canAtLeast, user } = useAuth();
   const canCreate = canAtLeast('experimenter');
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     listExperiments()
       .then((data) => {
         setExperiments(data.experiments);
@@ -67,6 +70,8 @@ export default function ExperimentListPage() {
       });
   }, []);
 
+  useEffect(() => { fetchData(); }, [fetchData]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
@@ -77,11 +82,7 @@ export default function ExperimentListPage() {
   }
 
   if (error) {
-    return (
-      <div className="rounded-md bg-red-50 p-4">
-        <p className="text-sm text-red-700">Failed to load experiments: {error}</p>
-      </div>
-    );
+    return <RetryableError message={error} onRetry={fetchData} context="experiments" />;
   }
 
   if (experiments.length === 0) {
