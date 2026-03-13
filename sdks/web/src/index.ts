@@ -17,6 +17,8 @@
  *   const variant = await client.getVariant('homepage_recs_v2');
  */
 
+import { murmurhash3_x86_32 } from './murmur3';
+
 // ---------------------------------------------------------------------------
 // Core Types
 // ---------------------------------------------------------------------------
@@ -131,22 +133,42 @@ export class RemoteProvider implements AssignmentProvider {
 // LocalProvider
 // ---------------------------------------------------------------------------
 
+export interface WasmHashModule {
+  wasm_bucket(userId: string, salt: string, totalBuckets: number): number;
+  wasm_is_in_allocation(bucket: number, start: number, end: number): boolean;
+}
+
 export interface LocalProviderConfig {
   /** Static experiment configs for local evaluation. */
   experiments: ExperimentConfig[];
+  /** Optional WASM hash module. Falls back to pure-TS MurmurHash3 if not provided. */
+  wasmModule?: WasmHashModule;
 }
 
 export class LocalProvider implements AssignmentProvider {
   private experiments: Map<string, ExperimentConfig> = new Map();
+  private wasmModule?: WasmHashModule;
 
   constructor(config: LocalProviderConfig) {
     for (const exp of config.experiments) {
       this.experiments.set(exp.experimentId, exp);
     }
+    this.wasmModule = config.wasmModule;
   }
 
   async initialize(): Promise<void> {
     // No-op for static config
+  }
+
+  private computeBucket(userId: string, salt: string, totalBuckets: number): number {
+    if (this.wasmModule) {
+      return this.wasmModule.wasm_bucket(userId, salt, totalBuckets);
+    }
+    // Pure-TS fallback
+    const encoder = new TextEncoder();
+    const key = encoder.encode(`${userId}\x00${salt}`);
+    const hash = murmurhash3_x86_32(key, 0);
+    return hash % totalBuckets;
   }
 
   async getAssignment(
@@ -155,15 +177,42 @@ export class LocalProvider implements AssignmentProvider {
   ): Promise<Assignment | null> {
     const config = this.experiments.get(experimentId);
     if (!config) return null;
+    if (config.variants.length === 0) return null;
 
-    // TODO (Agent-1): Implement MurmurHash3 bucket assignment in WASM
-    //   1. hash = murmur3(`${attributes.userId}:${config.hashSalt}`)
-    //   2. bucket = hash % config.totalBuckets
-    //   3. if bucket < config.allocationStart || bucket > config.allocationEnd → null
-    //   4. map bucket to variant by cumulative traffic fractions
-    void attributes;
-    void config;
-    return null;
+    const bucket = this.computeBucket(
+      attributes.userId,
+      config.hashSalt,
+      config.totalBuckets,
+    );
+
+    if (bucket < config.allocationStart || bucket > config.allocationEnd) {
+      return null;
+    }
+
+    const allocSize = config.allocationEnd - config.allocationStart + 1;
+    const relativeBucket = bucket - config.allocationStart;
+
+    let cumulative = 0.0;
+    for (const variant of config.variants) {
+      cumulative += variant.trafficFraction * allocSize;
+      if (relativeBucket < cumulative) {
+        return {
+          experimentId: config.experimentId,
+          variantName: variant.name,
+          payload: variant.payload,
+          fromCache: true,
+        };
+      }
+    }
+
+    // FP rounding fallback — assign to last variant
+    const last = config.variants[config.variants.length - 1];
+    return {
+      experimentId: config.experimentId,
+      variantName: last.name,
+      payload: last.payload,
+      fromCache: true,
+    };
   }
 
   async getAllAssignments(
