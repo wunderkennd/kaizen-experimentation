@@ -105,31 +105,87 @@ class AssignmentProvider(ABC):
 # ---------------------------------------------------------------------------
 
 class RemoteProvider(AssignmentProvider):
-    """Calls the Assignment Service via ConnectRPC."""
+    """Calls the Assignment Service via JSON HTTP."""
 
     def __init__(self, base_url: str, timeout_ms: int = 2000) -> None:
-        self.base_url = base_url
+        self.base_url = base_url.rstrip("/")
         self.timeout_ms = timeout_ms
+        self._client: Any = None
 
     async def initialize(self) -> None:
-        # TODO (Agent-1): Create ConnectRPC/gRPC channel
-        pass
+        import httpx
+
+        self._client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=self.timeout_ms / 1000.0,
+        )
 
     async def get_assignment(
         self, experiment_id: str, attrs: UserAttributes
     ) -> Optional[Assignment]:
-        # TODO (Agent-1): Call AssignmentService.GetAssignment
-        return None
+        if self._client is None:
+            raise RuntimeError("provider not initialized")
+
+        import json as json_mod
+
+        url = "/experimentation.assignment.v1.AssignmentService/GetAssignment"
+        body = {
+            "userId": attrs.user_id,
+            "experimentId": experiment_id,
+            "attributes": {str(k): str(v) for k, v in attrs.properties.items()},
+        }
+        resp = await self._client.post(url, json=body)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        if not data.get("isActive", False):
+            return None
+        if not data.get("variantId"):
+            return None
+        payload_str = data.get("payloadJson", "")
+        payload = json_mod.loads(payload_str) if payload_str else {}
+        return Assignment(
+            experiment_id=data["experimentId"],
+            variant_name=data["variantId"],
+            payload=payload,
+            from_cache=False,
+        )
 
     async def get_all_assignments(
         self, attrs: UserAttributes
     ) -> Dict[str, Assignment]:
-        # TODO (Agent-1): Call AssignmentService.GetAllAssignments
-        return {}
+        if self._client is None:
+            raise RuntimeError("provider not initialized")
+
+        import json as json_mod
+
+        url = "/experimentation.assignment.v1.AssignmentService/GetAssignments"
+        body = {
+            "userId": attrs.user_id,
+            "attributes": {str(k): str(v) for k, v in attrs.properties.items()},
+        }
+        resp = await self._client.post(url, json=body)
+        if resp.status_code != 200:
+            return {}
+        data = resp.json()
+        results: Dict[str, Assignment] = {}
+        for a in data.get("assignments", []):
+            if not a.get("isActive", False) or not a.get("variantId"):
+                continue
+            payload_str = a.get("payloadJson", "")
+            payload = json_mod.loads(payload_str) if payload_str else {}
+            results[a["experimentId"]] = Assignment(
+                experiment_id=a["experimentId"],
+                variant_name=a["variantId"],
+                payload=payload,
+                from_cache=False,
+            )
+        return results
 
     async def close(self) -> None:
-        # TODO (Agent-1): Close channel
-        pass
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
 
 # ---------------------------------------------------------------------------

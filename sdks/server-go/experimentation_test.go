@@ -2,7 +2,10 @@ package experimentation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -262,5 +265,223 @@ func TestLocalProviderGetAllAssignments(t *testing.T) {
 	}
 	if _, ok := results["exp_abc"]; !ok {
 		t.Error("missing exp_abc")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RemoteProvider tests
+// ---------------------------------------------------------------------------
+
+func mockAssignmentServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/experimentation.assignment.v1.AssignmentService/GetAssignment":
+			var req assignmentJSONRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if req.ExperimentID == "missing" {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"code":404,"message":"not found"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			resp := assignmentJSONResponse{
+				ExperimentID:          req.ExperimentID,
+				VariantID:             "treatment",
+				PayloadJSON:           `{"color":"red"}`,
+				AssignmentProbability: 0.5,
+				IsActive:              true,
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+
+		case "/experimentation.assignment.v1.AssignmentService/GetAssignments":
+			w.Header().Set("Content-Type", "application/json")
+			resp := assignmentsJSONResponse{
+				Assignments: []assignmentJSONResponse{
+					{ExperimentID: "exp1", VariantID: "control", PayloadJSON: "{}", IsActive: true},
+					{ExperimentID: "exp2", VariantID: "treatment", PayloadJSON: `{"x":1}`, IsActive: true},
+					{ExperimentID: "exp3", VariantID: "", IsActive: false},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+func TestRemoteProviderGetAssignment(t *testing.T) {
+	srv := mockAssignmentServer(t)
+	defer srv.Close()
+
+	p := NewRemoteProvider(srv.URL)
+	if err := p.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+
+	a, err := p.GetAssignment(context.Background(), "exp1", UserAttributes{UserID: "user-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a == nil {
+		t.Fatal("expected non-nil assignment")
+	}
+	if a.ExperimentID != "exp1" {
+		t.Errorf("expected exp1, got %s", a.ExperimentID)
+	}
+	if a.VariantName != "treatment" {
+		t.Errorf("expected treatment, got %s", a.VariantName)
+	}
+	if a.Payload["color"] != "red" {
+		t.Errorf("expected payload color=red, got %v", a.Payload)
+	}
+	if a.FromCache {
+		t.Error("expected FromCache=false")
+	}
+}
+
+func TestRemoteProviderGetAssignment404(t *testing.T) {
+	srv := mockAssignmentServer(t)
+	defer srv.Close()
+
+	p := NewRemoteProvider(srv.URL)
+	_ = p.Initialize(context.Background())
+	defer p.Close()
+
+	a, err := p.GetAssignment(context.Background(), "missing", UserAttributes{UserID: "user-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a != nil {
+		t.Error("expected nil for missing experiment")
+	}
+}
+
+func TestRemoteProviderGetAssignmentNetworkError(t *testing.T) {
+	p := NewRemoteProvider("http://127.0.0.1:1") // nothing listening
+	_ = p.Initialize(context.Background())
+	defer p.Close()
+
+	_, err := p.GetAssignment(context.Background(), "exp1", UserAttributes{UserID: "user-1"})
+	if err == nil {
+		t.Error("expected error for unreachable server")
+	}
+}
+
+func TestRemoteProviderNotInitialized(t *testing.T) {
+	p := NewRemoteProvider("http://localhost:8080")
+	// Don't call Initialize
+	_, err := p.GetAssignment(context.Background(), "exp1", UserAttributes{UserID: "user-1"})
+	if err == nil {
+		t.Error("expected error when not initialized")
+	}
+}
+
+func TestRemoteProviderGetAllAssignments(t *testing.T) {
+	srv := mockAssignmentServer(t)
+	defer srv.Close()
+
+	p := NewRemoteProvider(srv.URL)
+	_ = p.Initialize(context.Background())
+	defer p.Close()
+
+	results, err := p.GetAllAssignments(context.Background(), UserAttributes{UserID: "user-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 active assignments, got %d", len(results))
+	}
+	if results["exp1"] == nil || results["exp1"].VariantName != "control" {
+		t.Error("expected exp1=control")
+	}
+	if results["exp2"] == nil || results["exp2"].VariantName != "treatment" {
+		t.Error("expected exp2=treatment")
+	}
+	if _, ok := results["exp3"]; ok {
+		t.Error("exp3 should be excluded (inactive)")
+	}
+}
+
+func TestRemoteProviderWithAttributes(t *testing.T) {
+	var capturedBody assignmentJSONRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		resp := assignmentJSONResponse{ExperimentID: "exp1", VariantID: "v", IsActive: true}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	p := NewRemoteProvider(srv.URL)
+	_ = p.Initialize(context.Background())
+	defer p.Close()
+
+	_, _ = p.GetAssignment(context.Background(), "exp1", UserAttributes{
+		UserID:     "user-1",
+		Properties: map[string]any{"plan": "premium", "age": 30},
+	})
+
+	if capturedBody.Attributes["plan"] != "premium" {
+		t.Errorf("expected plan=premium, got %s", capturedBody.Attributes["plan"])
+	}
+	if capturedBody.Attributes["age"] != "30" {
+		t.Errorf("expected age=30, got %s", capturedBody.Attributes["age"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Client fallback chain tests
+// ---------------------------------------------------------------------------
+
+func TestClientFallbackOnError(t *testing.T) {
+	// RemoteProvider pointing to nothing → will error
+	remote := NewRemoteProvider("http://127.0.0.1:1")
+	local := NewMockProvider(map[string]*Assignment{
+		"exp1": {ExperimentID: "exp1", VariantName: "fallback-variant"},
+	})
+
+	client, err := NewClient(context.Background(), Config{
+		Provider:         remote,
+		FallbackProvider: local,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	variant, err := client.GetVariant(context.Background(), "exp1", "user-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if variant != "fallback-variant" {
+		t.Errorf("expected fallback-variant, got %s", variant)
+	}
+}
+
+func TestFlattenProps(t *testing.T) {
+	result := flattenProps(map[string]any{"key": "val", "num": 42, "flag": true})
+	if result["key"] != "val" {
+		t.Errorf("expected val, got %s", result["key"])
+	}
+	if result["num"] != "42" {
+		t.Errorf("expected 42, got %s", result["num"])
+	}
+	if result["flag"] != "true" {
+		t.Errorf("expected true, got %s", result["flag"])
+	}
+
+	nilResult := flattenProps(nil)
+	if nilResult != nil {
+		t.Error("expected nil for empty props")
 	}
 }
