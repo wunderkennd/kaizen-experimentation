@@ -248,6 +248,67 @@ func TestListMetricDefinitions(t *testing.T) {
 	}
 }
 
+func TestListMetricDefinitions_TypeFilter(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create metrics of different types.
+	types := []struct {
+		name string
+		typ  commonv1.MetricType
+	}{
+		{"filter_mean_1", commonv1.MetricType_METRIC_TYPE_MEAN},
+		{"filter_mean_2", commonv1.MetricType_METRIC_TYPE_MEAN},
+		{"filter_count_1", commonv1.MetricType_METRIC_TYPE_COUNT},
+		{"filter_proportion_1", commonv1.MetricType_METRIC_TYPE_PROPORTION},
+	}
+	for _, tt := range types {
+		_, err := env.client.CreateMetricDefinition(context.Background(),
+			connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
+				Metric: &commonv1.MetricDefinition{
+					Name:            tt.name,
+					Type:            tt.typ,
+					SourceEventType: "test_event",
+				},
+			}))
+		require.NoError(t, err)
+	}
+
+	// Filter by MEAN — should return at least 2.
+	resp, err := env.client.ListMetricDefinitions(context.Background(),
+		connect.NewRequest(&mgmtv1.ListMetricDefinitionsRequest{
+			PageSize:   100,
+			TypeFilter: commonv1.MetricType_METRIC_TYPE_MEAN,
+		}))
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(resp.Msg.GetMetrics()), 2)
+	for _, m := range resp.Msg.GetMetrics() {
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_MEAN, m.GetType(), "all returned metrics should be MEAN")
+	}
+
+	// Filter by COUNT — should return at least 1.
+	resp, err = env.client.ListMetricDefinitions(context.Background(),
+		connect.NewRequest(&mgmtv1.ListMetricDefinitionsRequest{
+			PageSize:   100,
+			TypeFilter: commonv1.MetricType_METRIC_TYPE_COUNT,
+		}))
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(resp.Msg.GetMetrics()), 1)
+	for _, m := range resp.Msg.GetMetrics() {
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_COUNT, m.GetType(), "all returned metrics should be COUNT")
+	}
+
+	// No filter (UNSPECIFIED) — should return all types.
+	resp, err = env.client.ListMetricDefinitions(context.Background(),
+		connect.NewRequest(&mgmtv1.ListMetricDefinitionsRequest{PageSize: 100}))
+	require.NoError(t, err)
+	typesSeen := map[commonv1.MetricType]bool{}
+	for _, m := range resp.Msg.GetMetrics() {
+		typesSeen[m.GetType()] = true
+	}
+	assert.True(t, len(typesSeen) >= 2, "unfiltered list should contain multiple types")
+}
+
 func TestCreateMetricDefinition_DuplicateID(t *testing.T) {
 	env, cleanup := setupTestServer(t)
 	defer cleanup()

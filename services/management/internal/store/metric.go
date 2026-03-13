@@ -83,8 +83,8 @@ func (s *MetricStore) GetByID(ctx context.Context, metricID string) (MetricDefin
 	return out, nil
 }
 
-// ListMetrics queries metric definitions with keyset pagination.
-func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken string) ([]MetricDefinitionRow, string, error) {
+// ListMetrics queries metric definitions with keyset pagination and optional type filter.
+func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken string, typeFilter string) ([]MetricDefinitionRow, string, error) {
 	if pageSize <= 0 || pageSize > 100 {
 		pageSize = 20
 	}
@@ -96,6 +96,11 @@ func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken
 	nextArg := func() string {
 		argN++
 		return fmt.Sprintf("$%d", argN)
+	}
+
+	if typeFilter != "" {
+		where += fmt.Sprintf(" AND type = %s", nextArg())
+		args = append(args, typeFilter)
 	}
 
 	if pageToken != "" {
