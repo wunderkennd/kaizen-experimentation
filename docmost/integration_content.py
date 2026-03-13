@@ -1185,7 +1185,7 @@ For bandit experiments, reward events feed the policy learning loop:
 
 | Topic | Producer | Consumer | Description |
 |-------|----------|----------|-------------|
-| `exposure_events` | M2 | M3, Delta Lake | Variant assignment exposures |
+| `exposures` | M2 | M3, Delta Lake | Variant assignment exposures |
 | `metric_events` | M2 | M3, Delta Lake | Raw metric signals |
 | `reward_events` | M2 | M4b, Delta Lake | Bandit reward signals |
 | `guardrail_alerts` | M3 | M5 | Guardrail breach notifications |
