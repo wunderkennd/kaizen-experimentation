@@ -1,9 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import { ALL_ROLES, ROLE_LABELS, ROLE_BADGE_COLORS } from '@/lib/auth';
 import type { UserRole } from '@/lib/auth';
+
+const ConnectionStatus = dynamic(
+  () => import('@/components/connection-status').then((m) => ({ default: m.ConnectionStatus })),
+  { ssr: false },
+);
 
 export function NavHeader() {
   const { user, setDevRole, isDevMode } = useAuth();
@@ -16,6 +22,7 @@ export function NavHeader() {
         </Link>
 
         <div className="flex items-center gap-3">
+          <ConnectionStatus />
           {isDevMode && (
             <select
               value={user.role}

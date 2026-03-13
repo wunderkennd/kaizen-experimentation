@@ -45,6 +45,12 @@ export function clearApiCache(): void {
   _cache.clear();
 }
 
+/** Default timeout for RPC calls in milliseconds. */
+export const API_TIMEOUT_MS = 10_000;
+
+/** Base delay for retry backoff in milliseconds. */
+const RETRY_BASE_DELAY_MS = 500;
+
 export class RpcError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -74,6 +80,15 @@ async function parseRpcError(res: Response, method: string): Promise<string> {
 interface CallRpcOptions {
   skipCache?: boolean;
   clearCacheOnSuccess?: boolean;
+  timeoutMs?: number;
+  retries?: number;
+}
+
+/** Returns true for errors caused by network-level failures (no connection, timeout). */
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === 'AbortError') return true;
+  if (err instanceof TypeError) return true; // fetch throws TypeError on network failure
+  return false;
 }
 
 async function callRpc<Req, Res>(
@@ -93,28 +108,68 @@ async function callRpc<Req, Res>(
     }
   }
 
+  const timeoutMs = options.timeoutMs ?? API_TIMEOUT_MS;
+  // Default: retry once for read-like calls (no clearCacheOnSuccess), zero for mutations
+  const maxRetries = options.retries ?? (options.clearCacheOnSuccess ? 0 : 1);
+
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (_authEmail) headers['X-User-Email'] = _authEmail;
   if (_authRole) headers['X-User-Role'] = _authRole;
 
-  const res = await fetch(`${baseUrl}/${service}/${method}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
-  });
-  if (!res.ok) {
-    throw new RpcError(await parseRpcError(res, method), res.status);
-  }
-  const data: Res = await res.json();
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Backoff before retry (not on first attempt)
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * attempt));
+    }
 
-  // Cache read-only responses; clear cache on mutating calls
-  if (options.clearCacheOnSuccess) {
-    _cache.clear();
-  } else if (!options.skipCache) {
-    _cache.set(cacheKey, { data, expiresAt: Date.now() + DEFAULT_TTL_MS });
+    // Use Promise.race for timeout instead of AbortController signal
+    // to avoid jsdom/Node AbortSignal incompatibility in tests.
+    let timer: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new DOMException('Request timed out', 'AbortError')),
+        timeoutMs,
+      );
+    });
+
+    try {
+      const res = await Promise.race([
+        fetch(`${baseUrl}/${service}/${method}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(request),
+        }),
+        timeoutPromise,
+      ]);
+      clearTimeout(timer!);
+
+      if (!res.ok) {
+        // Never retry HTTP errors — only network-level failures
+        throw new RpcError(await parseRpcError(res, method), res.status);
+      }
+      const data: Res = await res.json();
+
+      // Cache read-only responses; clear cache on mutating calls
+      if (options.clearCacheOnSuccess) {
+        _cache.clear();
+      } else if (!options.skipCache) {
+        _cache.set(cacheKey, { data, expiresAt: Date.now() + DEFAULT_TTL_MS });
+      }
+
+      return data;
+    } catch (err) {
+      clearTimeout(timer!);
+      // Never retry RpcError (server-decided 4xx/5xx)
+      if (err instanceof RpcError) throw err;
+      lastError = err;
+      // Only retry on network-level failures
+      if (!isNetworkError(err) || attempt === maxRetries) throw err;
+    }
   }
 
-  return data;
+  // Should never reach here, but satisfy TypeScript
+  throw lastError;
 }
 
 /** Strip proto enum prefix if present. e.g. "EXPERIMENT_STATE_DRAFT" → "DRAFT" */
