@@ -4,6 +4,7 @@ import {
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
   SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
+  SEED_METRIC_DEFINITIONS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -519,5 +520,25 @@ export const handlers = [
       allocations = allocations.filter((a) => !a.releasedAt);
     }
     return HttpResponse.json({ allocations });
+  }),
+
+  // ListMetricDefinitions
+  http.post(`${MGMT_SVC}/ListMetricDefinitions`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    let filtered = [...SEED_METRIC_DEFINITIONS];
+
+    if (body.typeFilter) {
+      const typeVal = (body.typeFilter as string).replace('METRIC_TYPE_', '');
+      filtered = filtered.filter((m) => m.type === typeVal);
+    }
+
+    const pageSize = (body.pageSize as number) || filtered.length;
+    const pageToken = (body.pageToken as string) || '';
+    const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+    const page = filtered.slice(startIndex, startIndex + pageSize);
+    const nextIndex = startIndex + pageSize;
+    const nextPageToken = nextIndex < filtered.length ? String(nextIndex) : '';
+
+    return HttpResponse.json({ metrics: page, nextPageToken });
   }),
 ];
