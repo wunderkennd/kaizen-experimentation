@@ -13,9 +13,11 @@ use experimentation_proto::experimentation::analysis::v1::{
     GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest,
     InterferenceAnalysisResult, InterleavingAnalysisResult, MetricResult, NoveltyAnalysisResult,
     PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
-    SrmResult as ProtoSrmResult, TitleSpillover,
+    SessionLevelResult, SrmResult as ProtoSrmResult, TitleSpillover,
 };
-use experimentation_stats::{cate, cuped, interference, interleaving, novelty, srm, ttest};
+use experimentation_stats::{
+    cate, clustering, cuped, interference, interleaving, novelty, srm, ttest,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -305,7 +307,13 @@ async fn compute_analysis(
                 variance_reduction_pct,
                 sequential_result: None,
                 segment_results,
-                session_level_result: None,
+                session_level_result: compute_session_level_result(
+                    &data,
+                    metric_id,
+                    &control_variant,
+                    variant_id,
+                    alpha,
+                ),
             });
         }
     }
@@ -322,6 +330,63 @@ async fn compute_analysis(
         cochran_q_p_value,
         computed_at: Some(now_timestamp()),
     })
+}
+
+// ---------------------------------------------------------------------------
+// Session-level clustering helper
+// ---------------------------------------------------------------------------
+
+/// Compute HC1 clustered standard errors if session-level data is available.
+///
+/// Returns `Some(SessionLevelResult)` when `session_data` contains observations
+/// for this metric, or `None` otherwise.
+fn compute_session_level_result(
+    data: &delta_reader::ExperimentMetrics,
+    metric_id: &str,
+    control_variant: &str,
+    treatment_variant: &str,
+    alpha: f64,
+) -> Option<SessionLevelResult> {
+    let session_map = data.session_data.get(metric_id)?;
+
+    // Build ClusteredObservation vec from session data.
+    let mut observations = Vec::new();
+    for (value, user_id, variant_id) in session_map {
+        let is_treatment = if variant_id == treatment_variant {
+            true
+        } else if variant_id == control_variant {
+            false
+        } else {
+            continue; // skip other variants
+        };
+        observations.push(clustering::ClusteredObservation {
+            value: *value,
+            cluster_id: user_id.clone(),
+            is_treatment,
+        });
+    }
+
+    if observations.len() < 3 {
+        return None;
+    }
+
+    match clustering::clustered_se(&observations, alpha) {
+        Ok(result) => Some(SessionLevelResult {
+            naive_se: result.naive_se,
+            clustered_se: result.clustered_se,
+            design_effect: result.design_effect,
+            naive_p_value: result.naive_p_value,
+            clustered_p_value: result.clustered_p_value,
+        }),
+        Err(e) => {
+            warn!(
+                metric_id = metric_id,
+                error = %e,
+                "failed to compute clustered SE, skipping session_level_result"
+            );
+            None
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1341,41 +1406,94 @@ mod tests {
         // ESTABLISHED: control ~3, treatment ~13 (effect ~10)
         let n = 20;
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
-        let user_ids: Vec<&str> = (0..n).map(|i| match i {
-            0 => "u00", 1 => "u01", 2 => "u02", 3 => "u03", 4 => "u04",
-            5 => "u05", 6 => "u06", 7 => "u07", 8 => "u08", 9 => "u09",
-            10 => "u10", 11 => "u11", 12 => "u12", 13 => "u13", 14 => "u14",
-            15 => "u15", 16 => "u16", 17 => "u17", 18 => "u18", _ => "u19",
-        }).collect();
+        let user_ids: Vec<&str> = (0..n)
+            .map(|i| match i {
+                0 => "u00",
+                1 => "u01",
+                2 => "u02",
+                3 => "u03",
+                4 => "u04",
+                5 => "u05",
+                6 => "u06",
+                7 => "u07",
+                8 => "u08",
+                9 => "u09",
+                10 => "u10",
+                11 => "u11",
+                12 => "u12",
+                13 => "u13",
+                14 => "u14",
+                15 => "u15",
+                16 => "u16",
+                17 => "u17",
+                18 => "u18",
+                _ => "u19",
+            })
+            .collect();
         let variant_ids: Vec<&str> = vec![
             // TRIAL: 5 control + 5 treatment
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
             // ESTABLISHED: 5 control + 5 treatment
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values: Vec<f64> = vec![
             // TRIAL control: ~3
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            // TRIAL treatment: ~4 (effect = 1)
-            2.0, 3.0, 4.0, 5.0, 6.0,
-            // ESTABLISHED control: ~3
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            // ESTABLISHED treatment: ~13 (effect = 10)
+            1.0, 2.0, 3.0, 4.0, 5.0, // TRIAL treatment: ~4 (effect = 1)
+            2.0, 3.0, 4.0, 5.0, 6.0, // ESTABLISHED control: ~3
+            1.0, 2.0, 3.0, 4.0, 5.0, // ESTABLISHED treatment: ~13 (effect = 10)
             11.0, 12.0, 13.0, 14.0, 15.0,
         ];
         let covariates: Vec<Option<f64>> = vec![None; n];
         let segments: Vec<Option<&str>> = vec![
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
         ];
 
         let batch = make_segmented_analysis_data(
-            &exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates, &segments,
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+            &segments,
         );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
@@ -1434,15 +1552,28 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 11.0, 12.0, 13.0, 14.0, 15.0];
         let covariates: Vec<Option<f64>> = vec![None; n];
 
         let batch = make_analysis_data(
-            &exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates,
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
         );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
@@ -1472,36 +1603,90 @@ mod tests {
         // Two segments with identical treatment effects → Q should be small
         let n = 20;
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
-        let user_ids: Vec<&str> = (0..n).map(|i| match i {
-            0 => "u00", 1 => "u01", 2 => "u02", 3 => "u03", 4 => "u04",
-            5 => "u05", 6 => "u06", 7 => "u07", 8 => "u08", 9 => "u09",
-            10 => "u10", 11 => "u11", 12 => "u12", 13 => "u13", 14 => "u14",
-            15 => "u15", 16 => "u16", 17 => "u17", 18 => "u18", _ => "u19",
-        }).collect();
+        let user_ids: Vec<&str> = (0..n)
+            .map(|i| match i {
+                0 => "u00",
+                1 => "u01",
+                2 => "u02",
+                3 => "u03",
+                4 => "u04",
+                5 => "u05",
+                6 => "u06",
+                7 => "u07",
+                8 => "u08",
+                9 => "u09",
+                10 => "u10",
+                11 => "u11",
+                12 => "u12",
+                13 => "u13",
+                14 => "u14",
+                15 => "u15",
+                16 => "u16",
+                17 => "u17",
+                18 => "u18",
+                _ => "u19",
+            })
+            .collect();
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         // Both segments: same effect = 1.0
         let values: Vec<f64> = vec![
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            2.0, 3.0, 4.0, 5.0, 6.0,
-            10.0, 11.0, 12.0, 13.0, 14.0,
-            11.0, 12.0, 13.0, 14.0, 15.0,
+            1.0, 2.0, 3.0, 4.0, 5.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 11.0, 12.0, 13.0, 14.0, 11.0,
+            12.0, 13.0, 14.0, 15.0,
         ];
         let covariates: Vec<Option<f64>> = vec![None; n];
         let segments: Vec<Option<&str>> = vec![
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
         ];
 
         let batch = make_segmented_analysis_data(
-            &exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates, &segments,
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+            &segments,
         );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
