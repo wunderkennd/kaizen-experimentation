@@ -34,3 +34,7 @@ anyhow = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+experimentation-bandit = { path = "../experimentation-bandit" }
+tokio-stream = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
