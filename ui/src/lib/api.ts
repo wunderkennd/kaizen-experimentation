@@ -3,8 +3,9 @@ import type {
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
+  SurrogateProjection, SrmResult, MetricResult, SegmentResult,
 } from './types';
-import type { ExperimentState, ExperimentType } from './types';
+import type { ExperimentState, ExperimentType, LifecycleSegment } from './types';
 
 // In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
 // In tests, vitest.config.ts sets NEXT_PUBLIC_*_URL to absolute URLs so MSW can intercept.
@@ -329,10 +330,81 @@ export async function createExperiment(request: CreateExperimentRequest): Promis
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
 
+/** Coerce proto3 int64 string values to numbers in a Record<string, string|number>. */
+function coerceInt64Map(map: Record<string, string | number> | undefined): Record<string, number> {
+  if (!map) return {};
+  const result: Record<string, number> = {};
+  for (const [k, v] of Object.entries(map)) {
+    result[k] = typeof v === 'string' ? Number(v) : v;
+  }
+  return result;
+}
+
+/** Adapt proto SurrogateProjection to UI type.
+ *  Proto has experimentId/variantId/modelId; UI needs metricId/surrogateMetricId.
+ *  Uses modelId as metricId fallback when metricId is absent. */
+function adaptSurrogateProjection(proto: Record<string, unknown>): SurrogateProjection {
+  return {
+    metricId: (proto.metricId as string) || (proto.modelId as string) || '',
+    surrogateMetricId: (proto.surrogateMetricId as string) || (proto.variantId as string) || '',
+    projectedEffect: (proto.projectedEffect as number) || 0,
+    projectionCiLower: (proto.projectionCiLower as number) || 0,
+    projectionCiUpper: (proto.projectionCiUpper as number) || 0,
+    calibrationRSquared: (proto.calibrationRSquared as number) || 0,
+    modelId: proto.modelId as string | undefined,
+    variantId: proto.variantId as string | undefined,
+  };
+}
+
+/** Adapt proto SegmentResult — coerce int64 sampleSize, strip enum prefix. */
+function adaptSegmentResult(proto: Record<string, unknown>): SegmentResult {
+  return {
+    segment: stripEnumPrefix((proto.segment as string) || '', 'LIFECYCLE_SEGMENT_') as LifecycleSegment,
+    effect: (proto.effect as number) || 0,
+    ciLower: (proto.ciLower as number) || 0,
+    ciUpper: (proto.ciUpper as number) || 0,
+    pValue: (proto.pValue as number) || 0,
+    sampleSize: typeof proto.sampleSize === 'string' ? Number(proto.sampleSize) : (proto.sampleSize as number) || 0,
+  };
+}
+
+/** Adapt proto SrmResult — coerce int64 map values to numbers. */
+function adaptSrmResult(proto: Record<string, unknown>): SrmResult {
+  return {
+    chiSquared: (proto.chiSquared as number) || 0,
+    pValue: (proto.pValue as number) || 0,
+    isMismatch: (proto.isMismatch as boolean) || false,
+    observedCounts: coerceInt64Map(proto.observedCounts as Record<string, string | number> | undefined),
+    expectedCounts: coerceInt64Map(proto.expectedCounts as Record<string, string | number> | undefined),
+  };
+}
+
+/** Adapt proto MetricResult — coerce segmentResults int64 fields. */
+function adaptMetricResult(proto: Record<string, unknown>): MetricResult {
+  const raw = proto as unknown as MetricResult & { segmentResults?: Record<string, unknown>[] };
+  return {
+    ...raw,
+    segmentResults: raw.segmentResults?.map(adaptSegmentResult),
+  };
+}
+
+/** Adapt raw proto AnalysisResult to UI AnalysisResult type. */
+function adaptAnalysisResult(raw: Record<string, unknown>): AnalysisResult {
+  return {
+    experimentId: (raw.experimentId as string) || '',
+    metricResults: ((raw.metricResults as Record<string, unknown>[]) || []).map(adaptMetricResult),
+    srmResult: adaptSrmResult((raw.srmResult as Record<string, unknown>) || {}),
+    surrogateProjections: (raw.surrogateProjections as Record<string, unknown>[])?.map(adaptSurrogateProjection),
+    cochranQPValue: raw.cochranQPValue as number | undefined,
+    computedAt: (raw.computedAt as string) || '',
+  };
+}
+
 export async function getAnalysisResult(experimentId: string): Promise<AnalysisResult> {
-  return callRpc<{ experimentId: string }, AnalysisResult>(
+  const raw = await callRpc<{ experimentId: string }, Record<string, unknown>>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetAnalysisResult', { experimentId },
   );
+  return adaptAnalysisResult(raw);
 }
 
 export async function getNoveltyAnalysis(experimentId: string): Promise<NoveltyAnalysisResult> {

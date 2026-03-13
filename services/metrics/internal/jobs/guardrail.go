@@ -8,6 +8,7 @@ import (
 
 	"github.com/org/experimentation-platform/services/metrics/internal/alerts"
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
+	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 )
@@ -73,6 +74,8 @@ func (j *GuardrailJob) Run(ctx context.Context, experimentID string) (*Guardrail
 		if err != nil {
 			return nil, fmt.Errorf("guardrail: execute SQL for %s: %w", gc.MetricID, err)
 		}
+		m3metrics.SparkQueryDuration.WithLabelValues("hourly_guardrail").Observe(result.Duration.Seconds())
+		m3metrics.SparkQueryRows.WithLabelValues("hourly_guardrail").Observe(float64(result.RowCount))
 		if err := j.queryLog.Log(ctx, querylog.Entry{
 			ExperimentID: experimentID, MetricID: gc.MetricID, SQLText: sql,
 			RowCount: result.RowCount, DurationMs: time.Since(start).Milliseconds(), JobType: "hourly_guardrail",
@@ -100,6 +103,7 @@ func (j *GuardrailJob) Run(ctx context.Context, experimentID string) (*Guardrail
 				if err := j.publisher.PublishAlert(ctx, alert); err != nil {
 					return nil, fmt.Errorf("guardrail: publish alert for %s/%s: %w", gc.MetricID, v.VariantID, err)
 				}
+				m3metrics.GuardrailBreaches.WithLabelValues(experimentID, gc.MetricID, "alert").Inc()
 				alertsPublished++
 				slog.Warn("guardrail breach detected", "experiment_id", experimentID,
 					"metric_id", gc.MetricID, "variant_id", v.VariantID,
