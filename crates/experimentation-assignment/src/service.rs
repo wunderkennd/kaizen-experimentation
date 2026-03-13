@@ -46,6 +46,11 @@ impl AssignmentServiceImpl {
         }
     }
 
+    /// Get the current config snapshot (for HTTP handler bulk path).
+    pub fn config_snapshot(&self) -> Arc<Config> {
+        self.config.snapshot()
+    }
+
     /// Core assignment logic.
     ///
     /// Returns `Ok(response)` on success, `Err(Status)` on lookup failure.
