@@ -89,7 +89,9 @@ fn error_json(status: StatusCode, message: &str) -> Response<BoxBody> {
     json_response(status, body.to_string().as_bytes())
 }
 
-async fn handle_request(
+/// Handle a single HTTP request. Public for integration test access.
+#[doc(hidden)]
+pub async fn __test_handle_request(
     svc: Arc<AssignmentServiceImpl>,
     req: Request<Incoming>,
 ) -> Result<Response<BoxBody>, hyper::Error> {
@@ -204,7 +206,7 @@ pub async fn serve(addr: SocketAddr, svc: Arc<AssignmentServiceImpl>) -> std::io
                     io,
                     service_fn(move |req| {
                         let svc = svc.clone();
-                        handle_request(svc, req)
+                        __test_handle_request(svc, req)
                     }),
                 )
                 .await
