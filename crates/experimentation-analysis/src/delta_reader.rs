@@ -228,6 +228,9 @@ type VariantObservations = Vec<(f64, Option<f64>)>;
 /// metric_id → variant_id → observations.
 type MetricsByVariant = HashMap<String, HashMap<String, VariantObservations>>;
 
+/// Segment-stratified observations: metric_id → segment → variant_id → values.
+type SegmentData = HashMap<String, HashMap<String, HashMap<String, Vec<f64>>>>;
+
 /// Grouped metric data for an experiment, ready for t-test / CUPED / SRM.
 #[derive(Debug)]
 pub struct ExperimentMetrics {
@@ -235,6 +238,9 @@ pub struct ExperimentMetrics {
     pub metrics: MetricsByVariant,
     /// variant_id → count of distinct users (for SRM check).
     pub variant_user_counts: HashMap<String, u64>,
+    /// Segment-stratified observations for CATE analysis.
+    /// Only populated when metric_summaries has a `lifecycle_segment` column.
+    pub segment_data: SegmentData,
 }
 
 /// Read metric_summaries from Delta Lake for a given experiment.
@@ -250,6 +256,7 @@ pub async fn read_metric_summaries(
     let batches = collect_batches(&table).await?;
 
     let mut metrics: MetricsByVariant = HashMap::new();
+    let mut segment_data: SegmentData = HashMap::new();
     let mut variant_users: HashMap<String, HashSet<String>> = HashMap::new();
     let mut found = false;
 
@@ -266,6 +273,11 @@ pub async fn read_metric_summaries(
             .as_any()
             .downcast_ref::<Float64Array>()
             .context("cuped_covariate is not f64")?;
+
+        // lifecycle_segment is optional — older tables may not have it.
+        let segment_arr = batch
+            .column_by_name("lifecycle_segment")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
 
         for i in 0..batch.num_rows() {
             if exp_arr.is_null(i) || exp_arr.value(i) != experiment_id {
@@ -288,11 +300,26 @@ pub async fn read_metric_summaries(
                 .insert(user_arr.value(i).to_string());
 
             metrics
-                .entry(metric)
+                .entry(metric.clone())
                 .or_default()
-                .entry(variant)
+                .entry(variant.clone())
                 .or_default()
                 .push((value, covariate));
+
+            // Populate segment-stratified data when lifecycle_segment is present.
+            if let Some(seg_arr) = segment_arr {
+                if !seg_arr.is_null(i) {
+                    let segment = seg_arr.value(i).to_string();
+                    segment_data
+                        .entry(metric)
+                        .or_default()
+                        .entry(segment)
+                        .or_default()
+                        .entry(variant)
+                        .or_default()
+                        .push(value);
+                }
+            }
         }
     }
 
@@ -311,6 +338,7 @@ pub async fn read_metric_summaries(
     Ok(ExperimentMetrics {
         metrics,
         variant_user_counts,
+        segment_data,
     })
 }
 

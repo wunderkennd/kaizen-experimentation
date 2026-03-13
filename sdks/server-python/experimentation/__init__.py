@@ -21,6 +21,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+import mmh3
+
 
 # ---------------------------------------------------------------------------
 # Core Types
@@ -149,12 +151,38 @@ class LocalProvider(AssignmentProvider):
         config = self._experiments.get(experiment_id)
         if config is None:
             return None
+        if not config.variants:
+            return None
 
-        # TODO (Agent-1): Use Python MurmurHash3 binding (or WASM via wasmtime)
-        #   1. bucket = murmur3(f"{attrs.user_id}:{config.hash_salt}") % config.total_buckets
-        #   2. if bucket < config.allocation_start or bucket > config.allocation_end → None
-        #   3. Map bucket to variant by cumulative traffic fractions
-        return None
+        key = f"{attrs.user_id}\x00{config.hash_salt}"
+        raw_hash: int = mmh3.hash(key, seed=0, signed=False)
+        bucket = raw_hash % config.total_buckets
+
+        if bucket < config.allocation_start or bucket > config.allocation_end:
+            return None
+
+        alloc_size = float(config.allocation_end - config.allocation_start + 1)
+        relative_bucket = float(bucket - config.allocation_start)
+
+        cumulative = 0.0
+        for variant in config.variants:
+            cumulative += variant.traffic_fraction * alloc_size
+            if relative_bucket < cumulative:
+                return Assignment(
+                    experiment_id=config.experiment_id,
+                    variant_name=variant.name,
+                    payload=variant.payload,
+                    from_cache=True,
+                )
+
+        # FP rounding fallback — assign to last variant
+        last = config.variants[-1]
+        return Assignment(
+            experiment_id=config.experiment_id,
+            variant_name=last.name,
+            payload=last.payload,
+            from_cache=True,
+        )
 
     async def get_all_assignments(
         self, attrs: UserAttributes

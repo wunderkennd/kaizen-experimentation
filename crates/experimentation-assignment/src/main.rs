@@ -66,6 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!(%grpc_addr, "starting gRPC server");
     tonic::transport::Server::builder()
+        .tcp_nodelay(true)
+        .concurrency_limit_per_connection(256)
+        .initial_connection_window_size(1024 * 1024)
+        .initial_stream_window_size(1024 * 1024)
         .add_service(AssignmentServiceServer::new(svc))
         .serve_with_shutdown(grpc_addr, async move {
             tokio::signal::ctrl_c().await.ok();

@@ -1,0 +1,16 @@
+{
+  "test_name": "gst_evaluate_pocock_3_look2_cross",
+  "description": "Pocock K=3, z=2.5 at look 2 \u2014 exceeds Pocock boundary (~2.29), crossing",
+  "z_stat": 2.5,
+  "current_look": 2,
+  "planned_looks": 3,
+  "overall_alpha": 0.05,
+  "spending_function": "Pocock",
+  "prev_alpha_spent": 0.022641621263197066,
+  "expected": {
+    "boundary_crossed": true,
+    "critical_value": 2.294911132376029,
+    "alpha_spent": 0.03816912576950707,
+    "alpha_remaining": 0.011830874230492935
+  }
+}

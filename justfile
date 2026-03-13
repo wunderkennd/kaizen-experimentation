@@ -192,6 +192,11 @@ test-crate crate:
     @echo "  Running tests for {{ crate }}..."
     {{ cargo }} test -p {{ crate }}
 
+# Run bootstrap coverage validation (1000 datasets × 4 scenarios, ~30s in release)
+test-bootstrap-coverage:
+    @echo "  Running bootstrap coverage validation (release mode)..."
+    {{ cargo }} test --release -p experimentation-stats --test bootstrap_coverage -- --ignored --nocapture
+
 # ==============================================================================
 # Linting
 # ==============================================================================
@@ -349,9 +354,17 @@ loadtest-soak:
 loadtest-assignment:
     bash scripts/loadtest_assignment.sh
 
+# Run M1 assignment service load test at 50K rps (Phase 4 SLA validation)
+loadtest-assignment-50k:
+    TARGET_RPS=50000 DURATION=60s bash scripts/loadtest_assignment.sh
+
 # Run M7 flag service load test: p99 < 10ms at 20K rps (builds, starts server, seeds flags, validates SLA)
 loadtest-flags:
     bash scripts/loadtest_flags.sh
+
+# Run M4b policy service load test: p99 < 15ms at 10K rps (builds, starts server, seeds experiments, validates SLA)
+loadtest-policy:
+    bash scripts/loadtest_policy.sh
 
 # ==============================================================================
 # Convenience
