@@ -71,26 +71,65 @@ groups:
           summary: "Bloom filter FPR exceeding 0.5% — consider resizing"
 
   # --------------------------------------------------------------------------
-  # Metric Computation (M3)
+  # Metric Computation (M3) — SLA: daily <2h, guardrail <30min
   # --------------------------------------------------------------------------
   - name: metrics
     rules:
-      - alert: MetricComputationFailed
-        expr: increase(metric_computation_failures_total[1h]) > 5
+      - alert: MetricComputationServiceDown
+        expr: up{job="metrics-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          module: m3
+        annotations:
+          summary: "Metric computation service is unreachable"
+
+      - alert: MetricJobFailureRate
+        expr: sum(increase(m3_job_total{status="error"}[1h])) > 5
         labels:
           severity: warning
           module: m3
         annotations:
-          summary: "Metric computation failures increasing"
+          summary: "Metric computation job failures increasing"
+          description: "{{ $value }} job failures in the last hour"
 
-      - alert: MetricComputationSlow
-        expr: histogram_quantile(0.95, rate(metric_computation_duration_seconds_bucket[30m])) > 300
+      - alert: MetricJobDurationHigh
+        expr: histogram_quantile(0.95, sum(rate(m3_job_duration_seconds_bucket[30m])) by (le, job_type)) > 300
         for: 10m
         labels:
           severity: warning
           module: m3
         annotations:
-          summary: "Metric computation taking >5 minutes at p95"
+          summary: "Metric job p95 duration above 5 minutes for {{ $labels.job_type }}"
+          description: "p95 duration: {{ $value | humanizeDuration }}"
+
+      - alert: MetricRPCErrorRate
+        expr: sum(rate(m3_rpc_total{status="error"}[5m])) / sum(rate(m3_rpc_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          module: m3
+        annotations:
+          summary: "M3 RPC error rate above 5%"
+          description: "Error rate: {{ $value | humanizePercentage }}"
+
+      - alert: SparkQuerySlow
+        expr: histogram_quantile(0.95, sum(rate(m3_spark_query_duration_seconds_bucket[30m])) by (le, job_type)) > 120
+        for: 10m
+        labels:
+          severity: warning
+          module: m3
+        annotations:
+          summary: "Spark queries p95 above 2 minutes for {{ $labels.job_type }}"
+
+      - alert: GuardrailBreachDetected
+        expr: increase(m3_guardrail_breaches_total[1h]) > 0
+        labels:
+          severity: warning
+          module: m3
+        annotations:
+          summary: "Guardrail breach detected for experiment {{ $labels.experiment_id }}"
+          description: "Metric: {{ $labels.metric_id }}, action: {{ $labels.action }}"
 
   # --------------------------------------------------------------------------
   # Statistical Analysis (M4a) — Fail-fast on numerical issues
