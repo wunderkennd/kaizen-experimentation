@@ -516,12 +516,13 @@ async def main():
 
     # 3. Use the variant
     if variant == "treatment":
-        return new_recommendations()
+        result = new_recommendations()
     else:
-        return default_recommendations()
+        result = default_recommendations()
 
     # 4. Clean up
     await client.close()
+    return result
 
 asyncio.run(main())
 ```
