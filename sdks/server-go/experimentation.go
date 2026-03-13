@@ -138,14 +138,40 @@ func (p *LocalProvider) GetAssignment(_ context.Context, experimentID string, at
 	if !ok {
 		return nil, nil
 	}
+	if len(config.Variants) == 0 {
+		return nil, nil
+	}
 
-	// TODO (Agent-1): Use CGo binding to experimentation_bucket() from experimentation-ffi
-	//   1. bucket = experimentation_bucket(attrs.UserID, config.HashSalt, config.TotalBuckets)
-	//   2. if bucket < config.AllocationStart || bucket > config.AllocationEnd → nil
-	//   3. Map bucket to variant by cumulative traffic fractions
-	_ = config
-	_ = attrs
-	return nil, nil
+	bucket := computeBucket(attrs.UserID, config.HashSalt, uint32(config.TotalBuckets))
+
+	if !isInAllocation(bucket, uint32(config.AllocationStart), uint32(config.AllocationEnd)) {
+		return nil, nil
+	}
+
+	allocSize := float64(config.AllocationEnd - config.AllocationStart + 1)
+	relativeBucket := float64(bucket - uint32(config.AllocationStart))
+
+	cumulative := 0.0
+	for _, v := range config.Variants {
+		cumulative += v.TrafficFraction * allocSize
+		if relativeBucket < cumulative {
+			return &Assignment{
+				ExperimentID: config.ExperimentID,
+				VariantName:  v.Name,
+				Payload:      v.Payload,
+				FromCache:    true,
+			}, nil
+		}
+	}
+
+	// FP rounding fallback — assign to last variant
+	last := config.Variants[len(config.Variants)-1]
+	return &Assignment{
+		ExperimentID: config.ExperimentID,
+		VariantName:  last.Name,
+		Payload:      last.Payload,
+		FromCache:    true,
+	}, nil
 }
 
 func (p *LocalProvider) GetAllAssignments(ctx context.Context, attrs UserAttributes) (map[string]*Assignment, error) {
