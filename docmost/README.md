@@ -47,6 +47,10 @@ echo 'YOUR_TOKEN_HERE' > /tmp/docmost_token.txt
 python3 populate_docmost.py
 ```
 
+> **Note:** The population script is not idempotent. Running it multiple times will
+> create duplicate spaces and pages. If you need to re-run it, first delete the
+> existing spaces via the DocMost UI or reset the database with `docker compose down -v`.
+
 ## Documentation Structure
 
 The script creates the following spaces in DocMost:
