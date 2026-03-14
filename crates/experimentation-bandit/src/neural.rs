@@ -45,9 +45,13 @@ struct NeuralMetadata {
 ///
 /// Uses a 2-layer MLP to predict expected reward per arm given context features.
 /// Exploration via Gaussian noise on logits, decaying with 1/sqrt(total_rewards + 1).
+///
+/// Layers are stored separately (not as `nn::Sequential`) so that `select_arm`
+/// can disable dropout (`train=false`) while `update` enables it (`train=true`).
 pub struct NeuralContextualPolicy {
     vs: nn::VarStore,
-    net: nn::Sequential,
+    layer1: nn::Linear,
+    layer2: nn::Linear,
     optimizer: nn::Optimizer,
     arm_ids: Vec<String>,
     feature_keys: Vec<String>,
@@ -88,20 +92,37 @@ impl NeuralContextualPolicy {
         let d_in = feature_keys.len() as i64;
         let n_arms = arm_ids.len() as i64;
         let vs = nn::VarStore::new(Device::Cpu);
-        let net = build_net(&vs.root(), d_in, config.d_hidden, n_arms, config.dropout_p);
+        let root = vs.root();
+        let layer1 = nn::linear(&root / "layer1", d_in, config.d_hidden, Default::default());
+        let layer2 = nn::linear(
+            &root / "layer2",
+            config.d_hidden,
+            n_arms,
+            Default::default(),
+        );
         let optimizer = nn::Adam::default()
             .build(&vs, config.learning_rate)
             .expect("optimizer creation should not fail");
 
         Self {
             vs,
-            net,
+            layer1,
+            layer2,
             optimizer,
             arm_ids,
             feature_keys,
             config,
             total_rewards: 0,
         }
+    }
+
+    /// Forward pass through the 2-layer MLP.
+    ///
+    /// `train=true` enables dropout; `train=false` disables it (inference).
+    fn forward(&self, input: &Tensor, train: bool) -> Tensor {
+        let h = self.layer1.forward(input).relu();
+        let h = h.dropout(self.config.dropout_p, train);
+        self.layer2.forward(&h)
     }
 
     /// Build input tensor from context features.
@@ -121,36 +142,12 @@ impl NeuralContextualPolicy {
     }
 }
 
-fn build_net(
-    root: &nn::Path,
-    d_in: i64,
-    d_hidden: i64,
-    n_arms: i64,
-    dropout_p: f64,
-) -> nn::Sequential {
-    nn::seq()
-        .add(nn::linear(
-            root / "layer1",
-            d_in,
-            d_hidden,
-            Default::default(),
-        ))
-        .add_fn(|x| x.relu())
-        .add_fn(move |x| x.dropout(dropout_p, false)) // dropout only during training
-        .add(nn::linear(
-            root / "layer2",
-            d_hidden,
-            n_arms,
-            Default::default(),
-        ))
-}
-
 impl Policy for NeuralContextualPolicy {
     fn select_arm(&self, context: Option<&HashMap<String, f64>>) -> ArmSelection {
         let input = self.context_to_tensor(context);
 
-        // Forward pass (no_grad, eval mode).
-        let logits = tch::no_grad(|| self.net.forward(&input)).squeeze_dim(0);
+        // Forward pass (no_grad, eval mode — dropout disabled).
+        let logits = tch::no_grad(|| self.forward(&input, false)).squeeze_dim(0);
 
         // Add Thompson-style exploration noise: scale / sqrt(total_rewards + 1).
         let noise_std = self.config.noise_scale / ((self.total_rewards as f64 + 1.0).sqrt());
@@ -197,8 +194,8 @@ impl Policy for NeuralContextualPolicy {
 
         let input = self.context_to_tensor(context);
 
-        // Forward pass (train mode for dropout).
-        let logits = self.net.forward(&input).squeeze_dim(0);
+        // Forward pass (train mode — dropout enabled).
+        let logits = self.forward(&input, true).squeeze_dim(0);
 
         // MSE loss on the selected arm's output vs reward.
         let target = Tensor::from_slice(&[reward as f32]).to_kind(Kind::Float);
@@ -248,12 +245,18 @@ impl Policy for NeuralContextualPolicy {
         let n_arms = metadata.arm_ids.len() as i64;
 
         let mut vs = nn::VarStore::new(Device::Cpu);
-        let net = build_net(
-            &vs.root(),
+        let root = vs.root();
+        let layer1 = nn::linear(
+            &root / "layer1",
             d_in,
             metadata.config.d_hidden,
+            Default::default(),
+        );
+        let layer2 = nn::linear(
+            &root / "layer2",
+            metadata.config.d_hidden,
             n_arms,
-            metadata.config.dropout_p,
+            Default::default(),
         );
 
         // Load weights from buffer.
@@ -267,7 +270,8 @@ impl Policy for NeuralContextualPolicy {
 
         Self {
             vs,
-            net,
+            layer1,
+            layer2,
             optimizer,
             arm_ids: metadata.arm_ids,
             feature_keys: metadata.feature_keys,
