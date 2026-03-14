@@ -331,13 +331,15 @@ pub async fn read_metric_summaries(
                 }
             }
 
-            // Populate session-level data when session_id is present.
-            if session_arr.is_some() {
-                session_data.entry(metric).or_default().push((
-                    value,
-                    user_arr.value(i).to_string(),
-                    variant,
-                ));
+            // Populate session-level data when session_id is present and non-null.
+            if let Some(sess_arr) = session_arr {
+                if !sess_arr.is_null(i) {
+                    session_data.entry(metric).or_default().push((
+                        value,
+                        user_arr.value(i).to_string(),
+                        variant,
+                    ));
+                }
             }
         }
     }

@@ -2,20 +2,23 @@
 //!
 //! Architecture: Linear(d_in, d_hidden) -> ReLU -> Dropout(p) -> Linear(d_hidden, n_arms)
 //!
-//! Behind `#[cfg(feature = "gpu")]` — requires libtorch.
+//! Behind `#[cfg(feature = "gpu")]` — uses Candle (pure Rust ML framework).
 //! Thompson-style exploration via Gaussian noise on output logits.
 
 use crate::policy::Policy;
 use crate::ArmSelection;
+use candle_core::{DType, Device, IndexOp, ModuleT, Result as CResult, Tensor};
+use candle_nn::{
+    linear, AdamW, Dropout, Linear, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap,
+};
 use experimentation_core::error::assert_finite;
 use std::collections::HashMap;
-use tch::{nn, nn::Module, nn::OptimizerConfig, Device, Kind, Tensor};
 
 /// Configuration for the neural contextual bandit.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NeuralConfig {
-    pub d_hidden: i64,
-    pub dropout_p: f64,
+    pub d_hidden: usize,
+    pub dropout_p: f32,
     pub learning_rate: f64,
     /// Scale of Thompson-style exploration noise, decays as 1/sqrt(total_rewards + 1).
     pub noise_scale: f64,
@@ -32,7 +35,7 @@ impl Default for NeuralConfig {
     }
 }
 
-/// Serializable metadata for neural policy state (excludes VarStore weights).
+/// Serializable metadata for neural policy state (excludes network weights).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct NeuralMetadata {
     arm_ids: Vec<String>,
@@ -41,18 +44,50 @@ struct NeuralMetadata {
     total_rewards: u64,
 }
 
+/// 2-layer MLP network.
+///
+/// Replaces tch's `nn::Sequential` with explicit layer management,
+/// giving us proper control over the `train` flag for dropout.
+struct Net {
+    layer1: Linear,
+    layer2: Linear,
+    dropout: Dropout,
+}
+
+impl Net {
+    fn new(
+        vb: VarBuilder,
+        d_in: usize,
+        d_hidden: usize,
+        n_arms: usize,
+        dropout_p: f32,
+    ) -> CResult<Self> {
+        let layer1 = linear(d_in, d_hidden, vb.pp("layer1"))?;
+        let layer2 = linear(d_hidden, n_arms, vb.pp("layer2"))?;
+        let dropout = Dropout::new(dropout_p);
+        Ok(Self {
+            layer1,
+            layer2,
+            dropout,
+        })
+    }
+
+    fn forward(&self, x: &Tensor, train: bool) -> CResult<Tensor> {
+        let x = self.layer1.forward(x)?;
+        let x = x.relu()?;
+        let x = self.dropout.forward_t(&x, train)?;
+        self.layer2.forward(&x)
+    }
+}
+
 /// Neural contextual bandit policy.
 ///
 /// Uses a 2-layer MLP to predict expected reward per arm given context features.
 /// Exploration via Gaussian noise on logits, decaying with 1/sqrt(total_rewards + 1).
-///
-/// Layers are stored separately (not as `nn::Sequential`) so that `select_arm`
-/// can disable dropout (`train=false`) while `update` enables it (`train=true`).
 pub struct NeuralContextualPolicy {
-    vs: nn::VarStore,
-    layer1: nn::Linear,
-    layer2: nn::Linear,
-    optimizer: nn::Optimizer,
+    varmap: VarMap,
+    net: Net,
+    optimizer: AdamW,
     arm_ids: Vec<String>,
     feature_keys: Vec<String>,
     config: NeuralConfig,
@@ -72,7 +107,7 @@ impl std::fmt::Debug for NeuralContextualPolicy {
 
 impl Clone for NeuralContextualPolicy {
     fn clone(&self) -> Self {
-        // Serialize/deserialize roundtrip since VarStore doesn't implement Clone.
+        // Serialize/deserialize roundtrip since VarMap doesn't implement Clone.
         let data = self.serialize();
         Self::deserialize(&data)
     }
@@ -89,25 +124,24 @@ impl NeuralContextualPolicy {
         assert!(!arm_ids.is_empty(), "must have at least one arm");
         assert!(!feature_keys.is_empty(), "must have at least one feature");
 
-        let d_in = feature_keys.len() as i64;
-        let n_arms = arm_ids.len() as i64;
-        let vs = nn::VarStore::new(Device::Cpu);
-        let root = vs.root();
-        let layer1 = nn::linear(&root / "layer1", d_in, config.d_hidden, Default::default());
-        let layer2 = nn::linear(
-            &root / "layer2",
-            config.d_hidden,
-            n_arms,
-            Default::default(),
-        );
-        let optimizer = nn::Adam::default()
-            .build(&vs, config.learning_rate)
-            .expect("optimizer creation should not fail");
+        let d_in = feature_keys.len();
+        let n_arms = arm_ids.len();
+        let varmap = VarMap::new();
+        let vb = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
+        let net = Net::new(vb, d_in, config.d_hidden, n_arms, config.dropout_p)
+            .expect("network construction should not fail");
+        let optimizer = AdamW::new(
+            varmap.all_vars(),
+            ParamsAdamW {
+                lr: config.learning_rate,
+                ..Default::default()
+            },
+        )
+        .expect("optimizer creation should not fail");
 
         Self {
-            vs,
-            layer1,
-            layer2,
+            varmap,
+            net,
             optimizer,
             arm_ids,
             feature_keys,
@@ -116,48 +150,37 @@ impl NeuralContextualPolicy {
         }
     }
 
-    /// Forward pass through the 2-layer MLP.
-    ///
-    /// `train=true` enables dropout; `train=false` disables it (inference).
-    fn forward(&self, input: &Tensor, train: bool) -> Tensor {
-        let h = self.layer1.forward(input).relu();
-        let h = h.dropout(self.config.dropout_p, train);
-        self.layer2.forward(&h)
-    }
-
     /// Build input tensor from context features.
     fn context_to_tensor(&self, context: Option<&HashMap<String, f64>>) -> Tensor {
-        let values: Vec<f64> = self
+        let values: Vec<f32> = self
             .feature_keys
             .iter()
             .map(|key| {
                 let v = context.and_then(|c| c.get(key)).copied().unwrap_or(0.0);
                 assert_finite(v, &format!("neural context feature '{key}'"));
-                v
+                v as f32
             })
             .collect();
-        Tensor::from_slice(&values)
-            .to_kind(Kind::Float)
-            .unsqueeze(0) // batch dim
+        Tensor::from_slice(&values, (1, values.len()), &Device::Cpu)
+            .expect("FAIL-FAST: tensor creation from context")
     }
-}
 
-impl Policy for NeuralContextualPolicy {
-    fn select_arm(&self, context: Option<&HashMap<String, f64>>) -> ArmSelection {
+    /// Inner select_arm returning candle Result for clean `?` propagation.
+    fn select_arm_inner(&self, context: Option<&HashMap<String, f64>>) -> CResult<ArmSelection> {
         let input = self.context_to_tensor(context);
 
-        // Forward pass (no_grad, eval mode — dropout disabled).
-        let logits = tch::no_grad(|| self.forward(&input, false)).squeeze_dim(0);
+        // Forward pass (eval mode: no dropout).
+        let logits = self.net.forward(&input, false)?.squeeze(0)?;
 
         // Add Thompson-style exploration noise: scale / sqrt(total_rewards + 1).
         let noise_std = self.config.noise_scale / ((self.total_rewards as f64 + 1.0).sqrt());
-        let noise =
-            Tensor::randn(self.arm_ids.len() as i64, (Kind::Float, Device::Cpu)) * noise_std;
-        let noisy_logits = &logits + &noise;
+        let n_arms = self.arm_ids.len();
+        let noise = (Tensor::randn(0f32, 1f32, (n_arms,), &Device::Cpu)? * noise_std)?;
+        let noisy_logits = (&logits + &noise)?;
 
         // Softmax for probabilities.
-        let probs = noisy_logits.softmax(0, Kind::Float);
-        let probs_vec: Vec<f64> = Vec::<f64>::try_from(&probs).expect("tensor to vec");
+        let probs = candle_nn::ops::softmax(&noisy_logits, 0)?;
+        let probs_vec: Vec<f32> = probs.to_vec1()?;
 
         // Argmax for selection.
         let best_idx = probs_vec
@@ -171,21 +194,29 @@ impl Policy for NeuralContextualPolicy {
             .arm_ids
             .iter()
             .zip(probs_vec.iter())
-            .map(|(id, &p)| (id.clone(), p as f64))
+            .map(|(id, &p)| {
+                let p_f64 = p as f64;
+                assert_finite(p_f64, &format!("neural arm probability for '{id}'"));
+                (id.clone(), p_f64)
+            })
             .collect();
 
         let assignment_probability = all_arm_probabilities[&self.arm_ids[best_idx]];
 
-        ArmSelection {
+        Ok(ArmSelection {
             arm_id: self.arm_ids[best_idx].clone(),
             assignment_probability,
             all_arm_probabilities,
-        }
+        })
     }
 
-    fn update(&mut self, arm_id: &str, reward: f64, context: Option<&HashMap<String, f64>>) {
-        assert_finite(reward, "neural bandit reward");
-
+    /// Inner update returning candle Result for clean `?` propagation.
+    fn update_inner(
+        &mut self,
+        arm_id: &str,
+        reward: f64,
+        context: Option<&HashMap<String, f64>>,
+    ) -> CResult<()> {
         let arm_idx = self
             .arm_ids
             .iter()
@@ -194,17 +225,32 @@ impl Policy for NeuralContextualPolicy {
 
         let input = self.context_to_tensor(context);
 
-        // Forward pass (train mode — dropout enabled).
-        let logits = self.forward(&input, true).squeeze_dim(0);
+        // Forward pass (train mode: apply dropout).
+        let logits = self.net.forward(&input, true)?.squeeze(0)?;
 
         // MSE loss on the selected arm's output vs reward.
-        let target = Tensor::from_slice(&[reward as f32]).to_kind(Kind::Float);
-        let prediction = logits.get(arm_idx as i64).unsqueeze(0);
-        let loss = prediction.mse_loss(&target, tch::Reduction::Mean);
+        let target = Tensor::from_slice(&[reward as f32], (1,), &Device::Cpu)?;
+        let prediction = logits.i(arm_idx)?.unsqueeze(0)?;
+        let loss = candle_nn::loss::mse(&prediction, &target)?;
 
         // Backward + step.
-        self.optimizer.backward_step(&loss);
+        self.optimizer.backward_step(&loss)?;
         self.total_rewards += 1;
+
+        Ok(())
+    }
+}
+
+impl Policy for NeuralContextualPolicy {
+    fn select_arm(&self, context: Option<&HashMap<String, f64>>) -> ArmSelection {
+        self.select_arm_inner(context)
+            .expect("FAIL-FAST: neural select_arm failed")
+    }
+
+    fn update(&mut self, arm_id: &str, reward: f64, context: Option<&HashMap<String, f64>>) {
+        assert_finite(reward, "neural bandit reward");
+        self.update_inner(arm_id, reward, context)
+            .expect("FAIL-FAST: neural update failed")
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -217,18 +263,19 @@ impl Policy for NeuralContextualPolicy {
 
         let meta_bytes = serde_json::to_vec(&metadata).expect("metadata serialization");
 
-        // Save VarStore weights to a buffer.
-        let mut weights_buf = Vec::new();
-        self.vs
-            .save_to_stream(&mut weights_buf)
-            .expect("VarStore save");
+        // Save VarMap weights to a temp file, then read into buffer.
+        // VarMap uses safetensors format. tempfile avoids needing the safetensors
+        // crate directly for in-memory serialization.
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile creation");
+        self.varmap.save(tmp.path()).expect("VarMap save");
+        let weights_bytes = std::fs::read(tmp.path()).expect("read weights");
 
-        // Format: [4 bytes meta_len (big-endian)] [meta_bytes] [weights_bytes]
+        // Format: [4 bytes meta_len (big-endian)] [meta_bytes] [safetensors bytes]
         let meta_len = (meta_bytes.len() as u32).to_be_bytes();
-        let mut result = Vec::with_capacity(4 + meta_bytes.len() + weights_buf.len());
+        let mut result = Vec::with_capacity(4 + meta_bytes.len() + weights_bytes.len());
         result.extend_from_slice(&meta_len);
         result.extend_from_slice(&meta_bytes);
-        result.extend_from_slice(&weights_buf);
+        result.extend_from_slice(&weights_bytes);
         result
     }
 
@@ -241,37 +288,40 @@ impl Policy for NeuralContextualPolicy {
         let metadata: NeuralMetadata =
             serde_json::from_slice(&data[4..4 + meta_len]).expect("metadata deserialization");
 
-        let d_in = metadata.feature_keys.len() as i64;
-        let n_arms = metadata.arm_ids.len() as i64;
+        let d_in = metadata.feature_keys.len();
+        let n_arms = metadata.arm_ids.len();
 
-        let mut vs = nn::VarStore::new(Device::Cpu);
-        let root = vs.root();
-        let layer1 = nn::linear(
-            &root / "layer1",
+        // Reconstruct network structure first (creates variables in VarMap),
+        // then load saved weights into those variables.
+        let mut varmap = VarMap::new();
+        let vb = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
+        let net = Net::new(
+            vb,
             d_in,
             metadata.config.d_hidden,
-            Default::default(),
-        );
-        let layer2 = nn::linear(
-            &root / "layer2",
-            metadata.config.d_hidden,
             n_arms,
-            Default::default(),
-        );
+            metadata.config.dropout_p,
+        )
+        .expect("network reconstruction");
 
-        // Load weights from buffer.
+        // Write weights to temp file, then load into VarMap.
         let weights_data = &data[4 + meta_len..];
-        let mut cursor = std::io::Cursor::new(weights_data);
-        vs.load_from_stream(&mut cursor).expect("VarStore load");
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile creation");
+        std::fs::write(tmp.path(), weights_data).expect("write weights to tempfile");
+        varmap.load(tmp.path()).expect("VarMap load");
 
-        let optimizer = nn::Adam::default()
-            .build(&vs, metadata.config.learning_rate)
-            .expect("optimizer creation");
+        let optimizer = AdamW::new(
+            varmap.all_vars(),
+            ParamsAdamW {
+                lr: metadata.config.learning_rate,
+                ..Default::default()
+            },
+        )
+        .expect("optimizer creation");
 
         Self {
-            vs,
-            layer1,
-            layer2,
+            varmap,
+            net,
             optimizer,
             arm_ids: metadata.arm_ids,
             feature_keys: metadata.feature_keys,

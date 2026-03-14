@@ -59,8 +59,10 @@ pub fn ipw_estimate(
     if observations.is_empty() {
         return Err(Error::Validation("observations must not be empty".into()));
     }
-    if !(0.0..=1.0).contains(&alpha) {
-        return Err(Error::Validation("alpha must be in [0, 1]".into()));
+    if alpha <= 0.0 || alpha >= 1.0 {
+        return Err(Error::Validation(
+            "alpha must be in (0, 1) exclusive".into(),
+        ));
     }
     if min_probability <= 0.0 || min_probability >= 0.5 {
         return Err(Error::Validation(
@@ -317,6 +319,11 @@ mod tests {
             0.01
         )
         .is_err()); // no treatment
+
+        // Boundary: alpha=0.0 and 1.0 are rejected (would cause inverse_cdf(1.0) = inf).
+        let obs = make_uniform_obs(&[1.0, 2.0], &[3.0, 4.0]);
+        assert!(ipw_estimate(&obs, 0.0, 0.01).is_err());
+        assert!(ipw_estimate(&obs, 1.0, 0.01).is_err());
     }
 
     #[test]

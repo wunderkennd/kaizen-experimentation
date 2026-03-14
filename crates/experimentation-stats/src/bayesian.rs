@@ -61,8 +61,10 @@ pub fn bayesian_beta_binomial(
             "treatment_successes cannot exceed treatment_total".into(),
         ));
     }
-    if !(0.0..=1.0).contains(&credible_level) {
-        return Err(Error::Validation("credible_level must be in [0, 1]".into()));
+    if credible_level <= 0.0 || credible_level >= 1.0 {
+        return Err(Error::Validation(
+            "credible_level must be in (0, 1) exclusive".into(),
+        ));
     }
 
     let control_failures = control_total - control_successes;
@@ -148,8 +150,10 @@ pub fn bayesian_normal(
             "treatment must have at least 2 observations".into(),
         ));
     }
-    if !(0.0..=1.0).contains(&credible_level) {
-        return Err(Error::Validation("credible_level must be in [0, 1]".into()));
+    if credible_level <= 0.0 || credible_level >= 1.0 {
+        return Err(Error::Validation(
+            "credible_level must be in (0, 1) exclusive".into(),
+        ));
     }
 
     let n_c = control.len() as f64;
@@ -291,6 +295,11 @@ mod tests {
         assert!(bayesian_normal(&[1.0], &[1.0, 2.0], 0.95).is_err());
         assert!(bayesian_normal(&[1.0, 2.0], &[1.0], 0.95).is_err());
         assert!(bayesian_normal(&[1.0, 2.0], &[1.0, 2.0], 1.5).is_err());
+        // Boundary: credible_level=0.0 and 1.0 are rejected (would cause inverse_cdf(1.0) = inf).
+        assert!(bayesian_beta_binomial(50, 100, 50, 100, 0.0, 42).is_err());
+        assert!(bayesian_beta_binomial(50, 100, 50, 100, 1.0, 42).is_err());
+        assert!(bayesian_normal(&[1.0, 2.0], &[1.0, 2.0], 0.0).is_err());
+        assert!(bayesian_normal(&[1.0, 2.0], &[1.0, 2.0], 1.0).is_err());
     }
 
     #[test]
