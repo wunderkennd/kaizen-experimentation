@@ -218,12 +218,13 @@ class MockProvider(AssignmentProvider):
         return dict(self._assignments)
 
     def set_assignment(
-        self, experiment_id: str, variant_name: str
+        self, experiment_id: str, variant_name: str, payload: dict[str, Any] | None = None
     ) -> None:
         """Override an assignment at runtime (useful in tests)."""
         self._assignments[experiment_id] = Assignment(
             experiment_id=experiment_id,
             variant_name=variant_name,
+            payload=payload or {},
         )
 
     async def close(self) -> None:
