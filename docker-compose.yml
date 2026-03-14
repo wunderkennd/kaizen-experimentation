@@ -95,5 +95,22 @@ services:
     depends_on:
       kafka: { condition: service_healthy }
 
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    ports: ["3000:3000"]
+    environment:
+      # Next.js server-side rewrite targets (host.docker.internal = host machine)
+      BACKEND_MANAGEMENT_URL: http://host.docker.internal:50055
+      BACKEND_METRICS_URL: http://host.docker.internal:50056
+      BACKEND_ANALYSIS_URL: http://host.docker.internal:50053
+      BACKEND_BANDIT_URL: http://host.docker.internal:50054
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   postgres_data:
