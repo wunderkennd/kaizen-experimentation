@@ -191,9 +191,16 @@ class MockProvider(AssignmentProvider):
     """Returns deterministic assignments for testing."""
 
     def __init__(
-        self, assignments: dict[str, Assignment] | None = None
+        self, assignments: dict[str, str] | dict[str, Assignment] | None = None
     ) -> None:
-        self._assignments: dict[str, Assignment] = assignments or {}
+        self._assignments: dict[str, Assignment] = {}
+        for exp_id, val in (assignments or {}).items():
+            if isinstance(val, str):
+                self._assignments[exp_id] = Assignment(
+                    experiment_id=exp_id, variant_name=val
+                )
+            else:
+                self._assignments[exp_id] = val
 
     async def initialize(self) -> None:
         pass

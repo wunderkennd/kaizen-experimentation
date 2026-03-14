@@ -7,5 +7,5 @@ RUN CGO_ENABLED=0 go build -o /app ./metrics/cmd/
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /app /app
-EXPOSE 50053
+EXPOSE 50056
 CMD ["/app"]
