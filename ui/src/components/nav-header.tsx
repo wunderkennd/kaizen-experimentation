@@ -17,9 +17,14 @@ export function NavHeader() {
   return (
     <header className="border-b border-gray-200 bg-white">
       <nav aria-label="Main navigation" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="text-lg font-semibold text-gray-900">
-          Experimentation Platform
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link href="/" className="text-lg font-semibold text-gray-900">
+            Experimentation Platform
+          </Link>
+          <Link href="/metrics" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-metrics">
+            Metrics
+          </Link>
+        </div>
 
         <div className="flex items-center gap-3">
           <ConnectionStatus />
