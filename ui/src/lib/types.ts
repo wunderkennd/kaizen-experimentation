@@ -402,6 +402,32 @@ export interface LayerAllocation {
   releasedAt?: string;
 }
 
+// --- Metric Definitions (M6 metric browser) ---
+
+export type MetricType = 'MEAN' | 'PROPORTION' | 'RATIO' | 'COUNT' | 'PERCENTILE' | 'CUSTOM';
+
+export interface MetricDefinition {
+  metricId: string;
+  name: string;
+  description: string;
+  type: MetricType;
+  sourceEventType: string;
+  numeratorEventType?: string;
+  denominatorEventType?: string;
+  percentile?: number;
+  customSql?: string;
+  lowerIsBetter: boolean;
+  surrogateTargetMetricId?: string;
+  isQoeMetric: boolean;
+  cupedCovariateMetricId?: string;
+  minimumDetectableEffect?: number;
+}
+
+export interface ListMetricDefinitionsResponse {
+  metrics: MetricDefinition[];
+  nextPageToken: string;
+}
+
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';
 
 export interface BanditArmStats {
