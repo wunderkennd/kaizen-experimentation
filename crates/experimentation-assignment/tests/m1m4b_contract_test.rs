@@ -105,10 +105,15 @@ impl BanditPolicyService for RealBanditService {
         let req = request.into_inner();
         let experiment_id = &req.experiment_id;
 
-        // Try Thompson first
+        // Try Thompson first — clone arms under the lock, then release before
+        // selection to avoid holding a std::sync::Mutex across async work and
+        // causing timeout under concurrent load (see contract_concurrent_select_arm).
         {
-            let thompson = self.thompson_experiments.lock().unwrap();
-            if let Some(arms) = thompson.get(experiment_id) {
+            let arms = {
+                let thompson = self.thompson_experiments.lock().unwrap();
+                thompson.get(experiment_id).cloned()
+            };
+            if let Some(arms) = arms {
                 let mut rng = StdRng::seed_from_u64(
                     experimentation_hash::murmur3::murmurhash3_x86_32(
                         req.user_id.as_bytes(),
@@ -116,7 +121,7 @@ impl BanditPolicyService for RealBanditService {
                     ) as u64,
                 );
                 let selection =
-                    experimentation_bandit::thompson::select_arm(arms, &mut rng);
+                    experimentation_bandit::thompson::select_arm(&arms, &mut rng);
                 return Ok(Response::new(ProtoArmSelection {
                     arm_id: selection.arm_id,
                     assignment_probability: selection.assignment_probability,
