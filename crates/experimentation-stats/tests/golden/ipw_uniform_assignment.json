@@ -1,0 +1,26 @@
+{
+  "test_name": "ipw_uniform_assignment",
+  "r_command": "# With uniform P(assignment)=0.5, IPW reduces to simple difference in means.\n# control: c(1,2,3,4,5), treatment: c(6,7,8,9,10)\n# Effect = 5.0, SE from weighted variance.",
+  "observations": [
+    {"outcome": 1.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 2.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 3.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 4.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 5.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 6.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 7.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 8.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 9.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 10.0, "is_treatment": true, "assignment_probability": 0.5}
+  ],
+  "alpha": 0.05,
+  "min_probability": 0.01,
+  "expected": {
+    "effect": 5.0,
+    "n_observations": 10,
+    "n_clipped": 0,
+    "effective_sample_size": 10.0,
+    "p_value_significant": true
+  },
+  "tolerance": 1e-6
+}

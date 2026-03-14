@@ -241,6 +241,10 @@ pub struct ExperimentMetrics {
     /// Segment-stratified observations for CATE analysis.
     /// Only populated when metric_summaries has a `lifecycle_segment` column.
     pub segment_data: SegmentData,
+    /// Session-level observations for clustering: metric_id → Vec<(value, user_id, variant_id)>.
+    /// Populated only when metric_summaries has a `session_id` column,
+    /// indicating multiple rows per user (one per session).
+    pub session_data: HashMap<String, Vec<(f64, String, String)>>,
 }
 
 /// Read metric_summaries from Delta Lake for a given experiment.
@@ -257,6 +261,7 @@ pub async fn read_metric_summaries(
 
     let mut metrics: MetricsByVariant = HashMap::new();
     let mut segment_data: SegmentData = HashMap::new();
+    let mut session_data: HashMap<String, Vec<(f64, String, String)>> = HashMap::new();
     let mut variant_users: HashMap<String, HashSet<String>> = HashMap::new();
     let mut found = false;
 
@@ -277,6 +282,11 @@ pub async fn read_metric_summaries(
         // lifecycle_segment is optional — older tables may not have it.
         let segment_arr = batch
             .column_by_name("lifecycle_segment")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+        // session_id is optional — when present, enables clustered SE computation.
+        let session_arr = batch
+            .column_by_name("session_id")
             .and_then(|c| c.as_any().downcast_ref::<StringArray>());
 
         for i in 0..batch.num_rows() {
@@ -311,13 +321,24 @@ pub async fn read_metric_summaries(
                 if !seg_arr.is_null(i) {
                     let segment = seg_arr.value(i).to_string();
                     segment_data
-                        .entry(metric)
+                        .entry(metric.clone())
                         .or_default()
                         .entry(segment)
                         .or_default()
-                        .entry(variant)
+                        .entry(variant.clone())
                         .or_default()
                         .push(value);
+                }
+            }
+
+            // Populate session-level data when session_id is present and non-null.
+            if let Some(sess_arr) = session_arr {
+                if !sess_arr.is_null(i) {
+                    session_data.entry(metric).or_default().push((
+                        value,
+                        user_arr.value(i).to_string(),
+                        variant,
+                    ));
                 }
             }
         }
@@ -339,6 +360,7 @@ pub async fn read_metric_summaries(
         metrics,
         variant_user_counts,
         segment_data,
+        session_data,
     })
 }
 
