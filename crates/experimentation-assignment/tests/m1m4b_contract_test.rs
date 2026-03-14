@@ -483,20 +483,34 @@ async fn contract_export_affinity_unknown_experiment() {
 }
 
 /// 7. Concurrent SelectArm calls return valid results.
+///
+/// CI environments are often slower than local machines. We use a generous
+/// per-task timeout that scales when the `CI` env var is set.
 #[tokio::test]
 async fn contract_concurrent_select_arm() {
     let (client, _, handle) = start_real_m4b().await;
+
+    // CI-aware timeout: 10s locally, 30s in CI (GitHub Actions sets CI=true).
+    let per_task_timeout = if std::env::var("CI").is_ok() {
+        std::time::Duration::from_secs(30)
+    } else {
+        std::time::Duration::from_secs(10)
+    };
 
     let mut handles = Vec::new();
     for i in 0..20u32 {
         let c = client.clone();
         handles.push(tokio::spawn(async move {
-            c.select_arm(
-                "test-thompson-3arm",
-                &format!("concurrent-user-{i}"),
-                HashMap::new(),
+            tokio::time::timeout(
+                per_task_timeout,
+                c.select_arm(
+                    "test-thompson-3arm",
+                    &format!("concurrent-user-{i}"),
+                    HashMap::new(),
+                ),
             )
             .await
+            .expect("concurrent SelectArm timed out — increase CI timeout if flaky")
         }));
     }
 

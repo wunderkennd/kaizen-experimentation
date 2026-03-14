@@ -33,7 +33,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 	port := os.Getenv("PORT")
-	if port == "" { port = "50055" }
+	if port == "" { port = "50053" }
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" { configPath = "internal/config/testdata/seed_config.json" }
 	cfgStore, err := config.LoadFromFile(configPath)

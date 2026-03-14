@@ -171,12 +171,23 @@ impl NeuralContextualPolicy {
 
         // Forward pass (eval mode: no dropout).
         let logits = self.net.forward(&input, false)?.squeeze(0)?;
+        // Fail-fast: verify logits are finite before adding noise.
+        let logits_vec: Vec<f32> = logits.to_vec1()?;
+        for (i, &v) in logits_vec.iter().enumerate() {
+            assert_finite(v as f64, &format!("neural logits[{}]", i));
+        }
 
         // Add Thompson-style exploration noise: scale / sqrt(total_rewards + 1).
         let noise_std = self.config.noise_scale / ((self.total_rewards as f64 + 1.0).sqrt());
+        assert_finite(noise_std, "neural noise_std");
         let n_arms = self.arm_ids.len();
         let noise = (Tensor::randn(0f32, 1f32, (n_arms,), &Device::Cpu)? * noise_std)?;
         let noisy_logits = (&logits + &noise)?;
+        // Fail-fast: verify noisy logits are finite before softmax.
+        let noisy_vec: Vec<f32> = noisy_logits.to_vec1()?;
+        for (i, &v) in noisy_vec.iter().enumerate() {
+            assert_finite(v as f64, &format!("neural noisy_logits[{}]", i));
+        }
 
         // Softmax for probabilities.
         let probs = candle_nn::ops::softmax(&noisy_logits, 0)?;
