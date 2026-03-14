@@ -27,9 +27,9 @@ type MetricDefinitionRow struct {
 	CreatedAt              time.Time
 }
 
-const metricCols = `metric_id, name, description, type, source_event_type,
-	numerator_event_type, denominator_event_type, percentile, custom_sql,
-	lower_is_better, is_qoe_metric, cuped_covariate_metric_id,
+const metricCols = `metric_id, name, COALESCE(description, ''), type, COALESCE(source_event_type, ''),
+	COALESCE(numerator_event_type, ''), COALESCE(denominator_event_type, ''), percentile, COALESCE(custom_sql, ''),
+	lower_is_better, is_qoe_metric, COALESCE(cuped_covariate_metric_id, ''),
 	minimum_detectable_effect, created_at`
 
 // MetricStore provides database operations for metric definitions.
