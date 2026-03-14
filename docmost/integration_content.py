@@ -95,6 +95,11 @@ Kaizen provides official SDKs for five platforms. All SDKs implement the \
 | **Server Go** | Go | `experimentation` | Go microservices, API servers |
 | **Server Python** | Python | `experimentation` | Python services, ML pipelines |
 
+> **Note**: Package names shown above are illustrative — these SDKs are not 
+published to public registries. See the actual SDK source directories 
+(`sdks/web/`, `sdks/server-go/`, `sdks/server-python/`, `sdks/ios/`, 
+`sdks/android/`) for real import paths.
+
 ## Provider Types
 
 ### RemoteProvider
@@ -395,8 +400,10 @@ provider := experimentation.NewLocalProvider(
 )
 ```
 
-Evaluates assignments locally using MurmurHash3 via CGo bridge to the \
-Rust `experimentation-hash` crate.
+Evaluates assignments locally using a pure Go MurmurHash3 implementation 
+(`murmur3_x86_32`). When CGo and the Rust FFI library are available 
+(build tag `cgo && has_ffi`), the SDK can optionally use the Rust 
+`experimentation-hash` crate for guaranteed cross-language parity.
 
 ### MockProvider
 
@@ -808,31 +815,35 @@ dependencies {
 
 ```kotlin
 import com.experimentation.sdk.*
+import kotlinx.coroutines.*
 
-// 1. Create client
-val client = ExperimentClient(
-    provider = RemoteProvider(
-        baseUrl = "https://assignment.example.com",
-        timeoutMs = 2000
+// All SDK methods are suspend functions — use within a coroutine scope
+lifecycleScope.launch {
+    // 1. Create client
+    val client = ExperimentClient(
+        provider = RemoteProvider(
+            baseUrl = "https://assignment.example.com",
+            timeoutMs = 2000L
+        )
     )
-)
-client.initialize()
+    client.initialize()
 
-// 2. Get variant
-val variant = client.getVariant(
-    experimentId = "homepage_recs_v2",
-    userId = "user-123",
-    attributes = mapOf("country" to "US")
-)
+    // 2. Get variant
+    val variant = client.getVariant(
+        experimentId = "homepage_recs_v2",
+        userId = "user-123",
+        properties = mapOf("country" to "US")
+    )
 
-// 3. Use the variant
-when (variant) {
-    "treatment" -> showNewRecommendations()
-    else -> showDefaultRecommendations()
+    // 3. Use the variant
+    when (variant) {
+        "treatment" -> showNewRecommendations()
+        else -> showDefaultRecommendations()
+    }
+
+    // 4. Clean up
+    client.close()
 }
-
-// 4. Clean up
-client.close()
 ```
 
 ### Jetpack Compose Integration
@@ -846,8 +857,12 @@ fun RecommendationsScreen(userId: String) {
                 baseUrl = BuildConfig.ASSIGNMENT_URL
             )
         )
-        client.initialize()
-        value = client.getVariant("homepage_recs_v2", userId)
+        client.initialize()  // suspend
+        value = client.getVariant(
+            experimentId = "homepage_recs_v2",
+            userId = userId,
+            properties = mapOf(),
+        )  // suspend
     }
 
     when (variant) {
@@ -1288,31 +1303,40 @@ This creates a full experiment in M5 with:
 
 ## Using Flags in Code
 
+The Feature Flag Service (M7) is a standalone Go gRPC service accessed 
+via ConnectRPC. There are **no SDK wrapper clients** for flag evaluation — 
+you call the service directly using an HTTP POST.
+
+```bash
+# Direct HTTP call to the Feature Flag Service
+curl -X POST https://flags.example.com/experimentation.flags.v1.FeatureFlagService/EvaluateFlag \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "flagId": "dark-mode",
+    "userId": "user-123",
+    "attributes": {"country": "US"}
+  }'
+```
+
 ```typescript
-// Web SDK
-const darkMode = await client.evaluateFlag('dark-mode', userId);
-if (darkMode.value === 'true') {
+// TypeScript — direct fetch to Flag Service
+const resp = await fetch(
+  'https://flags.example.com/experimentation.flags.v1.FeatureFlagService/EvaluateFlag',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flagId: 'dark-mode', userId, attributes: {} }),
+  },
+);
+const { value } = await resp.json();
+if (value === 'true') {
   enableDarkMode();
 }
 ```
 
-```go
-// Go SDK
-resp, _ := flagsClient.EvaluateFlag(ctx, &flagsv1.EvaluateFlagRequest{
-    FlagId: "dark-mode",
-    UserId: userID,
-})
-if resp.Value == "true" {
-    enableDarkMode()
-}
-```
-
-```python
-# Python
-resp = await flags_client.evaluate_flag("dark-mode", user_id)
-if resp.value == "true":
-    enable_dark_mode()
-```
+> **Note**: The existing SDKs (`sdk-web`, `server-go`, etc.) only contain 
+assignment providers for experiment variant lookups. Flag evaluation is a 
+separate service call.
 """
 
 EXPERIMENT_TYPES_DOC = """\
@@ -1483,16 +1507,20 @@ The `just setup` command:
 
 ## Service Endpoints
 
-| Service | Default Port | Protocol |
-|---------|-------------|----------|
-| M1 Assignment | `:50051` | ConnectRPC |
-| M2 Pipeline | `:50052` | ConnectRPC |
-| M3 Metrics | `:50053` | ConnectRPC |
-| M4a Analysis | `:50054` | ConnectRPC |
-| M4b Bandit | `:50055` | ConnectRPC |
-| M5 Management | `:50056` | ConnectRPC |
-| M6 UI | `:3000` | HTTP |
-| M7 Flags | `:50057` | ConnectRPC |
+| Service | Default Port | Protocol | Notes |
+|---------|-------------|----------|-------|
+| M1 Assignment | `:50051` (gRPC) / `:8080` (HTTP JSON) | ConnectRPC | HTTP JSON is used by all SDK RemoteProviders |
+| M2 Pipeline | `:50051` | ConnectRPC | Same default; configure via `PORT` env var |
+| M3 Metrics | `:50055` / `:50056` (Prometheus) | ConnectRPC | |
+| M4a Analysis | `:50055` | ConnectRPC | Configure via `ANALYSIS_GRPC_ADDR` |
+| M4b Bandit | `:50054` | ConnectRPC | Configure via `POLICY_ADDR` |
+| M5 Management | `:50055` | ConnectRPC | Configure via `PORT` env var |
+| M6 UI | `:3000` | HTTP | Next.js frontend |
+| M7 Flags | `:50055` | ConnectRPC | Configure via `PORT` env var |
+
+> **Note**: Several services share the same default port (`:50055`). In 
+production, each service must be configured with a unique port via the 
+`PORT` environment variable or deployed in separate containers.
 
 ## Production Deployment Considerations
 
@@ -1507,7 +1535,7 @@ The `just setup` command:
 | M4b Bandit | **Single-threaded** (LMAX) | One active instance per policy; see ADR-002 |
 | M5 Management | Horizontal | Standard CRUD service |
 | M6 UI | CDN + SSR | Next.js with CDN for static assets |
-| M7 Flags | Horizontal (stateless) | Similar to M1; uses CGo hash bridge |
+| M7 Flags | Horizontal (stateless) | Similar to M1; uses conditional CGo hash bridge (pure Go fallback) |
 
 ### Database
 
@@ -1519,7 +1547,7 @@ snapshots (ADR-003)
 ### Monitoring
 
 Key metrics to monitor:
-- **Assignment latency** (M1): p50 < 5ms, p99 < 20ms
+- **Assignment latency** (M1): p50 < 2ms, p99 < 5ms
 - **Event ingestion rate** (M2): Events/second throughput
 - **Kafka consumer lag**: All consumer groups should have near-zero lag
 - **Guardrail breach rate**: Alerts from M3 to M5
@@ -1543,11 +1571,12 @@ Tokens are issued by your identity provider and validated by each service.
 
 The Dashboard UI (M6) enforces role-based access:
 
-| Role | Permissions |
-|------|------------|
-| **Viewer** | View experiments, results, and dashboards |
-| **Experimenter** | Create/edit experiments, start/pause/conclude |
-| **Admin** | All permissions + manage users, layers, metric definitions |
+| Role | Level | Permissions |
+|------|-------|------------|
+| **Viewer** | 0 | View experiments, results, dashboards, metric definitions, layers |
+| **Analyst** | 1 | Viewer + create metric definitions, targeting rules, surrogate models |
+| **Experimenter** | 2 | Analyst + create/edit experiments, start/pause/conclude |
+| **Admin** | 3 | All permissions + archive experiments, create layers, manage users |
 
 ## Data Security
 
