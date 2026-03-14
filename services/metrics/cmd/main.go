@@ -86,7 +86,7 @@ func main() {
 	defer recalConsumer.Close()
 	// Start Prometheus metrics HTTP server on a separate port.
 	metricsPort := os.Getenv("METRICS_PORT")
-	if metricsPort == "" { metricsPort = "50056" }
+	if metricsPort == "" { metricsPort = "9090" } // Prometheus scrape endpoint — must differ from main PORT
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", promhttp.Handler())
 	metricsSrv := &http.Server{Addr: ":" + metricsPort, Handler: metricsMux}
