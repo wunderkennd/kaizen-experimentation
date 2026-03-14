@@ -194,7 +194,11 @@ impl NeuralContextualPolicy {
             .arm_ids
             .iter()
             .zip(probs_vec.iter())
-            .map(|(id, &p)| (id.clone(), p as f64))
+            .map(|(id, &p)| {
+                let p_f64 = p as f64;
+                assert_finite(p_f64, &format!("neural arm probability for '{id}'"));
+                (id.clone(), p_f64)
+            })
             .collect();
 
         let assignment_probability = all_arm_probabilities[&self.arm_ids[best_idx]];
