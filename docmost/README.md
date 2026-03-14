@@ -63,6 +63,8 @@ The script creates the following spaces in DocMost:
 | **Architecture Decision Records** | All 10 ADRs (language selection, LMAX core, RocksDB, etc.) |
 | **Agent Onboarding** | Per-agent quickstart guides (Agent-0 through Agent-7) |
 | **Project Coordination** | Status tracker, coordinator playbook, agent prompts |
+| **Integration Guide** | SDK guides (Web, Go, Python, iOS, Android), API reference, event pipeline, feature flags, experiment types, deployment, security |
+| **User Experience Guide** | Dashboard overview, creating experiments, lifecycle management, reading results, day-to-day workflows, tips & troubleshooting |
 
 ## Configuration
 

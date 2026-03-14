@@ -21,6 +21,8 @@ import sys
 
 import requests
 
+from integration_content import get_integration_pages, get_ux_pages
+
 BASE_URL = os.environ.get("DOCMOST_URL", "http://localhost:3000")
 TOKEN_FILE = os.environ.get("DOCMOST_TOKEN_FILE", "/tmp/docmost_token.txt")
 REPO_ROOT = os.environ.get("REPO_ROOT", os.path.join(os.path.dirname(__file__), ".."))
@@ -227,6 +229,18 @@ def populate_coordination_space(space_id, headers):
                 create_page(space_id, title, content, headers, parent_page_id=parent)
 
 
+def populate_integration_space(space_id, headers):
+    """Populate the Integration Guide space with SDK, API, and setup docs."""
+    for title, content in get_integration_pages():
+        create_page(space_id, title, content, headers)
+
+
+def populate_ux_space(space_id, headers):
+    """Populate the User Experience Guide space with dashboard and workflow docs."""
+    for title, content in get_ux_pages():
+        create_page(space_id, title, content, headers)
+
+
 def main():
     token = _get_token()
     if not token:
@@ -246,13 +260,23 @@ def main():
     print("times will create duplicate spaces and pages.")
     print()
 
-    # Create spaces
+    # Create spaces — core documentation
     general_id = create_space("General", "general", headers, "Overview and getting started")
     arch_id = create_space("Architecture", "architecture", headers, "System design and architectural patterns")
     modules_id = create_space("Modules", "modules", headers, "Module documentation (M1-M7)")
     adr_id = create_space("Architecture Decision Records", "adrs", headers, "ADRs documenting settled decisions")
     onboarding_id = create_space("Agent Onboarding", "onboarding", headers, "Per-agent quickstart guides")
     coord_id = create_space("Project Coordination", "coordination", headers, "Multi-agent coordination")
+
+    # Create spaces — integration & user experience
+    integration_id = create_space(
+        "Integration Guide", "integration", headers,
+        "SDK guides, API reference, and integration tutorials",
+    )
+    ux_id = create_space(
+        "User Experience Guide", "uxguide", headers,
+        "Dashboard walkthrough, experiment workflows, and tips",
+    )
 
     # Populate each space
     if general_id:
@@ -267,6 +291,10 @@ def main():
         populate_onboarding_space(onboarding_id, headers)
     if coord_id:
         populate_coordination_space(coord_id, headers)
+    if integration_id:
+        populate_integration_space(integration_id, headers)
+    if ux_id:
+        populate_ux_space(ux_id, headers)
 
     print("\n" + "=" * 60)
     print("Documentation population complete!")
