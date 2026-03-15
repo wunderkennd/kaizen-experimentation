@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from experimentation.providers import AssignmentProvider
 from experimentation.types import Assignment, UserAttributes
@@ -66,7 +69,17 @@ class ExperimentClient:
             return await self._provider.get_assignment(experiment_id, attrs)
         except Exception:
             if self._fallback:
+                logger.warning(
+                    "Primary provider failed for experiment %s, falling back",
+                    experiment_id,
+                    exc_info=True,
+                )
                 return await self._fallback.get_assignment(experiment_id, attrs)
+            logger.warning(
+                "Provider failed for experiment %s with no fallback configured",
+                experiment_id,
+                exc_info=True,
+            )
             return None
 
     async def close(self) -> None:
