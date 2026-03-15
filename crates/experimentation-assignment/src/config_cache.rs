@@ -90,7 +90,7 @@ impl ConfigCache {
             if !layer_id.is_empty() && !self.layers.contains_key(layer_id) {
                 let new_layer = LayerConfig {
                     layer_id: layer_id.clone(),
-                    total_buckets: 10_000, // default bucket count per ADR-003
+                    total_buckets: 10_000, // matches schema default (sql/migrations/001_schema.sql)
                 };
                 tracing::info!(
                     layer_id = %layer_id,
