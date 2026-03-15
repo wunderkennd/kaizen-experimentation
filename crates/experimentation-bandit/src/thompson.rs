@@ -88,11 +88,12 @@ pub fn select_arm<R: Rng>(arms: &[BetaArm], rng: &mut R) -> ArmSelection {
         win_counts[best_idx] = 1;
     }
 
+    let total_wins: u32 = win_counts.iter().sum();
     let all_arm_probabilities: HashMap<String, f64> = arms
         .iter()
         .enumerate()
         .map(|(i, arm)| {
-            (arm.arm_id.clone(), win_counts[i] as f64 / MC_SIMULATIONS as f64)
+            (arm.arm_id.clone(), win_counts[i] as f64 / total_wins as f64)
         })
         .collect();
 
