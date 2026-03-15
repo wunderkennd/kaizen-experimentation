@@ -38,7 +38,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "50055"
+		port = "50055" // M5 Management — canonical port
 	}
 
 	// Database connection pool.

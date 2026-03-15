@@ -27,9 +27,9 @@ type MetricDefinitionRow struct {
 	CreatedAt              time.Time
 }
 
-const metricCols = `metric_id, name, description, type, source_event_type,
-	numerator_event_type, denominator_event_type, percentile, custom_sql,
-	lower_is_better, is_qoe_metric, cuped_covariate_metric_id,
+const metricCols = `metric_id, name, COALESCE(description, ''), type, COALESCE(source_event_type, ''),
+	COALESCE(numerator_event_type, ''), COALESCE(denominator_event_type, ''), percentile, COALESCE(custom_sql, ''),
+	lower_is_better, is_qoe_metric, COALESCE(cuped_covariate_metric_id, ''),
 	minimum_detectable_effect, created_at`
 
 // MetricStore provides database operations for metric definitions.
@@ -83,8 +83,8 @@ func (s *MetricStore) GetByID(ctx context.Context, metricID string) (MetricDefin
 	return out, nil
 }
 
-// ListMetrics queries metric definitions with keyset pagination.
-func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken string) ([]MetricDefinitionRow, string, error) {
+// ListMetrics queries metric definitions with keyset pagination and optional type filter.
+func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken string, typeFilter string) ([]MetricDefinitionRow, string, error) {
 	if pageSize <= 0 || pageSize > 100 {
 		pageSize = 20
 	}
@@ -96,6 +96,11 @@ func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken
 	nextArg := func() string {
 		argN++
 		return fmt.Sprintf("$%d", argN)
+	}
+
+	if typeFilter != "" {
+		where += fmt.Sprintf(" AND type = %s", nextArg())
+		args = append(args, typeFilter)
 	}
 
 	if pageToken != "" {

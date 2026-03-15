@@ -75,8 +75,9 @@ tempfile = "3"
 assert_approx_eq = "1.1"
 mockall = "0.13"
 tokio-test = "0.4"
-# ML (optional, for bandit gpu feature)
-tch = "0.16"
+# ML (optional, for bandit neural contextual bandit)
+candle-core = "0.8"
+candle-nn = "0.8"
 # Bloom filter
 bloomfilter = "1.0"
 # Metrics

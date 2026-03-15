@@ -3,14 +3,14 @@
 // =============================================================================
 // Validates Phase 4 SLA: EvaluateFlag p99 < 10ms under sustained 20K rps load.
 //
-// Uses ConnectRPC HTTP POST against the flags service (port 50055).
+// Uses ConnectRPC HTTP POST against the flags service (port 50057).
 // Two scenarios:
 //   - EvaluateFlag (single): 80% of traffic — p99 < 10ms
 //   - EvaluateFlags (bulk):  20% of traffic — p99 < 50ms
 //
 // Usage:
 //   k6 run scripts/loadtest_flags.js
-//   FLAGS_URL=http://localhost:50055 k6 run scripts/loadtest_flags.js
+//   FLAGS_URL=http://localhost:50057 k6 run scripts/loadtest_flags.js
 //   k6 run --env TARGET_RPS=10000 scripts/loadtest_flags.js
 //
 // Full automated run:
@@ -36,7 +36,7 @@ const bulkCount = new Counter("m7_bulk_total");
 // Configuration
 // ---------------------------------------------------------------------------
 
-const FLAGS_URL = __ENV.FLAGS_URL || "http://localhost:50055";
+const FLAGS_URL = __ENV.FLAGS_URL || "http://localhost:50057";
 const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "20000");
 const DURATION = __ENV.DURATION || "60s";
 const RAMP_DURATION = __ENV.RAMP_DURATION || "10s";

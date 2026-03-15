@@ -29,7 +29,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "50055"
+		port = "50057" // M7 Flags — distinct from M5 Management (:50055)
 	}
 
 	// Database connection pool.

@@ -4,8 +4,9 @@ import type {
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
   SurrogateProjection, SrmResult, MetricResult, SegmentResult,
+  MetricDefinition, ListMetricDefinitionsResponse,
 } from './types';
-import type { ExperimentState, ExperimentType, LifecycleSegment } from './types';
+import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
 // In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
 // In tests, vitest.config.ts sets NEXT_PUBLIC_*_URL to absolute URLs so MSW can intercept.
@@ -487,4 +488,56 @@ export async function getLayerAllocations(
     { allocations?: LayerAllocation[] }
   >(MGMT_URL, MGMT_SVC, 'GetLayerAllocations', { layerId, includeReleased });
   return raw.allocations || [];
+}
+
+/** Convert proto JSON metric definition to local MetricDefinition type. */
+function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition {
+  const type = stripEnumPrefix(
+    (proto.type as string) || 'MEAN',
+    'METRIC_TYPE_',
+  ) as MetricType;
+
+  return {
+    metricId: (proto.metricId as string) || '',
+    name: (proto.name as string) || '',
+    description: (proto.description as string) || '',
+    type,
+    sourceEventType: (proto.sourceEventType as string) || '',
+    numeratorEventType: proto.numeratorEventType as string | undefined,
+    denominatorEventType: proto.denominatorEventType as string | undefined,
+    percentile: proto.percentile as number | undefined,
+    customSql: proto.customSql as string | undefined,
+    lowerIsBetter: (proto.lowerIsBetter as boolean) || false,
+    surrogateTargetMetricId: proto.surrogateTargetMetricId as string | undefined,
+    isQoeMetric: (proto.isQoeMetric as boolean) || false,
+    cupedCovariateMetricId: proto.cupedCovariateMetricId as string | undefined,
+    minimumDetectableEffect: proto.minimumDetectableEffect as number | undefined,
+  };
+}
+
+export interface ListMetricDefinitionsFilters {
+  typeFilter?: MetricType;
+  pageSize?: number;
+  pageToken?: string;
+}
+
+export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilters): Promise<ListMetricDefinitionsResponse> {
+  const request: Record<string, unknown> = {};
+  if (filters?.typeFilter) {
+    request.typeFilter = `METRIC_TYPE_${filters.typeFilter}`;
+  }
+  if (filters?.pageSize) {
+    request.pageSize = filters.pageSize;
+  }
+  if (filters?.pageToken) {
+    request.pageToken = filters.pageToken;
+  }
+
+  const raw = await callRpc<Record<string, unknown>, { metrics?: Record<string, unknown>[]; nextPageToken?: string }>(
+    MGMT_URL, MGMT_SVC, 'ListMetricDefinitions', request,
+  );
+  return {
+    metrics: (raw.metrics || []).map(adaptMetricDefinition),
+    nextPageToken: raw.nextPageToken || '',
+  };
 }

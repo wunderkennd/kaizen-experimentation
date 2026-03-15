@@ -4,14 +4,10 @@
 //! runs statistical tests via the experimentation-stats crate,
 //! and serves results over gRPC.
 
-mod config;
-mod delta_reader;
-mod grpc;
-mod store;
-
-use config::AnalysisConfig;
+use experimentation_analysis::config::AnalysisConfig;
+use experimentation_analysis::grpc;
+use experimentation_analysis::store::AnalysisStore;
 use std::sync::Arc;
-use store::AnalysisStore;
 use tracing::info;
 
 #[tokio::main]

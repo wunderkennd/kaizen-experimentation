@@ -1,0 +1,19 @@
+{
+  "test_name": "beta_binomial_clear_effect",
+  "r_command": "# Prior: Beta(1,1). Posterior control: Beta(21,81), treatment: Beta(61,41).\n# qbeta(0.025, 61, 41) - qbeta(0.975, 21, 81) for CI of effect dist.\n# P(B(61,41) > B(21,81)) via 1e6 Monte Carlo draws.",
+  "control_successes": 20,
+  "control_total": 100,
+  "treatment_successes": 60,
+  "treatment_total": 100,
+  "credible_level": 0.95,
+  "seed": 42,
+  "expected": {
+    "posterior_mean_control": 0.20588235294117646,
+    "posterior_mean_treatment": 0.5980392156862745,
+    "effect": 0.39215686274509803,
+    "probability_of_superiority": 1.0,
+    "model": "BetaBinomial"
+  },
+  "tolerance_normal": 1e-6,
+  "tolerance_mc": 0.02
+}

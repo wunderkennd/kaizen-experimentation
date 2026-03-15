@@ -410,6 +410,10 @@ func (s *ExperimentService) ArchiveExperiment(
 
 // PauseExperiment records a pause event. The experiment stays in RUNNING state
 // (RUNNING->RUNNING is valid per ADR-005). Traffic zeroing deferred to M1.23.
+//
+// Uses a transaction with GetByIDForUpdate to prevent TOCTOU race conditions
+// where a concurrent ConcludeExperiment could change state between our read
+// and audit insert.
 func (s *ExperimentService) PauseExperiment(
 	ctx context.Context,
 	req *connect.Request[mgmtv1.PauseExperimentRequest],
@@ -419,7 +423,13 @@ func (s *ExperimentService) PauseExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	expRow, variants, guardrails, err := s.store.GetByID(ctx, id)
+	tx, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return nil, internalError("begin tx", err)
+	}
+	defer tx.Rollback(ctx)
+
+	expRow, err := s.store.GetByIDForUpdate(ctx, tx, id)
 	if err != nil {
 		return nil, wrapDBError(err, "experiment", id)
 	}
@@ -434,7 +444,7 @@ func (s *ExperimentService) PauseExperiment(
 
 	details, _ := json.Marshal(map[string]string{"reason": req.Msg.GetReason()})
 
-	if err := s.audit.Insert(ctx, nil, store.AuditEntry{
+	if err := s.audit.Insert(ctx, tx, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        action,
 		ActorEmail:    actorFromContext(ctx),
@@ -445,16 +455,30 @@ func (s *ExperimentService) PauseExperiment(
 		return nil, internalError("audit pause", err)
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return nil, internalError("commit tx", err)
+	}
+
+	// Re-read full experiment (with variants/guardrails) for response.
+	fullRow, variants, guardrails, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		return nil, internalError("read back experiment", err)
+	}
+
 	// Notify subscribers of the pause (traffic config may have changed).
 	if s.notifier != nil {
 		s.notifier.Publish(ctx, id, "upsert")
 	}
 
 	slog.Info("experiment paused", "id", id, "reason", req.Msg.GetReason())
-	return connect.NewResponse(store.RowToExperiment(expRow, variants, guardrails)), nil
+	return connect.NewResponse(store.RowToExperiment(fullRow, variants, guardrails)), nil
 }
 
 // ResumeExperiment records a resume event. Experiment stays in RUNNING state.
+//
+// Uses a transaction with GetByIDForUpdate to prevent TOCTOU race conditions
+// where a concurrent ConcludeExperiment could change state between our read
+// and audit insert.
 func (s *ExperimentService) ResumeExperiment(
 	ctx context.Context,
 	req *connect.Request[mgmtv1.ResumeExperimentRequest],
@@ -464,7 +488,13 @@ func (s *ExperimentService) ResumeExperiment(
 		return nil, connect.NewError(connect.CodeInvalidArgument, nil)
 	}
 
-	expRow, variants, guardrails, err := s.store.GetByID(ctx, id)
+	tx, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return nil, internalError("begin tx", err)
+	}
+	defer tx.Rollback(ctx)
+
+	expRow, err := s.store.GetByIDForUpdate(ctx, tx, id)
 	if err != nil {
 		return nil, wrapDBError(err, "experiment", id)
 	}
@@ -472,7 +502,7 @@ func (s *ExperimentService) ResumeExperiment(
 		return nil, preconditionError("experiment must be in RUNNING state to resume")
 	}
 
-	if err := s.audit.Insert(ctx, nil, store.AuditEntry{
+	if err := s.audit.Insert(ctx, tx, store.AuditEntry{
 		ExperimentID:  id,
 		Action:        "resume",
 		ActorEmail:    actorFromContext(ctx),
@@ -482,13 +512,23 @@ func (s *ExperimentService) ResumeExperiment(
 		return nil, internalError("audit resume", err)
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return nil, internalError("commit tx", err)
+	}
+
+	// Re-read full experiment (with variants/guardrails) for response.
+	fullRow, variants, guardrails, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		return nil, internalError("read back experiment", err)
+	}
+
 	// Notify subscribers of the resume.
 	if s.notifier != nil {
 		s.notifier.Publish(ctx, id, "upsert")
 	}
 
 	slog.Info("experiment resumed", "id", id)
-	return connect.NewResponse(store.RowToExperiment(expRow, variants, guardrails)), nil
+	return connect.NewResponse(store.RowToExperiment(fullRow, variants, guardrails)), nil
 }
 
 // validateMetricsForStart checks that the experiment's primary, secondary, and

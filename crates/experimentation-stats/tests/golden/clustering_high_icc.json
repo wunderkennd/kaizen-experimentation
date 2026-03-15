@@ -1,0 +1,32 @@
+{
+  "test_name": "clustering_high_icc",
+  "r_command": "# High within-user correlation (ICC ≈ 0.8). 4 users, 5 sessions each.\n# Very small within-user variance, large between-user variance.\n# Design effect should be large (> 3).\n# sandwich::vcovCL(lm(y ~ treatment), cluster = ~user_id, type = 'HC1')",
+  "observations": [
+    {"value": 2.00, "cluster_id": "u1", "is_treatment": false},
+    {"value": 2.01, "cluster_id": "u1", "is_treatment": false},
+    {"value": 2.02, "cluster_id": "u1", "is_treatment": false},
+    {"value": 1.99, "cluster_id": "u1", "is_treatment": false},
+    {"value": 2.00, "cluster_id": "u1", "is_treatment": false},
+    {"value": 8.00, "cluster_id": "u2", "is_treatment": false},
+    {"value": 8.01, "cluster_id": "u2", "is_treatment": false},
+    {"value": 7.99, "cluster_id": "u2", "is_treatment": false},
+    {"value": 8.02, "cluster_id": "u2", "is_treatment": false},
+    {"value": 8.00, "cluster_id": "u2", "is_treatment": false},
+    {"value": 3.00, "cluster_id": "u3", "is_treatment": true},
+    {"value": 3.01, "cluster_id": "u3", "is_treatment": true},
+    {"value": 2.99, "cluster_id": "u3", "is_treatment": true},
+    {"value": 3.02, "cluster_id": "u3", "is_treatment": true},
+    {"value": 3.00, "cluster_id": "u3", "is_treatment": true},
+    {"value": 9.00, "cluster_id": "u4", "is_treatment": true},
+    {"value": 9.01, "cluster_id": "u4", "is_treatment": true},
+    {"value": 8.99, "cluster_id": "u4", "is_treatment": true},
+    {"value": 9.02, "cluster_id": "u4", "is_treatment": true},
+    {"value": 9.00, "cluster_id": "u4", "is_treatment": true}
+  ],
+  "alpha": 0.05,
+  "expected": {
+    "design_effect_greater_than_3": true,
+    "clustered_se_much_greater_than_naive": true
+  },
+  "tolerance": 1e-6
+}
