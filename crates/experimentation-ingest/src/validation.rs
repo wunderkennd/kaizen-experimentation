@@ -37,6 +37,13 @@ pub fn require_timestamp(
         .as_ref()
         .ok_or_else(|| Error::Validation(format!("{name} is required")))?;
 
+    if ts.nanos < 0 {
+        return Err(Error::Validation(format!(
+            "{name} has negative nanos: {}",
+            ts.nanos
+        )));
+    }
+
     let dt = DateTime::<Utc>::from_timestamp(ts.seconds, ts.nanos as u32).ok_or_else(|| {
         Error::Validation(format!(
             "{name} has invalid value: seconds={}, nanos={}",
