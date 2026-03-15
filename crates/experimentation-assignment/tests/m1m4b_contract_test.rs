@@ -278,9 +278,15 @@ async fn start_real_m4b() -> (GrpcBanditClient, SocketAddr, tokio::task::JoinHan
     // Allow server to start
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    let client = GrpcBanditClient::connect(&format!("http://[::1]:{}", addr.port()))
-        .await
-        .expect("failed to connect GrpcBanditClient to test M4b");
+    // Use a generous timeout for tests — the production 10ms default is too
+    // tight for Thompson MC estimation (1000 draws × K arms) on CI runners.
+    let test_timeout = std::time::Duration::from_secs(5);
+    let client = GrpcBanditClient::connect_with_timeout(
+        &format!("http://[::1]:{}", addr.port()),
+        test_timeout,
+    )
+    .await
+    .expect("failed to connect GrpcBanditClient to test M4b");
 
     (client, addr, server_handle)
 }
@@ -495,9 +501,11 @@ async fn contract_export_affinity_unknown_experiment() {
 async fn contract_concurrent_select_arm() {
     let (client, _, handle) = start_real_m4b().await;
 
-    // CI-aware timeout: 10s locally, 30s in CI (GitHub Actions sets CI=true).
+    // CI-aware timeout: 10s locally, 60s in CI (GitHub Actions sets CI=true).
+    // The Thompson MC estimation (1000 draws × K arms) makes each call heavier,
+    // and CI runners are often slower than local machines.
     let per_task_timeout = if std::env::var("CI").is_ok() {
-        std::time::Duration::from_secs(30)
+        std::time::Duration::from_secs(60)
     } else {
         std::time::Duration::from_secs(10)
     };
