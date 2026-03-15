@@ -130,10 +130,15 @@ impl BanditPolicyService for RealBanditService {
             }
         }
 
-        // Try LinUCB
+        // Try LinUCB — clone policy under the lock, then release before
+        // selection to avoid holding a std::sync::Mutex across async work and
+        // causing timeout under concurrent load (see contract_concurrent_select_arm).
         {
-            let linucb = self.linucb_experiments.lock().unwrap();
-            if let Some(policy) = linucb.get(experiment_id) {
+            let policy = {
+                let linucb = self.linucb_experiments.lock().unwrap();
+                linucb.get(experiment_id).cloned()
+            };
+            if let Some(policy) = policy {
                 let context = if req.context_features.is_empty() {
                     None
                 } else {
