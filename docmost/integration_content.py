@@ -1510,17 +1510,17 @@ The `just setup` command:
 | Service | Default Port | Protocol | Notes |
 |---------|-------------|----------|-------|
 | M1 Assignment | `:50051` (gRPC) / `:8080` (HTTP JSON) | ConnectRPC | HTTP JSON is used by all SDK RemoteProviders |
-| M2 Pipeline | `:50051` | ConnectRPC | Same default; configure via `PORT` env var |
-| M3 Metrics | `:50055` / `:50056` (Prometheus) | ConnectRPC | |
-| M4a Analysis | `:50055` | ConnectRPC | Configure via `ANALYSIS_GRPC_ADDR` |
+| M2 Pipeline | `:50052` | ConnectRPC | Configure via `PORT` env var |
+| M3 Metrics | `:50056` / `:50059` (Prometheus) | ConnectRPC | |
+| M4a Analysis | `:50053` | ConnectRPC | Configure via `ANALYSIS_GRPC_ADDR` |
 | M4b Bandit | `:50054` | ConnectRPC | Configure via `POLICY_ADDR` |
 | M5 Management | `:50055` | ConnectRPC | Configure via `PORT` env var |
 | M6 UI | `:3000` | HTTP | Next.js frontend |
-| M7 Flags | `:50055` | ConnectRPC | Configure via `PORT` env var |
+| M7 Flags | `:50057` | ConnectRPC | Configure via `PORT` env var |
 
-> **Note**: Several services share the same default port (`:50055`). In 
-production, each service must be configured with a unique port via the 
-`PORT` environment variable or deployed in separate containers.
+> **Note**: M5 Management defaults to `:50055`. In production, verify each
+service is configured with a unique port via the `PORT` environment
+variable or deployed in separate containers.
 
 ## Production Deployment Considerations
 

@@ -67,7 +67,7 @@ class ExperimentClient:
         except Exception:
             if self._fallback:
                 return await self._fallback.get_assignment(experiment_id, attrs)
-            raise
+            return None
 
     async def close(self) -> None:
         """Shut down provider(s) and release resources."""
