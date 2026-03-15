@@ -82,6 +82,12 @@ pub fn select_arm<R: Rng>(arms: &[BetaArm], rng: &mut R) -> ArmSelection {
         win_counts[best] += 1;
     }
 
+    // Guarantee the actually selected arm has at least 1 win so that
+    // assignment_probability > 0 (required by downstream IPW: ipw.rs:84).
+    if win_counts[best_idx] == 0 {
+        win_counts[best_idx] = 1;
+    }
+
     let all_arm_probabilities: HashMap<String, f64> = arms
         .iter()
         .enumerate()
