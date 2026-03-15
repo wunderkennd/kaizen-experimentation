@@ -53,7 +53,12 @@ impl GrpcBanditClient {
         Self::connect_with_timeout(addr, BANDIT_TIMEOUT).await
     }
 
-    /// Connect with a custom per-call timeout (for tests or non-hot-path callers).
+    /// Connect with a custom per-call timeout.
+    ///
+    /// This is intended for integration tests and non-hot-path callers.
+    /// Production callers should use [`connect`](Self::connect) which enforces
+    /// the 10ms SLA timeout.
+    #[doc(hidden)]
     pub async fn connect_with_timeout(
         addr: &str,
         timeout: Duration,
