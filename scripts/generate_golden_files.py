@@ -67,28 +67,17 @@ def chisq_test(observed, expected_fractions):
 
 # Also validate with scipy directly
 def verify_ttest(control, treatment, alpha):
-    """Cross-check with scipy.stats.ttest_ind."""
+    """Cross-check with scipy.stats.ttest_ind, including significance flag."""
     result = stats.ttest_ind(control, treatment, equal_var=False)
-    # Ensure alpha is a numeric value (used to avoid an unused-parameter warning)
-    float(alpha)
-    return result.statistic, result.pvalue
+    scipy_significant = result.pvalue < alpha
+    return result.statistic, result.pvalue, scipy_significant
 
 def generate_ttest_files():
     """Generate 5 t-test golden files."""
+    # Dataset 1: equal variance, equal n
     np.random.seed(42)
-
-    datasets = [
-        {
-            "test_name": "equal_variance_equal_n",
-            "r_command": "set.seed(42); c=rnorm(20,10,2); t=rnorm(20,10,2); t.test(c,t,var.equal=FALSE)",
-            "control": np.random.normal(10, 2, 20).tolist(),
-            "treatment": None,  # Generated below with same seed state
-            "alpha": 0.05,
-            "description": "Baseline: equal n=20, similar variance, no true effect"
-        },
-    ]
-    # Generate first dataset
-    datasets[0]["treatment"] = np.random.normal(10, 2, 20).tolist()
+    ds1_control = np.random.normal(10, 2, 20).tolist()
+    ds1_treatment = np.random.normal(10, 2, 20).tolist()
 
     # Dataset 2: unequal n
     np.random.seed(123)
@@ -114,8 +103,8 @@ def generate_ttest_files():
         ("ttest_equal_variance_equal_n.json", {
             "test_name": "equal_variance_equal_n",
             "r_command": "set.seed(42); c=rnorm(20,10,2); t=rnorm(20,10,2); t.test(c,t,var.equal=FALSE)",
-            "control": datasets[0]["control"],
-            "treatment": datasets[0]["treatment"],
+            "control": ds1_control,
+            "treatment": ds1_treatment,
             "alpha": 0.05,
         }),
         ("ttest_unequal_n.json", {
@@ -154,9 +143,11 @@ def generate_ttest_files():
         expected = welch_ttest(control, treatment, ds["alpha"])
 
         # Cross-validate with scipy
-        scipy_stat, scipy_p = verify_ttest(control, treatment, ds["alpha"])
+        scipy_stat, scipy_p, scipy_sig = verify_ttest(control, treatment, ds["alpha"])
         assert abs(expected["p_value"] - scipy_p) < 1e-12, \
             f"p-value mismatch for {filename}: manual={expected['p_value']}, scipy={scipy_p}"
+        assert expected["is_significant"] == scipy_sig, \
+            f"significance flag mismatch for {filename}: manual={expected['is_significant']}, scipy={scipy_sig}"
 
         ds["expected"] = expected
         filepath = f"{OUTPUT_DIR}/{filename}"

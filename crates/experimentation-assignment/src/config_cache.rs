@@ -61,7 +61,9 @@ impl ConfigCache {
     /// Apply a config update from the M5 stream.
     ///
     /// Upserts or deletes the experiment, rebuilds the `Config`, and publishes
-    /// the new snapshot through the watch channel.
+    /// the new snapshot through the watch channel. Also updates the layer map
+    /// when the experiment carries a `layer_id` not yet known to the cache,
+    /// preventing stale layer data that previously required an M1 restart.
     pub fn apply_update(&mut self, update: &ConfigUpdate) {
         let exp_id = update
             .experiment
@@ -80,6 +82,23 @@ impl ConfigCache {
                 version = update.version,
                 "experiment upserted in cache"
             );
+
+            // Ensure the layer referenced by this experiment exists in our
+            // layer map. Without this, layers added after initial config load
+            // were never picked up, causing stale layer data until M1 restart.
+            let layer_id = &exp_config.layer_id;
+            if !layer_id.is_empty() && !self.layers.contains_key(layer_id) {
+                let new_layer = LayerConfig {
+                    layer_id: layer_id.clone(),
+                    total_buckets: 10_000, // default bucket count per ADR-003
+                };
+                tracing::info!(
+                    layer_id = %layer_id,
+                    "auto-registered new layer from experiment update"
+                );
+                self.layers.insert(layer_id.clone(), new_layer);
+            }
+
             self.experiments.insert(exp_id, exp_config);
         }
 
