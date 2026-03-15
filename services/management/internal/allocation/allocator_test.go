@@ -101,6 +101,29 @@ func TestFindContiguousGap(t *testing.T) {
 			wantStart:     2500,
 			wantEnd:       4999,
 		},
+		{
+			name:          "single bucket at very end",
+			totalBuckets:  10000,
+			occupied:      []BucketRange{{0, 9998}},
+			bucketsNeeded: 1,
+			wantStart:     9999,
+			wantEnd:       9999,
+		},
+		{
+			name:          "exactly remaining at end",
+			totalBuckets:  10000,
+			occupied:      []BucketRange{{0, 7999}},
+			bucketsNeeded: 2000,
+			wantStart:     8000,
+			wantEnd:       9999,
+		},
+		{
+			name:          "one more than remaining",
+			totalBuckets:  10000,
+			occupied:      []BucketRange{{0, 8001}},
+			bucketsNeeded: 2000,
+			wantErr:       ErrInsufficientCapacity,
+		},
 	}
 
 	for _, tt := range tests {

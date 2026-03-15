@@ -315,3 +315,83 @@ func TestProcessAlert_AuditDetails(t *testing.T) {
 	assert.Contains(t, string(detailsJSON), `0.08`)
 	assert.Contains(t, string(detailsJSON), `0.05`)
 }
+
+func TestProcessAlert_AlreadyConcluded(t *testing.T) {
+	proc, pool := setupProcessor(t)
+	ctx := context.Background()
+
+	expID := createRunningExperiment(t, pool, "already-concluded-"+t.Name(), "AUTO_PAUSE")
+
+	// Transition to CONCLUDING → CONCLUDED.
+	es := store.NewExperimentStore(pool)
+	tx, err := es.BeginTx(ctx)
+	require.NoError(t, err)
+	_, err = es.TransitionState(ctx, tx, expID, "RUNNING", "CONCLUDING", "")
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+
+	tx2, err := es.BeginTx(ctx)
+	require.NoError(t, err)
+	_, err = es.TransitionState(ctx, tx2, expID, "CONCLUDING", "CONCLUDED", "concluded_at")
+	require.NoError(t, err)
+	require.NoError(t, tx2.Commit(ctx))
+
+	// Process alert — should be skipped.
+	result, err := proc.ProcessAlert(ctx, newAlert(expID))
+	require.NoError(t, err)
+	assert.Equal(t, guardrail.ResultSkipped, result)
+
+	// Verify no guardrail audit entries exist for this alert.
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_trail WHERE experiment_id = $1 AND action IN ('guardrail_auto_pause', 'guardrail_alert')`,
+		expID).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestProcessAlert_ConcludingState(t *testing.T) {
+	proc, pool := setupProcessor(t)
+	ctx := context.Background()
+
+	expID := createRunningExperiment(t, pool, "concluding-state-"+t.Name(), "AUTO_PAUSE")
+
+	// Transition to CONCLUDING only.
+	es := store.NewExperimentStore(pool)
+	tx, err := es.BeginTx(ctx)
+	require.NoError(t, err)
+	_, err = es.TransitionState(ctx, tx, expID, "RUNNING", "CONCLUDING", "")
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+
+	// Process alert — should be skipped (CONCLUDING != RUNNING).
+	result, err := proc.ProcessAlert(ctx, newAlert(expID))
+	require.NoError(t, err)
+	assert.Equal(t, guardrail.ResultSkipped, result)
+}
+
+func TestProcessAlert_RapidSuccessiveAlerts(t *testing.T) {
+	proc, pool := setupProcessor(t)
+	ctx := context.Background()
+
+	expID := createRunningExperiment(t, pool, "rapid-alerts-"+t.Name(), "AUTO_PAUSE")
+
+	// First alert — should auto-pause.
+	result, err := proc.ProcessAlert(ctx, newAlert(expID))
+	require.NoError(t, err)
+	assert.Equal(t, guardrail.ResultPaused, result)
+
+	// Second alert immediately — experiment stays RUNNING per ADR-005 (auto-pause
+	// writes audit but does not transition state), so second alert also succeeds.
+	result, err = proc.ProcessAlert(ctx, newAlert(expID))
+	require.NoError(t, err)
+	assert.Equal(t, guardrail.ResultPaused, result)
+
+	// Count audit entries — should have exactly 2 guardrail_auto_pause entries.
+	var count int
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_trail WHERE experiment_id = $1 AND action = 'guardrail_auto_pause'`,
+		expID).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count, "each breach should produce its own audit entry")
+}
