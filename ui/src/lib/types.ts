@@ -139,6 +139,18 @@ export interface LorenzCurvePoint {
   cumulativeConsumptionFraction: number;
 }
 
+// --- IPW-adjusted results (M4a bandit experiments) ---
+
+export interface IpwResult {
+  effect: number;
+  se: number;
+  ciLower: number;
+  ciUpper: number;
+  pValue: number;
+  nClipped: number;
+  effectiveSampleSize: number;
+}
+
 export interface MetricResult {
   metricId: string;
   variantId: string;
@@ -157,6 +169,7 @@ export interface MetricResult {
   sequentialResult?: SequentialResult;
   sessionLevelResult?: SessionLevelResult;
   segmentResults?: SegmentResult[];
+  ipwResult?: IpwResult;
 }
 
 export interface SessionLevelResult {

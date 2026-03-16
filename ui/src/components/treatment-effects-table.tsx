@@ -7,9 +7,10 @@ import { formatPValue, formatEffect } from '@/lib/utils';
 interface TreatmentEffectsTableProps {
   metricResults: MetricResult[];
   showCuped: boolean;
+  showIpw?: boolean;
 }
 
-function TreatmentEffectsTableInner({ metricResults, showCuped }: TreatmentEffectsTableProps) {
+function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw }: TreatmentEffectsTableProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
@@ -26,17 +27,27 @@ function TreatmentEffectsTableInner({ metricResults, showCuped }: TreatmentEffec
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
           {metricResults.map((m) => {
-            const effect = showCuped && m.varianceReductionPct > 0 ? m.cupedAdjustedEffect : m.absoluteEffect;
-            const ciLow = showCuped && m.varianceReductionPct > 0 ? m.cupedCiLower : m.ciLower;
-            const ciHigh = showCuped && m.varianceReductionPct > 0 ? m.cupedCiUpper : m.ciUpper;
+            const useIpw = showIpw && m.ipwResult;
+            const useCuped = showCuped && m.varianceReductionPct > 0;
+
+            const effect = useIpw ? m.ipwResult!.effect : useCuped ? m.cupedAdjustedEffect : m.absoluteEffect;
+            const ciLow = useIpw ? m.ipwResult!.ciLower : useCuped ? m.cupedCiLower : m.ciLower;
+            const ciHigh = useIpw ? m.ipwResult!.ciUpper : useCuped ? m.cupedCiUpper : m.ciUpper;
+            const pVal = useIpw ? m.ipwResult!.pValue : m.pValue;
+            const significant = useIpw ? pVal < 0.05 : m.isSignificant;
 
             return (
               <tr
                 key={m.metricId}
-                className={m.isSignificant ? 'border-l-4 border-l-green-500' : ''}
+                className={significant ? `border-l-4 ${useIpw ? 'border-l-amber-500' : 'border-l-green-500'}` : ''}
               >
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                   {m.metricId}
+                  {useIpw && (
+                    <span className="ml-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      IPW
+                    </span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                   {m.controlMean.toFixed(4)}
@@ -51,11 +62,13 @@ function TreatmentEffectsTableInner({ metricResults, showCuped }: TreatmentEffec
                   [{formatEffect(ciLow)}, {formatEffect(ciHigh)}]
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
-                  {formatPValue(m.pValue)}
+                  {formatPValue(pVal)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm">
-                  {m.isSignificant ? (
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                  {significant ? (
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      useIpw ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                    }`}>
                       Significant
                     </span>
                   ) : (
