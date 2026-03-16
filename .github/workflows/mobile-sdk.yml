@@ -54,17 +54,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Create settings.gradle.kts if missing
-        working-directory: sdks/android
-        run: |
-          if [ ! -f settings.gradle.kts ]; then
-            echo 'rootProject.name = "experimentation-sdk"' > settings.gradle.kts
-          fi
-
       - name: Compile (debug)
         working-directory: sdks/android
-        run: gradle compileDebugKotlin --no-daemon
+        run: ./gradlew compileDebugKotlin --no-daemon
 
       - name: Unit tests
         working-directory: sdks/android
-        run: gradle testDebugUnitTest --no-daemon
+        run: ./gradlew testDebugUnitTest --no-daemon
