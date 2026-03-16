@@ -291,7 +291,7 @@ primary_region = "ord"
 
 [env]
   RUST_LOG = "info"
-  ROCKSDB_PATH = "/data/policy.db"
+  POLICY_ROCKSDB_PATH = "/data/policy.db"
   KAFKA_BROKERS = "your-upstash-kafka-endpoint:9092"
 
 [mounts]
@@ -640,7 +640,7 @@ spec:
         ports:
         - containerPort: 50054
         env:
-        - name: ROCKSDB_PATH
+        - name: POLICY_ROCKSDB_PATH
           value: /data/policy.db
         volumeMounts:
         - name: policy-data
@@ -758,7 +758,7 @@ M2-O(Orch)      -     -     -     -     -     -     CnRPC -     -
 M3  (Metrics)   -     -     -     -     -     -     -     -     -
 M4a (Analysis)  -     -     -     -     -     -     -     -     -
 M4b (Policy)    -     -     -     -     -     -     -     -     -
-M5  (Mgmt)      gRPC  -     -     -     -     -     -     -     -
+M5  (Mgmt)      -     -     -     -     CnRPC CnRPC -     -     -
 M6  (UI)        -     -     -     -     -     -     CnRPC -     -
 M7  (Flags)     CGo   -     -     -     -     -     -     -     -
 
@@ -1212,7 +1212,7 @@ grpcurl kaizen-assignment.fly.dev:443 grpc.health.v1.Health/Check
 | `REDIS_URL` | M3, M7 | Redis connection string | `redis://host:6379` |
 | `MANAGEMENT_ADDR` | M1 | M5 gRPC address (config source) | `management.internal:50055` |
 | `POLICY_ADDR` | M1 | M4b gRPC address (bandit delegation) | `policy.internal:50054` |
-| `ROCKSDB_PATH` | M4b | Path to RocksDB data directory | `/data/policy.db` |
+| `POLICY_ROCKSDB_PATH` | M4b | Path to RocksDB data directory | `/data/policy.db` |
 | `RUST_LOG` | All Rust | Log level filter | `info` or `debug` |
 | `PORT` | All | Override default service port | `50051` |
 
