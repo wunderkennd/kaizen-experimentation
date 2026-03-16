@@ -4,7 +4,7 @@ import {
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
   SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
-  SEED_METRIC_DEFINITIONS,
+  SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -569,5 +569,33 @@ export const handlers = [
     const nextPageToken = nextIndex < metrics.length ? String(nextIndex) : '';
 
     return HttpResponse.json({ metrics: page, nextPageToken });
+  }),
+
+  // ListAuditLog — supports filtering by experimentId, action, and pagination
+  http.post(`${MGMT_SVC}/ListAuditLog`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    let filtered = [...SEED_AUDIT_LOG];
+
+    if (body.experimentId) {
+      filtered = filtered.filter((e) => e.experimentId === body.experimentId);
+    }
+    if (body.actionFilter) {
+      filtered = filtered.filter((e) => e.action === body.actionFilter);
+    }
+    if (body.actorEmail) {
+      filtered = filtered.filter((e) => e.actorEmail === body.actorEmail);
+    }
+
+    // Sort by timestamp descending (newest first)
+    filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const pageSize = (body.pageSize as number) || filtered.length;
+    const pageToken = (body.pageToken as string) || '';
+    const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+    const page = filtered.slice(startIndex, startIndex + pageSize);
+    const nextIndex = startIndex + pageSize;
+    const nextPageToken = nextIndex < filtered.length ? String(nextIndex) : '';
+
+    return HttpResponse.json({ entries: page, nextPageToken });
   }),
 ];

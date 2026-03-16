@@ -468,6 +468,36 @@ export interface QoeConfig {
   deviceFilter: string;
 }
 
+// --- Audit Log (M6 audit viewer) ---
+
+export type AuditAction =
+  | 'CREATED'
+  | 'UPDATED'
+  | 'STARTED'
+  | 'PAUSED'
+  | 'RESUMED'
+  | 'CONCLUDED'
+  | 'ARCHIVED'
+  | 'GUARDRAIL_BREACH'
+  | 'CONFIG_CHANGED';
+
+export interface AuditLogEntry {
+  entryId: string;
+  experimentId: string;
+  experimentName: string;
+  action: AuditAction;
+  actorEmail: string;
+  timestamp: string;
+  details: string;
+  previousValue?: string;
+  newValue?: string;
+}
+
+export interface ListAuditLogResponse {
+  entries: AuditLogEntry[];
+  nextPageToken: string;
+}
+
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';
 
 export interface BanditArmStats {

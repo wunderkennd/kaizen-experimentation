@@ -6,6 +6,7 @@ import type {
   SurrogateProjection, SrmResult, MetricResult, SegmentResult,
   MetricDefinition, ListMetricDefinitionsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
+  AuditLogEntry, AuditAction, ListAuditLogResponse,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -543,6 +544,41 @@ export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilte
   );
   return {
     metrics: (raw.metrics || []).map(adaptMetricDefinition),
+    nextPageToken: raw.nextPageToken || '',
+  };
+}
+
+export interface ListAuditLogFilters {
+  experimentId?: string;
+  actionFilter?: AuditAction;
+  actorEmail?: string;
+  pageSize?: number;
+  pageToken?: string;
+}
+
+export async function listAuditLog(filters?: ListAuditLogFilters): Promise<ListAuditLogResponse> {
+  const request: Record<string, unknown> = {};
+  if (filters?.experimentId) {
+    request.experimentId = filters.experimentId;
+  }
+  if (filters?.actionFilter) {
+    request.actionFilter = filters.actionFilter;
+  }
+  if (filters?.actorEmail) {
+    request.actorEmail = filters.actorEmail;
+  }
+  if (filters?.pageSize) {
+    request.pageSize = filters.pageSize;
+  }
+  if (filters?.pageToken) {
+    request.pageToken = filters.pageToken;
+  }
+
+  const raw = await callRpc<Record<string, unknown>, { entries?: AuditLogEntry[]; nextPageToken?: string }>(
+    MGMT_URL, MGMT_SVC, 'ListAuditLog', request,
+  );
+  return {
+    entries: raw.entries || [],
     nextPageToken: raw.nextPageToken || '',
   };
 }
