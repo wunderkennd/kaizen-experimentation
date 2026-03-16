@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { GuardrailStatusResult } from '@/lib/types';
 import { getGuardrailStatus } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { RetryableError } from '@/components/retryable-error';
 
 interface GuardrailTabProps {
   experimentId: string;
@@ -14,12 +15,16 @@ export function GuardrailTab({ experimentId }: GuardrailTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getGuardrailStatus(experimentId)
       .then(setResult)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [experimentId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -31,11 +36,7 @@ export function GuardrailTab({ experimentId }: GuardrailTabProps) {
   }
 
   if (error) {
-    return (
-      <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
-        Failed to load guardrail status: {error}
-      </div>
-    );
+    return <RetryableError message={error} onRetry={fetchData} context="guardrail status" />;
   }
 
   if (!result || result.breaches.length === 0) {

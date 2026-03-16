@@ -1,10 +1,12 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
 use experimentation_assignment::bandit_client::GrpcBanditClient;
 use experimentation_assignment::config::Config;
 use experimentation_assignment::config_cache::ConfigCache;
+use experimentation_assignment::http_json;
 use experimentation_assignment::service::AssignmentServiceImpl;
 use experimentation_assignment::stream_client::StreamClient;
 use experimentation_proto::experimentation::assignment::v1::assignment_service_server::AssignmentServiceServer;
@@ -17,6 +19,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("CONFIG_PATH").unwrap_or_else(|_| "dev/config.json".to_string());
     let grpc_addr = std::env::var("GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
+        .parse()?;
+    let http_addr = std::env::var("HTTP_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
 
     let config = Config::from_file(Path::new(&config_path))?;
@@ -62,11 +67,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let svc = AssignmentServiceImpl::new(handle, bandit_client);
+    let svc = Arc::new(AssignmentServiceImpl::new(handle, bandit_client));
+
+    // Spawn JSON HTTP server for SDK access.
+    let http_svc = svc.clone();
+    tokio::spawn(async move {
+        if let Err(e) = http_json::serve(http_addr, http_svc).await {
+            tracing::error!(error = %e, "JSON HTTP server failed");
+        }
+    });
 
     tracing::info!(%grpc_addr, "starting gRPC server");
     tonic::transport::Server::builder()
-        .add_service(AssignmentServiceServer::new(svc))
+        .tcp_nodelay(true)
+        .concurrency_limit_per_connection(256)
+        .initial_connection_window_size(1024 * 1024)
+        .initial_stream_window_size(1024 * 1024)
+        .add_service(AssignmentServiceServer::from_arc(svc))
         .serve_with_shutdown(grpc_addr, async move {
             tokio::signal::ctrl_c().await.ok();
             tracing::info!("shutdown signal received");

@@ -1,261 +1,56 @@
 """
-Experimentation Platform — Python Server SDK
+Experimentation Platform — Python Server SDK (DEPRECATED legacy shim)
 
-Implements the Provider Abstraction pattern (ADR-007) with three backends:
-  - RemoteProvider: Calls the Assignment Service via ConnectRPC/gRPC
-  - LocalProvider:  Evaluates assignments locally using cached config
-  - MockProvider:   Returns deterministic assignments for testing
+.. deprecated::
+    This flat module is deprecated. Use the modular package instead::
 
-Usage:
-    from experimentation import ExperimentClient, RemoteProvider
+        # NEW (canonical) — modular imports from src/experimentation/
+        from experimentation.client import ExperimentClient
+        from experimentation.providers import RemoteProvider, LocalProvider, MockProvider
+        from experimentation.types import Assignment, UserAttributes
 
-    client = ExperimentClient(
-        provider=RemoteProvider(base_url="https://assignment.example.com"),
-    )
-    variant = await client.get_variant("homepage_recs_v2", user_id="user-123")
+    This shim re-exports the canonical implementations so existing code
+    continues to work, but will emit a DeprecationWarning on first import.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+import warnings
 
+warnings.warn(
+    "Importing from the flat 'experimentation/__init__.py' package is deprecated. "
+    "Use 'from experimentation.client import ExperimentClient' and "
+    "'from experimentation.providers import RemoteProvider' instead. "
+    "See sdks/server-python/src/experimentation/ for the canonical package.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-# ---------------------------------------------------------------------------
-# Core Types
-# ---------------------------------------------------------------------------
+# Re-export from co-located submodules (copies of the canonical
+# src/experimentation/ package).  These resolve naturally because
+# client.py, providers.py, and types.py live alongside this __init__.py.
+from experimentation.client import ExperimentClient  # noqa: E402,F401
+from experimentation.providers import (  # noqa: E402,F401
+    AssignmentProvider,
+    LocalProvider,
+    MockProvider,
+    RemoteProvider,
+)
+from experimentation.types import (  # noqa: E402,F401
+    Assignment,
+    ExperimentConfig,
+    UserAttributes,
+    VariantConfig,
+)
 
-@dataclass
-class Assignment:
-    """A variant assignment for a single experiment."""
-    experiment_id: str
-    variant_name: str
-    payload: Dict[str, Any] = field(default_factory=dict)
-    from_cache: bool = False
-
-
-@dataclass
-class UserAttributes:
-    """User attributes for targeting evaluation."""
-    user_id: str
-    properties: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class VariantConfig:
-    """Variant-level configuration."""
-    name: str
-    traffic_fraction: float
-    is_control: bool = False
-    payload: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ExperimentConfig:
-    """Configuration for local assignment evaluation."""
-    experiment_id: str
-    hash_salt: str
-    layer_name: str
-    variants: List[VariantConfig]
-    allocation_start: int
-    allocation_end: int
-    total_buckets: int = 10000
-
-
-# ---------------------------------------------------------------------------
-# Provider Interface
-# ---------------------------------------------------------------------------
-
-class AssignmentProvider(ABC):
-    """
-    Provider abstraction — all assignment backends implement this interface.
-    See ADR-007 for the design rationale.
-    """
-
-    @abstractmethod
-    async def initialize(self) -> None:
-        """Initialize the provider (establish connections, fetch config)."""
-        ...
-
-    @abstractmethod
-    async def get_assignment(
-        self, experiment_id: str, attrs: UserAttributes
-    ) -> Optional[Assignment]:
-        """Get a variant assignment for the given experiment and user."""
-        ...
-
-    @abstractmethod
-    async def get_all_assignments(
-        self, attrs: UserAttributes
-    ) -> Dict[str, Assignment]:
-        """Get assignments for all active experiments."""
-        ...
-
-    @abstractmethod
-    async def close(self) -> None:
-        """Shut down the provider and release resources."""
-        ...
-
-
-# ---------------------------------------------------------------------------
-# RemoteProvider
-# ---------------------------------------------------------------------------
-
-class RemoteProvider(AssignmentProvider):
-    """Calls the Assignment Service via ConnectRPC."""
-
-    def __init__(self, base_url: str, timeout_ms: int = 2000) -> None:
-        self.base_url = base_url
-        self.timeout_ms = timeout_ms
-
-    async def initialize(self) -> None:
-        # TODO (Agent-1): Create ConnectRPC/gRPC channel
-        pass
-
-    async def get_assignment(
-        self, experiment_id: str, attrs: UserAttributes
-    ) -> Optional[Assignment]:
-        # TODO (Agent-1): Call AssignmentService.GetAssignment
-        return None
-
-    async def get_all_assignments(
-        self, attrs: UserAttributes
-    ) -> Dict[str, Assignment]:
-        # TODO (Agent-1): Call AssignmentService.GetAllAssignments
-        return {}
-
-    async def close(self) -> None:
-        # TODO (Agent-1): Close channel
-        pass
-
-
-# ---------------------------------------------------------------------------
-# LocalProvider
-# ---------------------------------------------------------------------------
-
-class LocalProvider(AssignmentProvider):
-    """Evaluates assignments locally using cached config."""
-
-    def __init__(self, configs: List[ExperimentConfig]) -> None:
-        self._experiments = {c.experiment_id: c for c in configs}
-
-    async def initialize(self) -> None:
-        pass
-
-    async def get_assignment(
-        self, experiment_id: str, attrs: UserAttributes
-    ) -> Optional[Assignment]:
-        config = self._experiments.get(experiment_id)
-        if config is None:
-            return None
-
-        # TODO (Agent-1): Use Python MurmurHash3 binding (or WASM via wasmtime)
-        #   1. bucket = murmur3(f"{attrs.user_id}:{config.hash_salt}") % config.total_buckets
-        #   2. if bucket < config.allocation_start or bucket > config.allocation_end → None
-        #   3. Map bucket to variant by cumulative traffic fractions
-        return None
-
-    async def get_all_assignments(
-        self, attrs: UserAttributes
-    ) -> Dict[str, Assignment]:
-        results: Dict[str, Assignment] = {}
-        for exp_id in self._experiments:
-            assignment = await self.get_assignment(exp_id, attrs)
-            if assignment is not None:
-                results[exp_id] = assignment
-        return results
-
-    async def close(self) -> None:
-        self._experiments.clear()
-
-
-# ---------------------------------------------------------------------------
-# MockProvider
-# ---------------------------------------------------------------------------
-
-class MockProvider(AssignmentProvider):
-    """Returns deterministic assignments for testing."""
-
-    def __init__(self, assignments: Optional[Dict[str, str]] = None) -> None:
-        self._assignments: Dict[str, Assignment] = {}
-        for exp_id, variant in (assignments or {}).items():
-            self._assignments[exp_id] = Assignment(
-                experiment_id=exp_id, variant_name=variant
-            )
-
-    async def initialize(self) -> None:
-        pass
-
-    async def get_assignment(
-        self, experiment_id: str, attrs: UserAttributes
-    ) -> Optional[Assignment]:
-        return self._assignments.get(experiment_id)
-
-    async def get_all_assignments(
-        self, attrs: UserAttributes
-    ) -> Dict[str, Assignment]:
-        return dict(self._assignments)
-
-    def set_assignment(
-        self, experiment_id: str, variant_name: str, payload: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """Override an assignment at runtime (useful in tests)."""
-        self._assignments[experiment_id] = Assignment(
-            experiment_id=experiment_id,
-            variant_name=variant_name,
-            payload=payload or {},
-        )
-
-    async def close(self) -> None:
-        self._assignments.clear()
-
-
-# ---------------------------------------------------------------------------
-# Client
-# ---------------------------------------------------------------------------
-
-class ExperimentClient:
-    """Main entry point for the Experimentation SDK."""
-
-    def __init__(
-        self,
-        provider: AssignmentProvider,
-        fallback_provider: Optional[AssignmentProvider] = None,
-    ) -> None:
-        self._provider = provider
-        self._fallback = fallback_provider
-        self._initialized = False
-
-    async def initialize(self) -> None:
-        await self._provider.initialize()
-        if self._fallback:
-            await self._fallback.initialize()
-        self._initialized = True
-
-    async def get_variant(
-        self, experiment_id: str, user_id: str, properties: Optional[Dict[str, Any]] = None
-    ) -> Optional[str]:
-        assignment = await self.get_assignment(experiment_id, user_id, properties)
-        return assignment.variant_name if assignment else None
-
-    async def get_assignment(
-        self, experiment_id: str, user_id: str, properties: Optional[Dict[str, Any]] = None
-    ) -> Optional[Assignment]:
-        if not self._initialized:
-            await self.initialize()
-
-        attrs = UserAttributes(user_id=user_id, properties=properties or {})
-
-        try:
-            return await self._provider.get_assignment(experiment_id, attrs)
-        except Exception:
-            if self._fallback:
-                return await self._fallback.get_assignment(experiment_id, attrs)
-            return None
-
-    async def close(self) -> None:
-        await self._provider.close()
-        if self._fallback:
-            await self._fallback.close()
-        self._initialized = False
+__all__ = [
+    "Assignment",
+    "AssignmentProvider",
+    "ExperimentClient",
+    "ExperimentConfig",
+    "LocalProvider",
+    "MockProvider",
+    "RemoteProvider",
+    "UserAttributes",
+    "VariantConfig",
+]

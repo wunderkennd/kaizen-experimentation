@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Area, ComposedChart,
 } from 'recharts';
 import type { CumulativeHoldoutResult } from '@/lib/types';
-import { getCumulativeHoldoutResult } from '@/lib/api';
+import { getCumulativeHoldoutResult, RpcError } from '@/lib/api';
+import { RetryableError } from '@/components/retryable-error';
 
 interface HoldoutTabProps {
   experimentId: string;
@@ -17,12 +18,19 @@ export function HoldoutTab({ experimentId }: HoldoutTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getCumulativeHoldoutResult(experimentId)
       .then(setResult)
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        if (err instanceof RpcError && err.status === 404) return;
+        setError(err.message);
+      })
       .finally(() => setLoading(false));
   }, [experimentId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -33,7 +41,11 @@ export function HoldoutTab({ experimentId }: HoldoutTabProps) {
     );
   }
 
-  if (error || !result) {
+  if (error) {
+    return <RetryableError message={error} onRetry={fetchData} context="holdout data" />;
+  }
+
+  if (!result) {
     return (
       <div className="rounded-md bg-gray-50 p-4 text-sm text-gray-500">
         No cumulative holdout data available for this experiment.

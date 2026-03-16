@@ -147,6 +147,16 @@ export interface MetricResult {
   cupedCiUpper: number;
   varianceReductionPct: number;
   sequentialResult?: SequentialResult;
+  sessionLevelResult?: SessionLevelResult;
+  segmentResults?: SegmentResult[];
+}
+
+export interface SessionLevelResult {
+  naiveSe: number;
+  clusteredSe: number;
+  designEffect: number;
+  naivePValue: number;
+  clusteredPValue: number;
 }
 
 export interface SrmResult {
@@ -157,11 +167,21 @@ export interface SrmResult {
   expectedCounts: Record<string, number>;
 }
 
+export interface SegmentResult {
+  segment: LifecycleSegment;
+  effect: number;
+  ciLower: number;
+  ciUpper: number;
+  pValue: number;
+  sampleSize: number;
+}
+
 export interface AnalysisResult {
   experimentId: string;
   metricResults: MetricResult[];
   srmResult: SrmResult;
   surrogateProjections?: SurrogateProjection[];
+  cochranQPValue?: number;
   computedAt: string;
 }
 
@@ -237,6 +257,10 @@ export interface SurrogateProjection {
   projectionCiLower: number;
   projectionCiUpper: number;
   calibrationRSquared: number;
+  /** Proto field — present in wire format, mapped to metricId/surrogateMetricId by adapter */
+  modelId?: string;
+  /** Proto field — present in wire format, not used directly by UI */
+  variantId?: string;
 }
 
 // --- Cumulative Holdout (M2.10) ---
@@ -376,6 +400,32 @@ export interface LayerAllocation {
   endBucket: number;
   activatedAt?: string;
   releasedAt?: string;
+}
+
+// --- Metric Definitions (M6 metric browser) ---
+
+export type MetricType = 'MEAN' | 'PROPORTION' | 'RATIO' | 'COUNT' | 'PERCENTILE' | 'CUSTOM';
+
+export interface MetricDefinition {
+  metricId: string;
+  name: string;
+  description: string;
+  type: MetricType;
+  sourceEventType: string;
+  numeratorEventType?: string;
+  denominatorEventType?: string;
+  percentile?: number;
+  customSql?: string;
+  lowerIsBetter: boolean;
+  surrogateTargetMetricId?: string;
+  isQoeMetric: boolean;
+  cupedCovariateMetricId?: string;
+  minimumDetectableEffect?: number;
+}
+
+export interface ListMetricDefinitionsResponse {
+  metrics: MetricDefinition[];
+  nextPageToken: string;
 }
 
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';

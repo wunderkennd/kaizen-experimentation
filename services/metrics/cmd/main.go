@@ -11,10 +11,13 @@ import (
 	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/org/experimentation/gen/go/experimentation/metrics/v1/metricsv1connect"
+
+	_ "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/alerts"
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
@@ -30,7 +33,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 	port := os.Getenv("PORT")
-	if port == "" { port = "50055" }
+	if port == "" { port = "50056" } // M3 Metrics — matches .env.example METRICS_SERVICE_PORT
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" { configPath = "internal/config/testdata/seed_config.json" }
 	cfgStore, err := config.LoadFromFile(configPath)
@@ -81,11 +84,22 @@ func main() {
 	recalConsumer := recalconsumer.NewConsumer(brokers, recalJob, cfgStore)
 	recalConsumer.Start(ctx)
 	defer recalConsumer.Close()
+	// Start Prometheus metrics HTTP server on a separate port.
+	metricsPort := os.Getenv("METRICS_PORT")
+	if metricsPort == "" { metricsPort = "50059" } // Prometheus scrape endpoint — must differ from main PORT (50056) and Prometheus server (9090)
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
+	metricsSrv := &http.Server{Addr: ":" + metricsPort, Handler: metricsMux}
+	go func() {
+		slog.Info("prometheus metrics server starting", "port", metricsPort)
+		if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed { slog.Error("metrics server failed", "error", err) }
+	}()
 	go func() {
 		slog.Info("metrics service starting", "port", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed { slog.Error("server failed", "error", err); os.Exit(1) }
 	}()
 	<-ctx.Done()
 	slog.Info("shutting down")
+	metricsSrv.Shutdown(context.Background())
 	srv.Shutdown(context.Background())
 }

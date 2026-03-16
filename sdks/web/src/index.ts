@@ -17,6 +17,8 @@
  *   const variant = await client.getVariant('homepage_recs_v2');
  */
 
+import { murmurhash3_x86_32 } from './murmur3';
+
 // ---------------------------------------------------------------------------
 // Core Types
 // ---------------------------------------------------------------------------
@@ -101,52 +103,125 @@ export class RemoteProvider implements AssignmentProvider {
   }
 
   async initialize(): Promise<void> {
-    // TODO (Agent-1): Establish ConnectRPC transport to Assignment Service
+    // No persistent connection needed — each request uses fetch.
   }
 
   async getAssignment(
     experimentId: string,
     attributes: UserAttributes,
   ): Promise<Assignment | null> {
-    // TODO (Agent-1): Call AssignmentService.GetAssignment via ConnectRPC
-    void experimentId;
-    void attributes;
-    return null;
+    const url = `${this.config.baseUrl}/experimentation.assignment.v1.AssignmentService/GetAssignment`;
+    const body = {
+      userId: attributes.userId,
+      experimentId,
+      attributes: flattenAttributes(attributes),
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.config.timeoutMs ?? 2000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data.isActive) return null;
+    return {
+      experimentId: data.experimentId,
+      variantName: data.variantId,
+      payload: data.payloadJson ? JSON.parse(data.payloadJson) : {},
+      fromCache: false,
+    };
   }
 
   async getAllAssignments(
     attributes: UserAttributes,
   ): Promise<Map<string, Assignment>> {
-    // TODO (Agent-1): Call AssignmentService.GetAllAssignments via ConnectRPC
-    void attributes;
-    return new Map();
+    const url = `${this.config.baseUrl}/experimentation.assignment.v1.AssignmentService/GetAssignments`;
+    const body = {
+      userId: attributes.userId,
+      attributes: flattenAttributes(attributes),
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.config.timeoutMs ?? 2000),
+    });
+    if (!resp.ok) return new Map();
+    const data = await resp.json();
+    const results = new Map<string, Assignment>();
+    for (const a of data.assignments ?? []) {
+      if (a.isActive && a.variantId) {
+        results.set(a.experimentId, {
+          experimentId: a.experimentId,
+          variantName: a.variantId,
+          payload: a.payloadJson ? JSON.parse(a.payloadJson) : {},
+          fromCache: false,
+        });
+      }
+    }
+    return results;
   }
 
   async destroy(): Promise<void> {
-    // TODO (Agent-1): Close transport
+    // No persistent resources to clean up.
   }
+}
+
+/** Flatten UserAttributes extra fields to Record<string, string> for the proto map. */
+function flattenAttributes(attrs: UserAttributes): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === 'userId') continue;
+    if (Array.isArray(value)) {
+      result[key] = value.join(',');
+    } else {
+      result[key] = String(value);
+    }
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
 // LocalProvider
 // ---------------------------------------------------------------------------
 
+export interface WasmHashModule {
+  wasm_bucket(userId: string, salt: string, totalBuckets: number): number;
+  wasm_is_in_allocation(bucket: number, start: number, end: number): boolean;
+}
+
 export interface LocalProviderConfig {
   /** Static experiment configs for local evaluation. */
   experiments: ExperimentConfig[];
+  /** Optional WASM hash module. Falls back to pure-TS MurmurHash3 if not provided. */
+  wasmModule?: WasmHashModule;
 }
 
 export class LocalProvider implements AssignmentProvider {
   private experiments: Map<string, ExperimentConfig> = new Map();
+  private wasmModule?: WasmHashModule;
 
   constructor(config: LocalProviderConfig) {
     for (const exp of config.experiments) {
       this.experiments.set(exp.experimentId, exp);
     }
+    this.wasmModule = config.wasmModule;
   }
 
   async initialize(): Promise<void> {
     // No-op for static config
+  }
+
+  private computeBucket(userId: string, salt: string, totalBuckets: number): number {
+    if (this.wasmModule) {
+      return this.wasmModule.wasm_bucket(userId, salt, totalBuckets);
+    }
+    // Pure-TS fallback
+    const encoder = new TextEncoder();
+    const key = encoder.encode(`${userId}\x00${salt}`);
+    const hash = murmurhash3_x86_32(key, 0);
+    return hash % totalBuckets;
   }
 
   async getAssignment(
@@ -155,15 +230,42 @@ export class LocalProvider implements AssignmentProvider {
   ): Promise<Assignment | null> {
     const config = this.experiments.get(experimentId);
     if (!config) return null;
+    if (config.variants.length === 0) return null;
 
-    // TODO (Agent-1): Implement MurmurHash3 bucket assignment in WASM
-    //   1. hash = murmur3(`${attributes.userId}:${config.hashSalt}`)
-    //   2. bucket = hash % config.totalBuckets
-    //   3. if bucket < config.allocationStart || bucket > config.allocationEnd → null
-    //   4. map bucket to variant by cumulative traffic fractions
-    void attributes;
-    void config;
-    return null;
+    const bucket = this.computeBucket(
+      attributes.userId,
+      config.hashSalt,
+      config.totalBuckets,
+    );
+
+    if (bucket < config.allocationStart || bucket > config.allocationEnd) {
+      return null;
+    }
+
+    const allocSize = config.allocationEnd - config.allocationStart + 1;
+    const relativeBucket = bucket - config.allocationStart;
+
+    let cumulative = 0.0;
+    for (const variant of config.variants) {
+      cumulative += variant.trafficFraction * allocSize;
+      if (relativeBucket < cumulative) {
+        return {
+          experimentId: config.experimentId,
+          variantName: variant.name,
+          payload: variant.payload,
+          fromCache: true,
+        };
+      }
+    }
+
+    // FP rounding fallback — assign to last variant
+    const last = config.variants[config.variants.length - 1];
+    return {
+      experimentId: config.experimentId,
+      variantName: last.name,
+      payload: last.payload,
+      fromCache: true,
+    };
   }
 
   async getAllAssignments(

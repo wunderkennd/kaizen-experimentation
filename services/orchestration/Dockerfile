@@ -7,5 +7,5 @@ RUN CGO_ENABLED=0 go build -o /app ./orchestration/cmd/
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /app /app
-EXPOSE 50055
+EXPOSE 50058
 CMD ["/app"]

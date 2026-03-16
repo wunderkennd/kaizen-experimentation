@@ -25,7 +25,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-PORT="${FLAGS_PORT:-50055}"
+PORT="${FLAGS_PORT:-50057}"
 TARGET_RPS="${TARGET_RPS:-20000}"
 DURATION="${DURATION:-60s}"
 NUM_FLAGS="${NUM_FLAGS:-20}"

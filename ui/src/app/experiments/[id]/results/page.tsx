@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
 import { getExperiment, getAnalysisResult } from '@/lib/api';
+import { RetryableError } from '@/components/retryable-error';
 import { SrmBanner } from '@/components/srm-banner';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
@@ -56,8 +57,12 @@ const CateTab = dynamic(
   () => import('@/components/cate-tab').then(m => ({ default: m.CateTab })),
   { ssr: false },
 );
+const SessionLevelTab = dynamic(
+  () => import('@/components/session-level-tab').then(m => ({ default: m.SessionLevelTab })),
+  { ssr: false },
+);
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session';
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -68,9 +73,10 @@ export default function ResultsPage() {
   const [showCuped, setShowCuped] = useState(false);
   const [activeTab, setActiveTab] = useState<AnalysisTab>('overview');
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!params.id) return;
-
+    setLoading(true);
+    setError(null);
     Promise.all([getExperiment(params.id), getAnalysisResult(params.id)])
       .then(([exp, analysis]) => {
         setExperiment(exp);
@@ -79,6 +85,8 @@ export default function ResultsPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -99,11 +107,11 @@ export default function ResultsPage() {
           <span className="mx-2">/</span>
           <span className="text-gray-900">Results</span>
         </nav>
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-700">
-            {error || 'No analysis results available for this experiment.'}
-          </p>
-        </div>
+        <RetryableError
+          message={error || 'No analysis results available for this experiment.'}
+          onRetry={fetchData}
+          context="analysis results"
+        />
       </div>
     );
   }
@@ -114,6 +122,7 @@ export default function ResultsPage() {
   const isHoldout = experiment.type === 'CUMULATIVE_HOLDOUT';
   const hasGuardrails = experiment.guardrailConfigs.length > 0;
   const isQoe = experiment.type === 'PLAYBACK_QOE';
+  const hasSessionLevel = analysisResult.metricResults.some(m => m.sessionLevelResult);
 
   // Build tabs dynamically based on experiment features
   const tabs: { key: AnalysisTab; label: string }[] = [
@@ -127,6 +136,9 @@ export default function ResultsPage() {
   }
   if (experiment.type === 'AB' || experiment.type === 'MULTIVARIATE') {
     tabs.push({ key: 'lifecycle', label: 'Lifecycle Segments' });
+  }
+  if (hasSessionLevel) {
+    tabs.push({ key: 'session', label: 'Session-Level' });
   }
   if (hasSurrogateProjections) {
     tabs.push({ key: 'surrogate', label: 'Surrogate Projections' });
@@ -245,6 +257,14 @@ export default function ResultsPage() {
       {activeTab === 'lifecycle' && (
         <div role="tabpanel" id="tabpanel-lifecycle" aria-labelledby="tab-lifecycle" tabIndex={0}>
           <CateTab experimentId={params.id} />
+        </div>
+      )}
+
+      {activeTab === 'session' && (
+        <div role="tabpanel" id="tabpanel-session" aria-labelledby="tab-session" tabIndex={0}>
+          <SessionLevelTab
+            metricResults={analysisResult.metricResults.filter(m => m.sessionLevelResult)}
+          />
         </div>
       )}
 

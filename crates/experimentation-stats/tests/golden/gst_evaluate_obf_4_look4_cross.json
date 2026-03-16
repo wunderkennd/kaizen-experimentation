@@ -1,0 +1,16 @@
+{
+  "test_name": "gst_evaluate_obf_4_look4_cross",
+  "description": "OBF K=4, z=3.0 at final look \u2014 exceeds boundary (~2.04), crossing",
+  "z_stat": 3.0,
+  "current_look": 4,
+  "planned_looks": 4,
+  "overall_alpha": 0.05,
+  "spending_function": "OBrienFleming",
+  "prev_alpha_spent": 0.023625121317601305,
+  "expected": {
+    "boundary_crossed": true,
+    "critical_value": 2.042638485279184,
+    "alpha_spent": 0.05,
+    "alpha_remaining": 0.0
+  }
+}

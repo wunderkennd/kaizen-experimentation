@@ -3,8 +3,10 @@ import type {
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
+  SurrogateProjection, SrmResult, MetricResult, SegmentResult,
+  MetricDefinition, ListMetricDefinitionsResponse,
 } from './types';
-import type { ExperimentState, ExperimentType } from './types';
+import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
 // In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
 // In tests, vitest.config.ts sets NEXT_PUBLIC_*_URL to absolute URLs so MSW can intercept.
@@ -45,6 +47,12 @@ export function clearApiCache(): void {
   _cache.clear();
 }
 
+/** Default timeout for RPC calls in milliseconds. */
+export const API_TIMEOUT_MS = 10_000;
+
+/** Base delay for retry backoff in milliseconds. */
+const RETRY_BASE_DELAY_MS = 500;
+
 export class RpcError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -74,6 +82,15 @@ async function parseRpcError(res: Response, method: string): Promise<string> {
 interface CallRpcOptions {
   skipCache?: boolean;
   clearCacheOnSuccess?: boolean;
+  timeoutMs?: number;
+  retries?: number;
+}
+
+/** Returns true for errors caused by network-level failures (no connection, timeout). */
+export function isNetworkError(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === 'AbortError') return true;
+  if (err instanceof TypeError) return true; // fetch throws TypeError on network failure
+  return false;
 }
 
 async function callRpc<Req, Res>(
@@ -93,28 +110,68 @@ async function callRpc<Req, Res>(
     }
   }
 
+  const timeoutMs = options.timeoutMs ?? API_TIMEOUT_MS;
+  // Default: retry once for read-like calls (no clearCacheOnSuccess), zero for mutations
+  const maxRetries = options.retries ?? (options.clearCacheOnSuccess ? 0 : 1);
+
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (_authEmail) headers['X-User-Email'] = _authEmail;
   if (_authRole) headers['X-User-Role'] = _authRole;
 
-  const res = await fetch(`${baseUrl}/${service}/${method}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
-  });
-  if (!res.ok) {
-    throw new RpcError(await parseRpcError(res, method), res.status);
-  }
-  const data: Res = await res.json();
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Backoff before retry (not on first attempt)
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * attempt));
+    }
 
-  // Cache read-only responses; clear cache on mutating calls
-  if (options.clearCacheOnSuccess) {
-    _cache.clear();
-  } else if (!options.skipCache) {
-    _cache.set(cacheKey, { data, expiresAt: Date.now() + DEFAULT_TTL_MS });
+    // Use Promise.race for timeout instead of AbortController signal
+    // to avoid jsdom/Node AbortSignal incompatibility in tests.
+    let timer: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new DOMException('Request timed out', 'AbortError')),
+        timeoutMs,
+      );
+    });
+
+    try {
+      const res = await Promise.race([
+        fetch(`${baseUrl}/${service}/${method}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(request),
+        }),
+        timeoutPromise,
+      ]);
+      clearTimeout(timer!);
+
+      if (!res.ok) {
+        // Never retry HTTP errors — only network-level failures
+        throw new RpcError(await parseRpcError(res, method), res.status);
+      }
+      const data: Res = await res.json();
+
+      // Cache read-only responses; clear cache on mutating calls
+      if (options.clearCacheOnSuccess) {
+        _cache.clear();
+      } else if (!options.skipCache) {
+        _cache.set(cacheKey, { data, expiresAt: Date.now() + DEFAULT_TTL_MS });
+      }
+
+      return data;
+    } catch (err) {
+      clearTimeout(timer!);
+      // Never retry RpcError (server-decided 4xx/5xx)
+      if (err instanceof RpcError) throw err;
+      lastError = err;
+      // Only retry on network-level failures
+      if (!isNetworkError(err) || attempt === maxRetries) throw err;
+    }
   }
 
-  return data;
+  // Should never reach here, but satisfy TypeScript
+  throw lastError;
 }
 
 /** Strip proto enum prefix if present. e.g. "EXPERIMENT_STATE_DRAFT" → "DRAFT" */
@@ -274,10 +331,81 @@ export async function createExperiment(request: CreateExperimentRequest): Promis
   return adaptExperiment(raw.experiment || raw as Record<string, unknown>);
 }
 
+/** Coerce proto3 int64 string values to numbers in a Record<string, string|number>. */
+function coerceInt64Map(map: Record<string, string | number> | undefined): Record<string, number> {
+  if (!map) return {};
+  const result: Record<string, number> = {};
+  for (const [k, v] of Object.entries(map)) {
+    result[k] = typeof v === 'string' ? Number(v) : v;
+  }
+  return result;
+}
+
+/** Adapt proto SurrogateProjection to UI type.
+ *  Proto has experimentId/variantId/modelId; UI needs metricId/surrogateMetricId.
+ *  Uses modelId as metricId fallback when metricId is absent. */
+function adaptSurrogateProjection(proto: Record<string, unknown>): SurrogateProjection {
+  return {
+    metricId: (proto.metricId as string) || (proto.modelId as string) || '',
+    surrogateMetricId: (proto.surrogateMetricId as string) || (proto.variantId as string) || '',
+    projectedEffect: (proto.projectedEffect as number) || 0,
+    projectionCiLower: (proto.projectionCiLower as number) || 0,
+    projectionCiUpper: (proto.projectionCiUpper as number) || 0,
+    calibrationRSquared: (proto.calibrationRSquared as number) || 0,
+    modelId: proto.modelId as string | undefined,
+    variantId: proto.variantId as string | undefined,
+  };
+}
+
+/** Adapt proto SegmentResult — coerce int64 sampleSize, strip enum prefix. */
+function adaptSegmentResult(proto: Record<string, unknown>): SegmentResult {
+  return {
+    segment: stripEnumPrefix((proto.segment as string) || '', 'LIFECYCLE_SEGMENT_') as LifecycleSegment,
+    effect: (proto.effect as number) || 0,
+    ciLower: (proto.ciLower as number) || 0,
+    ciUpper: (proto.ciUpper as number) || 0,
+    pValue: (proto.pValue as number) || 0,
+    sampleSize: typeof proto.sampleSize === 'string' ? Number(proto.sampleSize) : (proto.sampleSize as number) || 0,
+  };
+}
+
+/** Adapt proto SrmResult — coerce int64 map values to numbers. */
+function adaptSrmResult(proto: Record<string, unknown>): SrmResult {
+  return {
+    chiSquared: (proto.chiSquared as number) || 0,
+    pValue: (proto.pValue as number) || 0,
+    isMismatch: (proto.isMismatch as boolean) || false,
+    observedCounts: coerceInt64Map(proto.observedCounts as Record<string, string | number> | undefined),
+    expectedCounts: coerceInt64Map(proto.expectedCounts as Record<string, string | number> | undefined),
+  };
+}
+
+/** Adapt proto MetricResult — coerce segmentResults int64 fields. */
+function adaptMetricResult(proto: Record<string, unknown>): MetricResult {
+  const raw = proto as unknown as MetricResult & { segmentResults?: Record<string, unknown>[] };
+  return {
+    ...raw,
+    segmentResults: raw.segmentResults?.map(adaptSegmentResult),
+  };
+}
+
+/** Adapt raw proto AnalysisResult to UI AnalysisResult type. */
+function adaptAnalysisResult(raw: Record<string, unknown>): AnalysisResult {
+  return {
+    experimentId: (raw.experimentId as string) || '',
+    metricResults: ((raw.metricResults as Record<string, unknown>[]) || []).map(adaptMetricResult),
+    srmResult: adaptSrmResult((raw.srmResult as Record<string, unknown>) || {}),
+    surrogateProjections: (raw.surrogateProjections as Record<string, unknown>[])?.map(adaptSurrogateProjection),
+    cochranQPValue: raw.cochranQPValue as number | undefined,
+    computedAt: (raw.computedAt as string) || '',
+  };
+}
+
 export async function getAnalysisResult(experimentId: string): Promise<AnalysisResult> {
-  return callRpc<{ experimentId: string }, AnalysisResult>(
+  const raw = await callRpc<{ experimentId: string }, Record<string, unknown>>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetAnalysisResult', { experimentId },
   );
+  return adaptAnalysisResult(raw);
 }
 
 export async function getNoveltyAnalysis(experimentId: string): Promise<NoveltyAnalysisResult> {
@@ -360,4 +488,56 @@ export async function getLayerAllocations(
     { allocations?: LayerAllocation[] }
   >(MGMT_URL, MGMT_SVC, 'GetLayerAllocations', { layerId, includeReleased });
   return raw.allocations || [];
+}
+
+/** Convert proto JSON metric definition to local MetricDefinition type. */
+function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition {
+  const type = stripEnumPrefix(
+    (proto.type as string) || 'MEAN',
+    'METRIC_TYPE_',
+  ) as MetricType;
+
+  return {
+    metricId: (proto.metricId as string) || '',
+    name: (proto.name as string) || '',
+    description: (proto.description as string) || '',
+    type,
+    sourceEventType: (proto.sourceEventType as string) || '',
+    numeratorEventType: proto.numeratorEventType as string | undefined,
+    denominatorEventType: proto.denominatorEventType as string | undefined,
+    percentile: proto.percentile as number | undefined,
+    customSql: proto.customSql as string | undefined,
+    lowerIsBetter: (proto.lowerIsBetter as boolean) || false,
+    surrogateTargetMetricId: proto.surrogateTargetMetricId as string | undefined,
+    isQoeMetric: (proto.isQoeMetric as boolean) || false,
+    cupedCovariateMetricId: proto.cupedCovariateMetricId as string | undefined,
+    minimumDetectableEffect: proto.minimumDetectableEffect as number | undefined,
+  };
+}
+
+export interface ListMetricDefinitionsFilters {
+  typeFilter?: MetricType;
+  pageSize?: number;
+  pageToken?: string;
+}
+
+export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilters): Promise<ListMetricDefinitionsResponse> {
+  const request: Record<string, unknown> = {};
+  if (filters?.typeFilter) {
+    request.typeFilter = `METRIC_TYPE_${filters.typeFilter}`;
+  }
+  if (filters?.pageSize) {
+    request.pageSize = filters.pageSize;
+  }
+  if (filters?.pageToken) {
+    request.pageToken = filters.pageToken;
+  }
+
+  const raw = await callRpc<Record<string, unknown>, { metrics?: Record<string, unknown>[]; nextPageToken?: string }>(
+    MGMT_URL, MGMT_SVC, 'ListMetricDefinitions', request,
+  );
+  return {
+    metrics: (raw.metrics || []).map(adaptMetricDefinition),
+    nextPageToken: raw.nextPageToken || '',
+  };
 }

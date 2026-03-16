@@ -2,7 +2,7 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -321,6 +321,41 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     createdAt: '2026-01-20T11:00:00Z',
     startedAt: '2026-01-21T06:00:00Z',
     concludedAt: '2026-02-20T18:00:00Z',
+  },
+  // SESSION_LEVEL experiment for testing session-level analysis
+  {
+    experimentId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    name: 'session_watch_pattern',
+    description: 'Session-level test of watch pattern recommendations with HC1 clustered SE',
+    ownerEmail: 'carol@streamco.com',
+    type: 'SESSION_LEVEL',
+    state: 'CONCLUDED',
+    variants: [
+      {
+        variantId: 'va-control',
+        name: 'control',
+        trafficFraction: 0.5,
+        isControl: true,
+        payloadJson: '{"recommendation": "standard"}',
+      },
+      {
+        variantId: 'va-treatment',
+        name: 'session_aware',
+        trafficFraction: 0.5,
+        isControl: false,
+        payloadJson: '{"recommendation": "session_context_v2", "lookback_sessions": 3}',
+      },
+    ],
+    layerId: 'layer-engagement',
+    hashSalt: 'salt-session-watch-pattern',
+    primaryMetricId: 'watch_time_per_session',
+    secondaryMetricIds: ['sessions_per_week'],
+    guardrailConfigs: [],
+    guardrailAction: 'AUTO_PAUSE',
+    isCumulativeHoldout: false,
+    createdAt: '2026-02-01T09:00:00Z',
+    startedAt: '2026-02-02T06:00:00Z',
+    concludedAt: '2026-03-02T18:00:00Z',
   },
   // ARCHIVED experiment for testing archived state
   {
@@ -649,6 +684,65 @@ const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
       expectedCounts: { 'v8-control': 30000, 'v8-treatment': 30000 },
     },
     computedAt: '2026-02-20T18:00:00Z',
+  },
+  {
+    experimentId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    metricResults: [
+      {
+        metricId: 'watch_time_per_session',
+        variantId: 'va-treatment',
+        controlMean: 1920,
+        treatmentMean: 2064,
+        absoluteEffect: 144,
+        relativeEffect: 0.075,
+        ciLower: 42,
+        ciUpper: 246,
+        pValue: 0.006,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+        sessionLevelResult: {
+          naiveSe: 48.2,
+          clusteredSe: 69.8,
+          designEffect: 2.1,
+          naivePValue: 0.003,
+          clusteredPValue: 0.039,
+        },
+      },
+      {
+        metricId: 'sessions_per_week',
+        variantId: 'va-treatment',
+        controlMean: 4.2,
+        treatmentMean: 4.5,
+        absoluteEffect: 0.3,
+        relativeEffect: 0.0714,
+        ciLower: -0.05,
+        ciUpper: 0.65,
+        pValue: 0.093,
+        isSignificant: false,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+        sessionLevelResult: {
+          naiveSe: 0.15,
+          clusteredSe: 0.171,
+          designEffect: 1.3,
+          naivePValue: 0.046,
+          clusteredPValue: 0.079,
+        },
+      },
+    ],
+    srmResult: {
+      chiSquared: 0.31,
+      pValue: 0.578,
+      isMismatch: false,
+      observedCounts: { 'va-control': 20150, 'va-treatment': 19850 },
+      expectedCounts: { 'va-control': 20000, 'va-treatment': 20000 },
+    },
+    computedAt: '2026-03-02T18:00:00Z',
   },
 ];
 
@@ -1153,7 +1247,131 @@ const INITIAL_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = {
   ],
 };
 
+// ---------------------------------------------------------------------------
+// Metric Definitions — 10 from SQL seed + 2 edge-case extras (COUNT, CUSTOM)
+// ---------------------------------------------------------------------------
+const INITIAL_METRIC_DEFINITIONS: MetricDefinition[] = [
+  {
+    metricId: 'stream_start_rate',
+    name: 'Stream Start Rate',
+    description: 'Proportion of sessions that start a stream',
+    type: 'PROPORTION',
+    sourceEventType: 'stream_start',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'watch_time_minutes',
+    name: 'Watch Time (minutes)',
+    description: 'Average minutes watched per user per day',
+    type: 'MEAN',
+    sourceEventType: 'heartbeat',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+    cupedCovariateMetricId: 'watch_time_minutes_pre',
+    minimumDetectableEffect: 0.02,
+  },
+  {
+    metricId: 'completion_rate',
+    name: 'Content Completion Rate',
+    description: 'Proportion of content items watched to ≥90%',
+    type: 'PROPORTION',
+    sourceEventType: 'stream_end',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'rebuffer_rate',
+    name: 'Rebuffer Rate',
+    description: 'Rebuffer events per hour of playback',
+    type: 'RATIO',
+    sourceEventType: 'qoe_rebuffer',
+    numeratorEventType: 'qoe_rebuffer',
+    denominatorEventType: 'playback_hour',
+    lowerIsBetter: true,
+    isQoeMetric: true,
+  },
+  {
+    metricId: 'search_success_rate',
+    name: 'Search Success Rate',
+    description: 'Proportion of searches that lead to a stream start within 5m',
+    type: 'PROPORTION',
+    sourceEventType: 'search',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'ctr_recommendation',
+    name: 'Recommendation CTR',
+    description: 'Click-through rate on recommendation carousels',
+    type: 'PROPORTION',
+    sourceEventType: 'impression',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+    surrogateTargetMetricId: 'watch_time_minutes',
+  },
+  {
+    metricId: 'revenue_per_user',
+    name: 'Revenue per User',
+    description: 'Average daily revenue per user (ads + subscription)',
+    type: 'MEAN',
+    sourceEventType: 'revenue',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+    minimumDetectableEffect: 0.05,
+  },
+  {
+    metricId: 'churn_7d',
+    name: 'Churn (7-day)',
+    description: 'Proportion of users with zero activity in trailing 7 days',
+    type: 'PROPORTION',
+    sourceEventType: 'session',
+    lowerIsBetter: true,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'latency_p50_ms',
+    name: 'Playback Start Latency p50',
+    description: 'Median time-to-first-frame in milliseconds',
+    type: 'PERCENTILE',
+    sourceEventType: 'playback_start',
+    percentile: 50,
+    lowerIsBetter: true,
+    isQoeMetric: true,
+  },
+  {
+    metricId: 'error_rate',
+    name: 'Error Rate',
+    description: 'Proportion of playback attempts that result in an error',
+    type: 'PROPORTION',
+    sourceEventType: 'playback_error',
+    lowerIsBetter: true,
+    isQoeMetric: true,
+  },
+  // Edge-case extras: COUNT and CUSTOM types
+  {
+    metricId: 'daily_active_users',
+    name: 'Daily Active Users',
+    description: 'Count of unique users with at least one session per day',
+    type: 'COUNT',
+    sourceEventType: 'session',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'engagement_score',
+    name: 'Engagement Score',
+    description: 'Custom composite engagement metric combining watch time, interactions, and session frequency',
+    type: 'CUSTOM',
+    sourceEventType: 'composite',
+    customSql: 'SELECT user_id, (0.5 * watch_minutes + 0.3 * interactions + 0.2 * sessions) AS score FROM user_daily_agg',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+];
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
+export let SEED_METRIC_DEFINITIONS: MetricDefinition[] = structuredClone(INITIAL_METRIC_DEFINITIONS);
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
 export let SEED_ANALYSIS_RESULTS: AnalysisResult[] = structuredClone(INITIAL_ANALYSIS_RESULTS);
@@ -1171,6 +1389,7 @@ export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structure
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
+  SEED_METRIC_DEFINITIONS = structuredClone(INITIAL_METRIC_DEFINITIONS);
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
   SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
   SEED_ANALYSIS_RESULTS = structuredClone(INITIAL_ANALYSIS_RESULTS);

@@ -57,10 +57,11 @@ public protocol AssignmentProvider: Sendable {
 
 // MARK: - RemoteProvider
 
-/// Calls the Assignment Service via ConnectRPC.
+/// Calls the Assignment Service via JSON HTTP.
 public final class RemoteProvider: AssignmentProvider {
     private let baseURL: URL
     private let timeoutSeconds: TimeInterval
+    private var session: URLSession?
 
     public init(baseURL: URL, timeoutSeconds: TimeInterval = 2.0) {
         self.baseURL = baseURL
@@ -68,23 +69,108 @@ public final class RemoteProvider: AssignmentProvider {
     }
 
     public func initialize() async throws {
-        // TODO (Agent-1): Create ConnectRPC client for AssignmentService
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = timeoutSeconds
+        session = URLSession(configuration: config)
     }
 
     public func getAssignment(experimentId: String, attributes: UserAttributes) async throws -> Assignment? {
-        // TODO (Agent-1): Call AssignmentService.GetAssignment via ConnectRPC
-        _ = experimentId; _ = attributes
-        return nil
+        let url = baseURL.appendingPathComponent(
+            "experimentation.assignment.v1.AssignmentService/GetAssignment"
+        )
+        let body: [String: Any] = [
+            "userId": attributes.userId,
+            "experimentId": experimentId,
+            "attributes": attributes.properties,
+        ]
+        let data = try await post(url: url, body: body)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        guard json["isActive"] as? Bool == true,
+              let variantId = json["variantId"] as? String,
+              !variantId.isEmpty else {
+            return nil
+        }
+        let experimentIdResp = json["experimentId"] as? String ?? experimentId
+        let payloadJson = json["payloadJson"] as? String ?? ""
+        let payload = Self.parsePayload(payloadJson)
+        return Assignment(
+            experimentId: experimentIdResp,
+            variantName: variantId,
+            payload: payload,
+            fromCache: false
+        )
     }
 
     public func getAllAssignments(attributes: UserAttributes) async throws -> [String: Assignment] {
-        // TODO (Agent-1): Call AssignmentService.GetAllAssignments
-        _ = attributes
-        return [:]
+        let url = baseURL.appendingPathComponent(
+            "experimentation.assignment.v1.AssignmentService/GetAssignments"
+        )
+        let body: [String: Any] = [
+            "userId": attributes.userId,
+            "attributes": attributes.properties,
+        ]
+        let data = try await post(url: url, body: body)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let assignments = json["assignments"] as? [[String: Any]] else {
+            return [:]
+        }
+        var results: [String: Assignment] = [:]
+        for a in assignments {
+            guard a["isActive"] as? Bool == true,
+                  let variantId = a["variantId"] as? String,
+                  !variantId.isEmpty,
+                  let expId = a["experimentId"] as? String else {
+                continue
+            }
+            let payloadJson = a["payloadJson"] as? String ?? ""
+            let payload = Self.parsePayload(payloadJson)
+            results[expId] = Assignment(
+                experimentId: expId,
+                variantName: variantId,
+                payload: payload,
+                fromCache: false
+            )
+        }
+        return results
     }
 
     public func close() async {
-        // TODO (Agent-1): Close transport
+        session?.invalidateAndCancel()
+        session = nil
+    }
+
+    // MARK: - Private
+
+    private func post(url: URL, body: [String: Any]) async throws -> Data {
+        guard let session else {
+            throw NSError(domain: "ExperimentationSDK", code: -1, userInfo: [
+                NSLocalizedDescriptionKey: "provider not initialized"
+            ])
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.data(for: request)
+        guard let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200 else {
+            return Data()
+        }
+        return data
+    }
+
+    private static func parsePayload(_ jsonString: String) -> [String: String] {
+        guard !jsonString.isEmpty,
+              let data = jsonString.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        var result: [String: String] = [:]
+        for (key, value) in obj {
+            result[key] = "\(value)"
+        }
+        return result
     }
 }
 

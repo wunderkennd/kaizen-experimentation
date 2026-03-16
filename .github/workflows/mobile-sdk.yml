@@ -1,0 +1,63 @@
+name: Mobile SDK Compilation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sdks/ios/**'
+      - 'sdks/android/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'sdks/ios/**'
+      - 'sdks/android/**'
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+concurrency:
+  group: mobile-sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ───────── iOS: Swift Package compile + test ─────────
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve Swift packages
+        working-directory: sdks/ios
+        run: swift package resolve
+
+      - name: Build (debug)
+        working-directory: sdks/ios
+        run: swift build
+
+      - name: Run tests
+        working-directory: sdks/ios
+        run: swift test
+
+  # ───────── Android: Gradle compile + unit test ─────────
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Compile (debug)
+        working-directory: sdks/android
+        run: ./gradlew compileDebugKotlin --no-daemon
+
+      - name: Unit tests
+        working-directory: sdks/android
+        run: ./gradlew testDebugUnitTest --no-daemon

@@ -16,8 +16,13 @@
 package experimentation
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"sync"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -63,10 +68,11 @@ type AssignmentProvider interface {
 // RemoteProvider
 // ---------------------------------------------------------------------------
 
-// RemoteProvider calls the Assignment Service via ConnectRPC.
+// RemoteProvider calls the Assignment Service via JSON HTTP.
 type RemoteProvider struct {
 	baseURL   string
 	timeoutMs int
+	client    *http.Client
 }
 
 // NewRemoteProvider creates a provider that calls the Assignment Service.
@@ -75,24 +81,165 @@ func NewRemoteProvider(baseURL string) *RemoteProvider {
 }
 
 func (p *RemoteProvider) Initialize(_ context.Context) error {
-	// TODO (Agent-1): Create ConnectRPC client for AssignmentService
+	p.client = &http.Client{
+		Timeout: time.Duration(p.timeoutMs) * time.Millisecond,
+	}
 	return nil
 }
 
-func (p *RemoteProvider) GetAssignment(_ context.Context, experimentID string, attrs UserAttributes) (*Assignment, error) {
-	// TODO (Agent-1): Call AssignmentService.GetAssignment
-	_ = experimentID
-	_ = attrs
-	return nil, nil
+// assignmentJSONRequest matches the server's JSON API request format.
+type assignmentJSONRequest struct {
+	UserID       string            `json:"userId"`
+	ExperimentID string            `json:"experimentId,omitempty"`
+	SessionID    string            `json:"sessionId,omitempty"`
+	Attributes   map[string]string `json:"attributes,omitempty"`
 }
 
-func (p *RemoteProvider) GetAllAssignments(_ context.Context, attrs UserAttributes) (map[string]*Assignment, error) {
-	// TODO (Agent-1): Call AssignmentService.GetAllAssignments
-	_ = attrs
-	return nil, nil
+// assignmentJSONResponse matches the server's JSON API response format.
+type assignmentJSONResponse struct {
+	ExperimentID          string  `json:"experimentId"`
+	VariantID             string  `json:"variantId"`
+	PayloadJSON           string  `json:"payloadJson"`
+	AssignmentProbability float64 `json:"assignmentProbability"`
+	IsActive              bool    `json:"isActive"`
 }
 
-func (p *RemoteProvider) Close() error { return nil }
+// assignmentsJSONResponse wraps the bulk response.
+type assignmentsJSONResponse struct {
+	Assignments []assignmentJSONResponse `json:"assignments"`
+}
+
+func (p *RemoteProvider) GetAssignment(ctx context.Context, experimentID string, attrs UserAttributes) (*Assignment, error) {
+	if p.client == nil {
+		return nil, fmt.Errorf("provider not initialized")
+	}
+
+	url := p.baseURL + "/experimentation.assignment.v1.AssignmentService/GetAssignment"
+	reqBody := assignmentJSONRequest{
+		UserID:       attrs.UserID,
+		ExperimentID: experimentID,
+		Attributes:   flattenProps(attrs.Properties),
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+
+	var data assignmentJSONResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if !data.IsActive || data.VariantID == "" {
+		return nil, nil
+	}
+
+	var payload map[string]any
+	if data.PayloadJSON != "" {
+		if err := json.Unmarshal([]byte(data.PayloadJSON), &payload); err != nil {
+			payload = nil
+		}
+	}
+
+	return &Assignment{
+		ExperimentID: data.ExperimentID,
+		VariantName:  data.VariantID,
+		Payload:      payload,
+		FromCache:    false,
+	}, nil
+}
+
+func (p *RemoteProvider) GetAllAssignments(ctx context.Context, attrs UserAttributes) (map[string]*Assignment, error) {
+	if p.client == nil {
+		return nil, fmt.Errorf("provider not initialized")
+	}
+
+	url := p.baseURL + "/experimentation.assignment.v1.AssignmentService/GetAssignments"
+	reqBody := assignmentJSONRequest{
+		UserID:     attrs.UserID,
+		Attributes: flattenProps(attrs.Properties),
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+
+	var data assignmentsJSONResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	results := make(map[string]*Assignment, len(data.Assignments))
+	for _, a := range data.Assignments {
+		if !a.IsActive || a.VariantID == "" {
+			continue
+		}
+		var payload map[string]any
+		if a.PayloadJSON != "" {
+			if err := json.Unmarshal([]byte(a.PayloadJSON), &payload); err != nil {
+				payload = nil
+			}
+		}
+		results[a.ExperimentID] = &Assignment{
+			ExperimentID: a.ExperimentID,
+			VariantName:  a.VariantID,
+			Payload:      payload,
+			FromCache:    false,
+		}
+	}
+	return results, nil
+}
+
+func (p *RemoteProvider) Close() error {
+	if p.client != nil {
+		p.client.CloseIdleConnections()
+	}
+	return nil
+}
+
+// flattenProps converts map[string]any to map[string]string for the proto attributes.
+func flattenProps(props map[string]any) map[string]string {
+	if len(props) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(props))
+	for k, v := range props {
+		result[k] = fmt.Sprint(v)
+	}
+	return result
+}
 
 // ---------------------------------------------------------------------------
 // LocalProvider
@@ -138,14 +285,40 @@ func (p *LocalProvider) GetAssignment(_ context.Context, experimentID string, at
 	if !ok {
 		return nil, nil
 	}
+	if len(config.Variants) == 0 {
+		return nil, nil
+	}
 
-	// TODO (Agent-1): Use CGo binding to experimentation_bucket() from experimentation-ffi
-	//   1. bucket = experimentation_bucket(attrs.UserID, config.HashSalt, config.TotalBuckets)
-	//   2. if bucket < config.AllocationStart || bucket > config.AllocationEnd → nil
-	//   3. Map bucket to variant by cumulative traffic fractions
-	_ = config
-	_ = attrs
-	return nil, nil
+	bucket := computeBucket(attrs.UserID, config.HashSalt, uint32(config.TotalBuckets))
+
+	if !isInAllocation(bucket, uint32(config.AllocationStart), uint32(config.AllocationEnd)) {
+		return nil, nil
+	}
+
+	allocSize := float64(config.AllocationEnd - config.AllocationStart + 1)
+	relativeBucket := float64(bucket - uint32(config.AllocationStart))
+
+	cumulative := 0.0
+	for _, v := range config.Variants {
+		cumulative += v.TrafficFraction * allocSize
+		if relativeBucket < cumulative {
+			return &Assignment{
+				ExperimentID: config.ExperimentID,
+				VariantName:  v.Name,
+				Payload:      v.Payload,
+				FromCache:    true,
+			}, nil
+		}
+	}
+
+	// FP rounding fallback — assign to last variant
+	last := config.Variants[len(config.Variants)-1]
+	return &Assignment{
+		ExperimentID: config.ExperimentID,
+		VariantName:  last.Name,
+		Payload:      last.Payload,
+		FromCache:    true,
+	}, nil
 }
 
 func (p *LocalProvider) GetAllAssignments(ctx context.Context, attrs UserAttributes) (map[string]*Assignment, error) {

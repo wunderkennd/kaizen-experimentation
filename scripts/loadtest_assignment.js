@@ -1,11 +1,13 @@
 // =============================================================================
-// k6 Load Test — M1 Assignment Service: p99 < 5ms at 10K rps
+// k6 Load Test — M1 Assignment Service: p99 < 5ms at configurable rps
 // =============================================================================
-// Validates Phase 1 SLA: GetAssignment p99 < 5ms under sustained 10K rps load.
+// Validates SLA: GetAssignment p99 < 5ms under sustained load.
+// VU counts scale dynamically with TARGET_RPS (baseline: 10K rps).
 //
 // Uses k6's native gRPC module against the tonic gRPC server.
 // Exercises all experiment types from dev/config.json:
 //   - AB (exp_dev_001, exp_dev_002)
+//   - CUMULATIVE_HOLDOUT (exp_dev_holdout_001)
 //   - SESSION_LEVEL (exp_dev_003, exp_dev_008)
 //   - MAB (exp_dev_005)
 //   - CONTEXTUAL_BANDIT (cold-start:movie-new-001)
@@ -14,10 +16,11 @@
 // Usage:
 //   k6 run scripts/loadtest_assignment.js
 //   ASSIGNMENT_ADDR=localhost:50051 k6 run scripts/loadtest_assignment.js
-//   k6 run --env TARGET_RPS=5000 scripts/loadtest_assignment.js
+//   k6 run --env TARGET_RPS=50000 scripts/loadtest_assignment.js
 //
 // Full automated run:
 //   bash scripts/loadtest_assignment.sh
+//   TARGET_RPS=50000 bash scripts/loadtest_assignment.sh
 // =============================================================================
 
 import grpc from "k6/net/grpc";
@@ -45,6 +48,9 @@ const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "10000");
 const DURATION = __ENV.DURATION || "60s";
 const RAMP_DURATION = __ENV.RAMP_DURATION || "10s";
 
+// Scale VU counts proportionally to TARGET_RPS (baseline: 10K rps)
+const VU_SCALE = Math.max(1, TARGET_RPS / 10000);
+
 const SERVICE = "experimentation.assignment.v1.AssignmentService";
 
 const client = new grpc.Client();
@@ -56,38 +62,38 @@ client.load(["proto"], "experimentation/assignment/v1/assignment_service.proto")
 
 export const options = {
   scenarios: {
-    // Sustained 10K rps for GetAssignment (85% of traffic)
+    // GetAssignment (85% of traffic) — VUs scale with TARGET_RPS
     get_assignment: {
       executor: "constant-arrival-rate",
       rate: Math.floor(TARGET_RPS * 0.85),
       timeUnit: "1s",
       duration: DURATION,
-      preAllocatedVUs: 100,
-      maxVUs: 500,
+      preAllocatedVUs: Math.ceil(100 * VU_SCALE),
+      maxVUs: Math.ceil(500 * VU_SCALE),
       exec: "getAssignment",
       gracefulStop: "5s",
     },
 
-    // Sustained 10% for GetAssignments batch
+    // GetAssignments batch (10% of traffic)
     get_assignments_batch: {
       executor: "constant-arrival-rate",
       rate: Math.floor(TARGET_RPS * 0.10),
       timeUnit: "1s",
       duration: DURATION,
-      preAllocatedVUs: 20,
-      maxVUs: 100,
+      preAllocatedVUs: Math.ceil(20 * VU_SCALE),
+      maxVUs: Math.ceil(100 * VU_SCALE),
       exec: "getAssignments",
       gracefulStop: "5s",
     },
 
-    // Sustained 5% for GetInterleavedList
+    // GetInterleavedList (5% of traffic)
     get_interleaved: {
       executor: "constant-arrival-rate",
       rate: Math.floor(TARGET_RPS * 0.05),
       timeUnit: "1s",
       duration: DURATION,
-      preAllocatedVUs: 10,
-      maxVUs: 50,
+      preAllocatedVUs: Math.ceil(10 * VU_SCALE),
+      maxVUs: Math.ceil(50 * VU_SCALE),
       exec: "getInterleavedList",
       gracefulStop: "5s",
     },
@@ -119,7 +125,7 @@ function randomSessionId() {
 }
 
 // Experiment pools matching dev/config.json
-const AB_EXPERIMENTS = ["exp_dev_001", "exp_dev_002"];
+const AB_EXPERIMENTS = ["exp_dev_001", "exp_dev_002", "exp_dev_holdout_001"];
 const SESSION_EXPERIMENTS = ["exp_dev_003", "exp_dev_008"];
 const BANDIT_EXPERIMENTS = ["exp_dev_005", "cold-start:movie-new-001"];
 const INTERLEAVE_EXPERIMENTS = [

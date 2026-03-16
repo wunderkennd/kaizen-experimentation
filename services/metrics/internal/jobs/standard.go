@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
+	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 )
@@ -102,6 +103,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		if err != nil {
 			return nil, fmt.Errorf("jobs: execute metric %s: %w", m.MetricID, err)
 		}
+		m3metrics.SparkQueryDuration.WithLabelValues(jobType).Observe(result.Duration.Seconds())
+		m3metrics.SparkQueryRows.WithLabelValues(jobType).Observe(float64(result.RowCount))
 
 		if err := j.queryLog.Log(ctx, querylog.Entry{
 			ExperimentID: experimentID,
@@ -128,6 +131,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			if err != nil {
 				return nil, fmt.Errorf("jobs: execute delta method for %s: %w", m.MetricID, err)
 			}
+			m3metrics.SparkQueryDuration.WithLabelValues("delta_method").Observe(deltaResult.Duration.Seconds())
+			m3metrics.SparkQueryRows.WithLabelValues("delta_method").Observe(float64(deltaResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
@@ -171,6 +176,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			if err != nil {
 				return nil, fmt.Errorf("jobs: execute CUPED covariate for %s: %w", m.MetricID, err)
 			}
+			m3metrics.SparkQueryDuration.WithLabelValues("cuped_covariate").Observe(cupedResult.Duration.Seconds())
+			m3metrics.SparkQueryRows.WithLabelValues("cuped_covariate").Observe(float64(cupedResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
@@ -205,6 +212,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			if err != nil {
 				return nil, fmt.Errorf("jobs: execute session-level metric for %s: %w", m.MetricID, err)
 			}
+			m3metrics.SparkQueryDuration.WithLabelValues("session_level_metric").Observe(slResult.Duration.Seconds())
+			m3metrics.SparkQueryRows.WithLabelValues("session_level_metric").Observe(float64(slResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
@@ -238,6 +247,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			if err != nil {
 				return nil, fmt.Errorf("jobs: execute lifecycle metric for %s: %w", m.MetricID, err)
 			}
+			m3metrics.SparkQueryDuration.WithLabelValues("lifecycle_metric").Observe(lcResult.Duration.Seconds())
+			m3metrics.SparkQueryRows.WithLabelValues("lifecycle_metric").Observe(float64(lcResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
@@ -285,6 +296,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			if err != nil {
 				return nil, fmt.Errorf("jobs: execute daily treatment effect for %s: %w", m.MetricID, err)
 			}
+			m3metrics.SparkQueryDuration.WithLabelValues("daily_treatment_effect").Observe(teResult.Duration.Seconds())
+			m3metrics.SparkQueryRows.WithLabelValues("daily_treatment_effect").Observe(float64(teResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
@@ -334,6 +347,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 				if err != nil {
 					return nil, fmt.Errorf("jobs: execute QoE-engagement correlation (%s × %s): %w", qm.MetricID, em.MetricID, err)
 				}
+				m3metrics.SparkQueryDuration.WithLabelValues("qoe_engagement_correlation").Observe(corrResult.Duration.Seconds())
+				m3metrics.SparkQueryRows.WithLabelValues("qoe_engagement_correlation").Observe(float64(corrResult.RowCount))
 
 				if err := j.queryLog.Log(ctx, querylog.Entry{
 					ExperimentID: experimentID,

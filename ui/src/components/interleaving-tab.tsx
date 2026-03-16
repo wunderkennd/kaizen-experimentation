@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -12,8 +12,9 @@ import {
   Cell,
 } from 'recharts';
 import type { InterleavingAnalysisResult } from '@/lib/types';
-import { getInterleavingAnalysis } from '@/lib/api';
+import { getInterleavingAnalysis, RpcError } from '@/lib/api';
 import { formatPValue } from '@/lib/utils';
+import { RetryableError } from '@/components/retryable-error';
 
 interface InterleavingTabProps {
   experimentId: string;
@@ -24,12 +25,19 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getInterleavingAnalysis(experimentId)
       .then(setResult)
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        if (err instanceof RpcError && err.status === 404) return;
+        setError(err.message);
+      })
       .finally(() => setLoading(false));
   }, [experimentId]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -40,7 +48,11 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
     );
   }
 
-  if (error || !result) {
+  if (error) {
+    return <RetryableError message={error} onRetry={fetchData} context="interleaving analysis" />;
+  }
+
+  if (!result) {
     return (
       <div className="rounded-md bg-gray-50 p-4 text-sm text-gray-500">
         No interleaving analysis available for this experiment.

@@ -286,9 +286,11 @@ fn test_layers_preserved() {
 
     let (mut cache, handle) = ConfigCache::new(config);
 
-    // Add a new experiment — layers should be preserved.
+    // Add a new experiment on an existing layer — layer count should stay at 2.
+    let mut proto = make_proto_experiment("exp_2", ExperimentState::Running);
+    proto.layer_id = "custom_layer".to_string();
     cache.apply_update(&ConfigUpdate {
-        experiment: Some(make_proto_experiment("exp_2", ExperimentState::Running)),
+        experiment: Some(proto),
         is_deletion: false,
         version: 1,
     });
@@ -298,6 +300,20 @@ fn test_layers_preserved() {
     assert!(snap.layers_by_id.contains_key("custom_layer"));
     assert!(snap.layers_by_id.contains_key("another_layer"));
     assert_eq!(snap.layers_by_id["custom_layer"].total_buckets, 5000);
+
+    // Add an experiment on a NEW layer — auto-registration should add it.
+    let mut proto_new = make_proto_experiment("exp_3", ExperimentState::Running);
+    proto_new.layer_id = "brand_new_layer".to_string();
+    cache.apply_update(&ConfigUpdate {
+        experiment: Some(proto_new),
+        is_deletion: false,
+        version: 2,
+    });
+
+    let snap2 = handle.snapshot();
+    assert_eq!(snap2.layers.len(), 3);
+    assert!(snap2.layers_by_id.contains_key("brand_new_layer"));
+    assert_eq!(snap2.layers_by_id["brand_new_layer"].total_buckets, 10_000);
 }
 
 #[test]
