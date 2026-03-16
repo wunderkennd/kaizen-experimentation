@@ -21,6 +21,9 @@ export function NavHeader() {
           <Link href="/" className="text-lg font-semibold text-gray-900">
             Experimentation Platform
           </Link>
+          <Link href="/flags" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-flags">
+            Flags
+          </Link>
           <Link href="/metrics" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-metrics">
             Metrics
           </Link>

@@ -428,6 +428,33 @@ export interface ListMetricDefinitionsResponse {
   nextPageToken: string;
 }
 
+// --- Feature Flags (M7) ---
+
+export type FlagType = 'BOOLEAN' | 'STRING' | 'NUMERIC' | 'JSON';
+
+export interface FlagVariant {
+  variantId: string;
+  value: string;
+  trafficFraction: number;
+}
+
+export interface Flag {
+  flagId: string;
+  name: string;
+  description: string;
+  type: FlagType;
+  defaultValue: string;
+  enabled: boolean;
+  rolloutPercentage: number;
+  variants: FlagVariant[];
+  targetingRuleId?: string;
+}
+
+export interface ListFlagsResponse {
+  flags: Flag[];
+  nextPageToken: string;
+}
+
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';
 
 export interface BanditArmStats {
