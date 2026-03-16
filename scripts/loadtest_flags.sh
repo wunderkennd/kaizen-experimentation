@@ -192,5 +192,5 @@ print(f\"  Error rate:          {r.get('eval_error_rate', 0)*100:.3f}%\")
 else
     warn "No results file found — k6 may have reported inline"
     # k6 thresholds cause exit code 99 on failure
-    exit 0
+    exit $k6_exit
 fi
