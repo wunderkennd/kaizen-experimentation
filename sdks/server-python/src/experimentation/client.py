@@ -80,7 +80,7 @@ class ExperimentClient:
                 experiment_id,
                 exc_info=True,
             )
-            return None
+            raise
 
     async def close(self) -> None:
         """Shut down provider(s) and release resources."""
