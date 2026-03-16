@@ -17,7 +17,7 @@
 | Agent | Module | Status | Details |
 |-------|--------|--------|---------|
 | Agent-1 | M1 Assignment | 🔵 Polish | [agent-1.md](status/agent-1.md) |
-| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | [agent-2.md](status/agent-2.md) |
+| Agent-2 | M2 Pipeline | 🔵 Polish | [agent-2.md](status/agent-2.md) |
 | Agent-3 | M3 Metrics | 🟢 All Phases Complete | [agent-3.md](status/agent-3.md) |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟢 All Phases Complete | [agent-4.md](status/agent-4.md) |
 | Agent-5 | M5 Management | 🟢 All Phases Complete | [agent-5.md](status/agent-5.md) |
@@ -236,6 +236,8 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 - [x] Devin: Platform improvements — port collisions, assert_finite, status split, CI, SDKs (PR #160)
 - [x] Devin: 12 bugs + optimizations from early PR review, human review checklist passed 6/6 (PR #161)
 - [x] Agent-1: Post-review cleanup — doc ports, iOS SDK, Python drift (PR #162)
+
+- [x] Agent-2: PGO build + k6 load test + 6 Grafana panels + 2 alert rules (PR TBD)
 
 **In progress:**
 - Agent-1: Mobile SDK CI builds — guard UniFFI imports (PR #163, open)
