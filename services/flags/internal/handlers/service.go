@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/org/experimentation-platform/services/flags/internal/store"
+	"github.com/org/experimentation-platform/services/flags/internal/telemetry"
 	"github.com/org/experimentation/gen/go/experimentation/flags/v1/flagsv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 )
@@ -15,6 +16,7 @@ type FlagService struct {
 	auditStore       store.AuditStore
 	managementClient managementv1connect.ExperimentManagementServiceClient
 	defaultLayerID   string
+	metrics          *telemetry.Metrics
 }
 
 // NewFlagService creates a new FlagService.
@@ -36,7 +38,13 @@ func NewFlagServiceFull(s store.Store, a store.AuditStore, mc managementv1connec
 	return &FlagService{store: s, auditStore: a, managementClient: mc, defaultLayerID: defaultLayerID}
 }
 
-// NewReconcilerFromService creates a Reconciler using the FlagService's dependencies.
+// WithMetrics returns the FlagService with metrics instrumentation attached.
+func (s *FlagService) WithMetrics(m *telemetry.Metrics) *FlagService {
+	s.metrics = m
+	return s
+}
+
+// NewReconciler creates a Reconciler using the FlagService's dependencies.
 func (s *FlagService) NewReconciler(interval time.Duration, defaultAction ResolutionAction) *Reconciler {
-	return NewReconciler(s.store, s.auditStore, s.managementClient, interval, defaultAction)
+	return NewReconcilerWithMetrics(s.store, s.auditStore, s.managementClient, interval, defaultAction, s.metrics)
 }

@@ -358,6 +358,7 @@ loadtest-assignment:
 loadtest-assignment-50k:
     TARGET_RPS=50000 DURATION=60s bash scripts/loadtest_assignment.sh
 
+
 # Run M7 flag service load test: p99 < 10ms at 20K rps (builds, starts server, seeds flags, validates SLA)
 loadtest-flags:
     bash scripts/loadtest_flags.sh
@@ -365,6 +366,7 @@ loadtest-flags:
 # Run M4b policy service load test: p99 < 15ms at 10K rps (builds, starts server, seeds experiments, validates SLA)
 loadtest-policy:
     bash scripts/loadtest_policy.sh
+
 
 # ==============================================================================
 # Convenience
