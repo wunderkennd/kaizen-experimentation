@@ -87,6 +87,10 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     ],
     guardrailAction: 'AUTO_PAUSE',
     isCumulativeHoldout: false,
+    qoeConfig: {
+      qoeMetrics: ['rebuffer_ratio', 'time_to_first_frame_ms', 'avg_bitrate_kbps', 'startup_failure_rate'],
+      deviceFilter: 'smart_tv',
+    },
     createdAt: '2026-03-01T14:30:00Z',
   },
   {
@@ -119,6 +123,13 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     guardrailConfigs: [],
     guardrailAction: 'AUTO_PAUSE',
     isCumulativeHoldout: false,
+    interleavingConfig: {
+      method: 'TEAM_DRAFT',
+      algorithmIds: ['bm25_v2', 'semantic_search_v2'],
+      creditAssignment: 'BINARY_WIN',
+      creditMetricEvent: 'click',
+      maxListSize: 20,
+    },
     createdAt: '2026-02-20T09:15:00Z',
     startedAt: '2026-02-21T06:00:00Z',
   },
@@ -172,6 +183,13 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     ],
     guardrailAction: 'ALERT_ONLY',
     isCumulativeHoldout: false,
+    banditExperimentConfig: {
+      algorithm: 'THOMPSON_SAMPLING',
+      rewardMetricId: 'play_through_rate',
+      contextFeatureKeys: ['content_genre', 'user_tenure_days', 'device_type'],
+      minExplorationFraction: 0.1,
+      warmupObservations: 200,
+    },
     createdAt: '2026-03-02T16:45:00Z',
   },
   // Transitional state experiments for testing StartingChecklist and ConcludingProgress

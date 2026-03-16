@@ -1,6 +1,6 @@
 plugins {
-    id("com.android.library")
-    kotlin("android")
+    id("com.android.library") version "8.2.2"
+    kotlin("android") version "1.9.22"
 }
 
 android {
@@ -19,6 +19,13 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    sourceSets.getByName("main") {
+        val uniffiDir = file("src/uniffi/kotlin")
+        if (uniffiDir.isDirectory) {
+            kotlin.srcDir(uniffiDir)
+        }
     }
 }
 

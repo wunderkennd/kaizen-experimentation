@@ -53,6 +53,8 @@ message MetricResult {
   repeated SegmentResult segment_results = 16;
   // Session-level: both naive and clustered estimates.
   SessionLevelResult session_level_result = 17;
+  // IPW-adjusted result for bandit experiments (when assignment_probability available).
+  IpwResult ipw_result = 18;
 }
 
 message SequentialResult {
@@ -84,6 +86,22 @@ message SessionLevelResult {
   double design_effect = 3;
   double naive_p_value = 4;
   double clustered_p_value = 5;
+}
+
+// IPW-adjusted treatment effect for bandit experiments.
+// Populated when metric_summaries has an assignment_probability column.
+message IpwResult {
+  // IPW-adjusted treatment effect (Hájek estimator).
+  double effect = 1;
+  // Standard error of the IPW effect estimate (sandwich variance).
+  double se = 2;
+  double ci_lower = 3;
+  double ci_upper = 4;
+  double p_value = 5;
+  // Number of observations with clipped assignment probabilities.
+  int32 n_clipped = 6;
+  // Kish's effective sample size (accounts for variable weighting).
+  double effective_sample_size = 7;
 }
 
 // AnalysisResult is the top-level result for an experiment.
