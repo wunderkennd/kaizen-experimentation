@@ -1,13 +1,13 @@
 # Agent-5 — M5 Management Service
 
 **Status**: All Phases Complete
-**Current Branch**: agent-5/test/m1m5-contract
-**Current Milestone**: All pair integration tests complete
+**Current Branch**: agent-5/feat/consumer-prometheus-metrics
+**Current Milestone**: Operational hardening complete
 **Blocked By**: —
 
 ## Summary
 
-Phase 3 complete. RBAC interceptor with 4-level role hierarchy. All pair integration tests complete.
+All phases complete. RBAC interceptor with 4-level role hierarchy. All pair integration tests complete. Prometheus metrics for Kafka consumers. 21 stress tests covering concurrent state transitions across every lifecycle operation. Chaos test validates metrics endpoint recovery.
 
 ## Key PRs
 
@@ -27,9 +27,15 @@ Phase 3 complete. RBAC interceptor with 4-level role hierarchy. All pair integra
 | #126 | M5-M6 wire-format contract tests (11 tests) | Merged |
 | #135 | M1-M5 config streaming contract tests (10 tests) | Merged |
 | #157 | MetricType type_filter for ListMetricDefinitions | Merged |
+| #175 | Prometheus metrics, edge-case tests, concurrent stress tests, chaos metrics validation | Open |
 
 ## Pair Integrations
 
 - Agent-5 <-> Agent-1 (config streaming)
 - Agent-5 <-> Agent-3 (experiment/metric/surrogate definitions)
 - Agent-5 <-> Agent-6 (management API + UI)
+
+## Operational Observability
+
+- **Prometheus metrics** (port 50060): `m5_alerts_processed_total`, `m5_alert_processing_duration_seconds`, `m5_kafka_fetch_errors_total`, `m5_last_processed_timestamp_seconds`
+- **Chaos test** validates `/metrics` endpoint recovery, metric family registration, and counter validity after crash-only restart
