@@ -106,6 +106,10 @@ export const handlers = [
       sequentialTestConfig: body.sequentialTestConfig,
       targetingRuleId: body.targetingRuleId as string | undefined,
       isCumulativeHoldout: (body.isCumulativeHoldout as boolean) || false,
+      interleavingConfig: body.interleavingConfig,
+      sessionConfig: body.sessionConfig,
+      banditExperimentConfig: body.banditExperimentConfig,
+      qoeConfig: body.qoeConfig,
       createdAt: new Date().toISOString(),
     };
 
