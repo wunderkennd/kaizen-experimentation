@@ -10,8 +10,9 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::analysis::v1::{
-    AnalysisResult, InterferenceAnalysisResult, MetricResult, NoveltyAnalysisResult, SegmentResult,
-    SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult,
+    AnalysisResult, InterferenceAnalysisResult, IpwResult as ProtoIpwResult, MetricResult,
+    NoveltyAnalysisResult, SegmentResult, SequentialResult, SessionLevelResult,
+    SrmResult as ProtoSrmResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,8 @@ pub struct CachedMetricResult {
     pub sequential_result: Option<CachedSequentialResult>,
     pub segment_results: Vec<CachedSegmentResult>,
     pub session_level_result: Option<CachedSessionLevelResult>,
+    #[serde(default)]
+    pub ipw_result: Option<CachedIpwResult>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,6 +78,17 @@ pub struct CachedSessionLevelResult {
     pub design_effect: f64,
     pub naive_p_value: f64,
     pub clustered_p_value: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CachedIpwResult {
+    pub effect: f64,
+    pub se: f64,
+    pub ci_lower: f64,
+    pub ci_upper: f64,
+    pub p_value: f64,
+    pub n_clipped: i32,
+    pub effective_sample_size: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -148,6 +162,7 @@ impl From<&MetricResult> for CachedMetricResult {
                 .session_level_result
                 .as_ref()
                 .map(CachedSessionLevelResult::from),
+            ipw_result: m.ipw_result.as_ref().map(CachedIpwResult::from),
         }
     }
 }
@@ -175,6 +190,7 @@ impl From<&CachedMetricResult> for MetricResult {
                 .session_level_result
                 .as_ref()
                 .map(SessionLevelResult::from),
+            ipw_result: c.ipw_result.as_ref().map(ProtoIpwResult::from),
         }
     }
 }
@@ -249,6 +265,34 @@ impl From<&CachedSessionLevelResult> for SessionLevelResult {
             design_effect: c.design_effect,
             naive_p_value: c.naive_p_value,
             clustered_p_value: c.clustered_p_value,
+        }
+    }
+}
+
+impl From<&ProtoIpwResult> for CachedIpwResult {
+    fn from(i: &ProtoIpwResult) -> Self {
+        Self {
+            effect: i.effect,
+            se: i.se,
+            ci_lower: i.ci_lower,
+            ci_upper: i.ci_upper,
+            p_value: i.p_value,
+            n_clipped: i.n_clipped,
+            effective_sample_size: i.effective_sample_size,
+        }
+    }
+}
+
+impl From<&CachedIpwResult> for ProtoIpwResult {
+    fn from(c: &CachedIpwResult) -> Self {
+        Self {
+            effect: c.effect,
+            se: c.se,
+            ci_lower: c.ci_lower,
+            ci_upper: c.ci_upper,
+            p_value: c.p_value,
+            n_clipped: c.n_clipped,
+            effective_sample_size: c.effective_sample_size,
         }
     }
 }
@@ -545,6 +589,7 @@ mod tests {
                 sequential_result: None,
                 segment_results: vec![],
                 session_level_result: None,
+                ipw_result: None,
             }],
             srm_result: Some(ProtoSrmResult {
                 chi_squared: 0.1,

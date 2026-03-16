@@ -24,20 +24,6 @@ interface HashProvider {
     fun isInAllocation(bucket: Int, startBucket: Int, endBucket: Int): Boolean
 }
 
-/**
- * Production hash provider that delegates to the generated UniFFI bindings.
- * Requires the UniFFI-generated native library to be loaded.
- */
-class UniFFIHashProvider : HashProvider {
-    override fun bucket(userId: String, salt: String, totalBuckets: Int): Int =
-        uniffi.experimentation_hash.uniffiBucket(userId, salt, totalBuckets.toUInt()).toInt()
-
-    override fun isInAllocation(bucket: Int, startBucket: Int, endBucket: Int): Boolean =
-        uniffi.experimentation_hash.uniffiIsInAllocation(
-            bucket.toUInt(), startBucket.toUInt(), endBucket.toUInt()
-        )
-}
-
 // ---------------------------------------------------------------------------
 // LocalProvider
 // ---------------------------------------------------------------------------

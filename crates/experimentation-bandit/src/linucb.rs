@@ -74,16 +74,16 @@ impl LinUcbArm {
             let numerator = &a_inv_x * a_inv_x.transpose();
             self.a_inv -= numerator / denominator;
 
-            // Verify result is finite
-            for val in self.a_inv.iter() {
-                assert_finite(*val, "LinUCB A_inv element after Sherman-Morrison");
-            }
+            // Single O(1) finiteness check via Frobenius norm instead of
+            // iterating over all d² elements. The norm is NaN/Inf if any
+            // element is non-finite.
+            let norm = self.a_inv.norm();
+            assert_finite(norm, "LinUCB A_inv Frobenius norm after Sherman-Morrison");
         }
 
         self.b += reward * x;
-        for val in self.b.iter() {
-            assert_finite(*val, "LinUCB b element after update");
-        }
+        let b_norm = self.b.norm();
+        assert_finite(b_norm, "LinUCB b vector norm after update");
 
         self.n_pulls += 1;
     }
@@ -234,15 +234,15 @@ impl LinUcbPolicy {
     /// Convert a context HashMap to a DVector using the stable feature_keys ordering.
     /// Missing keys default to 0.0.
     fn context_to_vector(&self, context: &HashMap<String, f64>) -> DVector<f64> {
-        let data: Vec<f64> = self
-            .feature_keys
-            .iter()
-            .map(|key| {
-                let val = context.get(key).copied().unwrap_or(0.0);
+        let mut data = Vec::with_capacity(self.feature_keys.len());
+        for key in &self.feature_keys {
+            let val = context.get(key).copied().unwrap_or(0.0);
+            if !val.is_finite() {
+                // Only allocate the format string on the error path.
                 assert_finite(val, &format!("context feature '{key}'"));
-                val
-            })
-            .collect();
+            }
+            data.push(val);
+        }
         DVector::from_vec(data)
     }
 

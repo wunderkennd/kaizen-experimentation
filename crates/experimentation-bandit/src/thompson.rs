@@ -40,27 +40,61 @@ impl BetaArm {
     }
 }
 
+/// Number of Monte Carlo simulations used to estimate assignment probabilities.
+const MC_SIMULATIONS: u32 = 1000;
+
 /// Select an arm via Thompson Sampling from a set of Beta arms.
+///
+/// Assignment probabilities are estimated via Monte Carlo simulation: we draw
+/// `MC_SIMULATIONS` independent samples from each arm's Beta posterior and
+/// count how often each arm has the highest draw. This gives the marginal
+/// probability that each arm would be selected, which is the correct
+/// propensity score for downstream inverse propensity weighting (IPW).
 pub fn select_arm<R: Rng>(arms: &[BetaArm], rng: &mut R) -> ArmSelection {
     assert!(!arms.is_empty(), "must have at least one arm");
 
+    // Single draw to decide which arm to select *now*.
     let samples: Vec<(usize, f64)> = arms
         .iter()
         .enumerate()
         .map(|(i, arm)| (i, arm.sample(rng)))
         .collect();
 
-    let total_sample: f64 = samples.iter().map(|(_, s)| s).sum();
     let best_idx = samples
         .iter()
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
         .unwrap()
         .0;
 
+    // Monte Carlo estimation of assignment probabilities.
+    // For each simulation, draw from every arm's posterior and record the winner.
+    let mut win_counts = vec![0u32; arms.len()];
+    for _ in 0..MC_SIMULATIONS {
+        let mut best_val = f64::NEG_INFINITY;
+        let mut best = 0usize;
+        for (i, arm) in arms.iter().enumerate() {
+            let draw = arm.sample(rng);
+            if draw > best_val {
+                best_val = draw;
+                best = i;
+            }
+        }
+        win_counts[best] += 1;
+    }
+
+    // Guarantee the actually selected arm has at least 1 win so that
+    // assignment_probability > 0 (required by downstream IPW: ipw.rs:84).
+    if win_counts[best_idx] == 0 {
+        win_counts[best_idx] = 1;
+    }
+
+    let total_wins: u32 = win_counts.iter().sum();
     let all_arm_probabilities: HashMap<String, f64> = arms
         .iter()
-        .zip(samples.iter())
-        .map(|(arm, (_, s))| (arm.arm_id.clone(), s / total_sample))
+        .enumerate()
+        .map(|(i, arm)| {
+            (arm.arm_id.clone(), win_counts[i] as f64 / total_wins as f64)
+        })
         .collect();
 
     let assignment_probability = all_arm_probabilities[&arms[best_idx].arm_id];

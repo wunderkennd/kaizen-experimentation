@@ -413,9 +413,11 @@ impl AssignmentService for AssignmentServiceImpl {
             .partition(|e| e.is_cumulative_holdout);
 
         // Phase 1: Evaluate holdout experiments. Track layers claimed by holdouts.
+        // On holdout assignment error, treat the layer as held-out (fail-closed)
+        // to avoid accidentally exposing holdout users to treatments.
         let mut holdout_layers: HashSet<String> = HashSet::new();
         for exp in &holdouts {
-            if let Ok(resp) = self
+            match self
                 .assign(
                     &exp.experiment_id,
                     &req.user_id,
@@ -424,10 +426,25 @@ impl AssignmentService for AssignmentServiceImpl {
                 )
                 .await
             {
-                if !resp.variant_id.is_empty() {
+                Ok(resp) => {
+                    if !resp.variant_id.is_empty() {
+                        holdout_layers.insert(exp.layer_id.clone());
+                    }
+                    assignments.push(resp);
+                }
+                Err(e) => {
+                    // Fail-closed: mark this layer as held-out so that the user
+                    // is NOT assigned to regular experiments in this layer.
+                    // This prevents holdout leakage when the holdout assignment
+                    // itself fails (e.g., missing layer config).
+                    tracing::warn!(
+                        experiment_id = %exp.experiment_id,
+                        layer_id = %exp.layer_id,
+                        error = %e,
+                        "holdout assignment failed, excluding layer (fail-closed)",
+                    );
                     holdout_layers.insert(exp.layer_id.clone());
                 }
-                assignments.push(resp);
             }
         }
 
@@ -436,7 +453,7 @@ impl AssignmentService for AssignmentServiceImpl {
             if holdout_layers.contains(&exp.layer_id) {
                 continue;
             }
-            if let Ok(resp) = self
+            match self
                 .assign(
                     &exp.experiment_id,
                     &req.user_id,
@@ -445,7 +462,16 @@ impl AssignmentService for AssignmentServiceImpl {
                 )
                 .await
             {
-                assignments.push(resp);
+                Ok(resp) => {
+                    assignments.push(resp);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        experiment_id = %exp.experiment_id,
+                        error = %e,
+                        "assignment failed for regular experiment, skipping",
+                    );
+                }
             }
         }
 
