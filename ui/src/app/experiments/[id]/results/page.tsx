@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
 import { getExperiment, getAnalysisResult } from '@/lib/api';
@@ -74,7 +73,9 @@ export default function ResultsPage() {
   const [showCuped, setShowCuped] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initialTab = (searchParams.get('tab') as AnalysisTab) || 'overview';
+  const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session'];
+  const rawTab = searchParams.get('tab');
+  const initialTab: AnalysisTab = rawTab && VALID_TABS.includes(rawTab as AnalysisTab) ? (rawTab as AnalysisTab) : 'overview';
   const [activeTab, setActiveTabState] = useState<AnalysisTab>(initialTab);
 
   const setActiveTab = useCallback((tab: AnalysisTab) => {
@@ -92,10 +93,13 @@ export default function ResultsPage() {
     if (!params.id) return;
     setLoading(true);
     setError(null);
-    Promise.all([getExperiment(params.id), getAnalysisResult(params.id)])
-      .then(([exp, analysis]) => {
+    getExperiment(params.id)
+      .then((exp) => {
         setExperiment(exp);
-        setAnalysisResult(analysis);
+        return getAnalysisResult(params.id).catch(() => null);
+      })
+      .then((analysis) => {
+        if (analysis) setAnalysisResult(analysis);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
