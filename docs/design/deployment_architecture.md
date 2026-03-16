@@ -56,10 +56,11 @@ Kaizen Experimentation is a multi-service platform for running A/B tests, multi-
            v                              v
 +---------------------------+  +---------------------------+
 | M4b: Bandit Policy        |  | Kafka Cluster             |
-| (Rust) :50054             |  | 5 topics, 4-8 partitions  |
+| (Rust) :50054             |  | 6 topics, 4-128 partitions|
 | Thompson, LinUCB, Neural  |  | exposures, metric_events  |
 | LMAX single-thread core   |  | reward_events, qoe_events |
-| RocksDB snapshots         |  | guardrail_alerts          |
+| RocksDB snapshots         |  | guardrail_alerts,         |
+|                           |  | surrogate_recalib_reqs    |
 +---------------------------+  +----------+----------------+
                                           |
                                           v
@@ -140,7 +141,7 @@ just docker-build-svc assignment
 | Component | Purpose | Local Dev Image | Production Requirement |
 |-----------|---------|-----------------|----------------------|
 | **PostgreSQL 16** | Config, results, audit trail, query log | `postgres:16-alpine` | Managed (RDS/Cloud SQL/Fly Postgres) |
-| **Kafka** (Confluent 7.7) | Event streaming (5 topics) | `confluentinc/cp-kafka:7.7.0` | Managed (MSK/Confluent Cloud) or self-hosted |
+| **Kafka** (Confluent 7.7) | Event streaming (6 topics) | `confluentinc/cp-kafka:7.7.0` | Managed (MSK/Confluent Cloud) or self-hosted |
 | **ZooKeeper** | Kafka coordination | `confluentinc/cp-zookeeper:7.7.0` | Bundled with Kafka (KRaft mode in production) |
 | **Schema Registry** | Avro/Protobuf schema enforcement | `confluentinc/cp-schema-registry:7.7.0` | Confluent Cloud or self-hosted |
 | **Redis 7** | Feature store, caching | `redis:7-alpine` | Managed (ElastiCache/Memorystore/Upstash) |
@@ -151,11 +152,12 @@ just docker-build-svc assignment
 
 | Topic | Partitions | Purpose | Producers | Consumers |
 |-------|-----------|---------|-----------|-----------|
-| `exposures` | 4 | Assignment events | M2 | M3 |
-| `metric_events` | 8 | User behavior metrics | M2 | M3 |
-| `reward_events` | 4 | Bandit reward signals | M2 | M4b |
-| `qoe_events` | 4 | Playback quality events | M2 | M3 |
-| `guardrail_alerts` | 2 | Auto-pause triggers | M3 | M5 |
+| `exposures` | 64 | Assignment events | M2 | M3 |
+| `metric_events` | 128 | User behavior metrics | M2 | M3 |
+| `reward_events` | 32 | Bandit reward signals | M2 | M4b, M3 |
+| `qoe_events` | 64 | Playback quality events | M2 | M3 |
+| `guardrail_alerts` | 8 | Auto-pause triggers | M3 | M5 |
+| `surrogate_recalibration_requests` | 4 | Surrogate model recalibration | M5 | M3 |
 
 ### PostgreSQL Schema
 
@@ -809,11 +811,12 @@ M3 -> [guardrail_alerts] -> M5
 | Setting | Value | Rationale |
 |---------|-------|-----------|
 | Brokers | 3 (kafka.m5.large on MSK) | Replication factor 3 for durability |
-| `exposures` | 12 partitions, 7-day retention | High throughput, order by user_id |
-| `metric_events` | 24 partitions, 7-day retention | Highest volume topic |
-| `reward_events` | 8 partitions, 7-day retention | M4b consumer group |
-| `qoe_events` | 8 partitions, 7-day retention | QoE metrics |
-| `guardrail_alerts` | 4 partitions, 30-day retention | Low volume, audit trail |
+| `exposures` | 64 partitions, 90-day retention | High throughput (~50K/sec), keyed by experiment_id |
+| `metric_events` | 128 partitions, 90-day retention | Highest volume topic (~100K/sec), keyed by user_id |
+| `reward_events` | 32 partitions, 180-day retention | M4b consumer group (~5K/sec), longer retention for bandit replay |
+| `qoe_events` | 64 partitions, 90-day retention | QoE metrics (~20K/sec), keyed by session_id |
+| `guardrail_alerts` | 8 partitions, 30-day retention | Low volume (~10/hour), audit trail |
+| `surrogate_recalibration_requests` | 4 partitions, 30-day retention | Rare (~1/day), keyed by model_id |
 | Compression | lz4 | Best throughput/compression ratio |
 | `acks` | all | No message loss |
 
