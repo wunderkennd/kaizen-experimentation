@@ -8,6 +8,7 @@ import { getQueryLog } from '@/lib/api';
 import { downloadNotebook, type ExportPhase } from '@/lib/export-notebook';
 import { QueryLogTable } from '@/components/query-log-table';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 export default function SqlPage() {
   const params = useParams<{ id: string }>();
@@ -61,13 +62,11 @@ export default function SqlPage() {
   if (error) {
     return (
       <div>
-        <nav className="mb-4 text-sm text-gray-500">
-          <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-          <span className="mx-2">/</span>
-          <Link href={`/experiments/${params.id}`} className="hover:text-indigo-600">Detail</Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900">SQL</span>
-        </nav>
+        <Breadcrumb items={[
+          { label: 'Experiments', href: '/' },
+          { label: 'Detail', href: `/experiments/${params.id}` },
+          { label: 'SQL' },
+        ]} />
         <RetryableError message={error} onRetry={fetchData} context="query log" />
       </div>
     );
@@ -75,13 +74,11 @@ export default function SqlPage() {
 
   return (
     <div>
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-        <span className="mx-2">/</span>
-        <Link href={`/experiments/${params.id}`} className="hover:text-indigo-600">Detail</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">SQL</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Detail', href: `/experiments/${params.id}` },
+        { label: 'SQL' },
+      ]} />
 
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Query Log</h1>
 

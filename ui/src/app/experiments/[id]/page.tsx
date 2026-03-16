@@ -7,7 +7,9 @@ import type { Experiment, Variant } from '@/lib/types';
 import { getExperiment, updateExperiment, startExperiment, concludeExperiment, archiveExperiment, isPermissionDenied } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 import { StateBadge } from '@/components/state-badge';
 import { TypeBadge } from '@/components/type-badge';
 import { VariantTable } from '@/components/variant-table';
@@ -23,6 +25,7 @@ export default function ExperimentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { canAtLeast } = useAuth();
+  const { addToast } = useToast();
   const canEdit = canAtLeast('experimenter');
 
   const fetchData = useCallback(() => {
@@ -60,14 +63,15 @@ export default function ExperimentDetailPage() {
           break;
       }
       setExperiment(updated);
+      addToast(`Experiment ${action === 'start' ? 'started' : action === 'conclude' ? 'concluded' : 'archived'} successfully`, 'success');
     } catch (err) {
       if (isPermissionDenied(err)) {
-        setError('Permission denied: your role does not allow this action.');
+        addToast('Permission denied: your role does not allow this action.', 'error');
       } else {
-        setError(err instanceof Error ? err.message : 'Transition failed');
+        addToast(err instanceof Error ? err.message : 'Transition failed', 'error');
       }
     }
-  }, [experiment]);
+  }, [experiment, addToast]);
 
   if (loading) {
     return (
@@ -84,14 +88,10 @@ export default function ExperimentDetailPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/" className="hover:text-indigo-600">
-          Experiments
-        </Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">{experiment.name}</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: experiment.name },
+      ]} />
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">

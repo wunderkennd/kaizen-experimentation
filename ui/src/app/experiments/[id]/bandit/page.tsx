@@ -17,6 +17,7 @@ import type { Experiment, BanditDashboardResult } from '@/lib/types';
 import { getExperiment, getBanditDashboard } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const ARM_COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed'];
 
@@ -54,13 +55,11 @@ export default function BanditDashboardPage() {
   if (error || !experiment || !dashboard) {
     return (
       <div>
-        <nav className="mb-4 text-sm text-gray-500">
-          <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-          <span className="mx-2">/</span>
-          <Link href={`/experiments/${params.id}`} className="hover:text-indigo-600">Detail</Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900">Bandit</span>
-        </nav>
+        <Breadcrumb items={[
+          { label: 'Experiments', href: '/' },
+          { label: 'Detail', href: `/experiments/${params.id}` },
+          { label: 'Bandit' },
+        ]} />
         <RetryableError
           message={error || 'No bandit dashboard available for this experiment.'}
           onRetry={fetchData}
@@ -99,14 +98,11 @@ export default function BanditDashboardPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-        <span className="mx-2">/</span>
-        <Link href={`/experiments/${params.id}`} className="hover:text-indigo-600">Detail</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">Bandit</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Detail', href: `/experiments/${params.id}` },
+        { label: 'Bandit' },
+      ]} />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Bandit Dashboard</h1>
 

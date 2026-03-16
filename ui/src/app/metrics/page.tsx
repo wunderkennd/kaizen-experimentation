@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { MetricDefinition, MetricType } from '@/lib/types';
 import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
-import { AuthProvider } from '@/lib/auth-context';
-import { NavHeader } from '@/components/nav-header';
 
 const METRIC_TYPE_BADGE: Record<MetricType, string> = {
   MEAN: 'bg-blue-100 text-blue-800',
@@ -253,14 +251,5 @@ function MetricBrowserContent() {
 }
 
 export default function MetricBrowserPage() {
-  return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <NavHeader />
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <MetricBrowserContent />
-        </main>
-      </div>
-    </AuthProvider>
-  );
+  return <MetricBrowserContent />;
 }

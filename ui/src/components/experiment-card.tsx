@@ -37,7 +37,10 @@ function ResultsCell({ experiment }: { experiment: Experiment }) {
   }
 }
 
-export function ExperimentCard({ experiment }: ExperimentCardProps) {
+/** @deprecated Use ExperimentRow instead */
+export const ExperimentCard = ExperimentRow;
+
+export function ExperimentRow({ experiment }: ExperimentCardProps) {
   return (
     <tr className="hover:bg-gray-50">
       <td className="whitespace-nowrap px-4 py-3">
