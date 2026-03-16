@@ -60,7 +60,6 @@ func (c *Consumer) consume(ctx context.Context) {
 	const consumer = "guardrail"
 
 	for {
-		fetchStart := time.Now()
 		msg, err := c.reader.FetchMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil || err == io.EOF {
@@ -77,6 +76,7 @@ func (c *Consumer) consume(ctx context.Context) {
 			continue
 		}
 
+		processStart := time.Now()
 		var alert Alert
 		if err := json.Unmarshal(msg.Value, &alert); err != nil {
 			metrics.AlertsProcessed.WithLabelValues(consumer, "invalid_message").Inc()
@@ -105,7 +105,7 @@ func (c *Consumer) consume(ctx context.Context) {
 
 		rs := resultString(result)
 		metrics.AlertsProcessed.WithLabelValues(consumer, rs).Inc()
-		metrics.AlertProcessingDuration.WithLabelValues(consumer).Observe(time.Since(fetchStart).Seconds())
+		metrics.AlertProcessingDuration.WithLabelValues(consumer).Observe(time.Since(processStart).Seconds())
 		slog.Info("guardrail consumer: processed alert",
 			"experiment_id", alert.ExperimentID,
 			"metric_id", alert.MetricID,

@@ -22,7 +22,7 @@ import (
 	"github.com/org/experimentation-platform/services/management/internal/auth"
 	"github.com/org/experimentation-platform/services/management/internal/guardrail"
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
-	_ "github.com/org/experimentation-platform/services/management/internal/metrics"
+	"github.com/org/experimentation-platform/services/management/internal/metrics"
 	"github.com/org/experimentation-platform/services/management/internal/sequential"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
@@ -34,6 +34,9 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	// Pre-populate Prometheus metric families so /metrics always exposes them.
+	metrics.Init()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

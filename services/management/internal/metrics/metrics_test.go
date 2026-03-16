@@ -82,3 +82,26 @@ func TestFetchErrorsDoNotPanic(t *testing.T) {
 		}, "Inc should not panic for consumer=%s", consumer)
 	}
 }
+
+func TestInitPrePopulatesAllFamilies(t *testing.T) {
+	// Init should not panic and should make all metric families gatherable.
+	assert.NotPanics(t, func() { Init() })
+
+	gathered, err := prometheus.DefaultGatherer.Gather()
+	assert.NoError(t, err)
+
+	expected := map[string]bool{
+		"m5_alerts_processed_total":            false,
+		"m5_alert_processing_duration_seconds": false,
+		"m5_kafka_fetch_errors_total":          false,
+		"m5_last_processed_timestamp_seconds":  false,
+	}
+	for _, mf := range gathered {
+		if _, ok := expected[mf.GetName()]; ok {
+			expected[mf.GetName()] = true
+		}
+	}
+	for name, found := range expected {
+		assert.True(t, found, "Init() should make %s gatherable", name)
+	}
+}

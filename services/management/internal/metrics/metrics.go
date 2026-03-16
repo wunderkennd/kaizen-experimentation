@@ -36,3 +36,17 @@ var (
 		Help: "Unix timestamp of the last successfully processed message.",
 	}, []string{"consumer"})
 )
+
+// Init pre-populates all metric label combinations so that metric families
+// always appear in /metrics output, even before any Kafka messages are processed.
+// Call from main.go to ensure Prometheus scrapes see all m5_* families at startup.
+func Init() {
+	for _, c := range []string{"guardrail", "sequential"} {
+		FetchErrors.WithLabelValues(c).Add(0)
+		AlertProcessingDuration.WithLabelValues(c)
+		LastProcessedTimestamp.WithLabelValues(c)
+		for _, r := range []string{"skipped", "paused", "alert_only", "concluded", "error", "invalid_message"} {
+			AlertsProcessed.WithLabelValues(c, r).Add(0)
+		}
+	}
+}

@@ -48,7 +48,7 @@ scrape_configs:
   # --- Go Services ---
   - job_name: management-service
     static_configs:
-      - targets: ["host.docker.internal:50055"]
+      - targets: ["host.docker.internal:50060"]
         labels:
           module: m5
           language: go
