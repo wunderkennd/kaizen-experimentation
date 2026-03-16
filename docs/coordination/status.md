@@ -216,7 +216,7 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 ### Week 3 — 2026-03-15
 
 **Completed this week:**
-- [x] Agent-4: M4b load test — k6 gRPC 10K rps SelectArm (PR #142)
+- [x] Agent-1: M1-M4b live bandit contract tests — 10 tests (PR #142)
 - [x] Agent-6: Phase 4 — performance, live API, error resilience, M4a pair testing (PR #143)
 - [x] Agent-1: SDK LocalProvider hash-based variant assignment (PR #144)
 - [x] Agent-4: CATE lifecycle segment wired into RunAnalysis RPC (PR #145)
