@@ -142,18 +142,18 @@ describe('Accessibility', () => {
   // --- ExperimentForm ---
 
   describe('ExperimentForm', () => {
-    it('all required inputs have aria-required="true"', () => {
+    it('all required inputs on step 1 have aria-required="true"', () => {
       render(
         <AuthProvider initialUser={defaultUser}>
           <ExperimentForm onSubmit={async () => {}} />
         </AuthProvider>,
       );
 
+      // Wizard step 1 (Basics) is shown by default — Primary Metric is on step 4
       expect(screen.getByLabelText(/^Name/)).toHaveAttribute('aria-required', 'true');
       expect(screen.getByLabelText(/Owner Email/)).toHaveAttribute('aria-required', 'true');
       expect(screen.getByLabelText(/Experiment Type/)).toHaveAttribute('aria-required', 'true');
       expect(screen.getByLabelText(/Layer ID/)).toHaveAttribute('aria-required', 'true');
-      expect(screen.getByLabelText(/Primary Metric/)).toHaveAttribute('aria-required', 'true');
     });
   });
 
