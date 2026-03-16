@@ -110,7 +110,7 @@ grpc_call() {
     local rpc="$1"
     local payload="$2"
     grpcurl -plaintext -d "$payload" \
-        "localhost:${POLICY_PORT}" \
+        "[::1]:${POLICY_PORT}" \
         "${SVC_PATH}/${rpc}" 2>&1
 }
 
