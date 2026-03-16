@@ -42,6 +42,11 @@ func Init(ctx context.Context) (*Metrics, func(), error) {
 	}
 
 	var cleanups []func()
+	rollback := func() {
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
+	}
 
 	// Trace provider: OTLP gRPC exporter → Jaeger. Skip if endpoint is empty.
 	otlpEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -68,6 +73,7 @@ func Init(ctx context.Context) (*Metrics, func(), error) {
 	// Meter provider: Prometheus exporter.
 	promExporter, err := prometheusexporter.New()
 	if err != nil {
+		rollback()
 		return nil, nil, err
 	}
 
@@ -85,6 +91,7 @@ func Init(ctx context.Context) (*Metrics, func(), error) {
 		metric.WithDescription("Total flag evaluations by result"),
 	)
 	if err != nil {
+		rollback()
 		return nil, nil, err
 	}
 
@@ -92,6 +99,7 @@ func Init(ctx context.Context) (*Metrics, func(), error) {
 		metric.WithDescription("Total flag promotions to experiments"),
 	)
 	if err != nil {
+		rollback()
 		return nil, nil, err
 	}
 
@@ -99,6 +107,7 @@ func Init(ctx context.Context) (*Metrics, func(), error) {
 		metric.WithDescription("Total reconciler actions per flag"),
 	)
 	if err != nil {
+		rollback()
 		return nil, nil, err
 	}
 
@@ -107,6 +116,7 @@ func Init(ctx context.Context) (*Metrics, func(), error) {
 		metric.WithExplicitBucketBoundaries(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 5.0, 30.0, 60.0),
 	)
 	if err != nil {
+		rollback()
 		return nil, nil, err
 	}
 

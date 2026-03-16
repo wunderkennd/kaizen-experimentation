@@ -150,7 +150,6 @@ log "Running k6 load test: ${TARGET_RPS} rps for ${DURATION}..."
 echo ""
 
 cd "$REPO_ROOT"
-cd "$REPO_ROOT"
 k6_exit=0
 k6 run \
     --env "FLAGS_URL=${FLAGS_URL}" \
