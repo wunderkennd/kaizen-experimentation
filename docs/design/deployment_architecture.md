@@ -253,8 +253,8 @@ primary_region = "ord"            # Chicago
 
 [env]
   RUST_LOG = "info"
-  MANAGEMENT_ADDR = "kaizen-management.internal:50055"
-  POLICY_ADDR = "kaizen-policy.internal:50054"
+  M5_ADDR = "kaizen-management.internal:50055"
+  M4B_ADDR = "kaizen-policy.internal:50054"
 
 [[services]]
   internal_port = 50051
@@ -483,8 +483,8 @@ done
     "portMappings": [{"containerPort": 50051, "protocol": "tcp"}],
     "environment": [
       {"name": "RUST_LOG", "value": "info"},
-      {"name": "MANAGEMENT_ADDR", "value": "management.kaizen.local:50055"},
-      {"name": "POLICY_ADDR", "value": "policy.kaizen.local:50054"}
+      {"name": "M5_ADDR", "value": "management.kaizen.local:50055"},
+      {"name": "M4B_ADDR", "value": "policy.kaizen.local:50054"}
     ],
     "healthCheck": {
       "command": ["CMD-SHELL", "grpc_health_probe -addr=:50051 || exit 1"],
@@ -607,7 +607,8 @@ gcloud run deploy kaizen-assignment \
   --max-instances 20 \
   --concurrency 200 \
   --set-env-vars RUST_LOG=info \
-  --set-env-vars MANAGEMENT_ADDR=kaizen-management-HASH.run.app:443 \
+  --set-env-vars M5_ADDR=kaizen-management-HASH.run.app:443 \
+  --set-env-vars M4B_ADDR=kaizen-policy-HASH.run.app:443 \
   --vpc-connector kaizen-vpc-connector \
   --region us-central1
 
