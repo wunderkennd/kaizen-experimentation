@@ -1,6 +1,8 @@
 //! Bandit policy trait and multi-algorithm dispatch enum.
 
 use crate::linucb::LinUcbPolicy;
+#[cfg(feature = "gpu")]
+use crate::neural::NeuralContextualPolicy;
 use crate::thompson::ThompsonSamplingPolicy;
 use crate::ArmSelection;
 use std::collections::HashMap;
@@ -29,6 +31,8 @@ pub trait Policy: Send {
 pub enum AnyPolicy {
     Thompson(ThompsonSamplingPolicy),
     LinUcb(LinUcbPolicy),
+    #[cfg(feature = "gpu")]
+    NeuralContextual(NeuralContextualPolicy),
 }
 
 impl AnyPolicy {
@@ -37,6 +41,8 @@ impl AnyPolicy {
         match self {
             AnyPolicy::Thompson(_) => "thompson_sampling",
             AnyPolicy::LinUcb(_) => "linucb",
+            #[cfg(feature = "gpu")]
+            AnyPolicy::NeuralContextual(_) => "neural_contextual",
         }
     }
 
@@ -46,10 +52,12 @@ impl AnyPolicy {
     /// Panics on unknown policy type.
     pub fn deserialize(policy_type: &str, data: &[u8]) -> Self {
         match policy_type {
-            "thompson_sampling" => {
-                AnyPolicy::Thompson(ThompsonSamplingPolicy::deserialize(data))
-            }
+            "thompson_sampling" => AnyPolicy::Thompson(ThompsonSamplingPolicy::deserialize(data)),
             "linucb" => AnyPolicy::LinUcb(LinUcbPolicy::deserialize(data)),
+            #[cfg(feature = "gpu")]
+            "neural_contextual" => {
+                AnyPolicy::NeuralContextual(NeuralContextualPolicy::deserialize(data))
+            }
             other => panic!("unknown policy type: {other}"),
         }
     }
@@ -59,6 +67,8 @@ impl AnyPolicy {
         match self {
             AnyPolicy::Thompson(p) => p.select_arm(context),
             AnyPolicy::LinUcb(p) => p.select_arm(context),
+            #[cfg(feature = "gpu")]
+            AnyPolicy::NeuralContextual(p) => p.select_arm(context),
         }
     }
 
@@ -67,6 +77,8 @@ impl AnyPolicy {
         match self {
             AnyPolicy::Thompson(p) => p.update(arm_id, reward, context),
             AnyPolicy::LinUcb(p) => p.update(arm_id, reward, context),
+            #[cfg(feature = "gpu")]
+            AnyPolicy::NeuralContextual(p) => p.update(arm_id, reward, context),
         }
     }
 
@@ -75,6 +87,8 @@ impl AnyPolicy {
         match self {
             AnyPolicy::Thompson(p) => p.serialize(),
             AnyPolicy::LinUcb(p) => p.serialize(),
+            #[cfg(feature = "gpu")]
+            AnyPolicy::NeuralContextual(p) => p.serialize(),
         }
     }
 
@@ -83,6 +97,8 @@ impl AnyPolicy {
         match self {
             AnyPolicy::Thompson(p) => p.total_rewards(),
             AnyPolicy::LinUcb(p) => p.total_rewards(),
+            #[cfg(feature = "gpu")]
+            AnyPolicy::NeuralContextual(p) => p.total_rewards(),
         }
     }
 }

@@ -11,11 +11,14 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
 use experimentation_proto::experimentation::analysis::v1::{
     AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult, GetAnalysisResultRequest,
     GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest,
-    InterferenceAnalysisResult, InterleavingAnalysisResult, MetricResult, NoveltyAnalysisResult,
-    PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
-    SrmResult as ProtoSrmResult, TitleSpillover,
+    InterferenceAnalysisResult, InterleavingAnalysisResult, IpwResult as ProtoIpwResult,
+    MetricResult, NoveltyAnalysisResult, PositionAnalysis as ProtoPositionAnalysis,
+    RunAnalysisRequest, SegmentResult, SessionLevelResult, SrmResult as ProtoSrmResult,
+    TitleSpillover,
 };
-use experimentation_stats::{cate, cuped, interference, interleaving, novelty, srm, ttest};
+use experimentation_stats::{
+    cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -305,7 +308,20 @@ async fn compute_analysis(
                 variance_reduction_pct,
                 sequential_result: None,
                 segment_results,
-                session_level_result: None,
+                session_level_result: compute_session_level_result(
+                    &data,
+                    metric_id,
+                    &control_variant,
+                    variant_id,
+                    alpha,
+                ),
+                ipw_result: compute_ipw_result(
+                    &data,
+                    metric_id,
+                    &control_variant,
+                    variant_id,
+                    alpha,
+                ),
             });
         }
     }
@@ -322,6 +338,123 @@ async fn compute_analysis(
         cochran_q_p_value,
         computed_at: Some(now_timestamp()),
     })
+}
+
+// ---------------------------------------------------------------------------
+// Session-level clustering helper
+// ---------------------------------------------------------------------------
+
+/// Compute HC1 clustered standard errors if session-level data is available.
+///
+/// Returns `Some(SessionLevelResult)` when `session_data` contains observations
+/// for this metric, or `None` otherwise.
+fn compute_session_level_result(
+    data: &delta_reader::ExperimentMetrics,
+    metric_id: &str,
+    control_variant: &str,
+    treatment_variant: &str,
+    alpha: f64,
+) -> Option<SessionLevelResult> {
+    let session_map = data.session_data.get(metric_id)?;
+
+    // Build ClusteredObservation vec from session data.
+    let mut observations = Vec::new();
+    for (value, user_id, variant_id) in session_map {
+        let is_treatment = if variant_id == treatment_variant {
+            true
+        } else if variant_id == control_variant {
+            false
+        } else {
+            continue; // skip other variants
+        };
+        observations.push(clustering::ClusteredObservation {
+            value: *value,
+            cluster_id: user_id.clone(),
+            is_treatment,
+        });
+    }
+
+    if observations.len() < 3 {
+        return None;
+    }
+
+    match clustering::clustered_se(&observations, alpha) {
+        Ok(result) => Some(SessionLevelResult {
+            naive_se: result.naive_se,
+            clustered_se: result.clustered_se,
+            design_effect: result.design_effect,
+            naive_p_value: result.naive_p_value,
+            clustered_p_value: result.clustered_p_value,
+        }),
+        Err(e) => {
+            warn!(
+                metric_id = metric_id,
+                error = %e,
+                "failed to compute clustered SE, skipping session_level_result"
+            );
+            None
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IPW-adjusted analysis helper
+// ---------------------------------------------------------------------------
+
+/// Compute IPW-adjusted treatment effect if assignment_probability data is available.
+///
+/// Returns `Some(ProtoIpwResult)` when `ipw_data` contains observations
+/// for this metric with both control and treatment arms, or `None` otherwise.
+fn compute_ipw_result(
+    data: &delta_reader::ExperimentMetrics,
+    metric_id: &str,
+    control_variant: &str,
+    treatment_variant: &str,
+    alpha: f64,
+) -> Option<ProtoIpwResult> {
+    let ipw_rows = data.ipw_data.get(metric_id)?;
+
+    let observations: Vec<ipw::IpwObservation> = ipw_rows
+        .iter()
+        .filter_map(|(value, variant_id, prob)| {
+            let is_treatment = if variant_id == treatment_variant {
+                true
+            } else if variant_id == control_variant {
+                false
+            } else {
+                return None; // skip other variants
+            };
+            Some(ipw::IpwObservation {
+                outcome: *value,
+                is_treatment,
+                assignment_probability: *prob,
+            })
+        })
+        .collect();
+
+    if observations.len() < 2 {
+        return None;
+    }
+
+    match ipw::ipw_estimate(&observations, alpha, 0.01) {
+        Ok(result) => Some(ProtoIpwResult {
+            effect: result.effect,
+            se: result.se,
+            ci_lower: result.ci_lower,
+            ci_upper: result.ci_upper,
+            p_value: result.p_value,
+            n_clipped: result.n_clipped as i32,
+            effective_sample_size: result.effective_sample_size,
+        }),
+        Err(e) => {
+            warn!(
+                metric_id = metric_id,
+                error = %e,
+                "failed to compute IPW-adjusted effect, skipping ipw_result"
+            );
+            None
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1341,41 +1474,94 @@ mod tests {
         // ESTABLISHED: control ~3, treatment ~13 (effect ~10)
         let n = 20;
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
-        let user_ids: Vec<&str> = (0..n).map(|i| match i {
-            0 => "u00", 1 => "u01", 2 => "u02", 3 => "u03", 4 => "u04",
-            5 => "u05", 6 => "u06", 7 => "u07", 8 => "u08", 9 => "u09",
-            10 => "u10", 11 => "u11", 12 => "u12", 13 => "u13", 14 => "u14",
-            15 => "u15", 16 => "u16", 17 => "u17", 18 => "u18", _ => "u19",
-        }).collect();
+        let user_ids: Vec<&str> = (0..n)
+            .map(|i| match i {
+                0 => "u00",
+                1 => "u01",
+                2 => "u02",
+                3 => "u03",
+                4 => "u04",
+                5 => "u05",
+                6 => "u06",
+                7 => "u07",
+                8 => "u08",
+                9 => "u09",
+                10 => "u10",
+                11 => "u11",
+                12 => "u12",
+                13 => "u13",
+                14 => "u14",
+                15 => "u15",
+                16 => "u16",
+                17 => "u17",
+                18 => "u18",
+                _ => "u19",
+            })
+            .collect();
         let variant_ids: Vec<&str> = vec![
             // TRIAL: 5 control + 5 treatment
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
             // ESTABLISHED: 5 control + 5 treatment
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values: Vec<f64> = vec![
             // TRIAL control: ~3
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            // TRIAL treatment: ~4 (effect = 1)
-            2.0, 3.0, 4.0, 5.0, 6.0,
-            // ESTABLISHED control: ~3
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            // ESTABLISHED treatment: ~13 (effect = 10)
+            1.0, 2.0, 3.0, 4.0, 5.0, // TRIAL treatment: ~4 (effect = 1)
+            2.0, 3.0, 4.0, 5.0, 6.0, // ESTABLISHED control: ~3
+            1.0, 2.0, 3.0, 4.0, 5.0, // ESTABLISHED treatment: ~13 (effect = 10)
             11.0, 12.0, 13.0, 14.0, 15.0,
         ];
         let covariates: Vec<Option<f64>> = vec![None; n];
         let segments: Vec<Option<&str>> = vec![
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
         ];
 
         let batch = make_segmented_analysis_data(
-            &exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates, &segments,
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+            &segments,
         );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
@@ -1434,15 +1620,28 @@ mod tests {
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
         let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 11.0, 12.0, 13.0, 14.0, 15.0];
         let covariates: Vec<Option<f64>> = vec![None; n];
 
         let batch = make_analysis_data(
-            &exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates,
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
         );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
@@ -1472,36 +1671,90 @@ mod tests {
         // Two segments with identical treatment effects → Q should be small
         let n = 20;
         let exp_ids: Vec<&str> = vec!["exp-1"; n];
-        let user_ids: Vec<&str> = (0..n).map(|i| match i {
-            0 => "u00", 1 => "u01", 2 => "u02", 3 => "u03", 4 => "u04",
-            5 => "u05", 6 => "u06", 7 => "u07", 8 => "u08", 9 => "u09",
-            10 => "u10", 11 => "u11", 12 => "u12", 13 => "u13", 14 => "u14",
-            15 => "u15", 16 => "u16", 17 => "u17", 18 => "u18", _ => "u19",
-        }).collect();
+        let user_ids: Vec<&str> = (0..n)
+            .map(|i| match i {
+                0 => "u00",
+                1 => "u01",
+                2 => "u02",
+                3 => "u03",
+                4 => "u04",
+                5 => "u05",
+                6 => "u06",
+                7 => "u07",
+                8 => "u08",
+                9 => "u09",
+                10 => "u10",
+                11 => "u11",
+                12 => "u12",
+                13 => "u13",
+                14 => "u14",
+                15 => "u15",
+                16 => "u16",
+                17 => "u17",
+                18 => "u18",
+                _ => "u19",
+            })
+            .collect();
         let variant_ids: Vec<&str> = vec![
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
-            "control", "control", "control", "control", "control",
-            "treatment", "treatment", "treatment", "treatment", "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
         ];
         let metric_ids: Vec<&str> = vec!["ctr"; n];
         // Both segments: same effect = 1.0
         let values: Vec<f64> = vec![
-            1.0, 2.0, 3.0, 4.0, 5.0,
-            2.0, 3.0, 4.0, 5.0, 6.0,
-            10.0, 11.0, 12.0, 13.0, 14.0,
-            11.0, 12.0, 13.0, 14.0, 15.0,
+            1.0, 2.0, 3.0, 4.0, 5.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 11.0, 12.0, 13.0, 14.0, 11.0,
+            12.0, 13.0, 14.0, 15.0,
         ];
         let covariates: Vec<Option<f64>> = vec![None; n];
         let segments: Vec<Option<&str>> = vec![
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"), Some("TRIAL"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
-            Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"), Some("ESTABLISHED"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("TRIAL"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
+            Some("ESTABLISHED"),
         ];
 
         let batch = make_segmented_analysis_data(
-            &exp_ids, &user_ids, &variant_ids, &metric_ids, &values, &covariates, &segments,
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+            &segments,
         );
         write_table(tmp.path(), "metric_summaries", batch).await;
 
@@ -1532,6 +1785,187 @@ mod tests {
             result.cochran_q_p_value > 0.05,
             "cochran_q_p_value {} should be > 0.05 for homogeneous effects",
             result.cochran_q_p_value
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // IPW-adjusted analysis tests
+    // -----------------------------------------------------------------------
+
+    fn metric_summaries_schema_with_ipw() -> Arc<ArrowSchema> {
+        Arc::new(ArrowSchema::new(vec![
+            Field::new("experiment_id", DataType::Utf8, false),
+            Field::new("user_id", DataType::Utf8, false),
+            Field::new("variant_id", DataType::Utf8, false),
+            Field::new("metric_id", DataType::Utf8, false),
+            Field::new("metric_value", DataType::Float64, false),
+            Field::new("cuped_covariate", DataType::Float64, true),
+            Field::new("assignment_probability", DataType::Float64, true),
+        ]))
+    }
+
+    fn make_ipw_analysis_data(
+        exp_ids: &[&str],
+        user_ids: &[&str],
+        variant_ids: &[&str],
+        metric_ids: &[&str],
+        values: &[f64],
+        covariates: &[Option<f64>],
+        assignment_probs: &[Option<f64>],
+    ) -> RecordBatch {
+        let cov_arr: Float64Array = covariates.iter().copied().collect();
+        let prob_arr: Float64Array = assignment_probs.iter().copied().collect();
+        RecordBatch::try_new(
+            metric_summaries_schema_with_ipw(),
+            vec![
+                Arc::new(StringArray::from(exp_ids.to_vec())),
+                Arc::new(StringArray::from(user_ids.to_vec())),
+                Arc::new(StringArray::from(variant_ids.to_vec())),
+                Arc::new(StringArray::from(metric_ids.to_vec())),
+                Arc::new(Float64Array::from(values.to_vec())),
+                Arc::new(cov_arr),
+                Arc::new(prob_arr),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_with_ipw() {
+        let tmp = TempDir::new().unwrap();
+        // 5 control + 5 treatment, with varying assignment probabilities (bandit-style)
+        let n = 10;
+        let exp_ids: Vec<&str> = vec!["exp-1"; n];
+        let user_ids: Vec<&str> =
+            vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
+        let variant_ids: Vec<&str> = vec![
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+        ];
+        let metric_ids: Vec<&str> = vec!["ctr"; n];
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 11.0, 12.0, 13.0, 14.0, 15.0];
+        let covariates: Vec<Option<f64>> = vec![None; n];
+        // Bandit-style: control gets 70%, treatment gets 30%
+        let probs: Vec<Option<f64>> = vec![
+            Some(0.7),
+            Some(0.7),
+            Some(0.7),
+            Some(0.7),
+            Some(0.7),
+            Some(0.3),
+            Some(0.3),
+            Some(0.3),
+            Some(0.3),
+            Some(0.3),
+        ];
+
+        let batch = make_ipw_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+            &probs,
+        );
+        write_table(tmp.path(), "metric_summaries", batch).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+            }))
+            .await
+            .unwrap();
+
+        let result = resp.into_inner();
+        assert_eq!(result.metric_results.len(), 1);
+
+        let mr = &result.metric_results[0];
+        // IPW result should be populated
+        assert!(
+            mr.ipw_result.is_some(),
+            "ipw_result should be populated when assignment_probability is available"
+        );
+        let ipw = mr.ipw_result.as_ref().unwrap();
+        // IPW effect should be positive (treatment > control)
+        assert!(
+            ipw.effect > 0.0,
+            "IPW effect {} should be positive",
+            ipw.effect
+        );
+        // SE should be positive
+        assert!(ipw.se > 0.0, "IPW SE {} should be positive", ipw.se);
+        // CI should bracket the effect
+        assert!(ipw.ci_lower < ipw.effect);
+        assert!(ipw.ci_upper > ipw.effect);
+        // p-value should be significant for this large effect
+        assert!(
+            ipw.p_value < 0.05,
+            "IPW p_value {} should be < 0.05",
+            ipw.p_value
+        );
+        // ESS should be positive and less than N
+        assert!(ipw.effective_sample_size > 0.0);
+        assert!(ipw.effective_sample_size <= n as f64);
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_without_ipw_column() {
+        // Standard data without assignment_probability → ipw_result should be None
+        let tmp = TempDir::new().unwrap();
+        let n = 10;
+        let exp_ids: Vec<&str> = vec!["exp-1"; n];
+        let user_ids: Vec<&str> =
+            vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
+        let variant_ids: Vec<&str> = vec![
+            "control",
+            "control",
+            "control",
+            "control",
+            "control",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+            "treatment",
+        ];
+        let metric_ids: Vec<&str> = vec!["ctr"; n];
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 11.0, 12.0, 13.0, 14.0, 15.0];
+        let covariates: Vec<Option<f64>> = vec![None; n];
+
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
+        write_table(tmp.path(), "metric_summaries", batch).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+            }))
+            .await
+            .unwrap();
+
+        let result = resp.into_inner();
+        let mr = &result.metric_results[0];
+        // Without assignment_probability column, IPW result should be None
+        assert!(
+            mr.ipw_result.is_none(),
+            "ipw_result should be None when assignment_probability is not available"
         );
     }
 }

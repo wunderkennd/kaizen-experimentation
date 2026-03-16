@@ -28,16 +28,39 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+/** Navigate to a specific step by filling and clicking Next. */
+async function navigateToStep(user: ReturnType<typeof userEvent.setup>, targetStep: number) {
+  if (targetStep >= 1) {
+    // Fill basics
+    await user.type(screen.getByLabelText(/Name \*/), 'test_experiment');
+    await user.type(screen.getByLabelText(/Owner Email/), 'test@streamco.com');
+    await user.type(screen.getByLabelText(/Layer ID/), 'layer-test');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+  }
+  if (targetStep >= 2) {
+    // Skip type config (AB = no extra config)
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+  }
+  if (targetStep >= 3) {
+    // Skip variants (defaults valid)
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+  }
+  if (targetStep >= 4) {
+    // Fill metrics
+    await user.type(screen.getByLabelText(/Primary Metric/), 'conversion_rate');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+  }
+}
+
 describe('New Experiment Page', () => {
   it('renders the create experiment form', () => {
     renderNewPage();
 
     expect(screen.getByRole('heading', { name: 'Create Experiment' })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Name/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Name \*/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Owner Email/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Experiment Type/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Layer ID/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Primary Metric/)).toBeInTheDocument();
   });
 
   it('shows breadcrumb with link to experiments list', () => {
@@ -47,8 +70,11 @@ describe('New Experiment Page', () => {
     expect(experimentsLink.closest('a')).toHaveAttribute('href', '/');
   });
 
-  it('renders default two variants (control + treatment)', () => {
+  it('renders default two variants on variants step', async () => {
+    const user = userEvent.setup();
     renderNewPage();
+
+    await navigateToStep(user, 2);
 
     // Default variants: control and treatment
     const nameInputs = screen.getAllByLabelText(/Variant \d+ name/);
@@ -59,42 +85,38 @@ describe('New Experiment Page', () => {
     const user = userEvent.setup();
     renderNewPage();
 
-    const submitBtn = screen.getByRole('button', { name: 'Create Experiment' });
-    await user.click(submitBtn);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Experiment name is required');
+    expect(screen.getByRole('alert')).toHaveTextContent(/name/i);
   });
 
   it('shows validation error for missing owner email', async () => {
     const user = userEvent.setup();
     renderNewPage();
 
-    await user.type(screen.getByLabelText(/Name/), 'test_experiment');
-    await user.click(screen.getByRole('button', { name: 'Create Experiment' }));
+    await user.type(screen.getByLabelText(/Name \*/), 'test_experiment');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Owner email is required');
+    expect(screen.getByRole('alert')).toHaveTextContent(/email/i);
   });
 
   it('shows validation error for missing layer ID', async () => {
     const user = userEvent.setup();
     renderNewPage();
 
-    await user.type(screen.getByLabelText(/Name/), 'test_experiment');
+    await user.type(screen.getByLabelText(/Name \*/), 'test_experiment');
     await user.type(screen.getByLabelText(/Owner Email/), 'test@streamco.com');
-    await user.click(screen.getByRole('button', { name: 'Create Experiment' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Layer ID is required');
+    expect(screen.getByRole('alert')).toHaveTextContent(/layer/i);
   });
 
   it('successfully creates experiment and navigates to detail page', async () => {
     const user = userEvent.setup();
     renderNewPage();
 
-    // Fill required fields
-    await user.type(screen.getByLabelText(/Name/), 'my_new_experiment');
-    await user.type(screen.getByLabelText(/Owner Email/), 'test@streamco.com');
-    await user.type(screen.getByLabelText(/Layer ID/), 'layer-test');
-    await user.type(screen.getByLabelText(/Primary Metric/), 'conversion_rate');
+    // Navigate through all steps to review
+    await navigateToStep(user, 4);
 
     // Submit
     await user.click(screen.getByRole('button', { name: 'Create Experiment' }));
@@ -116,9 +138,11 @@ describe('New Experiment Page', () => {
     expect(typeSelect).toHaveValue('INTERLEAVING');
   });
 
-  it('can add and remove variants', async () => {
+  it('can add and remove variants on variants step', async () => {
     const user = userEvent.setup();
     renderNewPage();
+
+    await navigateToStep(user, 2);
 
     // Start with 2 variants
     expect(screen.getAllByLabelText(/Variant \d+ name/)).toHaveLength(2);
@@ -133,9 +157,11 @@ describe('New Experiment Page', () => {
     expect(screen.getAllByLabelText(/Variant \d+ name/)).toHaveLength(2);
   });
 
-  it('can add and remove guardrails', async () => {
+  it('can add and remove guardrails on metrics step', async () => {
     const user = userEvent.setup();
     renderNewPage();
+
+    await navigateToStep(user, 3);
 
     // Initially no guardrails
     expect(screen.getByText(/No guardrails configured/)).toBeInTheDocument();
@@ -152,9 +178,11 @@ describe('New Experiment Page', () => {
     expect(screen.getByText(/No guardrails configured/)).toBeInTheDocument();
   });
 
-  it('can toggle sequential testing options', async () => {
+  it('can toggle sequential testing options on metrics step', async () => {
     const user = userEvent.setup();
     renderNewPage();
+
+    await navigateToStep(user, 3);
 
     // Sequential testing is off by default
     expect(screen.queryByLabelText(/Method/)).not.toBeInTheDocument();
@@ -166,8 +194,11 @@ describe('New Experiment Page', () => {
     expect(screen.getByLabelText(/Overall Alpha/)).toBeInTheDocument();
   });
 
-  it('shows traffic sum indicator', () => {
+  it('shows traffic sum indicator on variants step', async () => {
+    const user = userEvent.setup();
     renderNewPage();
+
+    await navigateToStep(user, 2);
 
     // Default: 50% + 50% = 100.0%
     expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();

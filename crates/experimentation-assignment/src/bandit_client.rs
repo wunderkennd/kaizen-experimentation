@@ -50,13 +50,26 @@ pub struct GrpcBanditClient {
 impl GrpcBanditClient {
     /// Connect to M4b at the given address (e.g., "http://localhost:50054").
     pub async fn connect(addr: &str) -> Result<Self, tonic::transport::Error> {
+        Self::connect_with_timeout(addr, BANDIT_TIMEOUT).await
+    }
+
+    /// Connect with a custom per-call timeout.
+    ///
+    /// This is intended for integration tests and non-hot-path callers.
+    /// Production callers should use [`connect`](Self::connect) which enforces
+    /// the 10ms SLA timeout.
+    #[doc(hidden)]
+    pub async fn connect_with_timeout(
+        addr: &str,
+        timeout: Duration,
+    ) -> Result<Self, tonic::transport::Error> {
         let channel = Channel::from_shared(addr.to_string())
             .expect("valid URI")
             .connect()
             .await?;
         Ok(Self {
             client: BanditPolicyServiceClient::new(channel),
-            timeout: BANDIT_TIMEOUT,
+            timeout,
         })
     }
 

@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-16 by Agent-3 (IPW support, query log lifecycle, scheduler)
+> **Last updated**: 2026-03-15 by Agent-2 (PR #161 cross-cutting fixes merged + status sync PRs #142–#162)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -11,15 +11,18 @@
 
 ## Agent Status
 
-| Agent | Module | Status | Current Branch | Current Milestone | Blocked By | Notes |
-|-------|--------|--------|----------------|-------------------|------------|-------|
-| Agent-1 | M1 Assignment | 🔵 Phase 4 In Progress | agent-1/perf/loadtest-50k-rps | 50K rps load test validation | — | M1.1–1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation done. Cold-start bandit done. PGO build pipeline (PR #116, merged). k6 gRPC load test: 10K rps sustained (85% GetAssignment, 10% GetAssignments, 5% GetInterleavedList), SLA validation (p99 < 5ms assign, < 15ms interleave), `just loadtest-assignment` recipe (PR #122). Cumulative holdout priority assignment (PR #128, merged). **50K rps load test** (PR #138, merged): dynamic VU scaling, TCP_NODELAY + HTTP/2 window tuning, holdout experiment in load pool, `just loadtest-assignment-50k` recipe. |
-| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | agent-2/perf/pipeline-benchmarks | Criterion benchmarks + full pipeline E2E | — | All phases merged (PRs #1, #8, #23, #40, #48, #59, #66, #78, #85, #99, #124). PR #124: Criterion benchmark suite for ingestion hot path (`experimentation-ingest`) + full pipeline E2E test (`test_full_pipeline_e2e.sh`) — 7 phases, ~24 tests validating M1→M2→Kafka→M3→M4a data flow. 119 Rust tests pass. |
-| Agent-3 | M3 Metrics | 🟢 All Phases Complete | agent-3/feat/scheduler | IPW support + query log lifecycle + scheduler | — | Phase 1–3 done. Kafka publisher (PR #64). M3↔M5 contracts (PR #68). Chaos tests (PR #69). Coverage improvements (PR #77, #98, #132). E2e pipeline tests (PR #79). Spark retry with exponential backoff (PR #86). Databricks notebook export (PR #87). CUSTOM metric (PR #91). PERCENTILE metric (PR #92). SQL template validation (PR #95). Go benchmarks (PR #101). Surrogate recalibration trigger job (PR #105). Kafka-driven recalibration consumer (PR #113). Latency SLA validation (PR #118). M3↔M4a pair integration: ~50 contract tests (PR #127). M3↔M4a PG cache contract tests (PR #134, merged). Unit test coverage: recalconsumer, querylog, surrogate packages (PR #132). M3↔M5 wire-format contracts (PR #139, merged): 22 tests, 49 subtests. **Prometheus observability** (PR #148): 7+3 metrics on :50056. **Grafana dashboard** (PR #149). **IPW support**: assignment_probability propagated through all metric templates — unblocks M4a IPW analysis. **Query log lifecycle**: filtered retrieval (job_type, date range), pagination, PurgeOldLogs. **Scheduler**: daily StandardJob (2 AM UTC), hourly GuardrailJob, weekly log purge (90-day retention), SCHEDULER_ENABLED toggle. |
-| Agent-4 | M4a Analysis + M4b Bandit | 🔵 Phase 4 In Progress | agent-4/perf/loadtest-policy | M4b load test: p99 < 15ms at 10K rps | — | M1.14–1.19 merged. M2.1–2.6, M2.10 complete. M3.1 LinUCB merged (PR #54). M3.2 cold-start merged. M4.2 analysis service (PR #93, #107). Chaos testing merged. **All 5 analysis RPCs wired** + **PostgreSQL caching** (PR #107). GST recursive numerical integration matching gsDesign (PR #125). **PGO-optimized builds** (PR #133, merged). GST scipy boundary validation (PR #136, merged). Bootstrap BCa/percentile coverage (PR #140, merged). **M4.1 CATE wired into RunAnalysis** (PR #145, merged): reads lifecycle_segment from Delta Lake, calls analyze_cate() for segment-stratified t-tests + BH-FDR + Cochran Q, populates MetricResult.segment_results + AnalysisResult.cochran_q_p_value. **M4b load test**: k6 gRPC load test (10K rps, 95% SelectArm + 5% management RPCs), LinUCB context features, SLA validation (p99 < 15ms), `just loadtest-policy` recipe. 37 tests (34 active + 3 CATE integration). |
-| Agent-5 | M5 Management | 🟢 All Phases Complete | agent-5/test/m1m5-contract | All pair integration tests complete | — | Phase 3 complete (M3.6 PR #57). M4.4 RBAC interceptor (PR #71). Phase 4: stress tests (PR #75). Guardrail override audit (PR #83). Type-specific conclude + QoE validation (PR #89). Chaos test script (PR #96). Agent-5 ↔ Agent-6 wire-format contract tests: 11 integration tests (PR #126, merged). Agent-1 ↔ Agent-5 config streaming contract tests: 10 integration tests + notifier subscriber channel close fix (PR #135, merged). All Phase 4 onboarding items complete. |
-| Agent-6 | M6 UI | 🔵 Phase 4 In Progress | agent-6/fix/proto-type-alignment | Proto-to-UI type alignment adapters | — | M1.25–1.27, M2.8–2.9, analysis tabs (PR #56), bandit dashboard (PR #60), live API integration. Phase 3 complete: surrogate/holdout/guardrail (PR #76), CATE lifecycle (PR #80), QoE/novelty/GST/Lorenz (PR #81). Phase 4: search/filter/sort (PR #90). RBAC UI: auth context, role-based button disabling. Performance targets merged (PR #108). Layer allocation bucket chart on experiment detail (PR #121). WCAG 2.1 AA accessibility fixes. Live API integration (PR #130, merged): fixed metrics/bandit port swap, PauseExperiment/ResumeExperiment RPCs, server-side ListExperiments filters, CATE/GST enum prefix stripping, 37 proto wire-format contract tests. Session-level analysis panel (PR #137, merged). Error boundary + chaos resilience + M4a wire-format tests (PR #143, merged). **Proto-to-UI type alignment** (PR #147): adaptAnalysisResult() pipeline — SurrogateProjection field mapping (modelId→metricId, variantId→surrogateMetricId), SRM int64 string→number coercion, SegmentResult adapter (enum prefix strip + int64 coercion), cochranQPValue + segmentResults added to UI types. 27 wire-format tests, 344 total tests. |
-| Agent-7 | M7 Flags | 🟢 All Phases Complete | agent-7/perf/loadtest-flags | All Phase 4 onboarding items complete | — | M1.28–1.30 merged (PR #13). Phases 1–5 complete (PR #123: all-types promote + reconciler). **Phase 4 perf** (PR #129): k6 load test (20K rps, p99 < 10ms EvaluateFlag, p99 < 50ms bulk), Go SLA validation (5 tests), CGo bridge overhead (280ns/call, target < 1μs), concurrent updates (50 writers + 250 readers), `just loadtest-flags` recipe. CI-aware thresholds for GitHub Actions. |
+> **Per-agent details have moved to `docs/coordination/status/agent-N.md`** to eliminate
+> merge conflicts. Each agent updates only their own file. See [status/README.md](status/README.md).
+
+| Agent | Module | Status | Details |
+|-------|--------|--------|---------|
+| Agent-1 | M1 Assignment | 🔵 Polish | [agent-1.md](status/agent-1.md) |
+| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | [agent-2.md](status/agent-2.md) |
+| Agent-3 | M3 Metrics | 🟢 All Phases Complete | [agent-3.md](status/agent-3.md) |
+| Agent-4 | M4a Analysis + M4b Bandit | 🟢 All Phases Complete | [agent-4.md](status/agent-4.md) |
+| Agent-5 | M5 Management | 🟢 All Phases Complete | [agent-5.md](status/agent-5.md) |
+| Agent-6 | M6 UI | 🟢 All Phases Complete | [agent-6.md](status/agent-6.md) |
+| Agent-7 | M7 Flags | 🟢 All Phases Complete | [agent-7.md](status/agent-7.md) |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
 
@@ -139,7 +142,19 @@ Track integration test results between agent pairs.
 | 5 | Agent-2 ↔ Agent-4 (reward events: pipeline → bandit policy) | 🟢 | PR #99: 24 integration tests — 17 protobuf contract (encode/decode parity, context_json parsing, key contract) + 7 Kafka roundtrip (headers, partition determinism, consumer group offsets, ordering). |
 | 6 | Agent-3 ↔ Agent-5 (experiment/metric/surrogate definitions) | 🟢 | 22 tests, 49 subtests (PR #139): M3 reads experiment definitions, metric definitions, and surrogate models from M5's PostgreSQL tables. Validates wire-format roundtrip for all definition types M3 consumes. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🟢 | 10 contract tests (`m1m4b_contract_test.rs`): Thompson roundtrip, deterministic user seeding, LinUCB context feature serialization, NOT_FOUND error code, cold-start full lifecycle (Create → SelectArm → ExportAffinity), affinity score finiteness, concurrent SelectArm (20 parallel calls), user distribution across arms, default window_days. Uses real Thompson Sampling + LinUCB from `experimentation-bandit` (not mocks). |
-| 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🟢 | All 5 M4a gRPC RPCs wired. Agent-6: 27 wire-format contract tests (`m4a-wire-format.test.ts`) — proto3 zero-value omission, int64 string→number coercion (SRM counts + segment sampleSize), LIFECYCLE_SEGMENT_/SEQUENTIAL_METHOD_ prefix stripping, SurrogateProjection adapter (modelId→metricId, variantId→surrogateMetricId), cochranQPValue + segmentResults added to UI types, 5 missing RPCs cataloged, 2 UI-only fields remaining (dailyEffects, Lorenz curves). `adaptAnalysisResult()` pipeline transforms proto3 JSON to typed UI objects. Error boundary distinguishes 404 (no data) from 500 (service down) with retry. 344 total tests. |
+| 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🟢 | Agent-4: 12 Rust wire-format contract tests (`m4a_m6_contract_test.rs`) — AnalysisResult field presence, MetricResult 14-field contract (finite + CI containment + p-value range), SRM map fields + mismatch detection, SegmentResult lifecycle enum values (TRIAL=1, ESTABLISHED=3, MATURE=4), proto3 zero-value omission for optional sub-messages, InterleavingAnalysisResult (win rates + sign test + Bradley-Terry + position analysis), NoveltyAnalysisResult (decay params + stabilization), InterferenceAnalysisResult (JSD + Jaccard + Gini + coverage + spillover titles), NOT_FOUND for all 5 RPCs, INVALID_ARGUMENT for all 5 RPCs, Cochran Q heterogeneity detection. Agent-6: 27 TS wire-format contract tests (`m4a-wire-format.test.ts`) — proto3 zero-value omission, int64 string→number coercion (SRM counts + segment sampleSize), LIFECYCLE_SEGMENT_/SEQUENTIAL_METHOD_ prefix stripping, SurrogateProjection adapter (modelId→metricId, variantId→surrogateMetricId), cochranQPValue + segmentResults added to UI types, 5 missing RPCs cataloged, 2 UI-only fields remaining (dailyEffects, Lorenz curves). `adaptAnalysisResult()` pipeline transforms proto3 JSON to typed UI objects. Error boundary distinguishes 404 (no data) from 500 (service down) with retry. 344 total tests. |
+
+### Cross-Cutting Fixes (Devin AI + Manual Review)
+
+| PR | Description | Status | Reviewed By |
+|----|-------------|--------|-------------|
+| #153 | DocMost documentation site | Merged 2026-03-13 | — |
+| #155 | DocMost populate script review fixes | Merged 2026-03-13 | — |
+| #158 | Integration and user experience documentation | Merged 2026-03-14 | — |
+| #160 | Platform improvements: port collisions, assert_finite, status split, contract tests, CI workflows, SDK consolidation | Merged 2026-03-14 | — |
+| #161 | 12 bugs + optimizations from early PR review (#1–#79): Thompson MC propensity, Pause/Resume TOCTOU, holdout fail-closed, negative nanos guard, config cache layer auto-registration, allocator overlap detection, LinUCB Frobenius norm, golden file significance check | Merged 2026-03-15 | Agent-2 (6/6 checklist items passed) |
+| #162 | Post-review cleanup: doc port mismatches, iOS SDK dedup, Python SDK drift, Rust API `#[doc(hidden)]` | Merged 2026-03-15 | — |
+| #163 | Mobile SDK CI builds: guard UniFFI imports (iOS `#if canImport`, Android conditional source set) | Open | — |
 
 ## Contract Changes Log
 
@@ -148,6 +163,9 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 | Date | Agent | Change | Affected Agents | ADR | Status |
 |------|-------|--------|-----------------|-----|--------|
 | 2026-03-05 | Agent-5 | Added `kafka-go` dependency to Go services module | Agent-3 (shared go.mod) | — | Merged (PR #18) |
+| 2026-03-15 | Devin | Thompson Sampling `select_arm` now uses MC simulation (1000 draws) for correct IPW propensity scores | Agent-1 (SelectArm latency), Agent-4 (M4b policy) | — | Merged (PR #161) |
+| 2026-03-15 | Devin | Holdout assignment fail-closed: failed holdout now blocks layer instead of leaking users to treatment | Agent-1 (M1 assignment) | — | Merged (PR #161) |
+| 2026-03-15 | Devin | Allocator overlap detection: `ErrOverlappingRanges` sentinel on occupied range overlap | Agent-5 (M5 allocation) | — | Merged (PR #161) |
 
 ## Blockers & Escalations
 
@@ -181,3 +199,48 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 
 **Risks:**
 - None — Agent-6 Phase 1 milestones now complete
+
+### Week 2 — 2026-03-12
+
+**Completed this week:**
+- [x] Agent-4: PGO-optimized builds for M4a/M4b (PR #133)
+- [x] Agent-3: M3↔M4a PG cache contract tests (PR #134)
+- [x] Agent-5: Agent-1 ↔ Agent-5 config streaming contract tests (PR #135)
+- [x] Agent-4: GST scipy boundary validation (PR #136)
+- [x] Agent-6: Session-level analysis panel (PR #137)
+- [x] Agent-1: 50K rps load test with dynamic VU scaling (PR #138)
+- [x] Agent-3: M3↔M5 wire-format contracts — 22 tests, 49 subtests (PR #139)
+- [x] Agent-4: Bootstrap BCa/percentile coverage validation (PR #140)
+- [x] Status sync (PR #141)
+
+### Week 3 — 2026-03-15
+
+**Completed this week:**
+- [x] Agent-1: M1-M4b live bandit contract tests — 10 tests (PR #142)
+- [x] Agent-6: Phase 4 — performance, live API, error resilience, M4a pair testing (PR #143)
+- [x] Agent-1: SDK LocalProvider hash-based variant assignment (PR #144)
+- [x] Agent-4: CATE lifecycle segment wired into RunAnalysis RPC (PR #145)
+- [x] Agent-1: Agent-1 ↔ Agent-4 live bandit delegation contract tests (PR #146)
+- [x] Agent-6: Proto-to-UI type alignment adapters (PR #147)
+- [x] Agent-3: Prometheus observability — 7 metrics on :50056 (PR #148)
+- [x] Agent-3: Grafana dashboard panels + Prometheus alert rules (PR #149)
+- [x] Agent-1: SDK RemoteProviders with JSON HTTP API (PR #150)
+- [x] Agent-4: Agent-4 ↔ Agent-6 wire-format contract tests (PR #151)
+- [x] Agent-1: All phases complete (PR #152)
+- [x] Devin: DocMost documentation site (PRs #153, #155, #158)
+- [x] Agent-6: Metric definition browser — /metrics page (PR #154)
+- [x] Agent-4: Bayesian, IPW, clustered SE, neural bandit (PR #156)
+- [x] Agent-5: MetricType type_filter for ListMetricDefinitions (PR #157)
+- [x] Agent-4: Migrate neural bandit from tch-rs to Candle (PR #159)
+- [x] Devin: Platform improvements — port collisions, assert_finite, status split, CI, SDKs (PR #160)
+- [x] Devin: 12 bugs + optimizations from early PR review, human review checklist passed 6/6 (PR #161)
+- [x] Agent-1: Post-review cleanup — doc ports, iOS SDK, Python drift (PR #162)
+
+**In progress:**
+- Agent-1: Mobile SDK CI builds — guard UniFFI imports (PR #163, open)
+
+**Platform status:**
+- 6 of 7 agents at 🟢 All Phases Complete
+- Agent-1 in polish mode (PR #163 pending)
+- All 10 pair integrations at 🟢
+- Cross-cutting Devin review addressed 12 bugs across 6 crates/services

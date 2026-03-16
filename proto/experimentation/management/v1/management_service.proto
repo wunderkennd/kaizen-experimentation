@@ -83,7 +83,11 @@ message ResumeExperimentRequest { string experiment_id = 1; }
 // --- Metric ---
 message CreateMetricDefinitionRequest { experimentation.common.v1.MetricDefinition metric = 1; }
 message GetMetricDefinitionRequest { string metric_id = 1; }
-message ListMetricDefinitionsRequest { int32 page_size = 1; string page_token = 2; }
+message ListMetricDefinitionsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  experimentation.common.v1.MetricType type_filter = 3;
+}
 message ListMetricDefinitionsResponse {
   repeated experimentation.common.v1.MetricDefinition metrics = 1;
   string next_page_token = 2;

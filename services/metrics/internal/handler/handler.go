@@ -171,11 +171,18 @@ func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[m
 		m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("experiment_id is required"))
 	}
-	// Use GetLogsFiltered for filtered/paginated queries.
-	// Until proto codegen runs, the basic GetLogs path is used for simple requests.
 	filter := querylog.LogFilter{
 		ExperimentID: id,
 		MetricID:     req.Msg.GetMetricId(),
+		JobType:      req.Msg.GetJobType(),
+		PageSize:     int(req.Msg.GetPageSize()),
+		PageToken:    req.Msg.GetPageToken(),
+	}
+	if req.Msg.GetAfter() != nil {
+		filter.After = req.Msg.GetAfter().AsTime()
+	}
+	if req.Msg.GetBefore() != nil {
+		filter.Before = req.Msg.GetBefore().AsTime()
 	}
 	entries, nextToken, err := h.queryLog.GetLogsFiltered(ctx, filter)
 	if err != nil {
@@ -183,7 +190,6 @@ func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[m
 		m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	_ = nextToken // Will be used in GetQueryLogResponse.next_page_token after codegen
 	pe := make([]*metricsv1.QueryLogEntry, len(entries))
 	for i, e := range entries {
 		pe[i] = &metricsv1.QueryLogEntry{
@@ -193,5 +199,5 @@ func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[m
 	}
 	m3metrics.RPCTotal.WithLabelValues("GetQueryLog", "ok").Inc()
 	m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "ok").Observe(time.Since(start).Seconds())
-	return connect.NewResponse(&metricsv1.GetQueryLogResponse{Entries: pe}), nil
+	return connect.NewResponse(&metricsv1.GetQueryLogResponse{Entries: pe, NextPageToken: nextToken}), nil
 }

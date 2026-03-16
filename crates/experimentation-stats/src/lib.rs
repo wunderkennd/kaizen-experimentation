@@ -20,17 +20,19 @@
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
 //! - `clustering` — Clustered standard errors for session-level experiments
 
-pub mod ttest;
-pub mod srm;
-pub mod cuped;
-pub mod sequential;
+pub mod bayesian;
 pub mod bootstrap;
-pub mod multiple_comparison;
-pub mod novelty;
+pub mod cate;
+pub mod clustering;
+pub mod cuped;
 pub mod interference;
 pub mod interleaving;
+pub mod ipw;
+pub mod multiple_comparison;
+pub mod novelty;
+pub mod sequential;
+pub mod srm;
 pub mod surrogate;
-pub mod cate;
+pub mod ttest;
 // Stubs — implement in Phase 3:
 // pub mod delta_method;
-// pub mod clustering;

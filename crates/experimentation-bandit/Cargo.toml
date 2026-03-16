@@ -23,8 +23,16 @@ harness = false
 
 [features]
 default = []
-gpu = ["dep:tch"]     # Neural contextual bandit (Phase 3)
+gpu = ["dep:candle-core", "dep:candle-nn", "dep:tempfile"]
 
-[dependencies.tch]
+[dependencies.candle-core]
+workspace = true
+optional = true
+
+[dependencies.candle-nn]
+workspace = true
+optional = true
+
+[dependencies.tempfile]
 workspace = true
 optional = true

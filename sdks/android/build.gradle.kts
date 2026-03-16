@@ -1,6 +1,6 @@
 plugins {
-    id("com.android.library")
-    kotlin("android")
+    id("com.android.library") version "8.2.2"
+    kotlin("android") version "1.9.22"
 }
 
 android {
@@ -20,6 +20,13 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    sourceSets.getByName("main") {
+        val uniffiDir = file("src/uniffi/kotlin")
+        if (uniffiDir.isDirectory) {
+            kotlin.srcDir(uniffiDir)
+        }
+    }
 }
 
 dependencies {
@@ -31,4 +38,5 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
     testImplementation("com.google.truth:truth:1.4.2")
+    testImplementation("org.json:json:20240303")
 }

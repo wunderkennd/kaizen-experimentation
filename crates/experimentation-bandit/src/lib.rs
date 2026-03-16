@@ -10,9 +10,10 @@
 
 pub mod cold_start;
 pub mod linucb;
+#[cfg(feature = "gpu")]
+pub mod neural;
 pub mod policy;
 pub mod thompson;
-// Phase 3: pub mod neural;
 
 use std::collections::HashMap;
 

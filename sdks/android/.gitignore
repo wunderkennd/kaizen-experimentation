@@ -1,0 +1,9 @@
+# Build outputs
+build/
+.gradle/
+
+# UniFFI-generated bindings — only present after running binding generation
+src/uniffi/
+
+# Local properties (Android SDK path, etc.)
+local.properties

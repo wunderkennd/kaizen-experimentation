@@ -80,7 +80,9 @@ func (s *Scheduler) run(ctx context.Context) {
 	// Daily ticker: check once per minute whether it's the target hour.
 	dailyCheckTicker := time.NewTicker(time.Minute)
 	defer dailyCheckTicker.Stop()
-	lastDailyRun := time.Time{}
+	// Use a sentinel with Day() == 2 so the first check on the 1st of any month still triggers.
+	// time.Time{} has Day() == 1 which would cause a false "already ran today" on the 1st.
+	lastDailyRun := time.Date(1970, 1, 2, 0, 0, 0, 0, time.UTC)
 
 	slog.Info("scheduler: started",
 		"daily_hour_utc", s.config.DailyHourUTC,

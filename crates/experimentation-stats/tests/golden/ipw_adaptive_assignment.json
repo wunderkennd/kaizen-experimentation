@@ -1,0 +1,25 @@
+{
+  "test_name": "ipw_adaptive_assignment",
+  "r_command": "# Varying assignment probabilities (bandit-like).\n# Treatment gets higher probability for better-performing arm.\n# library(survey); d <- svydesign(...); svymean(~outcome, d)",
+  "observations": [
+    {"outcome": 1.0, "is_treatment": false, "assignment_probability": 0.7},
+    {"outcome": 2.0, "is_treatment": false, "assignment_probability": 0.6},
+    {"outcome": 1.5, "is_treatment": false, "assignment_probability": 0.65},
+    {"outcome": 3.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 2.5, "is_treatment": false, "assignment_probability": 0.55},
+    {"outcome": 8.0, "is_treatment": true, "assignment_probability": 0.3},
+    {"outcome": 7.0, "is_treatment": true, "assignment_probability": 0.4},
+    {"outcome": 9.0, "is_treatment": true, "assignment_probability": 0.35},
+    {"outcome": 6.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 7.5, "is_treatment": true, "assignment_probability": 0.45}
+  ],
+  "alpha": 0.05,
+  "min_probability": 0.01,
+  "expected": {
+    "effect_positive": true,
+    "n_observations": 10,
+    "n_clipped": 0,
+    "ess_less_than_n": true
+  },
+  "tolerance": 1e-6
+}

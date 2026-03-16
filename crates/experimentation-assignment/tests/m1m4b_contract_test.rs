@@ -105,10 +105,15 @@ impl BanditPolicyService for RealBanditService {
         let req = request.into_inner();
         let experiment_id = &req.experiment_id;
 
-        // Try Thompson first
+        // Try Thompson first — clone arms under the lock, then release before
+        // selection to avoid holding a std::sync::Mutex across async work and
+        // causing timeout under concurrent load (see contract_concurrent_select_arm).
         {
-            let thompson = self.thompson_experiments.lock().unwrap();
-            if let Some(arms) = thompson.get(experiment_id) {
+            let arms = {
+                let thompson = self.thompson_experiments.lock().unwrap();
+                thompson.get(experiment_id).cloned()
+            };
+            if let Some(arms) = arms {
                 let mut rng = StdRng::seed_from_u64(
                     experimentation_hash::murmur3::murmurhash3_x86_32(
                         req.user_id.as_bytes(),
@@ -116,7 +121,7 @@ impl BanditPolicyService for RealBanditService {
                     ) as u64,
                 );
                 let selection =
-                    experimentation_bandit::thompson::select_arm(arms, &mut rng);
+                    experimentation_bandit::thompson::select_arm(&arms, &mut rng);
                 return Ok(Response::new(ProtoArmSelection {
                     arm_id: selection.arm_id,
                     assignment_probability: selection.assignment_probability,
@@ -125,10 +130,15 @@ impl BanditPolicyService for RealBanditService {
             }
         }
 
-        // Try LinUCB
+        // Try LinUCB — clone policy under the lock, then release before
+        // selection to avoid holding a std::sync::Mutex across async work and
+        // causing timeout under concurrent load (see contract_concurrent_select_arm).
         {
-            let linucb = self.linucb_experiments.lock().unwrap();
-            if let Some(policy) = linucb.get(experiment_id) {
+            let policy = {
+                let linucb = self.linucb_experiments.lock().unwrap();
+                linucb.get(experiment_id).cloned()
+            };
+            if let Some(policy) = policy {
                 let context = if req.context_features.is_empty() {
                     None
                 } else {
@@ -268,9 +278,15 @@ async fn start_real_m4b() -> (GrpcBanditClient, SocketAddr, tokio::task::JoinHan
     // Allow server to start
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    let client = GrpcBanditClient::connect(&format!("http://[::1]:{}", addr.port()))
-        .await
-        .expect("failed to connect GrpcBanditClient to test M4b");
+    // Use a generous timeout for tests — the production 10ms default is too
+    // tight for Thompson MC estimation (1000 draws × K arms) on CI runners.
+    let test_timeout = std::time::Duration::from_secs(5);
+    let client = GrpcBanditClient::connect_with_timeout(
+        &format!("http://[::1]:{}", addr.port()),
+        test_timeout,
+    )
+    .await
+    .expect("failed to connect GrpcBanditClient to test M4b");
 
     (client, addr, server_handle)
 }
@@ -478,20 +494,36 @@ async fn contract_export_affinity_unknown_experiment() {
 }
 
 /// 7. Concurrent SelectArm calls return valid results.
+///
+/// CI environments are often slower than local machines. We use a generous
+/// per-task timeout that scales when the `CI` env var is set.
 #[tokio::test]
 async fn contract_concurrent_select_arm() {
     let (client, _, handle) = start_real_m4b().await;
+
+    // CI-aware timeout: 10s locally, 60s in CI (GitHub Actions sets CI=true).
+    // The Thompson MC estimation (1000 draws × K arms) makes each call heavier,
+    // and CI runners are often slower than local machines.
+    let per_task_timeout = if std::env::var("CI").is_ok() {
+        std::time::Duration::from_secs(60)
+    } else {
+        std::time::Duration::from_secs(10)
+    };
 
     let mut handles = Vec::new();
     for i in 0..20u32 {
         let c = client.clone();
         handles.push(tokio::spawn(async move {
-            c.select_arm(
-                "test-thompson-3arm",
-                &format!("concurrent-user-{i}"),
-                HashMap::new(),
+            tokio::time::timeout(
+                per_task_timeout,
+                c.select_arm(
+                    "test-thompson-3arm",
+                    &format!("concurrent-user-{i}"),
+                    HashMap::new(),
+                ),
             )
             .await
+            .expect("concurrent SelectArm timed out — increase CI timeout if flaky")
         }));
     }
 

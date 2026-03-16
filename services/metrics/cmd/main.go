@@ -34,7 +34,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 	port := os.Getenv("PORT")
-	if port == "" { port = "50055" }
+	if port == "" { port = "50056" } // M3 Metrics — matches .env.example METRICS_SERVICE_PORT
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" { configPath = "internal/config/testdata/seed_config.json" }
 	cfgStore, err := config.LoadFromFile(configPath)
@@ -94,7 +94,7 @@ func main() {
 	}
 	// Start Prometheus metrics HTTP server on a separate port.
 	metricsPort := os.Getenv("METRICS_PORT")
-	if metricsPort == "" { metricsPort = "50056" }
+	if metricsPort == "" { metricsPort = "50059" } // Prometheus scrape endpoint — must differ from main PORT (50056) and Prometheus server (9090)
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", promhttp.Handler())
 	metricsSrv := &http.Server{Addr: ":" + metricsPort, Handler: metricsMux}
