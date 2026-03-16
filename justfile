@@ -367,6 +367,43 @@ loadtest-policy:
     bash scripts/loadtest_policy.sh
 
 # ==============================================================================
+# Chaos Engineering
+# ==============================================================================
+
+# Run all chaos tests (M1 assignment + M4b policy + M2 pipeline + verify)
+chaos: chaos-assignment chaos-policy chaos-pipeline chaos-verify
+    @echo ""
+    @echo "  All chaos tests passed."
+
+# Run M1 assignment kill-9 chaos test (stateless, recovery < 2s)
+chaos-assignment:
+    bash scripts/chaos_kill_assignment.sh
+
+# Run M4b policy kill-9 chaos test (RocksDB recovery < 10s)
+chaos-policy:
+    bash scripts/chaos_kill_policy.sh
+
+# Run M2 pipeline kill-9 chaos test (Kafka idempotent producer, no data loss)
+chaos-pipeline:
+    bash scripts/chaos_kill_ingestion.sh
+
+# Run M4a analysis kill-9 chaos test (stateless, recovery < 2s)
+chaos-analysis:
+    bash scripts/chaos_test_analysis.sh
+
+# Verify Kafka data integrity after chaos tests
+chaos-verify:
+    bash scripts/chaos_verify_integrity.sh
+
+# Run the multi-service chaos E2E framework (requires Docker infra)
+chaos-framework:
+    bash scripts/chaos_e2e_framework.sh
+
+# Run chaos framework for specific services
+chaos-framework-services services:
+    bash scripts/chaos_e2e_framework.sh --services {{ services }}
+
+# ==============================================================================
 # Convenience
 # ==============================================================================
 
