@@ -65,7 +65,8 @@ func (s *ExperimentService) ListMetricDefinitions(
 	ctx context.Context,
 	req *connect.Request[mgmtv1.ListMetricDefinitionsRequest],
 ) (*connect.Response[mgmtv1.ListMetricDefinitionsResponse], error) {
-	rows, nextToken, err := s.metrics.ListMetrics(ctx, req.Msg.GetPageSize(), req.Msg.GetPageToken())
+	typeFilter := store.MetricTypeToString(req.Msg.GetTypeFilter())
+	rows, nextToken, err := s.metrics.ListMetrics(ctx, req.Msg.GetPageSize(), req.Msg.GetPageToken(), typeFilter)
 	if err != nil {
 		return nil, internalError("list metric definitions", err)
 	}

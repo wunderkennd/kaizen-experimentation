@@ -2,6 +2,7 @@ package allocation
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 )
@@ -9,6 +10,9 @@ import (
 // ErrInsufficientCapacity is returned when the layer has no contiguous gap
 // large enough for the requested number of buckets.
 var ErrInsufficientCapacity = errors.New("insufficient bucket capacity in layer")
+
+// ErrOverlappingRanges is returned when input occupied ranges overlap each other.
+var ErrOverlappingRanges = errors.New("occupied ranges overlap")
 
 // BucketRange represents an inclusive range of hash buckets [Start, End].
 type BucketRange struct {
@@ -37,6 +41,19 @@ func FindContiguousGap(totalBuckets int32, occupied []BucketRange, bucketsNeeded
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Start < sorted[j].Start
 	})
+
+	// O(n) overlap detection: after sorting, any overlap means
+	// sorted[i].Start <= sorted[i-1].End.
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i].Start <= sorted[i-1].End {
+			return BucketRange{}, fmt.Errorf(
+				"%w: [%d,%d] overlaps [%d,%d]",
+				ErrOverlappingRanges,
+				sorted[i-1].Start, sorted[i-1].End,
+				sorted[i].Start, sorted[i].End,
+			)
+		}
+	}
 
 	// Check gap before first occupied range.
 	if sorted[0].Start >= bucketsNeeded {

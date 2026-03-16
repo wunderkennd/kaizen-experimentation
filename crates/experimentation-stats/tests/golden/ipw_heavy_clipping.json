@@ -1,0 +1,25 @@
+{
+  "test_name": "ipw_heavy_clipping",
+  "r_command": "# Extreme probabilities that trigger clipping at min_probability=0.05.\n# Several observations with p < 0.05 or p > 0.95.",
+  "observations": [
+    {"outcome": 1.0, "is_treatment": false, "assignment_probability": 0.02},
+    {"outcome": 2.0, "is_treatment": false, "assignment_probability": 0.03},
+    {"outcome": 3.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 4.0, "is_treatment": false, "assignment_probability": 0.98},
+    {"outcome": 5.0, "is_treatment": false, "assignment_probability": 0.5},
+    {"outcome": 6.0, "is_treatment": true, "assignment_probability": 0.02},
+    {"outcome": 7.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 8.0, "is_treatment": true, "assignment_probability": 0.97},
+    {"outcome": 9.0, "is_treatment": true, "assignment_probability": 0.5},
+    {"outcome": 10.0, "is_treatment": true, "assignment_probability": 0.03}
+  ],
+  "alpha": 0.05,
+  "min_probability": 0.05,
+  "expected": {
+    "n_observations": 10,
+    "n_clipped": 6,
+    "effect_positive": true,
+    "ess_less_than_n": true
+  },
+  "tolerance": 1e-6
+}

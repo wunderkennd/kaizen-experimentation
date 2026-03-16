@@ -24,6 +24,7 @@ public protocol HashProvider: Sendable {
 
 // MARK: - UniFFI Hash Provider
 
+#if canImport(experimentation_hashFFI)
 /// Production hash provider that delegates to the generated UniFFI bindings.
 /// Requires the UniFFI-generated `experimentation_hashFFI` module to be linked.
 public struct UniFFIHashProvider: HashProvider {
@@ -37,6 +38,7 @@ public struct UniFFIHashProvider: HashProvider {
         uniffi_is_in_allocation(b: bucket, startBucket: startBucket, endBucket: endBucket)
     }
 }
+#endif
 
 // MARK: - Config Types
 
