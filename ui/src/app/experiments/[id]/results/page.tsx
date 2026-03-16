@@ -93,6 +93,7 @@ export default function ResultsPage() {
     if (!params.id) return;
     setLoading(true);
     setError(null);
+    setAnalysisResult(null);
     getExperiment(params.id)
       .then((exp) => {
         setExperiment(exp);
@@ -202,6 +203,10 @@ export default function ResultsPage() {
     tabs.push({ key: 'guardrails', label: 'Guardrails' });
   }
 
+  // Fall back to overview if activeTab isn't in the dynamic tab list for this experiment
+  // (e.g. ?tab=holdout for a non-holdout experiment)
+  const effectiveTab = tabs.some(t => t.key === activeTab) ? activeTab : 'overview';
+
   return (
     <div>
       <Breadcrumb items={[
@@ -227,11 +232,11 @@ export default function ResultsPage() {
               id={`tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={`whitespace-nowrap border-b-2 pb-3 pt-1 text-sm font-medium transition-colors ${
-                activeTab === tab.key
+                effectiveTab === tab.key
                   ? 'border-indigo-600 text-indigo-600'
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
               }`}
-              aria-selected={activeTab === tab.key}
+              aria-selected={effectiveTab === tab.key}
               aria-controls={`tabpanel-${tab.key}`}
               role="tab"
             >
@@ -242,7 +247,7 @@ export default function ResultsPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && (
+      {effectiveTab === 'overview' && (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}>
           {/* CUPED Toggle */}
           {hasCupedData && (
@@ -285,31 +290,31 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {activeTab === 'novelty' && (
+      {effectiveTab === 'novelty' && (
         <div role="tabpanel" id="tabpanel-novelty" aria-labelledby="tab-novelty" tabIndex={0}>
           <NoveltyTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'interference' && (
+      {effectiveTab === 'interference' && (
         <div role="tabpanel" id="tabpanel-interference" aria-labelledby="tab-interference" tabIndex={0}>
           <InterferenceTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'interleaving' && (
+      {effectiveTab === 'interleaving' && (
         <div role="tabpanel" id="tabpanel-interleaving" aria-labelledby="tab-interleaving" tabIndex={0}>
           <InterleavingTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'lifecycle' && (
+      {effectiveTab === 'lifecycle' && (
         <div role="tabpanel" id="tabpanel-lifecycle" aria-labelledby="tab-lifecycle" tabIndex={0}>
           <CateTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'session' && (
+      {effectiveTab === 'session' && (
         <div role="tabpanel" id="tabpanel-session" aria-labelledby="tab-session" tabIndex={0}>
           <SessionLevelTab
             metricResults={analysisResult.metricResults.filter(m => m.sessionLevelResult)}
@@ -317,25 +322,25 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {activeTab === 'surrogate' && analysisResult.surrogateProjections && (
+      {effectiveTab === 'surrogate' && analysisResult.surrogateProjections && (
         <div role="tabpanel" id="tabpanel-surrogate" aria-labelledby="tab-surrogate" tabIndex={0}>
           <SurrogateTab projections={analysisResult.surrogateProjections} />
         </div>
       )}
 
-      {activeTab === 'holdout' && (
+      {effectiveTab === 'holdout' && (
         <div role="tabpanel" id="tabpanel-holdout" aria-labelledby="tab-holdout" tabIndex={0}>
           <HoldoutTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'guardrails' && (
+      {effectiveTab === 'guardrails' && (
         <div role="tabpanel" id="tabpanel-guardrails" aria-labelledby="tab-guardrails" tabIndex={0}>
           <GuardrailTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'qoe' && (
+      {effectiveTab === 'qoe' && (
         <div role="tabpanel" id="tabpanel-qoe" aria-labelledby="tab-qoe" tabIndex={0}>
           <QoeTab experimentId={params.id} />
         </div>
