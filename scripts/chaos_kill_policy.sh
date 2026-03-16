@@ -7,7 +7,7 @@
 # Verifies crash-only recovery with RocksDB persistence:
 #   1. Start policy service with RocksDB
 #   2. Create a Thompson Sampling experiment via CreateColdStartBandit
-#   3. Feed reward events to build up policy state (diverge from uniform)
+#   3. Warm up with SelectArm calls to exercise snapshots (no Kafka = no rewards)
 #   4. Record baseline: arm selection probabilities pre-crash
 #   5. Send sustained SelectArm load
 #   6. kill -9 the process mid-load
@@ -229,27 +229,25 @@ if [[ -z "$ARM_IDS" ]]; then
 fi
 log "Detected arms: $(echo "$ARM_IDS" | tr '\n' ', ')"
 
-# Feed rewards to move policy away from uniform
-log "Feeding $NUM_REWARDS reward events to build policy state..."
-REWARD_SENT=0
+# Warm up with SelectArm calls to exercise the policy + trigger RocksDB snapshots.
+# NOTE: Rewards flow through Kafka (IngestRewardEvent → pipeline → reward_events topic
+# → Kafka consumer → PolicyCore), not via gRPC. Without Kafka running in this
+# standalone chaos test, policy parameters remain at their prior (uniform). What we
+# verify is that *experiment configuration and snapshot state* survive kill -9.
+# For full learned-parameter persistence testing, use the integration test suite
+# with Docker Kafka (just test-integration).
+log "Warming up with $NUM_REWARDS SelectArm calls (snapshots + experiment state)..."
+WARMUP_SENT=0
 for i in $(seq 1 "$NUM_REWARDS"); do
-    # Arm 0 gets high rewards, arm 1 gets low — policy should shift
-    local_arm="arm_0"
-    local_reward="0.9"
-    if (( i % 3 == 0 )); then
-        local_arm="arm_1"
-        local_reward="0.1"
-    fi
-
     grpc_call "SelectArm" "{
         \"experiment_id\": \"$EXPERIMENT_ID\",
-        \"user_id\": \"reward-user-$i\",
-        \"context_features\": {\"user_age_bucket\": 1.0}
+        \"user_id\": \"warmup-user-$i\",
+        \"context_features\": {\"user_age_bucket\": $((i % 5)).0}
     }" >/dev/null 2>&1 || true
 
-    REWARD_SENT=$((REWARD_SENT + 1))
+    WARMUP_SENT=$((WARMUP_SENT + 1))
 done
-ok "Fed $REWARD_SENT reward-triggering selections (policy state building)"
+ok "Sent $WARMUP_SENT warm-up SelectArm calls"
 
 # Small pause to let snapshots flush
 sleep 2
@@ -401,7 +399,11 @@ else
     echo "$POST_CRASH_SELECT" >&2
 fi
 
-# 7b: Verify arm distribution is consistent with pre-crash (within tolerance)
+# 7b: Verify arm distribution is consistent with pre-crash (within tolerance).
+# Without Kafka, both distributions are near-uniform (Thompson Sampling with
+# no reward updates). This still validates that experiment config + prior
+# parameters survived the crash — a corrupted restore would show errors or
+# a completely different distribution.
 POST_CRASH_ARM0=0
 POST_CRASH_ARM1=0
 POST_CRASH_TOTAL=0
@@ -491,7 +493,7 @@ echo "  Recovery time:              ${RECOVERY_MS}ms"
 echo "  Recovery SLA:               ${RECOVERY_SLA_MS}ms"
 echo "  Load requests sent:         ${LOAD_SENT}"
 echo "  Load errors (during kill):  ${LOAD_ERRORS}"
-echo "  Rewards fed pre-crash:      ${NUM_REWARDS}"
+echo "  Warm-up calls pre-crash:    ${NUM_REWARDS}"
 echo ""
 echo "  Arm distribution (baseline): arm_0=${BASELINE_ARM0_PCT}%, arm_1=$((100 - BASELINE_ARM0_PCT))%"
 echo "  Arm distribution (post):     arm_0=${POST_CRASH_ARM0_PCT}%, arm_1=$((100 - POST_CRASH_ARM0_PCT))%"
