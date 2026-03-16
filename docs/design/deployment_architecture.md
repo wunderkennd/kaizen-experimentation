@@ -152,7 +152,7 @@ just docker-build-svc assignment
 
 | Topic | Partitions | Purpose | Producers | Consumers |
 |-------|-----------|---------|-----------|-----------|
-| `exposures` | 64 | Assignment events | M2 | M3 |
+| `exposures` | 64 | Assignment events | M2 | M3, M4a |
 | `metric_events` | 128 | User behavior metrics | M2 | M3 |
 | `reward_events` | 32 | Bandit reward signals | M2 | M4b, M3 |
 | `qoe_events` | 64 | Playback quality events | M2 | M3 |
@@ -521,7 +521,7 @@ aws ec2 create-volume --volume-type gp3 --size 20 --iops 3000 --throughput 125 \
 | Compute (stateless) | ECS Fargate | Per-service task definitions |
 | Compute (M4b) | ECS on EC2 or dedicated EC2 | c6i.xlarge + gp3 EBS |
 | Database | RDS PostgreSQL 16 | db.r6g.large, Multi-AZ, automated backups |
-| Streaming | Amazon MSK | 3 brokers (kafka.m5.large), 5 topics |
+| Streaming | Amazon MSK | 3 brokers (kafka.m5.large), 6 topics |
 | Cache | ElastiCache Redis | r6g.large, cluster mode |
 | Object Storage | S3 | Delta Lake tables, MLflow artifacts |
 | Load Balancer | ALB | gRPC support (HTTP/2), TLS termination |
