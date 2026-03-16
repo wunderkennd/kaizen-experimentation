@@ -90,6 +90,15 @@ function FlagDetailContent() {
         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${flag.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
           {flag.enabled ? 'Enabled' : 'Disabled'}
         </span>
+        {canAtLeast('experimenter') && (
+          <Link
+            href={`/flags/${flag.flagId}/edit`}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            data-testid="edit-flag-link"
+          >
+            Edit
+          </Link>
+        )}
       </div>
 
       <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
