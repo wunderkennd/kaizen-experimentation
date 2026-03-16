@@ -303,3 +303,12 @@ func (w *MemWriter) AllEntries() []Entry {
 	copy(out, w.entries)
 	return out
 }
+
+// SetComputedAt overrides ComputedAt for all existing entries (for testing).
+func (w *MemWriter) SetComputedAt(t time.Time) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i := range w.entries {
+		w.entries[i].ComputedAt = t
+	}
+}

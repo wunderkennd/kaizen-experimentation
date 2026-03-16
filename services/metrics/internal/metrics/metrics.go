@@ -52,4 +52,22 @@ var (
 		Name: "m3_guardrail_breaches_total",
 		Help: "Total number of guardrail breach alerts published.",
 	}, []string{"experiment_id", "metric_id", "action"})
+
+	// SchedulerRuns counts total scheduler executions by job type and status.
+	SchedulerRuns = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "m3_scheduler_runs_total",
+		Help: "Total number of scheduled job runs.",
+	}, []string{"job_type", "status"})
+
+	// SchedulerLastRun records the timestamp of the last scheduler execution by job type.
+	SchedulerLastRun = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "m3_scheduler_last_run_timestamp",
+		Help: "Unix timestamp of the last scheduled job run.",
+	}, []string{"job_type"})
+
+	// SchedulerExperimentsProcessed counts experiments processed by the scheduler.
+	SchedulerExperimentsProcessed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "m3_scheduler_experiments_processed_total",
+		Help: "Total number of experiments processed by the scheduler.",
+	}, []string{"job_type"})
 )

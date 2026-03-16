@@ -25,6 +25,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/recalconsumer"
+	"github.com/org/experimentation-platform/services/metrics/internal/scheduler"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 	"github.com/org/experimentation-platform/services/metrics/internal/surrogate"
 )
@@ -84,6 +85,13 @@ func main() {
 	recalConsumer := recalconsumer.NewConsumer(brokers, recalJob, cfgStore)
 	recalConsumer.Start(ctx)
 	defer recalConsumer.Close()
+	// Start scheduler for automated periodic metric computation.
+	if os.Getenv("SCHEDULER_ENABLED") == "true" {
+		sched := scheduler.New(stdJob, gJob, cfgStore, qlWriter, scheduler.DefaultConfig())
+		sched.Start(ctx)
+		defer sched.Close()
+		slog.Info("scheduler enabled")
+	}
 	// Start Prometheus metrics HTTP server on a separate port.
 	metricsPort := os.Getenv("METRICS_PORT")
 	if metricsPort == "" { metricsPort = "50056" }
