@@ -371,7 +371,7 @@ loadtest-policy:
 # ==============================================================================
 
 # Run all chaos tests (M1 assignment + M4b policy + M2 pipeline + verify)
-chaos: chaos-assignment chaos-policy chaos-pipeline chaos-verify
+chaos: chaos-assignment chaos-policy chaos-analysis chaos-pipeline chaos-verify
     @echo ""
     @echo "  All chaos tests passed."
 
