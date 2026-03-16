@@ -103,30 +103,83 @@ export class RemoteProvider implements AssignmentProvider {
   }
 
   async initialize(): Promise<void> {
-    // TODO (Agent-1): Establish ConnectRPC transport to Assignment Service
+    // No persistent connection needed — each request uses fetch.
   }
 
   async getAssignment(
     experimentId: string,
     attributes: UserAttributes,
   ): Promise<Assignment | null> {
-    // TODO (Agent-1): Call AssignmentService.GetAssignment via ConnectRPC
-    void experimentId;
-    void attributes;
-    return null;
+    const url = `${this.config.baseUrl}/experimentation.assignment.v1.AssignmentService/GetAssignment`;
+    const body = {
+      userId: attributes.userId,
+      experimentId,
+      attributes: flattenAttributes(attributes),
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.config.timeoutMs ?? 2000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data.isActive) return null;
+    return {
+      experimentId: data.experimentId,
+      variantName: data.variantId,
+      payload: data.payloadJson ? JSON.parse(data.payloadJson) : {},
+      fromCache: false,
+    };
   }
 
   async getAllAssignments(
     attributes: UserAttributes,
   ): Promise<Map<string, Assignment>> {
-    // TODO (Agent-1): Call AssignmentService.GetAllAssignments via ConnectRPC
-    void attributes;
-    return new Map();
+    const url = `${this.config.baseUrl}/experimentation.assignment.v1.AssignmentService/GetAssignments`;
+    const body = {
+      userId: attributes.userId,
+      attributes: flattenAttributes(attributes),
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.config.timeoutMs ?? 2000),
+    });
+    if (!resp.ok) return new Map();
+    const data = await resp.json();
+    const results = new Map<string, Assignment>();
+    for (const a of data.assignments ?? []) {
+      if (a.isActive && a.variantId) {
+        results.set(a.experimentId, {
+          experimentId: a.experimentId,
+          variantName: a.variantId,
+          payload: a.payloadJson ? JSON.parse(a.payloadJson) : {},
+          fromCache: false,
+        });
+      }
+    }
+    return results;
   }
 
   async destroy(): Promise<void> {
-    // TODO (Agent-1): Close transport
+    // No persistent resources to clean up.
   }
+}
+
+/** Flatten UserAttributes extra fields to Record<string, string> for the proto map. */
+function flattenAttributes(attrs: UserAttributes): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === 'userId') continue;
+    if (Array.isArray(value)) {
+      result[key] = value.join(',');
+    } else {
+      result[key] = String(value);
+    }
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

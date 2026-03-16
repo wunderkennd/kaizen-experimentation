@@ -101,6 +101,28 @@ func TestFindContiguousGap(t *testing.T) {
 			wantStart:     2500,
 			wantEnd:       4999,
 		},
+		{
+			name:          "overlapping ranges detected",
+			totalBuckets:  10000,
+			occupied:      []BucketRange{{0, 500}, {400, 999}},
+			bucketsNeeded: 100,
+			wantErr:       ErrOverlappingRanges,
+		},
+		{
+			name:          "identical ranges detected as overlap",
+			totalBuckets:  10000,
+			occupied:      []BucketRange{{100, 200}, {100, 200}},
+			bucketsNeeded: 100,
+			wantErr:       ErrOverlappingRanges,
+		},
+		{
+			name:          "adjacent ranges no overlap",
+			totalBuckets:  10000,
+			occupied:      []BucketRange{{0, 499}, {500, 999}},
+			bucketsNeeded: 100,
+			wantStart:     1000,
+			wantEnd:       1099,
+		},
 	}
 
 	for _, tt := range tests {

@@ -241,6 +241,14 @@ pub struct ExperimentMetrics {
     /// Segment-stratified observations for CATE analysis.
     /// Only populated when metric_summaries has a `lifecycle_segment` column.
     pub segment_data: SegmentData,
+    /// Session-level observations for clustering: metric_id → Vec<(value, user_id, variant_id)>.
+    /// Populated only when metric_summaries has a `session_id` column,
+    /// indicating multiple rows per user (one per session).
+    pub session_data: HashMap<String, Vec<(f64, String, String)>>,
+    /// IPW observations: metric_id → Vec<(value, variant_id, assignment_probability)>.
+    /// Populated only when metric_summaries has an `assignment_probability` column
+    /// (produced by M3 for bandit experiments).
+    pub ipw_data: HashMap<String, Vec<(f64, String, f64)>>,
 }
 
 /// Read metric_summaries from Delta Lake for a given experiment.
@@ -257,6 +265,8 @@ pub async fn read_metric_summaries(
 
     let mut metrics: MetricsByVariant = HashMap::new();
     let mut segment_data: SegmentData = HashMap::new();
+    let mut session_data: HashMap<String, Vec<(f64, String, String)>> = HashMap::new();
+    let mut ipw_data: HashMap<String, Vec<(f64, String, f64)>> = HashMap::new();
     let mut variant_users: HashMap<String, HashSet<String>> = HashMap::new();
     let mut found = false;
 
@@ -278,6 +288,17 @@ pub async fn read_metric_summaries(
         let segment_arr = batch
             .column_by_name("lifecycle_segment")
             .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+        // session_id is optional — when present, enables clustered SE computation.
+        let session_arr = batch
+            .column_by_name("session_id")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+        // assignment_probability is optional — when present, enables IPW-adjusted analysis.
+        // Produced by M3 for bandit experiments (PR #170).
+        let prob_arr = batch
+            .column_by_name("assignment_probability")
+            .and_then(|c| c.as_any().downcast_ref::<Float64Array>());
 
         for i in 0..batch.num_rows() {
             if exp_arr.is_null(i) || exp_arr.value(i) != experiment_id {
@@ -311,13 +332,33 @@ pub async fn read_metric_summaries(
                 if !seg_arr.is_null(i) {
                     let segment = seg_arr.value(i).to_string();
                     segment_data
-                        .entry(metric)
+                        .entry(metric.clone())
                         .or_default()
                         .entry(segment)
                         .or_default()
-                        .entry(variant)
+                        .entry(variant.clone())
                         .or_default()
                         .push(value);
+                }
+            }
+
+            // Populate session-level data when session_id is present and non-null.
+            if let Some(sess_arr) = session_arr {
+                if !sess_arr.is_null(i) {
+                    session_data
+                        .entry(metric.clone())
+                        .or_default()
+                        .push((value, user_arr.value(i).to_string(), variant.clone()));
+                }
+            }
+
+            // Populate IPW data when assignment_probability is present and non-null.
+            if let Some(p_arr) = prob_arr {
+                if !p_arr.is_null(i) {
+                    ipw_data
+                        .entry(metric)
+                        .or_default()
+                        .push((value, variant, p_arr.value(i)));
                 }
             }
         }
@@ -339,6 +380,8 @@ pub async fn read_metric_summaries(
         metrics,
         variant_user_counts,
         segment_data,
+        session_data,
+        ipw_data,
     })
 }
 
@@ -841,6 +884,120 @@ mod tests {
         assert_eq!(result.metrics.len(), 2);
         assert!(result.metrics.contains_key("ctr"));
         assert!(result.metrics.contains_key("revenue"));
+    }
+
+    // -----------------------------------------------------------------------
+    // IPW (assignment_probability) tests
+    // -----------------------------------------------------------------------
+
+    fn metric_summaries_schema_with_ipw() -> Arc<ArrowSchema> {
+        Arc::new(ArrowSchema::new(vec![
+            Field::new("experiment_id", DataType::Utf8, false),
+            Field::new("user_id", DataType::Utf8, false),
+            Field::new("variant_id", DataType::Utf8, false),
+            Field::new("metric_id", DataType::Utf8, false),
+            Field::new("metric_value", DataType::Float64, false),
+            Field::new("cuped_covariate", DataType::Float64, true),
+            Field::new("assignment_probability", DataType::Float64, true),
+        ]))
+    }
+
+    fn make_ipw_metric_batch(
+        experiment_ids: &[&str],
+        user_ids: &[&str],
+        variant_ids: &[&str],
+        metric_ids: &[&str],
+        metric_values: &[f64],
+        covariates: &[Option<f64>],
+        assignment_probs: &[Option<f64>],
+    ) -> RecordBatch {
+        let schema = metric_summaries_schema_with_ipw();
+        let cov_arr: Float64Array = covariates.iter().copied().collect();
+        let prob_arr: Float64Array = assignment_probs.iter().copied().collect();
+        RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringArray::from(experiment_ids.to_vec())),
+                Arc::new(StringArray::from(user_ids.to_vec())),
+                Arc::new(StringArray::from(variant_ids.to_vec())),
+                Arc::new(StringArray::from(metric_ids.to_vec())),
+                Arc::new(Float64Array::from(metric_values.to_vec())),
+                Arc::new(cov_arr),
+                Arc::new(prob_arr),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_read_metric_summaries_with_ipw() {
+        let tmp = TempDir::new().unwrap();
+        let batch = make_ipw_metric_batch(
+            &["exp-1", "exp-1", "exp-1", "exp-1"],
+            &["u1", "u2", "u3", "u4"],
+            &["control", "control", "treatment", "treatment"],
+            &["ctr", "ctr", "ctr", "ctr"],
+            &[0.1, 0.2, 0.3, 0.4],
+            &[None, None, None, None],
+            &[Some(0.5), Some(0.5), Some(0.3), Some(0.3)],
+        );
+        write_named_test_table(tmp.path(), "metric_summaries", batch).await;
+
+        let result = read_metric_summaries(tmp.path().to_str().unwrap(), "exp-1")
+            .await
+            .unwrap();
+
+        // ipw_data should be populated
+        assert!(result.ipw_data.contains_key("ctr"));
+        let ipw_obs = &result.ipw_data["ctr"];
+        assert_eq!(ipw_obs.len(), 4);
+        // Check assignment probabilities are read correctly
+        assert!((ipw_obs[0].2 - 0.5).abs() < 1e-10 || (ipw_obs[0].2 - 0.3).abs() < 1e-10);
+    }
+
+    #[tokio::test]
+    async fn test_read_metric_summaries_without_ipw_column() {
+        // Standard schema without assignment_probability → ipw_data should be empty
+        let tmp = TempDir::new().unwrap();
+        let batch = make_metric_batch(
+            &["exp-1", "exp-1", "exp-1", "exp-1"],
+            &["u1", "u2", "u3", "u4"],
+            &["control", "control", "treatment", "treatment"],
+            &["ctr", "ctr", "ctr", "ctr"],
+            &[0.1, 0.2, 0.3, 0.4],
+            &[None, None, None, None],
+        );
+        write_named_test_table(tmp.path(), "metric_summaries", batch).await;
+
+        let result = read_metric_summaries(tmp.path().to_str().unwrap(), "exp-1")
+            .await
+            .unwrap();
+
+        assert!(result.ipw_data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_read_metric_summaries_ipw_null_probabilities() {
+        // Some rows have null assignment_probability → only non-null ones in ipw_data
+        let tmp = TempDir::new().unwrap();
+        let batch = make_ipw_metric_batch(
+            &["exp-1", "exp-1", "exp-1", "exp-1"],
+            &["u1", "u2", "u3", "u4"],
+            &["control", "control", "treatment", "treatment"],
+            &["ctr", "ctr", "ctr", "ctr"],
+            &[0.1, 0.2, 0.3, 0.4],
+            &[None, None, None, None],
+            &[Some(0.5), None, Some(0.3), None],
+        );
+        write_named_test_table(tmp.path(), "metric_summaries", batch).await;
+
+        let result = read_metric_summaries(tmp.path().to_str().unwrap(), "exp-1")
+            .await
+            .unwrap();
+
+        assert!(result.ipw_data.contains_key("ctr"));
+        // Only 2 out of 4 rows have non-null assignment_probability
+        assert_eq!(result.ipw_data["ctr"].len(), 2);
     }
 
     // -----------------------------------------------------------------------

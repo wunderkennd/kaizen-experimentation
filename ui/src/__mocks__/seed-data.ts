@@ -2,7 +2,7 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -87,6 +87,10 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     ],
     guardrailAction: 'AUTO_PAUSE',
     isCumulativeHoldout: false,
+    qoeConfig: {
+      qoeMetrics: ['rebuffer_ratio', 'time_to_first_frame_ms', 'avg_bitrate_kbps', 'startup_failure_rate'],
+      deviceFilter: 'smart_tv',
+    },
     createdAt: '2026-03-01T14:30:00Z',
   },
   {
@@ -119,6 +123,13 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     guardrailConfigs: [],
     guardrailAction: 'AUTO_PAUSE',
     isCumulativeHoldout: false,
+    interleavingConfig: {
+      method: 'TEAM_DRAFT',
+      algorithmIds: ['bm25_v2', 'semantic_search_v2'],
+      creditAssignment: 'BINARY_WIN',
+      creditMetricEvent: 'click',
+      maxListSize: 20,
+    },
     createdAt: '2026-02-20T09:15:00Z',
     startedAt: '2026-02-21T06:00:00Z',
   },
@@ -172,6 +183,13 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     ],
     guardrailAction: 'ALERT_ONLY',
     isCumulativeHoldout: false,
+    banditExperimentConfig: {
+      algorithm: 'THOMPSON_SAMPLING',
+      rewardMetricId: 'play_through_rate',
+      contextFeatureKeys: ['content_genre', 'user_tenure_days', 'device_type'],
+      minExplorationFraction: 0.1,
+      warmupObservations: 200,
+    },
     createdAt: '2026-03-02T16:45:00Z',
   },
   // Transitional state experiments for testing StartingChecklist and ConcludingProgress
@@ -1247,7 +1265,131 @@ const INITIAL_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = {
   ],
 };
 
+// ---------------------------------------------------------------------------
+// Metric Definitions — 10 from SQL seed + 2 edge-case extras (COUNT, CUSTOM)
+// ---------------------------------------------------------------------------
+const INITIAL_METRIC_DEFINITIONS: MetricDefinition[] = [
+  {
+    metricId: 'stream_start_rate',
+    name: 'Stream Start Rate',
+    description: 'Proportion of sessions that start a stream',
+    type: 'PROPORTION',
+    sourceEventType: 'stream_start',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'watch_time_minutes',
+    name: 'Watch Time (minutes)',
+    description: 'Average minutes watched per user per day',
+    type: 'MEAN',
+    sourceEventType: 'heartbeat',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+    cupedCovariateMetricId: 'watch_time_minutes_pre',
+    minimumDetectableEffect: 0.02,
+  },
+  {
+    metricId: 'completion_rate',
+    name: 'Content Completion Rate',
+    description: 'Proportion of content items watched to ≥90%',
+    type: 'PROPORTION',
+    sourceEventType: 'stream_end',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'rebuffer_rate',
+    name: 'Rebuffer Rate',
+    description: 'Rebuffer events per hour of playback',
+    type: 'RATIO',
+    sourceEventType: 'qoe_rebuffer',
+    numeratorEventType: 'qoe_rebuffer',
+    denominatorEventType: 'playback_hour',
+    lowerIsBetter: true,
+    isQoeMetric: true,
+  },
+  {
+    metricId: 'search_success_rate',
+    name: 'Search Success Rate',
+    description: 'Proportion of searches that lead to a stream start within 5m',
+    type: 'PROPORTION',
+    sourceEventType: 'search',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'ctr_recommendation',
+    name: 'Recommendation CTR',
+    description: 'Click-through rate on recommendation carousels',
+    type: 'PROPORTION',
+    sourceEventType: 'impression',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+    surrogateTargetMetricId: 'watch_time_minutes',
+  },
+  {
+    metricId: 'revenue_per_user',
+    name: 'Revenue per User',
+    description: 'Average daily revenue per user (ads + subscription)',
+    type: 'MEAN',
+    sourceEventType: 'revenue',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+    minimumDetectableEffect: 0.05,
+  },
+  {
+    metricId: 'churn_7d',
+    name: 'Churn (7-day)',
+    description: 'Proportion of users with zero activity in trailing 7 days',
+    type: 'PROPORTION',
+    sourceEventType: 'session',
+    lowerIsBetter: true,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'latency_p50_ms',
+    name: 'Playback Start Latency p50',
+    description: 'Median time-to-first-frame in milliseconds',
+    type: 'PERCENTILE',
+    sourceEventType: 'playback_start',
+    percentile: 50,
+    lowerIsBetter: true,
+    isQoeMetric: true,
+  },
+  {
+    metricId: 'error_rate',
+    name: 'Error Rate',
+    description: 'Proportion of playback attempts that result in an error',
+    type: 'PROPORTION',
+    sourceEventType: 'playback_error',
+    lowerIsBetter: true,
+    isQoeMetric: true,
+  },
+  // Edge-case extras: COUNT and CUSTOM types
+  {
+    metricId: 'daily_active_users',
+    name: 'Daily Active Users',
+    description: 'Count of unique users with at least one session per day',
+    type: 'COUNT',
+    sourceEventType: 'session',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+  {
+    metricId: 'engagement_score',
+    name: 'Engagement Score',
+    description: 'Custom composite engagement metric combining watch time, interactions, and session frequency',
+    type: 'CUSTOM',
+    sourceEventType: 'composite',
+    customSql: 'SELECT user_id, (0.5 * watch_minutes + 0.3 * interactions + 0.2 * sessions) AS score FROM user_daily_agg',
+    lowerIsBetter: false,
+    isQoeMetric: false,
+  },
+];
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
+export let SEED_METRIC_DEFINITIONS: MetricDefinition[] = structuredClone(INITIAL_METRIC_DEFINITIONS);
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
 export let SEED_ANALYSIS_RESULTS: AnalysisResult[] = structuredClone(INITIAL_ANALYSIS_RESULTS);
@@ -1265,6 +1407,7 @@ export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structure
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
+  SEED_METRIC_DEFINITIONS = structuredClone(INITIAL_METRIC_DEFINITIONS);
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
   SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
   SEED_ANALYSIS_RESULTS = structuredClone(INITIAL_ANALYSIS_RESULTS);

@@ -1,0 +1,19 @@
+{
+  "test_name": "beta_binomial_no_effect",
+  "r_command": "# Prior: Beta(1,1). Posterior: Beta(51,51) for both.\n# P(B(51,51) > B(51,51)) ≈ 0.5.",
+  "control_successes": 50,
+  "control_total": 100,
+  "treatment_successes": 50,
+  "treatment_total": 100,
+  "credible_level": 0.95,
+  "seed": 42,
+  "expected": {
+    "posterior_mean_control": 0.5,
+    "posterior_mean_treatment": 0.5,
+    "effect": 0.0,
+    "probability_of_superiority": 0.5,
+    "model": "BetaBinomial"
+  },
+  "tolerance_normal": 1e-6,
+  "tolerance_mc": 0.02
+}
