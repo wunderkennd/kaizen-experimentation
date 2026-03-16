@@ -305,24 +305,30 @@ LOAD_ERRORS=0
 send_load() {
     local duration="$1"
     local end_time=$(( $(date +%s) + duration ))
-    local sent=0
-    local errors=0
+
+    # Use file-based counters — each background grpc_call appends a line
+    # to a log file, and we count lines at the end. This avoids the subshell
+    # variable increment problem where child processes can't modify parent vars.
+    local sent_log="$WORK_DIR/load_sent_log"
+    local error_log="$WORK_DIR/load_error_log"
+    : > "$sent_log"
+    : > "$error_log"
 
     while [[ $(date +%s) -lt $end_time ]]; do
         for _ in $(seq 1 "$REQUESTS_PER_SEC"); do
             local user_id="chaos-load-user-$((RANDOM % 10000))"
-            grpc_call "SelectArm" "{
+            ( grpc_call "SelectArm" "{
                 \"experiment_id\": \"$EXPERIMENT_ID\",
                 \"user_id\": \"$user_id\",
                 \"context_features\": {\"user_age_bucket\": $((RANDOM % 5)).0}
-            }" >/dev/null 2>&1 && sent=$((sent + 1)) || errors=$((errors + 1)) &
+            }" >/dev/null 2>&1 && echo 1 >> "$sent_log" || echo 1 >> "$error_log" ) &
         done
         wait 2>/dev/null || true
         sleep 1
     done
 
-    echo "$sent" > "$WORK_DIR/load_sent"
-    echo "$errors" > "$WORK_DIR/load_errors"
+    wc -l < "$sent_log" | tr -d ' ' > "$WORK_DIR/load_sent"
+    wc -l < "$error_log" | tr -d ' ' > "$WORK_DIR/load_errors"
 }
 
 send_load "$TOTAL_DURATION" &
