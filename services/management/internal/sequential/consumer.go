@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+
+	"github.com/org/experimentation-platform/services/management/internal/metrics"
 )
 
 const (
@@ -54,13 +56,17 @@ func (c *Consumer) consume(ctx context.Context) {
 	defer close(c.done)
 	slog.Info("sequential consumer: started", "topic", Topic, "group", ConsumerGroup)
 
+	const consumer = "sequential"
+
 	for {
+		fetchStart := time.Now()
 		msg, err := c.reader.FetchMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil || err == io.EOF {
 				slog.Info("sequential consumer: shutting down")
 				return
 			}
+			metrics.FetchErrors.WithLabelValues(consumer).Inc()
 			slog.Error("sequential consumer: fetch error, retrying", "error", err)
 			select {
 			case <-ctx.Done():
@@ -72,6 +78,7 @@ func (c *Consumer) consume(ctx context.Context) {
 
 		var alert BoundaryAlert
 		if err := json.Unmarshal(msg.Value, &alert); err != nil {
+			metrics.AlertsProcessed.WithLabelValues(consumer, "invalid_message").Inc()
 			slog.Error("sequential consumer: invalid message payload",
 				"error", err, "offset", msg.Offset, "partition", msg.Partition)
 			_ = c.reader.CommitMessages(ctx, msg)
@@ -80,6 +87,7 @@ func (c *Consumer) consume(ctx context.Context) {
 
 		result, err := c.processor.ProcessAlert(ctx, alert)
 		if err != nil {
+			metrics.AlertsProcessed.WithLabelValues(consumer, "error").Inc()
 			slog.Error("sequential consumer: process error",
 				"error", err,
 				"experiment_id", alert.ExperimentID,
@@ -92,13 +100,18 @@ func (c *Consumer) consume(ctx context.Context) {
 			continue
 		}
 
+		rs := resultString(result)
+		metrics.AlertsProcessed.WithLabelValues(consumer, rs).Inc()
+		metrics.AlertProcessingDuration.WithLabelValues(consumer).Observe(time.Since(fetchStart).Seconds())
 		slog.Info("sequential consumer: processed alert",
 			"experiment_id", alert.ExperimentID,
 			"metric_id", alert.MetricID,
-			"result", resultString(result))
+			"result", rs)
 
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			slog.Error("sequential consumer: commit error", "error", err)
+		} else {
+			metrics.LastProcessedTimestamp.WithLabelValues(consumer).SetToCurrentTime()
 		}
 	}
 }
