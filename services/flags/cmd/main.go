@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/org/experimentation-platform/services/flags/internal/auth"
 	"github.com/org/experimentation-platform/services/flags/internal/handlers"
 	"github.com/org/experimentation-platform/services/flags/internal/store"
+	"github.com/org/experimentation-platform/services/flags/internal/telemetry"
 	"github.com/org/experimentation/gen/go/experimentation/flags/v1/flagsv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 )
@@ -26,6 +28,14 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Initialize OpenTelemetry tracing + Prometheus metrics.
+	metrics, otelCleanup, err := telemetry.Init(ctx)
+	if err != nil {
+		slog.Error("failed to initialize telemetry", "error", err)
+		os.Exit(1)
+	}
+	defer otelCleanup()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -60,7 +70,12 @@ func main() {
 	defaultLayerID := os.Getenv("FLAG_PROMOTION_LAYER_ID")
 	if mgmtURL != "" {
 		httpClient := &http.Client{Timeout: 10 * time.Second}
-		var clientOpts []connect.ClientOption
+		otelInterceptor, err := otelconnect.NewInterceptor()
+		if err != nil {
+			slog.Error("failed to create otel interceptor", "error", err)
+			os.Exit(1)
+		}
+		clientOpts := []connect.ClientOption{connect.WithInterceptors(otelInterceptor)}
 		if os.Getenv("DISABLE_AUTH") != "true" {
 			clientOpts = append(clientOpts, connect.WithInterceptors(auth.NewAuthForwardInterceptor()))
 		}
@@ -75,6 +90,8 @@ func main() {
 		svc = handlers.NewFlagServiceWithAudit(flagStore, auditStore)
 		slog.Warn("no MANAGEMENT_SERVICE_URL set — PromoteToExperiment will use mock mode")
 	}
+
+	svc = svc.WithMetrics(metrics)
 
 	mux := http.NewServeMux()
 
@@ -96,8 +113,13 @@ func main() {
 		fmt.Fprint(w, "ok")
 	})
 
-	// RBAC interceptor (disabled via DISABLE_AUTH=true for dev/test).
-	var handlerOpts []connect.HandlerOption
+	// OTel + RBAC interceptors. OTel runs first to extract trace context.
+	handlerOtelInterceptor, err := otelconnect.NewInterceptor()
+	if err != nil {
+		slog.Error("failed to create otel handler interceptor", "error", err)
+		os.Exit(1)
+	}
+	handlerOpts := []connect.HandlerOption{connect.WithInterceptors(handlerOtelInterceptor)}
 	if os.Getenv("DISABLE_AUTH") == "true" {
 		slog.Warn("RBAC disabled — DISABLE_AUTH=true (dev mode only)")
 	} else {
@@ -114,6 +136,9 @@ func main() {
 
 	// Register linkage + dependency tracking endpoints.
 	svc.RegisterLinkageRoutes(mux)
+
+	// Prometheus metrics endpoint.
+	mux.Handle("/metrics", telemetry.PrometheusHandler())
 
 	srv := &http.Server{
 		Addr:    ":" + port,
