@@ -1210,8 +1210,8 @@ grpcurl kaizen-assignment.fly.dev:443 grpc.health.v1.Health/Check
 | `DATABASE_URL` | M5 | PostgreSQL connection string | `postgres://user:pass@host:5432/experimentation` |
 | `KAFKA_BROKERS` | M2, M3, M4b, M5 | Kafka bootstrap servers | `broker1:9092,broker2:9092` |
 | `REDIS_URL` | M3, M7 | Redis connection string | `redis://host:6379` |
-| `MANAGEMENT_ADDR` | M1 | M5 gRPC address (config source) | `management.internal:50055` |
-| `POLICY_ADDR` | M1 | M4b gRPC address (bandit delegation) | `policy.internal:50054` |
+| `M5_ADDR` | M1 | M5 gRPC address (config source) | `management.internal:50055` |
+| `M4B_ADDR` | M1 | M4b gRPC address (bandit delegation) | `policy.internal:50054` |
 | `POLICY_ROCKSDB_PATH` | M4b | Path to RocksDB data directory | `/data/policy.db` |
 | `RUST_LOG` | All Rust | Log level filter | `info` or `debug` |
 | `PORT` | All | Override default service port | `50051` |
