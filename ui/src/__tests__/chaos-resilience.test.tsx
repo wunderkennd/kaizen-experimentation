@@ -15,7 +15,13 @@ let mockExperimentId = '11111111-1111-1111-1111-111111111111';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: mockExperimentId }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('@/lib/toast-context', () => ({
+  useToast: () => ({ addToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock('next/link', () => ({

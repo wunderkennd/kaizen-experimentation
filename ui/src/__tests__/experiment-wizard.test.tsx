@@ -19,7 +19,13 @@ const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('@/lib/toast-context', () => ({
+  useToast: () => ({ addToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock('next/link', () => ({

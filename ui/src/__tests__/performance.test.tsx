@@ -6,7 +6,8 @@ import SqlPage from '@/app/experiments/[id]/sql/page';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: '11111111-1111-1111-1111-111111111111' }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({
