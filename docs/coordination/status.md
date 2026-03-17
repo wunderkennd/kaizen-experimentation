@@ -237,7 +237,7 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 - [x] Devin: 12 bugs + optimizations from early PR review, human review checklist passed 6/6 (PR #161)
 - [x] Agent-1: Post-review cleanup — doc ports, iOS SDK, Python drift (PR #162)
 
-- [x] Agent-2: PGO build + k6 load test + 6 Grafana panels + 2 alert rules (PR TBD)
+- [x] Agent-2: PGO build + k6 load test + 6 Grafana panels + 2 alert rules (PR #179)
 
 **In progress:**
 - Agent-1: Mobile SDK CI builds — guard UniFFI imports (PR #163, open)

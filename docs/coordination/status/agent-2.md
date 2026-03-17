@@ -24,7 +24,7 @@ All phases merged. Polish complete: PGO-optimized build, k6 load test (p99 < 10m
 | #85 | Health check, traceparent, core telemetry, tonic-web | Merged |
 | #99 | Reward event pipeline contract tests (24 integration tests) | Merged |
 | #124 | Criterion benchmark suite + full pipeline E2E test | Merged |
-| TBD | PGO build + k6 load test + Grafana panels + alerts | Open |
+| #179 | PGO build + k6 load test + Grafana panels + alerts | Open |
 
 ## Polish Additions
 
