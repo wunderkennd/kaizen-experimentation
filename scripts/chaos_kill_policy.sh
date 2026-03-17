@@ -397,6 +397,7 @@ if echo "$POST_CRASH_SELECT" | grep -q "armId\|arm_id"; then
 else
     fail "SelectArm: experiment state lost — no arm returned"
     echo "$POST_CRASH_SELECT" >&2
+    RESULT="FAIL"
 fi
 
 # 7b: Verify arm distribution is consistent with pre-crash (within tolerance).
