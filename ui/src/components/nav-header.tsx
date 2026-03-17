@@ -24,6 +24,9 @@ export function NavHeader() {
           <Link href="/metrics" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-metrics">
             Metrics
           </Link>
+          <Link href="/monitoring" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-monitoring">
+            Monitoring
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">
