@@ -23,6 +23,8 @@ export default function MonitoringPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    clearApiCache();
+    setError(null);
 
     try {
       const listResult = await listExperiments();
