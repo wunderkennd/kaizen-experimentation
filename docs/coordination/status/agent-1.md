@@ -1,13 +1,13 @@
 # Agent-1 — M1 Assignment Service
 
-**Status**: All Phases Complete
-**Current Branch**: —
-**Current Milestone**: All Phase 4 onboarding items complete
+**Status**: Polish (mobile SDK CI fix pending)
+**Current Branch**: agent-1/fix/mobile-sdk-ci
+**Current Milestone**: Mobile SDK CI builds
 **Blocked By**: —
 
 ## Summary
 
-M1.1-1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation done. Cold-start bandit done.
+M1.1-1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation done. Cold-start bandit done. SDK LocalProvider + RemoteProviders shipped. Post-review cleanup done. Mobile SDK CI fix in progress.
 
 ## Key PRs
 
@@ -24,6 +24,9 @@ M1.1-1.5 + M2.7 + M2.7b + M2.7c complete. Live bandit delegation done. Cold-star
 | #142 | M1-M4b live bandit contract tests (10 tests) | Merged |
 | #144 | SDK LocalProvider hash-based variant assignment | Merged |
 | #150 | SDK RemoteProviders + JSON HTTP API | Merged |
+| #152 | All phases complete | Merged |
+| #162 | Post-review cleanup: doc ports, iOS SDK, Python drift | Merged |
+| #163 | Mobile SDK CI: guard UniFFI imports | Open |
 
 ## Pair Integrations
 

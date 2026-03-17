@@ -6,6 +6,7 @@ import type {
   SurrogateProjection, SrmResult, MetricResult, SegmentResult,
   MetricDefinition, ListMetricDefinitionsResponse,
   Flag, FlagType, ListFlagsResponse,
+  InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -216,6 +217,10 @@ function adaptExperiment(proto: Record<string, unknown>): Experiment {
     targetingRuleId: proto.targetingRuleId as string | undefined,
     surrogateModelId: proto.surrogateModelId as string | undefined,
     isCumulativeHoldout: (proto.isCumulativeHoldout as boolean) || false,
+    interleavingConfig: proto.interleavingConfig as InterleavingConfig | undefined,
+    sessionConfig: proto.sessionConfig as SessionConfig | undefined,
+    banditExperimentConfig: proto.banditExperimentConfig as BanditExperimentConfig | undefined,
+    qoeConfig: proto.qoeConfig as QoeConfig | undefined,
     createdAt: (proto.createdAt as string) || '',
     startedAt: proto.startedAt as string | undefined,
     concludedAt: proto.concludedAt as string | undefined,

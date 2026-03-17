@@ -62,6 +62,10 @@ export interface Experiment {
   targetingRuleId?: string;
   surrogateModelId?: string;
   isCumulativeHoldout: boolean;
+  interleavingConfig?: InterleavingConfig;
+  sessionConfig?: SessionConfig;
+  banditExperimentConfig?: BanditExperimentConfig;
+  qoeConfig?: QoeConfig;
   createdAt: string;
   startedAt?: string;
   concludedAt?: string;
@@ -86,6 +90,10 @@ export interface CreateExperimentRequest {
   sequentialTestConfig?: SequentialTestConfig;
   targetingRuleId?: string;
   isCumulativeHoldout: boolean;
+  interleavingConfig?: InterleavingConfig;
+  sessionConfig?: SessionConfig;
+  banditExperimentConfig?: BanditExperimentConfig;
+  qoeConfig?: QoeConfig;
 }
 
 export interface QueryLogEntry {
@@ -453,6 +461,38 @@ export interface Flag {
 export interface ListFlagsResponse {
   flags: Flag[];
   nextPageToken: string;
+}
+
+// --- Type-specific experiment config (wizard step 2) ---
+
+export type InterleavingMethod = 'TEAM_DRAFT' | 'OPTIMIZED' | 'MULTILEAVE';
+export type CreditAssignment = 'BINARY_WIN' | 'PROPORTIONAL' | 'WEIGHTED';
+
+export interface InterleavingConfig {
+  method: InterleavingMethod;
+  algorithmIds: string[];
+  creditAssignment: CreditAssignment;
+  creditMetricEvent: string;
+  maxListSize: number;
+}
+
+export interface SessionConfig {
+  sessionIdAttribute: string;
+  allowCrossSessionVariation: boolean;
+  minSessionsPerUser: number;
+}
+
+export interface BanditExperimentConfig {
+  algorithm: BanditAlgorithm;
+  rewardMetricId: string;
+  contextFeatureKeys: string[];
+  minExplorationFraction: number;
+  warmupObservations: number;
+}
+
+export interface QoeConfig {
+  qoeMetrics: string[];
+  deviceFilter: string;
 }
 
 export type BanditAlgorithm = 'THOMPSON_SAMPLING' | 'LINEAR_UCB' | 'THOMPSON_LINEAR' | 'NEURAL_CONTEXTUAL';

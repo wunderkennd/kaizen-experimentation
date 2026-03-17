@@ -1,13 +1,13 @@
 # Agent-6 — M6 UI (Next.js)
 
-**Status**: Phase 4 In Progress
-**Current Branch**: agent-6/feat/metric-browser
-**Current Milestone**: Metric definition browser
+**Status**: All Phases Complete
+**Current Branch**: —
+**Current Milestone**: All Phase 4 onboarding items complete
 **Blocked By**: —
 
 ## Summary
 
-Full experiment lifecycle UI with analysis tabs, bandit dashboard, live API integration. Phase 4: performance targets, error resilience, proto-to-UI type alignment, metric browser.
+Full experiment lifecycle UI with analysis tabs, bandit dashboard, live API integration. Phase 4 complete: performance targets, error resilience, proto-to-UI type alignment, metric browser, wire-format contract tests.
 
 ## Key PRs
 
