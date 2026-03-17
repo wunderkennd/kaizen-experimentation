@@ -626,22 +626,23 @@ export const handlers = [
     return HttpResponse.json(wire);
   }),
 
-  // CreateFlag
+  // CreateFlag — proto: CreateFlagRequest { Flag flag = 1; }
   http.post(`${FLAGS_SVC}/CreateFlag`, async ({ request }) => {
     const denied = checkAuth(request.headers, 'experimenter');
     if (denied) return denied;
-    const body = await request.json() as Record<string, unknown>;
+    const body = await request.json() as { flag?: Record<string, unknown> };
+    const f = body.flag || {};
 
     const newFlag = {
       flagId: crypto.randomUUID(),
-      name: (body.name as string) || '',
-      description: (body.description as string) || '',
-      type: (body.type as string) || 'BOOLEAN',
-      defaultValue: (body.defaultValue as string) || '',
-      enabled: (body.enabled as boolean) || false,
-      rolloutPercentage: (body.rolloutPercentage as number) || 0,
-      variants: (body.variants as typeof SEED_FLAGS[number]['variants']) || [],
-      targetingRuleId: body.targetingRuleId as string | undefined,
+      name: (f.name as string) || '',
+      description: (f.description as string) || '',
+      type: (f.type as string) || 'BOOLEAN',
+      defaultValue: (f.defaultValue as string) || '',
+      enabled: (f.enabled as boolean) || false,
+      rolloutPercentage: (f.rolloutPercentage as number) || 0,
+      variants: (f.variants as typeof SEED_FLAGS[number]['variants']) || [],
+      targetingRuleId: f.targetingRuleId as string | undefined,
     };
 
     SEED_FLAGS.push(newFlag as typeof SEED_FLAGS[number]);

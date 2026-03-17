@@ -594,8 +594,8 @@ export async function getFlag(flagId: string): Promise<Flag> {
 }
 
 export async function createFlag(flag: Partial<Flag>): Promise<Flag> {
-  const raw = await callRpc<Partial<Flag>, Record<string, unknown>>(
-    FLAGS_URL, FLAGS_SVC, 'CreateFlag', flag,
+  const raw = await callRpc<{ flag: Partial<Flag> }, Record<string, unknown>>(
+    FLAGS_URL, FLAGS_SVC, 'CreateFlag', { flag },
     { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptFlag(raw);
