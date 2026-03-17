@@ -43,12 +43,14 @@ export default function ComparePage() {
   }, [fetchExperiments]);
 
   // Fetch analysis results when selectedIds change
+  // Fetch analysis results when selectedIds change
   useEffect(() => {
     if (selectedIds.length === 0) {
       setEntries([]);
       return;
     }
 
+    let cancelled = false;
     setLoadingResults(true);
     setResultsError(null);
 
@@ -59,17 +61,20 @@ export default function ComparePage() {
           const experiment = experiments.find((e) => e.experimentId === id);
           if (!experiment) continue;
           const analysisResult = await getAnalysisResult(id);
+          if (cancelled) return;
           results.push({ experiment, analysisResult });
         }
-        setEntries(results);
+        if (!cancelled) setEntries(results);
       } catch (err) {
-        setResultsError(err instanceof Error ? err.message : 'Failed to fetch analysis results');
+        if (!cancelled) setResultsError(err instanceof Error ? err.message : 'Failed to fetch analysis results');
       } finally {
-        setLoadingResults(false);
+        if (!cancelled) setLoadingResults(false);
       }
     };
 
     fetchResults();
+
+    return () => { cancelled = true; };
   }, [selectedIds, experiments]);
 
   const handleSelect = useCallback((id: string) => {
