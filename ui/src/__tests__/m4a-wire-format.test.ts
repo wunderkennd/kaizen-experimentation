@@ -891,9 +891,9 @@ describe('M4a wire format: IPW-adjusted results', () => {
     expect(ipw).toBeDefined();
     expect(ipw.se).toBe(0.02);
     expect(ipw.effectiveSampleSize).toBe(5000);
-    // Proto3 zero-omitted fields come through as undefined
-    expect(ipw.effect).toBeUndefined();
-    expect(ipw.nClipped).toBeUndefined();
+    // Proto3 zero-omitted fields defaulted to 0 by adaptIpwResult
+    expect(ipw.effect).toBe(0);
+    expect(ipw.nClipped).toBe(0);
   });
 
   it('MetricResult without ipwResult (non-bandit experiment)', async () => {
