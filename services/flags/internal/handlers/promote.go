@@ -8,6 +8,9 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/org/experimentation-platform/services/flags/internal/store"
 	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 	flagsv1 "github.com/org/experimentation/gen/go/experimentation/flags/v1"
@@ -69,10 +72,23 @@ func (s *FlagService) PromoteToExperiment(ctx context.Context, req *connect.Requ
 	if s.managementClient != nil {
 		result, err = s.createExperimentViaM5(ctx, experiment)
 		if err != nil {
+			if s.metrics != nil {
+				s.metrics.FlagPromotionsTotal.Add(ctx, 1, metric.WithAttributes(
+					attribute.String("experiment_type", expType.String()),
+					attribute.String("status", "error"),
+				))
+			}
 			return nil, err
 		}
 	} else {
 		result = s.createExperimentMock(experiment, f)
+	}
+
+	if s.metrics != nil {
+		s.metrics.FlagPromotionsTotal.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("experiment_type", expType.String()),
+			attribute.String("status", "success"),
+		))
 	}
 
 	// Link the flag to the created experiment for lifecycle tracking.
