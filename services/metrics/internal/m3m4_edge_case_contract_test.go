@@ -124,6 +124,20 @@ func TestEdgeCase_IPW_AssignmentProbability_AllTemplates(t *testing.T) {
 				QoEField: "time_to_first_frame_ms", ComputationDate: "2024-01-15",
 			})
 		}},
+		{"lifecycle_mean", func() (string, error) {
+			return r.RenderLifecycleMean(spark.TemplateParams{
+				ExperimentID: "exp-ipw", MetricID: "m1",
+				SourceEventType: "e", ComputationDate: "2024-01-15",
+				LifecycleEnabled: true,
+			})
+		}},
+		{"session_level_mean", func() (string, error) {
+			return r.RenderSessionLevelMean(spark.TemplateParams{
+				ExperimentID: "exp-ipw", MetricID: "m1",
+				SourceEventType: "e", ComputationDate: "2024-01-15",
+				SessionLevel: true,
+			})
+		}},
 	}
 
 	for _, tc := range templates {
@@ -151,13 +165,18 @@ func TestEdgeCase_IPW_AssignmentProbability_AllTemplates(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Edge case: SQL injection resistance
-// Template parameters with special characters must not break SQL syntax.
+// Edge case: SQL template rendering with special characters
+//
+// IMPORTANT: Go text/template does NOT escape single quotes, so template params
+// with single quotes will break out of SQL string literals. This is acceptable
+// because template params (experiment_id, metric_id, etc.) come exclusively from
+// trusted internal config (ConfigStore), never from user input. These tests
+// verify the templates render without errors, not that they neutralize injection.
 // ---------------------------------------------------------------------------
 
 func TestEdgeCase_SQLInjection_MetricID(t *testing.T) {
 	r := newRenderer(t)
-	// metric_id with SQL injection attempt.
+	// metric_id with special characters — template renders without error.
 	sql, err := r.RenderMean(spark.TemplateParams{
 		ExperimentID:    "exp-1",
 		MetricID:        "metric'; DROP TABLE delta.metric_summaries; --",
@@ -166,12 +185,9 @@ func TestEdgeCase_SQLInjection_MetricID(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// The injected SQL should be inside a string literal (between quotes),
-	// not executable as a separate statement.
+	// Template still produces structurally complete SQL.
 	assert.Contains(t, sql, "AS metric_id",
-		"metric_id must still appear as an aliased string literal")
-	// The template wraps values in single quotes — the injection is neutralized
-	// because it's inside a string constant, not a statement boundary.
+		"metric_id must still appear as an aliased column")
 	assert.Contains(t, strings.ToUpper(sql), "SELECT",
 		"template must still produce valid SELECT")
 }
@@ -186,11 +202,13 @@ func TestEdgeCase_SQLInjection_ExperimentID(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// The experiment_id with injection is inside a string literal.
+	// Template renders without panicking. Note: the single quote in ExperimentID
+	// IS NOT escaped by text/template and would produce broken SQL if the param
+	// came from untrusted input. Safety relies on ConfigStore validation.
 	assert.Contains(t, strings.ToUpper(sql), "SELECT",
-		"template must still produce valid SELECT despite injection attempt")
+		"template must render without panicking")
 	assert.Contains(t, strings.ToUpper(sql), "FROM",
-		"template must still produce valid FROM despite injection attempt")
+		"template must render FROM clause")
 }
 
 // ---------------------------------------------------------------------------
