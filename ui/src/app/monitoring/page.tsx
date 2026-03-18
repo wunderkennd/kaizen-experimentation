@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Experiment, AnalysisResult, GuardrailStatusResult } from '@/lib/types';
-import { listExperiments, getAnalysisResult, getGuardrailStatus } from '@/lib/api';
+import { listExperiments, getAnalysisResult, getGuardrailStatus, clearApiCache } from '@/lib/api';
 import { MonitoringSummaryCards } from '@/components/monitoring-summary-cards';
 import { MonitoringHealthTable } from '@/components/monitoring-health-table';
 import { MonitoringBreachList } from '@/components/monitoring-breach-list';
