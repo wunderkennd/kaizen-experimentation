@@ -101,6 +101,7 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
       }));
     });
     setDirty(true);
+    setBannerError(undefined);
     setFieldErrors((prev) => prev.filter((e) => e.field !== 'trafficFraction'));
   }, []);
 
