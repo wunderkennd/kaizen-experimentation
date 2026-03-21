@@ -25,7 +25,7 @@ export function SqlHighlighter({ sql }: SqlHighlighterProps) {
       <button
         type="button"
         onClick={handleCopy}
-        className="absolute right-2 top-4 z-10 hidden rounded border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-600 shadow-sm hover:bg-gray-50 group-hover:block focus:block focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="absolute right-2 top-4 z-10 rounded border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-600 opacity-0 shadow-sm transition-opacity hover:bg-gray-50 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         aria-label="Copy SQL to clipboard"
       >
         {copied ? 'Copied!' : 'Copy'}
