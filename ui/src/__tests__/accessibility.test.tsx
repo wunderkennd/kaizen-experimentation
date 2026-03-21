@@ -18,6 +18,7 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: '11111111-1111-1111-1111-111111111111' }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/',
 }));
 
 vi.mock('next/link', () => ({

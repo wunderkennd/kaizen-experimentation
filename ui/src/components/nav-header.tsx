@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import { ALL_ROLES, ROLE_LABELS, ROLE_BADGE_COLORS } from '@/lib/auth';
@@ -13,18 +14,33 @@ const ConnectionStatus = dynamic(
 
 export function NavHeader() {
   const { user, setDevRole, isDevMode } = useAuth();
+  const pathname = usePathname();
 
   return (
     <header className="border-b border-gray-200 bg-white">
       <nav aria-label="Main navigation" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-lg font-semibold text-gray-900">
+          <Link
+            href="/"
+            className={`text-lg font-semibold ${pathname === '/' || pathname.startsWith('/experiments') ? 'text-indigo-600' : 'text-gray-900'}`}
+            aria-current={pathname === '/' || pathname.startsWith('/experiments') ? 'page' : undefined}
+          >
             Experimentation Platform
           </Link>
-          <Link href="/metrics" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-metrics">
+          <Link
+            href="/metrics"
+            className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/metrics') ? 'text-indigo-600' : 'text-gray-600'}`}
+            aria-current={pathname.startsWith('/metrics') ? 'page' : undefined}
+            data-testid="nav-metrics"
+          >
             Metrics
           </Link>
-          <Link href="/monitoring" className="text-sm font-medium text-gray-600 hover:text-gray-900" data-testid="nav-monitoring">
+          <Link
+            href="/monitoring"
+            className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/monitoring') ? 'text-indigo-600' : 'text-gray-600'}`}
+            aria-current={pathname.startsWith('/monitoring') ? 'page' : undefined}
+            data-testid="nav-monitoring"
+          >
             Monitoring
           </Link>
         </div>
