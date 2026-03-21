@@ -1,0 +1,26 @@
+{
+  "mode": "multiplayer",
+  "merge_strategy": "ci_gated",
+  "auto_merge_on_green_ci": false,
+  "require_human_review": true,
+  "supervisor": {
+    "health_check_interval_seconds": 120,
+    "nudge_after_idle_seconds": 1800,
+    "worktree_refresh_interval_seconds": 120
+  },
+  "worker": {
+    "branch_prefix": "agent-",
+    "auto_push": true,
+    "create_pr_on_completion": true,
+    "pr_labels": ["multiclaude", "phase-5"],
+    "status_file_pattern": "docs/coordination/status/agent-{agent_number}-status.md"
+  },
+  "ci": {
+    "required_checks": [
+      "cargo test --workspace",
+      "go test ./...",
+      "buf lint proto/",
+      "buf breaking proto/ --against .git#branch=main"
+    ]
+  }
+}

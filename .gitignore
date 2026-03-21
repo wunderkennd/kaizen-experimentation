@@ -31,3 +31,40 @@ Thumbs.db
 # Caches
 .cache/
 *.profdata
+
+# ============================================
+# Claude Code & Multiclaude
+# ============================================
+
+# .claude/ — commit project settings and agent definitions,
+# ignore user-local overrides and runtime state
+
+# Commit these (do NOT gitignore):
+#   .claude/settings.json          — project-level settings (Agent Teams flag, permissions)
+#   .claude/agents/                — project-scoped custom subagent definitions
+
+# Ignore user-local and runtime:
+.claude/settings.local.json
+.claude/worktrees/
+.claude/teams/
+.claude/tasks/
+.claude/credentials/
+.claude/statsig/
+.claude/cache/
+.claude/*.log
+
+# .multiclaude/ — commit agent definitions and repo config,
+# ignore runtime state and daemon artifacts
+
+# Commit these (do NOT gitignore):
+#   .multiclaude/agents/           — persistent agent definitions (the 7 Kaizen agents)
+#   .multiclaude/config.json       — repo-level Multiclaude configuration
+
+# Ignore runtime state:
+.multiclaude/state/
+.multiclaude/messages/
+.multiclaude/locks/
+.multiclaude/*.pid
+.multiclaude/*.log
+.multiclaude/worktrees/
+tsconfig.tsbuildinfo
