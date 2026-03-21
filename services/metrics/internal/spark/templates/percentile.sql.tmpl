@@ -5,6 +5,7 @@ SELECT
     metric_data.variant_id,
     '{{.MetricID}}' AS metric_id,
     PERCENTILE_APPROX(metric_data.value, {{.Percentile}}) AS metric_value,
-    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    MIN(metric_data.assignment_probability) AS assignment_probability
 FROM metric_data
 GROUP BY metric_data.user_id, metric_data.variant_id
