@@ -22,7 +22,7 @@ NEXT_PUBLIC_MOCK_API=true npm run dev
 - **CONCLUDED**: `session_watch_pattern` (aaaaaaaa-...), `retention_nudge_v1` (88888888-...)
 - **ARCHIVED**: `legacy_layout_test` (99999999-...)
 
-Experiments with analysis results: `homepage_recs_v2`, `search_ranking_interleave`, `retention_nudge_v1`, `session_watch_pattern`, `recommendation_holdout_q1`.
+Experiments with analysis results: `homepage_recs_v2`, `search_ranking_interleave`, `retention_nudge_v1`, `session_watch_pattern`, `recommendation_holdout_q1`, `thumbnail_selection_v1`, `cold_start_bandit`.
 
 ## Key Testing Flows
 
@@ -64,13 +64,12 @@ Experiments with analysis results: `homepage_recs_v2`, `search_ranking_interleav
 
 ```bash
 cd ui
-npm run test -- --run    # Run all tests (412+ tests)
+npm run test -- --run    # Run all tests (470+ tests, 476 total with 6 skipped)
 npm run lint             # ESLint
 npm run type-check       # TypeScript check (tsc --noEmit)
 ```
 
 ## Known Issues
-- `metric-browser.test.tsx` has a pre-existing failure related to `nav-metrics` testid (exists on main)
 - Toast auto-dismiss timer may have already elapsed by the time the page finishes transitioning, making it hard to capture in screenshots. The toast IS visible briefly after actions.
 - The dev role switcher in the nav (Mock dropdown) allows switching between Viewer/Analyst/Experimenter/Admin roles for RBAC testing.
 
