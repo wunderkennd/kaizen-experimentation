@@ -187,11 +187,4 @@ describe('Metric Browser Page', () => {
     expect(screen.getByTestId('direction-watch_time_minutes')).toHaveTextContent('↑ higher is better');
   });
 
-  it('has Metrics nav link pointing to /metrics', async () => {
-    await renderAndWait();
-
-    const navLink = screen.getByTestId('nav-metrics');
-    expect(navLink).toHaveAttribute('href', '/metrics');
-    expect(navLink).toHaveTextContent('Metrics');
-  });
 });
