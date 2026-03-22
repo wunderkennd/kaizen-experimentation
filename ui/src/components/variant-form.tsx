@@ -101,7 +101,7 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
       }));
     });
     setDirty(true);
-    setBannerError(undefined);
+    setBannerError((prev) => prev === 'Traffic fractions must sum to 100%' ? undefined : prev);
     setFieldErrors((prev) => prev.filter((e) => e.field !== 'trafficFraction'));
   }, []);
 
