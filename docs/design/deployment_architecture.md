@@ -16,6 +16,8 @@
 6. [AWS Deployment](#6-aws-deployment)
 7. [GCP Deployment](#7-gcp-deployment)
 8. [Hybrid Deployment](#8-hybrid-deployment)
+   - [Option A: Fly.io Edge + AWS/GCP Backend](#recommended-edge--managed-backend)
+   - [Option B: AWS + GCP Cross-Cloud (Data Gravity Split)](#option-b-aws--gcp-cross-cloud-hybrid-data-gravity-split)
 9. [Networking & Service Communication](#9-networking--service-communication)
 10. [Data Layer](#10-data-layer)
 11. [Observability](#11-observability)
@@ -175,28 +177,28 @@ The database uses 4 schema domains:
 ### Topology Options
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        DEPLOYMENT TOPOLOGIES                        │
-├───────────────┬──────────────────┬──────────────────────────────────┤
-│   Fly.io      │   AWS / GCP      │   Hybrid                        │
-│   (Simple)    │   (Enterprise)   │   (Optimal)                     │
-├───────────────┼──────────────────┼──────────────────────────────────┤
-│ All 9 services│ All 9 services   │ M1, M7 on Fly.io edge           │
-│ on Fly.io VMs │ on ECS/Cloud Run │ M4b, M3, M5 on AWS/GCP          │
-│               │                  │ Managed infra on AWS/GCP         │
-│ Fly Postgres  │ RDS / Cloud SQL  │ RDS / Cloud SQL                  │
-│ Upstash Redis │ ElastiCache      │ ElastiCache / Memorystore        │
-│ Upstash Kafka │ MSK / Pub-Sub    │ MSK / Confluent Cloud            │
-│               │ or Confluent     │                                  │
-├───────────────┼──────────────────┼──────────────────────────────────┤
-│ Best for:     │ Best for:        │ Best for:                        │
-│ Dev/staging   │ Production at    │ Global low-latency + managed     │
-│ Small-scale   │ scale, strict    │ stateful backends                │
-│ prototyping   │ compliance       │                                  │
-├───────────────┼──────────────────┼──────────────────────────────────┤
-│ Monthly cost  │ Monthly cost     │ Monthly cost                     │
-│ ~$50-200      │ ~$500-2,000+     │ ~$300-1,200                      │
-└───────────────┴──────────────────┴──────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                               DEPLOYMENT TOPOLOGIES                                       │
+├───────────────┬──────────────────┬─────────────────────────┬─────────────────────────────┤
+│   Fly.io      │   AWS / GCP      │   Hybrid A              │   Hybrid B (AWS+GCP)        │
+│   (Simple)    │   (Enterprise)   │   (Edge + Backend)      │   (Data Gravity Split)      │
+├───────────────┼──────────────────┼─────────────────────────┼─────────────────────────────┤
+│ All 9 services│ All 9 services   │ M1, M7 on Fly.io edge  │ M1,M2,M4b,M7 on AWS        │
+│ on Fly.io VMs │ on ECS/Cloud Run │ M4b,M3,M5 on AWS/GCP   │ M3,M4a,M5,Orch on GCP      │
+│               │                  │ Managed infra on cloud  │ Data lake on GCP (BQ/GCS)   │
+│ Fly Postgres  │ RDS / Cloud SQL  │ RDS / Cloud SQL         │ Cloud SQL + RDS             │
+│ Upstash Redis │ ElastiCache      │ ElastiCache/Memorystore │ ElastiCache + Memorystore   │
+│ Upstash Kafka │ MSK / Pub-Sub    │ MSK / Confluent Cloud   │ MSK + MirrorMaker2 to GCP   │
+│               │ or Confluent     │                         │                             │
+├───────────────┼──────────────────┼─────────────────────────┼─────────────────────────────┤
+│ Best for:     │ Best for:        │ Best for:               │ Best for:                   │
+│ Dev/staging   │ Production at    │ Global low-latency +    │ App servers on AWS,         │
+│ Small-scale   │ scale, strict    │ managed stateful        │ data lake on GCP            │
+│ prototyping   │ compliance       │ backends                │                             │
+├───────────────┼──────────────────┼─────────────────────────┼─────────────────────────────┤
+│ Monthly cost  │ Monthly cost     │ Monthly cost            │ Monthly cost                │
+│ ~$50-200      │ ~$500-2,000+     │ ~$300-1,200             │ ~$900-1,800                 │
+└───────────────┴──────────────────┴─────────────────────────┴─────────────────────────────┘
 ```
 
 ---
@@ -731,7 +733,7 @@ The hybrid topology puts latency-sensitive, stateless services at the edge (Fly.
 
 5. **M3/M4a** are batch services. Latency doesn't matter; reliability and access to data stores does.
 
-### Cross-Cloud Networking
+### Cross-Cloud Networking (Fly.io ↔ AWS)
 
 Fly.io supports WireGuard-based private networking to external clouds:
 
@@ -744,6 +746,246 @@ fly wireguard create kaizen-org aws-vpc
 ```
 
 Alternatively, expose AWS services via PrivateLink or public endpoints with mTLS.
+
+---
+
+### Option B: AWS + GCP Cross-Cloud Hybrid (Data Gravity Split)
+
+When your organization runs **app servers on AWS** but maintains its **data lake on GCP** (BigQuery/GCS), the optimal topology splits services by their primary dependency: latency-sensitive services co-locate with app servers (AWS), while data-intensive batch services co-locate with the data lake (GCP).
+
+#### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AWS us-east-1 (Latency Path)                     │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                        ECS Cluster                               │   │
+│  │                                                                  │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │   │
+│  │  │ M1:Assignment │  │ M7:Flags     │  │ M4b:Policy   │          │   │
+│  │  │ Fargate      │  │ Fargate      │  │ EC2+EBS      │          │   │
+│  │  │ 2 tasks      │  │ 2 tasks      │  │ c6i.xlarge   │          │   │
+│  │  │ p99 < 5ms    │  │ p99 < 10ms   │  │ RocksDB      │          │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘          │   │
+│  │                                                                  │   │
+│  │  ┌──────────────┐  ┌──────────────┐                             │   │
+│  │  │ M2:Pipeline  │  │ M6:UI        │                             │   │
+│  │  │ Fargate      │  │ Fargate      │                             │   │
+│  │  │ 2 tasks      │  │ (or CDN)     │                             │   │
+│  │  └──────────────┘  └──────────────┘                             │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────┐  ┌──────────────┐                                    │
+│  │ ElastiCache  │  │ Amazon MSK   │◄─── Kafka topics shared           │
+│  │ Redis        │  │ 3 brokers    │     across both clouds             │
+│  └──────────────┘  └──────┬───────┘                                    │
+│                           │                                             │
+└───────────────────────────┼─────────────────────────────────────────────┘
+                            │
+          ┌─────────────────┼─────────────────┐
+          │  Cloud Interconnect / VPN Tunnel   │
+          │  (dedicated 10Gbps or HA VPN)      │
+          └─────────────────┼─────────────────┘
+                            │
+┌───────────────────────────┼─────────────────────────────────────────────┐
+│                        GCP us-central1 (Data Path)                      │
+│                           │                                             │
+│  ┌────────────────────────▼─────────────────────────────────────────┐   │
+│  │                     GKE Cluster / Cloud Run                      │   │
+│  │                                                                  │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │   │
+│  │  │ M3:Metrics   │  │ M4a:Analysis │  │ M5:Management│          │   │
+│  │  │ Cloud Run    │  │ Cloud Run    │  │ Cloud Run    │          │   │
+│  │  │ Spark→BQ     │  │ Batch jobs   │  │ CRUD/lifecycle│          │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘          │   │
+│  │                                                                  │   │
+│  │  ┌──────────────┐                                               │   │
+│  │  │ M2-Orch      │                                               │   │
+│  │  │ Cloud Run    │                                               │   │
+│  │  └──────────────┘                                               │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │
+│  │ Cloud SQL    │  │ BigQuery     │  │ GCS          │                  │
+│  │ PostgreSQL   │  │ (Data Lake)  │  │ (Delta Lake) │                  │
+│  │ Multi-AZ     │  │              │  │ + MLflow     │                  │
+│  └──────────────┘  └──────────────┘  └──────────────┘                  │
+│                                                                         │
+│  ┌──────────────┐                                                      │
+│  │ Memorystore  │                                                      │
+│  │ Redis        │                                                      │
+│  └──────────────┘                                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Why This Split Works
+
+| Service | Cloud | Rationale |
+|---------|-------|-----------|
+| **M1 (Assignment)** | AWS | Co-located with app servers. Every user request calls M1 — cross-cloud latency is unacceptable for a 5ms p99 SLA |
+| **M7 (Flags)** | AWS | Same reasoning as M1 — serves app servers on the hot path (p99 < 10ms) |
+| **M4b (Bandit Policy)** | AWS | M1 calls M4b synchronously for bandit experiments. Must be in the same network as M1 |
+| **M2 (Event Pipeline)** | AWS | Receives events from app servers. Publishes to Kafka (MSK on AWS). Low-latency ingestion matters |
+| **M6 (UI)** | AWS (or CDN) | Static Next.js app. Can be served from anywhere, but AWS keeps it close to M5 for API calls |
+| **M3 (Metric Engine)** | GCP | Runs Spark SQL aggregations over the data lake. BigQuery/GCS access is zero-cost and sub-millisecond within GCP |
+| **M4a (Analysis)** | GCP | Consumes aggregated metrics from M3. Batch/async — latency-tolerant. Benefits from data locality |
+| **M5 (Management)** | GCP | Writes are infrequent. Config pushes to M1 are async (via Kafka/Redis). Co-located with Cloud SQL and the analysis pipeline |
+| **M2-Orch (Orchestration)** | GCP | Batch query logging — reads from M5, no real-time requirements |
+
+#### Cross-Cloud Communication Diagram
+
+```
+AWS (Latency Path)                          GCP (Data Path)
+═══════════════════                         ═══════════════════
+
+ App Servers ──gRPC──► M1 (Assignment)
+                        │
+                        ├──gRPC──► M4b (Bandit Policy)
+                        │           [same-VPC, < 1ms]
+                        │
+                        └──async──► M5 config fetch
+                                    [cross-cloud, ~20-40ms,
+                                     cached locally in M1]
+
+ App Servers ──gRPC──► M7 (Flags)
+                        │
+                        └──CGo──► libexperimentation_ffi
+                                  [in-process, < 0.1ms]
+
+ App Servers ──gRPC──► M2 (Pipeline) ──Kafka──► MSK (AWS)
+                                                  │
+                                   ┌──────────────┘
+                                   │  MirrorMaker 2 / Kafka Connect
+                                   │  (cross-cloud replication)
+                                   ▼
+                              GCP Kafka consumer
+                                   │
+                        ┌──────────┼──────────┐
+                        ▼          ▼          ▼
+                    M3 (Metrics) M4a(Analysis) M4b replay*
+                        │          │
+                        ▼          ▼
+                    BigQuery    Cloud SQL
+                    (aggregate) (results)
+                        │
+                        └──► M5 (Management) ──async──► M1 config push
+                                                        [cross-cloud,
+                                                         via Redis/Kafka,
+                                                         latency-tolerant]
+
+ M6 (UI) ──ConnectRPC──► M5 (Management)
+                          [cross-cloud, ~30-50ms,
+                           acceptable for human-facing UI]
+
+
+ * M4b Kafka replay only needed for disaster recovery,
+   not on the hot path.
+```
+
+#### Cross-Cloud Communication Inventory
+
+| Source | Destination | Protocol | Direction | Frequency | Latency Tolerance | Notes |
+|--------|-------------|----------|-----------|-----------|-------------------|-------|
+| M1 (AWS) | M5 (GCP) | gRPC | AWS → GCP | On startup + periodic refresh (~60s) | High (cached locally) | Config fetch. M1 caches experiment configs; stale config is tolerable for ~60s |
+| M5 (GCP) | M1 (AWS) | Kafka/Redis | GCP → AWS | On config change (~10/day) | High | Async push invalidation. M1 re-fetches on next poll |
+| M6 (AWS) | M5 (GCP) | ConnectRPC | AWS → GCP | Human-triggered (~100/day) | Medium (< 100ms acceptable) | Dashboard API calls. Users won't notice 30-50ms overhead |
+| M2 (AWS) | M3 (GCP) | Kafka | AWS → GCP | Continuous (via MirrorMaker 2) | High | Event stream replication. M3 processes in batches (hourly/daily) |
+| M3 (GCP) | M5 (GCP) | gRPC | Internal GCP | On analysis completion | N/A (same cloud) | Results written to Cloud SQL |
+| M4a (GCP) | Cloud SQL | SQL | Internal GCP | Batch | N/A (same cloud) | Analysis results stored |
+
+#### Kafka Replication Strategy (AWS MSK → GCP)
+
+Events originate from app servers (AWS) and must reach M3/M4a (GCP). Two options:
+
+**Option 1: MirrorMaker 2 (Recommended)**
+```bash
+# Deploy MirrorMaker 2 on GCP to pull from AWS MSK
+# mm2.properties
+clusters = aws, gcp
+aws.bootstrap.servers = MSK_BROKER_1:9092,MSK_BROKER_2:9092
+gcp.bootstrap.servers = GCP_KAFKA_BROKER:9092
+
+aws->gcp.enabled = true
+aws->gcp.topics = exposures, metric_events, reward_events, qoe_events
+
+# Replication lag is typically < 1 second
+replication.factor = 3
+```
+
+**Option 2: Confluent Cloud (Cluster Linking)**
+
+If using Confluent Cloud on both sides, Cluster Linking provides lower-latency replication with no separate MirrorMaker deployment.
+
+#### Cloud Interconnect Setup
+
+```bash
+# Option A: Dedicated Interconnect (10Gbps, lowest latency)
+# Requires physical cross-connect at a colocation facility
+# Best for: > 5Gbps sustained cross-cloud traffic
+
+# Option B: HA VPN (recommended for most deployments)
+# Two tunnels for redundancy, ~3Gbps per tunnel
+gcloud compute vpn-tunnels create aws-tunnel-1 \
+  --peer-ip AWS_VPN_GATEWAY_IP \
+  --shared-secret SECRET \
+  --ike-version 2 \
+  --region us-central1 \
+  --target-vpn-gateway kaizen-vpn-gw
+
+# AWS side: create Customer Gateway + VPN Connection
+aws ec2 create-vpn-connection \
+  --type ipsec.1 \
+  --customer-gateway-id cgw-XXXXX \
+  --vpn-gateway-id vgw-XXXXX \
+  --options "{\"StaticRoutesOnly\":false}"
+
+# Verify connectivity
+ping M5_PRIVATE_IP   # from AWS M1 instance
+```
+
+#### Network Latency Budget
+
+```
+Assignment hot path (user request → variant):
+┌──────────────────────────────────────────────────┐
+│ App Server → M1 (same VPC)          ~0.5ms       │
+│ M1 → M4b (same VPC, bandit only)   ~1.0ms       │
+│ M1 config lookup (local cache)      ~0.01ms      │
+│ Total:                              ~1.5ms       │ ✅ Well within 5ms SLA
+└──────────────────────────────────────────────────┘
+
+Cross-cloud paths (all async/batch, NOT on hot path):
+┌──────────────────────────────────────────────────┐
+│ M1 → M5 config refresh (AWS→GCP)    ~20-40ms    │ ✅ Cached, periodic
+│ M6 → M5 API calls (AWS→GCP)         ~30-50ms    │ ✅ Human-facing
+│ Kafka replication (AWS→GCP)          ~50-200ms   │ ✅ Async batch
+│ M5 → M1 config push (GCP→AWS)       ~20-40ms    │ ✅ Async notification
+└──────────────────────────────────────────────────┘
+```
+
+#### Option B Tradeoffs
+
+| Aspect | Assessment |
+|--------|-----------|
+| **Assignment latency** | Excellent — M1, M4b, M7 all on AWS with app servers. No cross-cloud calls on hot path |
+| **Data pipeline efficiency** | Excellent — M3 reads BigQuery/GCS natively in GCP. No egress for bulk data |
+| **Operational complexity** | High — two cloud environments, cross-cloud networking, Kafka replication |
+| **Cost** | Medium — cross-cloud egress for Kafka replication (~$0.08-0.12/GB). Offset by avoiding BigQuery cross-cloud reads |
+| **Failure domain** | Split — AWS outage affects assignments (user-facing), GCP outage affects analysis (backfill on recovery) |
+| **Team expertise required** | Both AWS and GCP infrastructure knowledge needed |
+| **M5 placement tradeoff** | M5 on GCP means M6 UI API calls cross clouds (~30-50ms added). Acceptable for human-facing dashboard. Alternative: M5 on AWS with cross-cloud DB connection (worse — adds latency to every M5 query) |
+| **Kafka replication lag** | MirrorMaker 2 adds ~50-200ms. Acceptable since M3/M4a process in hourly/daily batches |
+
+#### When to Choose Option B vs Existing Hybrid
+
+| Scenario | Recommended |
+|----------|-------------|
+| App servers on AWS, no existing data lake | Section 8 Hybrid (Fly.io edge + AWS backend) |
+| App servers on AWS, data lake on GCP | **Option B (AWS + GCP cross-cloud)** |
+| App servers on GCP, data lake on GCP | Section 7 (GCP-only deployment) |
+| App servers distributed globally | Section 8 Hybrid (Fly.io edge + cloud backend) |
+| Minimizing operational complexity | Single-cloud (Section 6 or 7) |
 
 ---
 
@@ -1113,14 +1355,16 @@ Per the platform's crash-only design (ADR-002), all services share startup and c
 | **NAT Gateway** | $0 | $100 | $50 |
 | **Monitoring** | $0 (external) | $50 (CloudWatch) | $30 (Cloud Monitoring) |
 | **Total** | **~$360/month** | **~$1,625/month** | **~$1,260/month** |
-| **Hybrid** | | | **~$800/month** (M1/M7 on Fly + AWS backend) |
+| **Hybrid A** | | | **~$800/month** (M1/M7 on Fly + AWS backend) |
+| **Hybrid B** | | | **~$1,400/month** (AWS compute + GCP data/analysis) |
 
 ### Cost Scaling Notes
 
 - **Fly.io** scales linearly with compute. No hidden costs (no NAT, no LB charges)
 - **AWS** has high fixed costs (NAT Gateway: $0.045/GB, ALB: $0.0225/hr) but better managed services
 - **GCP** Cloud Run is pay-per-request at low scale, cheaper than Fargate
-- **Hybrid** avoids Fly's managed DB weakness while keeping edge compute cheap
+- **Hybrid A** avoids Fly's managed DB weakness while keeping edge compute cheap
+- **Hybrid B** (AWS+GCP) costs more than Hybrid A due to dual-cloud infrastructure, but avoids cross-cloud egress for bulk data lake reads. Main variable cost is Kafka replication egress (~$0.08-0.12/GB AWS→GCP)
 
 ---
 
@@ -1164,12 +1408,32 @@ grpcurl kaizen-assignment.fly.dev:443 grpc.health.v1.Health/Check
    - Load test with `just loadtest-assignment` (target: p99 < 5ms at 10K RPS)
    - Canary production deployment (10% -> 50% -> 100%)
 
-### Phase 4: Hybrid (Optional, 1 week)
+### Phase 4a: Hybrid A — Edge + Backend (Optional, 1 week)
 
 1. Deploy M1 and M7 to Fly.io edge regions
 2. Configure WireGuard tunnel to AWS VPC
 3. Update M1 config to point to AWS-hosted M4b and M5
 4. Validate cross-cloud latency (target: < 50ms Fly -> AWS)
+
+### Phase 4b: Hybrid B — AWS + GCP Cross-Cloud (Optional, 2 weeks)
+
+Use this phase when your app servers are on AWS but your data lake is on GCP.
+
+1. **Week 1: GCP infrastructure**
+   - Provision GCP project, VPC, and Cloud SQL (PostgreSQL 16)
+   - Deploy M3, M4a, M5, and M2-Orch to Cloud Run or GKE
+   - Set up Memorystore Redis for M5 config caching
+   - Configure Cloud Interconnect or HA VPN tunnel to AWS VPC
+   - Validate cross-cloud connectivity (ping, gRPC health checks)
+
+2. **Week 2: Kafka replication + cutover**
+   - Deploy MirrorMaker 2 on GCP to replicate from AWS MSK
+   - Verify topic replication: `exposures`, `metric_events`, `reward_events`, `qoe_events`
+   - Point M3/M4a consumers to GCP-side Kafka replica topics
+   - Update M1 config to fetch from M5 on GCP (`M5_ADDR` → GCP private IP)
+   - Validate end-to-end: app server → M1 (AWS) → M2 (AWS) → Kafka (AWS) → MirrorMaker → M3 (GCP) → BigQuery
+   - Load test cross-cloud path (target: M1 p99 < 5ms, M6→M5 < 100ms)
+   - Canary rollout (10% → 50% → 100%)
 
 ---
 
@@ -1177,20 +1441,23 @@ grpcurl kaizen-assignment.fly.dev:443 grpc.health.v1.Health/Check
 
 ### Choosing Your Deployment Topology
 
-| Factor | Weight | Fly.io | AWS | GCP | Hybrid |
-|--------|--------|--------|-----|-----|--------|
-| **Setup speed** | High | 5 | 2 | 3 | 3 |
-| **Operational simplicity** | High | 5 | 2 | 3 | 3 |
-| **Edge latency (M1 SLA)** | Critical | 5 | 3 | 4 | 5 |
-| **Managed Postgres reliability** | Critical | 2 | 5 | 5 | 5 |
-| **Kafka reliability** | High | 3 | 5 | 4 | 5 |
-| **Autoscaling** | Medium | 2 | 5 | 5 | 4 |
-| **RocksDB persistence (M4b)** | High | 3 | 5 | 5 | 5 |
-| **Observability** | Medium | 2 | 5 | 4 | 4 |
-| **Cost (medium scale)** | Medium | 5 | 2 | 3 | 4 |
-| **Compliance (HIPAA/SOC2)** | Varies | 3 | 5 | 5 | 4 |
-| **Multi-region** | Low-Med | 5 | 3 | 4 | 5 |
-| **Weighted Score** | | **3.6** | **3.7** | **3.9** | **4.3** |
+| Factor | Weight | Fly.io | AWS | GCP | Hybrid A (Edge+Backend) | Hybrid B (AWS+GCP) |
+|--------|--------|--------|-----|-----|-------------------------|---------------------|
+| **Setup speed** | High | 5 | 2 | 3 | 3 | 2 |
+| **Operational simplicity** | High | 5 | 2 | 3 | 3 | 2 |
+| **Edge latency (M1 SLA)** | Critical | 5 | 3 | 4 | 5 | 4 |
+| **Managed Postgres reliability** | Critical | 2 | 5 | 5 | 5 | 5 |
+| **Kafka reliability** | High | 3 | 5 | 4 | 5 | 5 |
+| **Autoscaling** | Medium | 2 | 5 | 5 | 4 | 5 |
+| **RocksDB persistence (M4b)** | High | 3 | 5 | 5 | 5 | 5 |
+| **Observability** | Medium | 2 | 5 | 4 | 4 | 4 |
+| **Cost (medium scale)** | Medium | 5 | 2 | 3 | 4 | 3 |
+| **Compliance (HIPAA/SOC2)** | Varies | 3 | 5 | 5 | 4 | 5 |
+| **Multi-region** | Low-Med | 5 | 3 | 4 | 5 | 3 |
+| **Data lake co-location** | Varies | 1 | 3 | 5 | 3 | 5 |
+| **Weighted Score** | | **3.5** | **3.7** | **3.9** | **4.2** | **4.0** |
+
+> **Note on Hybrid B scoring**: Hybrid B scores lower than Hybrid A on setup speed and operational simplicity (managing two clouds is harder than one cloud + Fly.io), but scores highest on data lake co-location and matches enterprise options on compliance and managed service reliability. **Choose Hybrid B when data gravity is the dominant constraint** (i.e., your data lake is on GCP and moving it is not an option).
 
 ### Recommendation Summary
 
@@ -1198,9 +1465,10 @@ grpcurl kaizen-assignment.fly.dev:443 grpc.health.v1.Health/Check
 |----------|---------------------|
 | **Proof of concept / demo** | Fly.io (all services) |
 | **Early production (< 1K RPS)** | Fly.io + external managed Postgres (Neon/Supabase) |
-| **Production (1K-10K RPS)** | Hybrid (Fly.io edge + AWS/GCP backend) |
+| **Production (1K-10K RPS)** | Hybrid A (Fly.io edge + AWS/GCP backend) |
 | **Enterprise (> 10K RPS, compliance)** | AWS or GCP (full managed) |
-| **Global SVOD platform** | Hybrid (Fly.io edge in 5+ regions + AWS backend) |
+| **Global SVOD platform** | Hybrid A (Fly.io edge in 5+ regions + AWS backend) |
+| **App servers on AWS, data lake on GCP** | Hybrid B (AWS latency path + GCP data path) |
 
 ---
 

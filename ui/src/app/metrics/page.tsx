@@ -1,9 +1,20 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import type { MetricDefinition, MetricType } from '@/lib/types';
 import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
+
+const SqlHighlighter = dynamic(
+  () => import('@/components/sql-highlighter').then((m) => ({ default: m.SqlHighlighter })),
+  {
+    ssr: false,
+    loading: () => (
+      <pre className="mt-2 animate-pulse rounded bg-gray-50 p-3 font-mono text-xs">Loading...</pre>
+    ),
+  },
+);
 
 const METRIC_TYPE_BADGE: Record<MetricType, string> = {
   MEAN: 'bg-blue-100 text-blue-800',
@@ -96,7 +107,7 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
                 <div className="col-span-2">
                   <dt className="font-medium text-gray-500">Custom SQL</dt>
                   <dd className="mt-1">
-                    <pre className="rounded bg-gray-100 p-2 text-xs text-gray-800 overflow-x-auto">{metric.customSql}</pre>
+                    <SqlHighlighter sql={metric.customSql} />
                   </dd>
                 </div>
               )}

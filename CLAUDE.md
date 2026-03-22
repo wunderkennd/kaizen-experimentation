@@ -1,141 +1,135 @@
-# CLAUDE.md
+# Kaizen Experimentation Platform
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Project Overview
 
-## Build, Test, and Lint Commands
-
-This project uses `just` as its primary task runner. Run `just --list` to see all recipes.
-
-### Full setup (first time)
-```bash
-cp .env.example .env
-just setup    # infra + codegen + deps + seed + test
-```
-
-### Testing
-```bash
-just test                          # All: Rust + Go + TS + hash parity
-just test-rust                     # cd crates && cargo test --workspace
-just test-go                       # cd services && go test -race -cover ./...
-just test-ts                       # cd ui && npm test -- --passWithNoTests
-just test-hash                     # Cross-language hash parity (10K vectors)
-just test-crate experimentation-hash  # Single Rust crate
-just test-integration              # Go integration tests against Docker infra
-just test-flags-cgo                # Build Rust FFI + run Go CGo parity tests
-```
-
-### Linting
-```bash
-just lint                          # All linters
-just lint-rust                     # cd crates && cargo clippy --workspace --all-features -- -D warnings
-just lint-go                       # cd services && go vet ./...
-just lint-ts                       # cd ui && npm run lint
-just lint-proto                    # cd proto && buf lint
-just fmt                           # Format Rust code
-just fmt-check                     # Check Rust formatting without modifying
-```
-
-### Benchmarks
-```bash
-just bench                         # All Rust benchmarks
-just bench-crate experimentation-stats  # Single crate
-```
-
-### Code generation (protobuf)
-```bash
-just codegen                       # Generate Go + TypeScript from proto
-```
-Rust proto types are auto-generated via `tonic-build` during `cargo build`.
-
-### Infrastructure
-```bash
-just dev                           # Start Docker infra + load seed data
-just infra                         # Start Docker infra only
-just infra-down                    # Stop (preserve volumes)
-just infra-reset                   # Stop + destroy volumes
-just seed                          # Load seed data into Postgres
-just db                            # Open psql shell
-just monitoring                    # Start Grafana + Prometheus + Jaeger
-```
-
-### Golden files (statistical tests)
-```bash
-UPDATE_GOLDEN=1 cargo test --workspace   # Regenerate golden files after intentional changes
-```
+Full-stack SVOD experimentation platform. 7 modules, 3 languages (Rust/Go/TypeScript), 13 Rust crates, Protobuf schema-first. Phases 0–4 complete (163 PRs, 10 pair integration suites green). Phase 5 in progress: 15 ADRs (011–025) across 6 capability clusters.
 
 ## Architecture
 
-SVOD experimentation platform with 7 modules across 3 languages:
+| Module | Language | Owner | Port | Purpose |
+| --- | --- | --- | --- | --- |
+| M1 Assignment | Rust | Agent-1 | 50051 | Variant allocation, interleaving, bandit arm delegation, SDKs |
+| M2 Pipeline | Rust+Go | Agent-2 | 50052/50058 | Event validation/dedup/Kafka (Rust), orchestration (Go) |
+| M3 Metrics | Go | Agent-3 | 50056 | Spark SQL orchestration, metric computation, Delta Lake |
+| M4a Analysis | Rust | Agent-4 | 50053 | All statistical computation (experimentation-stats crate) |
+| M4b Bandit | Rust | Agent-4 | 50054 | Thompson, LinUCB, Neural (Candle), LMAX single-thread core |
+| M5 Management | Go (conditional Rust port, ADR-025) | Agent-5 | 50055 | CRUD, lifecycle, RBAC, guardrails, bucket reuse |
+| M6 UI | TypeScript | Agent-6 | 3000 | Next.js 14, React 18, Recharts, D3, shadcn/ui |
+| M7 Flags | Go → Rust (ADR-024) | Agent-7 | 50057 | Feature flags, percentage rollout, reconciler |
 
-| Module | Language | Purpose |
-|--------|----------|---------|
-| M1 Assignment | Rust | Deterministic user bucketing, interleaving, bandit arm delegation |
-| M2 Pipeline | Rust + Go | Event ingestion → validation → dedup → Kafka |
-| M3 Metrics | Go + Spark SQL | Metric computation orchestration |
-| M4a Analysis | Rust | Statistical tests (t-test, mSPRT, GST, CUPED, bootstrap) |
-| M4b Bandit | Rust | Thompson Sampling, LinUCB, LMAX single-threaded policy core |
-| M5 Management | Go | Experiment CRUD, lifecycle state machine, guardrail auto-pause |
-| M6 UI | TypeScript | Next.js dashboards (UI only — no statistical computation) |
-| M7 Flags | Go | Feature flags with experiment promotion via CGo hash bridge |
+## Cargo Workspace
 
-### Rust workspace (13 crates in `crates/`)
+```
+crates/
+  experimentation-core/          # Timestamps, errors, tracing, assert_finite!()
+  experimentation-hash/          # MurmurHash3, bucketing
+  experimentation-proto/         # tonic-build generated from proto/
+  experimentation-stats/         # All statistical methods (Phase 5: +9 new modules)
+  experimentation-bandit/        # Thompson, LinUCB, Neural, cold-start (Phase 5: +slate, +multi-objective, +LP)
+  experimentation-interleaving/  # Team Draft, Optimized, Multileave
+  experimentation-ingest/        # Event validation, Bloom filter dedup
+  experimentation-ffi/           # CGo bindings — DELETED after ADR-024 completes
+  experimentation-assignment/    # M1 service binary
+  experimentation-analysis/      # M4a service binary
+  experimentation-pipeline/      # M2 service binary
+  experimentation-policy/        # M4b service binary
+  experimentation-flags/         # M7 service binary (NEW, ADR-024)
+```
 
-Layered dependency structure — lower layers cannot depend on upper layers:
+## Critical Rules
 
-1. **Foundation**: `experimentation-core` (errors, timestamps), `experimentation-hash` (MurmurHash3), `experimentation-proto` (generated types)
-2. **Algorithms**: `experimentation-stats`, `experimentation-bandit`, `experimentation-interleaving`
-3. **Infrastructure**: `experimentation-ingest` (validation, Bloom filter dedup), `experimentation-ffi` (C headers for CGo)
-4. **Services** (binaries): `experimentation-assignment`, `experimentation-pipeline`, `experimentation-analysis`, `experimentation-policy`
+- **Schema-first**: All interfaces defined in Protobuf. Run `buf lint` and `buf breaking` before committing proto changes.
+- **Fail-fast**: Every floating-point path uses `assert_finite!()` from experimentation-core.
+- **No statistical computation in Go or TypeScript.** All math lives in experimentation-stats (Rust).
+- **TypeScript is UI only.** M6 never performs metric computation, bandit evaluation, or statistical analysis.
+- **Golden-file validation**: Every new statistical method requires golden files validated against reference R/Python packages to 4+ decimal places.
+- **Proptest invariants**: Every public function in experimentation-stats gets proptest invariants. Nightly CI runs 10K cases.
+- **Contract tests**: Cross-module interfaces require wire-format contract tests. The consumer agent writes the test.
+- **Conventional commits**: `feat(crate):`, `fix(crate):`, `test(crate):`, `docs:`, `chore:`.
+- **Branch naming**: `agent-N/feat/adr-XXX-description`, `agent-N/fix/...`, `agent-N/port/...`.
+- **Status files**: Write only your own `docs/coordination/status/agent-N-status.md`. Read others for dependency tracking.
 
-### Go services (`services/`)
+## Phase 5 Status
 
-Four services: `management/`, `metrics/`, `flags/`, `orchestration/`. All use ConnectRPC (`connectrpc.com/connect`) for RPC handlers.
+Phase 5 implements 15 ADRs across 6 clusters:
 
-### Proto schema (`proto/experimentation/`)
+| Cluster | ADRs | Core Gap |
+| --- | --- | --- |
+| A: Multi-Stakeholder | 011, 012, 013, 014 | Multi-objective bandits, LP constraints, meta-experiments, provider metrics |
+| B: Statistical Methods | 015, 018, 020 | AVLM (sequential CUPED), e-values + online FDR, adaptive sample size |
+| C: Bandit & RL | 016, 017 | Slate bandits, offline RL / surrogate calibration fix |
+| D: Quasi-Experimental | 022, 023 | Switchback experiments, synthetic control methods |
+| E: Platform Operations | 019, 021 | Portfolio optimization, feedback loop interference |
+| F: Language Migration | 024, 025 | M7 Rust port (unconditional), M5 Rust port (conditional) |
 
-All inter-service contracts defined in protobuf. Packages: `common/v1/`, `assignment/v1/`, `pipeline/v1/`, `metrics/v1/`, `analysis/v1/`, `bandit/v1/`, `management/v1/`, `flags/v1/`. The `buf` toolchain enforces lint rules and breaking change detection.
+**Current sprint**: Check `docs/coordination/status/` for per-agent status.
 
-### Key infrastructure
+**P0 items** (highest priority):
+- ADR-015 (AVLM) — #1 ROI: unifies CUPED + mSPRT
+- ADR-017 Phase 1 (TC/JIVE) — corrects theoretical error in surrogate calibration
+- ADR-024 (M7 Rust port) — eliminates FFI crate
 
-- **Kafka topics**: `exposures`, `metric_events`, `reward_events`, `qoe_events`, `guardrail_alerts` (config in `kafka/topic_configs.sh`)
-- **PostgreSQL**: Schema in `sql/migrations/001_schema.sql`, seed data in `scripts/seed_dev.sql`
-- **Delta Lake**: Table definitions in `delta/delta_lake_tables.sql`
-- **Hash test vectors**: 10K vectors in `test-vectors/hash_vectors.json` ensuring Rust/Go/WASM/FFI parity
+## Coordination Model
 
-## Key Design Patterns
+- **Multiclaude** for sprint-level work. Each agent gets its own worktree and branch. Supervisor daemon health-checks workers, routes messages, refreshes worktrees every 2 minutes. CI-gated merge queue in multiplayer mode (human review required).
+- **Agent Teams** for ad-hoc cross-agent collaboration. Contract test debugging, proto schema design, interactive PR review. Ephemeral sessions — do not replace Multiclaude for sprint work.
+- **Per-agent status files** at `docs/coordination/status/agent-N-status.md`. Each agent writes only their own. Read others for dependency tracking. Update on every PR.
+- **Agent definitions** at `.multiclaude/agents/agent-N-*.md`. Persistent role definitions with ADR responsibilities, coding standards, dependencies, and contract test obligations.
 
-**Crash-only design**: No graceful shutdown code paths. Startup = recovery. Stateless services restart instantly; M4b (bandit) snapshots to RocksDB and replays from last offset.
+## Key File Locations
 
-**Fail-fast data integrity**: All floating-point computations use `assert_finite!()` from `experimentation-core`. NaN/Infinity triggers immediate panic, not silent propagation.
+| What | Where |
+| --- | --- |
+| This file (agent context) | `CLAUDE.md` (repo root) |
+| Design document | `docs/design/design_doc_v7.0.md` |
+| ADRs (001–025) | `docs/adrs/` |
+| ADR index | `docs/adrs/README.md` |
+| Agent definitions | `.multiclaude/agents/agent-N-*.md` |
+| Agent status | `docs/coordination/status/agent-N-status.md` |
+| Claude Code settings | `.claude/settings.json` |
+| Multiclaude config | `.multiclaude/config.json` |
+| Proto schema | `proto/experimentation/` |
+| SQL migrations | `sql/migrations/` |
+| Test vectors | `test-vectors/hash_vectors.json` |
+| Sprint plan | `docs/coordination/phase5-implementation-plan.md` |
+| Playbook | `docs/coordination/phase5-playbook.md` |
+| Sprint prompts | `docs/coordination/sprint-prompts.md` |
+| Contributing (Phase 5) | `docs/coordination/CONTRIBUTING-phase5.md` |
 
-**LMAX single-threaded core** (M4b): All bandit policy state mutations happen on a single thread via bounded mpsc channels. No locks or shared mutable state on the core thread.
+## Testing Commands
 
-**Hash determinism**: MurmurHash3 x86 32-bit, little-endian. `bucket = hash(user_id, salt) % total_buckets`. Bucket allocations use inclusive ranges: `bucket >= start && bucket <= end`.
+```bash
+# Rust — per-crate (preferred for agents working on a single crate)
+cargo test -p experimentation-stats
+cargo test -p experimentation-bandit
+cargo test -p experimentation-flags
 
-## Conventions
+# Rust — workspace-wide (run before creating PR)
+cargo test --workspace
 
-**Branches**: `agent-N/<type>/<description>` (e.g., `agent-1/feat/wasm-hash-binding`). Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`.
+# Go
+go test ./services/metrics/...
+go test ./services/management/...
 
-**Commits**: Conventional Commits with module/crate scope: `feat(m2): ...`, `fix(experimentation-stats): ...`. Breaking changes use `!`: `feat(m1)!: ...`.
+# TypeScript
+cd ui && npm test
 
-**Rust style**: `rustfmt` defaults, `clippy --all-features -- -D warnings`, `thiserror` for library crates, `anyhow` only in binaries.
+# Proto validation
+buf lint proto/
+buf breaking proto/ --against .git#branch=main
 
-**Go style**: `gofmt`, `go vet`, `slog` for structured logging, always propagate `context.Context`.
+# Proptest nightly (CI only — slow)
+PROPTEST_CASES=10000 cargo test -p experimentation-stats
+```
 
-**TypeScript**: ESLint + Prettier, strict mode, `@connectrpc/connect-web` for API calls.
+## Golden-File Validation Targets
 
-**Proto changes**: Additive changes (new fields/RPCs) need no coordination. Breaking changes require an ADR and cross-agent PR review. `buf breaking` enforces this in CI.
-
-**Testing**: Rust uses `proptest` for property-based testing (extended in nightly CI). Go uses `testify/assert` with `-race` flag. Golden files in `crates/experimentation-stats/tests/golden/`.
-
-## CI/CD
-
-| Pipeline | Trigger | Purpose |
-|----------|---------|---------|
-| `ci.yml` | Every PR | Lint, build, test (Rust/Go/TS), hash parity, proto breaking check |
-| `nightly.yml` | Daily 3AM UTC | Extended proptest (10K cases), benchmark comparison |
-| `weekly-chaos.yml` | Sunday 2AM UTC | Kill services under load, verify crash recovery |
-
-## Multi-Agent Development
-
-This repository is developed by 7 specialized agents, each owning specific modules. Agent ownership boundaries are documented in `docs/onboarding/agent-{N}-*.md`. Current status is tracked in `docs/coordination/status.md`. ADRs in `adrs/` document settled architectural decisions.
+| Module | Reference | Precision |
+| --- | --- | --- |
+| `avlm.rs` (ADR-015) | R `avlm` package | 4 decimal places |
+| `orl.rs` TC/JIVE (ADR-017) | Netflix KDD 2024 Table 2 | Reproduce results |
+| `evalue.rs` (ADR-018) | Ramdas/Wang monograph examples | 6 decimal places |
+| `switchback.rs` (ADR-022) | DoorDash sandwich estimator | 4 decimal places |
+| `synthetic_control.rs` (ADR-023) | R `augsynth` package | 4 decimal places |
+| `gst.rs` (existing) | R `gsDesign` + scipy | 4 decimal places |
+| `ttest.rs` (existing) | R `t.test()` | 6 decimal places |

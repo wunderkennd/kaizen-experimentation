@@ -47,7 +47,7 @@ var metricSummariesRequired = []string{
 
 // metricSummariesOptional are nullable columns in delta.metric_summaries.
 var metricSummariesOptional = []string{
-	"lifecycle_segment", "cuped_covariate", "session_count",
+	"lifecycle_segment", "cuped_covariate", "session_count", "assignment_probability",
 }
 
 // interleavingScoresRequired are NOT NULL columns in delta.interleaving_scores.

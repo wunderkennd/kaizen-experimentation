@@ -31,7 +31,11 @@ jobs:
 
       - name: Chaos — Kill M4b Policy under load
         run: ./scripts/chaos_kill_policy.sh
-        # Verifies: recovery < 10 seconds, RocksDB snapshot restore
+        # Verifies: recovery < 10 seconds, RocksDB snapshot restore, policy state persistence
+
+      - name: Chaos — Kill M4a Analysis under load
+        run: ./scripts/chaos_test_analysis.sh
+        # Verifies: recovery < 2 seconds, all 5 RPCs functional (stateless)
 
       - name: Chaos — Kill M2 Pipeline under load
         run: ./scripts/chaos_kill_ingestion.sh
@@ -39,3 +43,7 @@ jobs:
 
       - name: Verify data integrity
         run: ./scripts/chaos_verify_integrity.sh
+
+      - name: Chaos — Multi-service E2E framework
+        run: ./scripts/chaos_e2e_framework.sh --services pipeline,analysis,policy
+        # Verifies: sequential kill/recovery of all services under sustained multi-event load

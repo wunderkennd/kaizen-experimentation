@@ -4,7 +4,7 @@ import {
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
   SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
-  SEED_METRIC_DEFINITIONS,
+  SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -13,6 +13,7 @@ const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
 const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
 const BANDIT_SVC = '*/experimentation.bandit.v1.BanditPolicyService';
+const FLAGS_SVC = '*/experimentation.flags.v1.FeatureFlagService';
 
 // --- Mock auth enforcement ---
 let _mockAuthEnabled = false;
@@ -569,5 +570,202 @@ export const handlers = [
     const nextPageToken = nextIndex < metrics.length ? String(nextIndex) : '';
 
     return HttpResponse.json({ metrics: page, nextPageToken });
+  }),
+
+  // ListAuditLog — supports filtering by experimentId, action, and pagination
+  http.post(`${MGMT_SVC}/ListAuditLog`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    let filtered = [...SEED_AUDIT_LOG];
+
+    if (body.experimentId) {
+      filtered = filtered.filter((e) => e.experimentId === body.experimentId);
+    }
+    if (body.actionFilter) {
+      // Client sends AUDIT_ACTION_CREATED, seed data stores CREATED — strip prefix for comparison
+      const actionValue = (body.actionFilter as string).replace(/^AUDIT_ACTION_/, '');
+      filtered = filtered.filter((e) => e.action === actionValue);
+    }
+    if (body.actorEmail) {
+      filtered = filtered.filter((e) => e.actorEmail === body.actorEmail);
+    }
+
+    // Sort by timestamp descending (newest first)
+    filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const pageSize = (body.pageSize as number) || filtered.length;
+    const pageToken = (body.pageToken as string) || '';
+    const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+    const page = filtered.slice(startIndex, startIndex + pageSize);
+    const nextIndex = startIndex + pageSize;
+    const nextPageToken = nextIndex < filtered.length ? String(nextIndex) : '';
+
+    // Return entries with proto wire format: AUDIT_ACTION_ prefix on action
+    const wireEntries = page.map((e) => ({
+      ...e,
+      action: `AUDIT_ACTION_${e.action}`,
+    }));
+
+    return HttpResponse.json({ entries: wireEntries, nextPageToken });
+  }),
+
+  // --- Feature Flags (M7) ---
+
+  // ListFlags — mirrors M7 proto wire format with FLAG_TYPE_ prefix
+  http.post(`${FLAGS_SVC}/ListFlags`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+
+    const flags = SEED_FLAGS.map((f) => {
+      const wire: Record<string, unknown> = {
+        flagId: f.flagId,
+        name: f.name,
+        type: `FLAG_TYPE_${f.type}`,
+        defaultValue: f.defaultValue,
+      };
+      if (f.description) wire.description = f.description;
+      if (f.enabled) wire.enabled = true;
+      if (f.rolloutPercentage) wire.rolloutPercentage = f.rolloutPercentage;
+      if (f.variants.length > 0) wire.variants = f.variants;
+      if (f.targetingRuleId) wire.targetingRuleId = f.targetingRuleId;
+      return wire;
+    });
+
+    const pageSize = (body.pageSize as number) || flags.length;
+    const pageToken = (body.pageToken as string) || '';
+    const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+    const page = flags.slice(startIndex, startIndex + pageSize);
+    const nextIndex = startIndex + pageSize;
+    const nextPageToken = nextIndex < flags.length ? String(nextIndex) : '';
+
+    return HttpResponse.json({ flags: page, nextPageToken });
+  }),
+
+  // GetFlag
+  http.post(`${FLAGS_SVC}/GetFlag`, async ({ request }) => {
+    const body = await request.json() as { flagId: string };
+    const flag = SEED_FLAGS.find((f) => f.flagId === body.flagId);
+
+    if (!flag) {
+      return HttpResponse.json(
+        { code: 'not_found', message: `Flag ${body.flagId} not found` },
+        { status: 404 },
+      );
+    }
+
+    const wire: Record<string, unknown> = {
+      flagId: flag.flagId,
+      name: flag.name,
+      type: `FLAG_TYPE_${flag.type}`,
+      defaultValue: flag.defaultValue,
+    };
+    if (flag.description) wire.description = flag.description;
+    if (flag.enabled) wire.enabled = true;
+    if (flag.rolloutPercentage) wire.rolloutPercentage = flag.rolloutPercentage;
+    if (flag.variants.length > 0) wire.variants = flag.variants;
+    if (flag.targetingRuleId) wire.targetingRuleId = flag.targetingRuleId;
+
+    return HttpResponse.json(wire);
+  }),
+
+  // CreateFlag — proto: CreateFlagRequest { Flag flag = 1; }
+  http.post(`${FLAGS_SVC}/CreateFlag`, async ({ request }) => {
+    const denied = checkAuth(request.headers, 'experimenter');
+    if (denied) return denied;
+    const body = await request.json() as { flag?: Record<string, unknown> };
+    const f = body.flag || {};
+
+    const newFlag = {
+      flagId: crypto.randomUUID(),
+      name: (f.name as string) || '',
+      description: (f.description as string) || '',
+      type: (f.type as string) || 'BOOLEAN',
+      defaultValue: (f.defaultValue as string) || '',
+      enabled: (f.enabled as boolean) || false,
+      rolloutPercentage: (f.rolloutPercentage as number) || 0,
+      variants: (f.variants as typeof SEED_FLAGS[number]['variants']) || [],
+      targetingRuleId: f.targetingRuleId as string | undefined,
+    };
+
+    SEED_FLAGS.push(newFlag as typeof SEED_FLAGS[number]);
+    return HttpResponse.json({
+      flagId: newFlag.flagId,
+      name: newFlag.name,
+      type: `FLAG_TYPE_${newFlag.type}`,
+      defaultValue: newFlag.defaultValue,
+      ...(newFlag.description ? { description: newFlag.description } : {}),
+      ...(newFlag.enabled ? { enabled: true } : {}),
+      ...(newFlag.rolloutPercentage ? { rolloutPercentage: newFlag.rolloutPercentage } : {}),
+      ...(newFlag.variants.length > 0 ? { variants: newFlag.variants } : {}),
+      ...(newFlag.targetingRuleId ? { targetingRuleId: newFlag.targetingRuleId } : {}),
+    });
+  }),
+
+  // UpdateFlag
+  http.post(`${FLAGS_SVC}/UpdateFlag`, async ({ request }) => {
+    const denied = checkAuth(request.headers, 'experimenter');
+    if (denied) return denied;
+    const body = await request.json() as { flag: Record<string, unknown> };
+    const flagData = body.flag;
+    const id = flagData.flagId as string;
+    const idx = SEED_FLAGS.findIndex((f) => f.flagId === id);
+
+    if (idx === -1) {
+      return HttpResponse.json(
+        { code: 'not_found', message: `Flag ${id} not found` },
+        { status: 404 },
+      );
+    }
+
+    SEED_FLAGS[idx] = { ...SEED_FLAGS[idx], ...flagData } as typeof SEED_FLAGS[number];
+    const updated = SEED_FLAGS[idx];
+    const wire: Record<string, unknown> = {
+      flagId: updated.flagId,
+      name: updated.name,
+      type: `FLAG_TYPE_${updated.type}`,
+      defaultValue: updated.defaultValue,
+    };
+    if (updated.description) wire.description = updated.description;
+    if (updated.enabled) wire.enabled = true;
+    if (updated.rolloutPercentage) wire.rolloutPercentage = updated.rolloutPercentage;
+    if (updated.variants.length > 0) wire.variants = updated.variants;
+    if (updated.targetingRuleId) wire.targetingRuleId = updated.targetingRuleId;
+    return HttpResponse.json(wire);
+  }),
+
+  // EvaluateFlag
+  http.post(`${FLAGS_SVC}/EvaluateFlag`, async ({ request }) => {
+    const body = await request.json() as { flagId: string; userId: string };
+    return HttpResponse.json({
+      flagId: body.flagId,
+      value: 'true',
+      variantId: 'v-default',
+    });
+  }),
+
+  // PromoteToExperiment
+  http.post(`${FLAGS_SVC}/PromoteToExperiment`, async ({ request }) => {
+    const denied = checkAuth(request.headers, 'experimenter');
+    if (denied) return denied;
+    const body = await request.json() as { flagId: string; experimentType: string; primaryMetricId: string };
+    const flag = SEED_FLAGS.find((f) => f.flagId === body.flagId);
+
+    if (!flag) {
+      return HttpResponse.json(
+        { code: 'not_found', message: `Flag ${body.flagId} not found` },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json({
+      experimentId: `exp-from-${flag.flagId}`,
+      name: flag.name,
+      type: body.experimentType || 'EXPERIMENT_TYPE_AB',
+      state: 'EXPERIMENT_STATE_DRAFT',
+      variants: [
+        { variantId: 'v1', name: 'control', trafficFraction: 0.5, isControl: true },
+        { variantId: 'v2', name: 'treatment', trafficFraction: 0.5 },
+      ],
+      primaryMetricId: body.primaryMetricId,
+      createdAt: new Date().toISOString(),
+    });
   }),
 ];
