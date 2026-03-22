@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS delta.metric_summaries (
     -- Pre-experiment covariate value (for CUPED). NULL if no covariate configured.
     cuped_covariate     DOUBLE,
     session_count       INT,                -- For session-level: number of sessions
+    assignment_probability DOUBLE,          -- For IPW analysis (bandit experiments). NULL if not applicable.
     computation_date    DATE        NOT NULL
 )
 USING DELTA

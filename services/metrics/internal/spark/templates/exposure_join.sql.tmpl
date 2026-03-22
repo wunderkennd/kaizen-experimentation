@@ -1,10 +1,11 @@
 {{define "exposure_join"}}WITH exposed_users AS (
-    SELECT DISTINCT user_id, variant_id
+    SELECT user_id, variant_id, MIN(assignment_probability) AS assignment_probability
     FROM delta.exposures
     WHERE experiment_id = '{{.ExperimentID}}'
+    GROUP BY user_id, variant_id
 ),
 metric_data AS (
-    SELECT me.user_id, eu.variant_id, me.value
+    SELECT me.user_id, eu.variant_id, eu.assignment_probability, me.value
     FROM delta.metric_events me
     INNER JOIN exposed_users eu ON me.user_id = eu.user_id
     WHERE me.event_type = '{{.SourceEventType}}'

@@ -12,6 +12,7 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({}),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/metrics',
 }));
 
 // Mock next/link to render an anchor tag
