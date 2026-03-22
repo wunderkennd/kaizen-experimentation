@@ -28,6 +28,14 @@ export function NavHeader() {
             Experimentation Platform
           </Link>
           <Link
+            href="/flags"
+            className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/flags') ? 'text-indigo-600' : 'text-gray-600'}`}
+            aria-current={pathname.startsWith('/flags') ? 'page' : undefined}
+            data-testid="nav-flags"
+          >
+            Flags
+          </Link>
+          <Link
             href="/metrics"
             className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/metrics') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/metrics') ? 'page' : undefined}
