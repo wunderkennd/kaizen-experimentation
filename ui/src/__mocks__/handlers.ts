@@ -680,7 +680,19 @@ export const handlers = [
     }
 
     SEED_FLAGS[idx] = { ...SEED_FLAGS[idx], ...flagData } as typeof SEED_FLAGS[number];
-    return HttpResponse.json({ flagId: id, name: SEED_FLAGS[idx].name, type: `FLAG_TYPE_${SEED_FLAGS[idx].type}` });
+    const updated = SEED_FLAGS[idx];
+    const wire: Record<string, unknown> = {
+      flagId: updated.flagId,
+      name: updated.name,
+      type: `FLAG_TYPE_${updated.type}`,
+      defaultValue: updated.defaultValue,
+    };
+    if (updated.description) wire.description = updated.description;
+    if (updated.enabled) wire.enabled = true;
+    if (updated.rolloutPercentage) wire.rolloutPercentage = updated.rolloutPercentage;
+    if (updated.variants.length > 0) wire.variants = updated.variants;
+    if (updated.targetingRuleId) wire.targetingRuleId = updated.targetingRuleId;
+    return HttpResponse.json(wire);
   }),
 
   // EvaluateFlag
