@@ -1081,18 +1081,26 @@ mod tests {
 
             let (policy_tx, _reward_tx, _mgmt_tx, handle) = spawn_core(core);
 
-            // Verify Thompson prefers "a"
-            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-            policy_tx
-                .send(SelectArmRequest {
-                    experiment_id: "thompson-1".into(),
-                    context: None,
-                    reply_tx,
-                })
-                .await
-                .unwrap();
-            let resp = reply_rx.await.unwrap().unwrap();
-            assert_eq!(resp.arm_id, "a", "Thompson should prefer arm 'a'");
+            // Verify Thompson prefers "a" (multi-trial: Thompson is probabilistic)
+            let mut a_count = 0;
+            for _ in 0..20 {
+                let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+                policy_tx
+                    .send(SelectArmRequest {
+                        experiment_id: "thompson-1".into(),
+                        context: None,
+                        reply_tx,
+                    })
+                    .await
+                    .unwrap();
+                if reply_rx.await.unwrap().unwrap().arm_id == "a" {
+                    a_count += 1;
+                }
+            }
+            assert!(
+                a_count >= 14,
+                "Thompson should pick 'a' at least 14/20 times after 30 rewards, got {a_count}"
+            );
 
             // Verify LinUCB prefers "x"
             let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();

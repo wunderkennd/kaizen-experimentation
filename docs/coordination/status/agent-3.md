@@ -1,13 +1,13 @@
 # Agent-3 — M3 Metrics Computation
 
 **Status**: All Phases Complete
-**Current Branch**: agent-3/feat/grafana-dashboard-alerts
-**Current Milestone**: Prometheus observability + Grafana dashboard
+**Current Branch**: agent-3/feat/ipw-edge-case-contracts
+**Current Milestone**: IPW support + query log lifecycle + scheduler
 **Blocked By**: —
 
 ## Summary
 
-Phase 1-3 done. Prometheus observability with 7 metrics on dedicated :50056 metrics server. Grafana dashboard with 6 M3 panels.
+Phase 1–4 done. IPW `assignment_probability` propagated through all metric templates (unblocks M4a IPW analysis). Query log lifecycle: filtered retrieval, pagination, PurgeOldLogs. Scheduler: daily StandardJob (2 AM UTC), hourly GuardrailJob, weekly log purge. Prometheus observability with 10 metrics on dedicated :50056 metrics server. Grafana dashboard with 6 M3 panels.
 
 ## Key PRs
 
@@ -37,6 +37,9 @@ Phase 1-3 done. Prometheus observability with 7 metrics on dedicated :50056 metr
 | #139 | M3-M5 wire-format contracts (22 tests, 49 subtests) | Merged |
 | #148 | Prometheus observability (7 metrics on :50056) | Merged |
 | #149 | Grafana dashboard (6 M3 panels + alert rules) | Merged |
+| #170 | IPW support + edge-case contract tests | Open |
+| #171 | Query log lifecycle (filtering, pagination, purge) | Open |
+| #172 | Scheduler (daily/hourly/weekly job orchestration) | Open |
 
 ## Pair Integrations
 

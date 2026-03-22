@@ -5,7 +5,8 @@ SELECT
     eu.variant_id,
     '{{.MetricID}}' AS metric_id,
     CAST(COUNT(md.value) AS DOUBLE) AS metric_value,
-    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    eu.assignment_probability
 FROM exposed_users eu
 LEFT JOIN metric_data md ON eu.user_id = md.user_id AND eu.variant_id = md.variant_id
-GROUP BY eu.user_id, eu.variant_id
+GROUP BY eu.user_id, eu.variant_id, eu.assignment_probability

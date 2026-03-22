@@ -2,7 +2,7 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition, Flag,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -1452,7 +1452,59 @@ const INITIAL_METRIC_DEFINITIONS: MetricDefinition[] = [
   },
 ];
 
+const INITIAL_FLAGS: Flag[] = [
+  {
+    flagId: 'flag-bool-rollout',
+    name: 'dark_mode_rollout',
+    description: 'Progressive dark mode rollout to subscribers',
+    type: 'BOOLEAN',
+    defaultValue: 'false',
+    enabled: true,
+    rolloutPercentage: 0.5,
+    variants: [],
+    targetingRuleId: 'rule-premium-users',
+  },
+  {
+    flagId: 'flag-string-ab',
+    name: 'checkout_flow_variant',
+    description: 'A/B test for checkout page layout',
+    type: 'STRING',
+    defaultValue: 'control',
+    enabled: true,
+    rolloutPercentage: 1.0,
+    variants: [
+      { variantId: 'v-ctrl', value: 'control', trafficFraction: 0.5 },
+      { variantId: 'v-new', value: 'streamlined', trafficFraction: 0.5 },
+    ],
+  },
+  {
+    flagId: 'flag-disabled-zero',
+    name: 'upcoming_feature',
+    description: 'Not yet launched — proto3 zero-value test',
+    type: 'BOOLEAN',
+    defaultValue: 'false',
+    enabled: false,
+    rolloutPercentage: 0,
+    variants: [],
+  },
+  {
+    flagId: 'flag-json-config',
+    name: 'player_config_override',
+    description: 'JSON config override for video player settings',
+    type: 'JSON',
+    defaultValue: '{"bitrate":"auto"}',
+    enabled: true,
+    rolloutPercentage: 0.25,
+    variants: [
+      { variantId: 'v-low', value: '{"bitrate":"720p","buffer":2}', trafficFraction: 0.34 },
+      { variantId: 'v-mid', value: '{"bitrate":"1080p","buffer":4}', trafficFraction: 0.33 },
+      { variantId: 'v-high', value: '{"bitrate":"4k","buffer":8}', trafficFraction: 0.33 },
+    ],
+  },
+];
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
+export let SEED_FLAGS: Flag[] = structuredClone(INITIAL_FLAGS);
 export let SEED_METRIC_DEFINITIONS: MetricDefinition[] = structuredClone(INITIAL_METRIC_DEFINITIONS);
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -1471,6 +1523,7 @@ export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structure
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
+  SEED_FLAGS = structuredClone(INITIAL_FLAGS);
   SEED_METRIC_DEFINITIONS = structuredClone(INITIAL_METRIC_DEFINITIONS);
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
   SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
