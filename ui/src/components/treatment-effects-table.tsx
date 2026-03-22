@@ -34,7 +34,7 @@ function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw }: Treat
             const ciLow = useIpw ? m.ipwResult!.ciLower : useCuped ? m.cupedCiLower : m.ciLower;
             const ciHigh = useIpw ? m.ipwResult!.ciUpper : useCuped ? m.cupedCiUpper : m.ciUpper;
             const pVal = useIpw ? m.ipwResult!.pValue : m.pValue;
-            const significant = useIpw ? pVal < 0.05 : m.isSignificant;
+            const significant = useIpw ? m.ipwResult!.isSignificant : m.isSignificant;
 
             return (
               <tr

@@ -35,7 +35,7 @@ function IpwDetailsPanelInner({ metricResults }: IpwDetailsPanelProps) {
           <tbody className="divide-y divide-gray-200 bg-white">
             {ipwMetrics.map((m) => {
               const ipw = m.ipwResult!;
-              const isSignificant = ipw.pValue < 0.05;
+              const isSignificant = ipw.isSignificant;
               return (
                 <tr
                   key={m.metricId}

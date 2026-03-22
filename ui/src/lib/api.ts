@@ -389,7 +389,7 @@ function adaptSrmResult(proto: Record<string, unknown>): SrmResult {
   };
 }
 
-/** Adapt proto IpwResult — default proto3 zero-omitted fields to 0. */
+/** Adapt proto IpwResult — default proto3 zero-omitted fields to 0/false. */
 function adaptIpwResult(proto: Record<string, unknown>): IpwResult {
   return {
     effect: (proto.effect as number) || 0,
@@ -397,6 +397,7 @@ function adaptIpwResult(proto: Record<string, unknown>): IpwResult {
     ciLower: (proto.ciLower as number) || 0,
     ciUpper: (proto.ciUpper as number) || 0,
     pValue: (proto.pValue as number) || 0,
+    isSignificant: (proto.isSignificant as boolean) || false,
     nClipped: (proto.nClipped as number) || 0,
     effectiveSampleSize: (proto.effectiveSampleSize as number) || 0,
   };

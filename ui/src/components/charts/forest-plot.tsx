@@ -28,8 +28,7 @@ function ForestPlotInner({ metricResults, showCuped, showIpw }: ForestPlotProps)
     const effect = useIpw ? m.ipwResult!.effect : useCuped ? m.cupedAdjustedEffect : m.absoluteEffect;
     const ciLow = useIpw ? m.ipwResult!.ciLower : useCuped ? m.cupedCiLower : m.ciLower;
     const ciHigh = useIpw ? m.ipwResult!.ciUpper : useCuped ? m.cupedCiUpper : m.ciUpper;
-    const pValue = useIpw ? m.ipwResult!.pValue : m.pValue;
-    const significant = useIpw ? pValue < 0.05 : m.isSignificant;
+    const significant = useIpw ? m.ipwResult!.isSignificant : m.isSignificant;
 
     return {
       metric: m.metricId,

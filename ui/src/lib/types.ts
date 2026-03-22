@@ -147,6 +147,7 @@ export interface IpwResult {
   ciLower: number;
   ciUpper: number;
   pValue: number;
+  isSignificant: boolean;
   nClipped: number;
   effectiveSampleSize: number;
 }

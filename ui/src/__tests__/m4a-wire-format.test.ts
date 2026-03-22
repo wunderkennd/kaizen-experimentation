@@ -827,6 +827,7 @@ describe('M4a wire format: IPW-adjusted results', () => {
                 ciLower: 0.014,
                 ciUpper: 0.076,
                 pValue: 0.005,
+                isSignificant: true,
                 nClipped: 15,
                 effectiveSampleSize: 4820,
               },
@@ -851,6 +852,7 @@ describe('M4a wire format: IPW-adjusted results', () => {
     expect(mr.ipwResult!.ciLower).toBe(0.014);
     expect(mr.ipwResult!.ciUpper).toBe(0.076);
     expect(mr.ipwResult!.pValue).toBe(0.005);
+    expect(mr.ipwResult!.isSignificant).toBe(true);
     expect(mr.ipwResult!.nClipped).toBe(15);
     expect(mr.ipwResult!.effectiveSampleSize).toBe(4820);
   });
@@ -891,8 +893,9 @@ describe('M4a wire format: IPW-adjusted results', () => {
     expect(ipw).toBeDefined();
     expect(ipw.se).toBe(0.02);
     expect(ipw.effectiveSampleSize).toBe(5000);
-    // Proto3 zero-omitted fields defaulted to 0 by adaptIpwResult
+    // Proto3 zero-omitted fields defaulted to 0/false by adaptIpwResult
     expect(ipw.effect).toBe(0);
+    expect(ipw.isSignificant).toBe(false);
     expect(ipw.nClipped).toBe(0);
   });
 
