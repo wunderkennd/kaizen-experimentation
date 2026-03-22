@@ -2,7 +2,11 @@
 //! Run: cargo bench --package experimentation-stats
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use experimentation_stats::bayesian::{bayesian_beta_binomial, bayesian_normal};
+use experimentation_stats::bootstrap::bootstrap_bca;
+use experimentation_stats::clustering::{clustered_se, ClusteredObservation};
 use experimentation_stats::cuped::cuped_adjust;
+use experimentation_stats::ipw::{ipw_estimate, IpwObservation};
 use experimentation_stats::sequential::{gst_boundaries, msprt_normal, SpendingFunction};
 use experimentation_stats::srm::srm_check;
 use experimentation_stats::ttest::welch_ttest;
@@ -76,12 +80,86 @@ fn bench_cuped_adjustment(c: &mut Criterion) {
     });
 }
 
+fn bench_bayesian_beta_binomial(c: &mut Criterion) {
+    c.bench_function("bayesian_beta_binomial_10k", |b| {
+        b.iter(|| {
+            bayesian_beta_binomial(
+                black_box(4500),
+                black_box(10_000),
+                black_box(4700),
+                black_box(10_000),
+                black_box(0.95),
+                black_box(42),
+            )
+        })
+    });
+}
+
+fn bench_bayesian_normal(c: &mut Criterion) {
+    let control: Vec<f64> = (0..10_000).map(|i| (i as f64) * 0.1 + 5.0).collect();
+    let treatment: Vec<f64> = (0..10_000).map(|i| (i as f64) * 0.1 + 5.3).collect();
+
+    c.bench_function("bayesian_normal_10k", |b| {
+        b.iter(|| bayesian_normal(black_box(&control), black_box(&treatment), black_box(0.95)))
+    });
+}
+
+fn bench_ipw_estimate(c: &mut Criterion) {
+    let observations: Vec<IpwObservation> = (0..10_000)
+        .map(|i| IpwObservation {
+            outcome: (i as f64) * 0.01 + if i % 2 == 0 { 0.0 } else { 0.5 },
+            is_treatment: i % 2 != 0,
+            assignment_probability: if i % 3 == 0 { 0.3 } else { 0.7 },
+        })
+        .collect();
+
+    c.bench_function("ipw_estimate_10k", |b| {
+        b.iter(|| ipw_estimate(black_box(&observations), black_box(0.05), black_box(0.01)))
+    });
+}
+
+fn bench_clustered_se(c: &mut Criterion) {
+    let observations: Vec<ClusteredObservation> = (0..10_000)
+        .map(|i| ClusteredObservation {
+            value: (i as f64) * 0.01 + if i % 2 == 0 { 0.0 } else { 2.0 },
+            cluster_id: format!("user_{}", i / 20), // 500 clusters of ~20 observations each
+            is_treatment: i % 2 != 0,
+        })
+        .collect();
+
+    c.bench_function("clustered_se_10k_500clusters", |b| {
+        b.iter(|| clustered_se(black_box(&observations), black_box(0.05)))
+    });
+}
+
+fn bench_bootstrap_bca(c: &mut Criterion) {
+    let control: Vec<f64> = (0..1_000).map(|i| (i as f64) * 0.1 + 5.0).collect();
+    let treatment: Vec<f64> = (0..1_000).map(|i| (i as f64) * 0.1 + 5.5).collect();
+
+    c.bench_function("bootstrap_bca_1k_2000r", |b| {
+        b.iter(|| {
+            bootstrap_bca(
+                black_box(&control),
+                black_box(&treatment),
+                black_box(0.05),
+                black_box(2000),
+                black_box(42),
+            )
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_welch_ttest,
     bench_srm_check,
     bench_msprt_normal,
     bench_gst_boundaries,
-    bench_cuped_adjustment
+    bench_cuped_adjustment,
+    bench_bayesian_beta_binomial,
+    bench_bayesian_normal,
+    bench_ipw_estimate,
+    bench_clustered_se,
+    bench_bootstrap_bca,
 );
 criterion_main!(benches);
