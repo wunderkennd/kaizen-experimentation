@@ -1,13 +1,13 @@
 # Agent-2 — M2 Event Pipeline
 
-**Status**: All Phases Complete
-**Current Branch**: agent-2/perf/pipeline-benchmarks
-**Current Milestone**: Criterion benchmarks + full pipeline E2E
+**Status**: All Phases Complete + Polish
+**Current Branch**: agent-2/perf/pgo-loadtest-grafana
+**Current Milestone**: PGO build, load test, Grafana observability
 **Blocked By**: —
 
 ## Summary
 
-All phases merged. Full pipeline E2E test validates M1->M2->Kafka->M3->M4a data flow.
+All phases merged. Polish complete: PGO-optimized build, k6 load test (p99 < 10ms SLA), 6 new Grafana panels covering all 10 Prometheus metrics, 2 new alert rules.
 
 ## Key PRs
 
@@ -24,6 +24,15 @@ All phases merged. Full pipeline E2E test validates M1->M2->Kafka->M3->M4a data 
 | #85 | Health check, traceparent, core telemetry, tonic-web | Merged |
 | #99 | Reward event pipeline contract tests (24 integration tests) | Merged |
 | #124 | Criterion benchmark suite + full pipeline E2E test | Merged |
+| #179 | PGO build + k6 load test + Grafana panels + alerts | Open |
+
+## Polish Additions
+
+- **PGO build**: 3-phase profile-guided optimization (`pgo_build_pipeline.sh` + `pgo_workload_pipeline.sh`)
+- **Load test**: k6 gRPC load test with 4 weighted scenarios (`loadtest_pipeline.sh` + `loadtest_pipeline.js`)
+- **Grafana**: 6 new M2 panels (Kafka publish latency, ingest delay, rejection rate, dedup rate, Bloom filter status, backpressure) + fixed existing panel metric name
+- **Alerts**: `PipelineAcceptedThroughputDrop`, `PipelineRejectionSpike`
+- **Justfile**: `pgo-build-pipeline`, `loadtest-pipeline` recipes
 
 ## Test Coverage
 

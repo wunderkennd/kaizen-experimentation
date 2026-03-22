@@ -796,7 +796,142 @@ describe('M4a wire format: SurrogateProjection contract', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// 9. RPCs called by Agent-6 that DON'T exist in proto yet (KNOWN GAPS)
+// 9. IPW-adjusted results (bandit experiment analysis)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('M4a wire format: IPW-adjusted results', () => {
+  it('parses MetricResult with nested ipwResult from proto3 JSON', async () => {
+    server.use(
+      http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, () =>
+        HttpResponse.json({
+          experimentId: 'ipw-test',
+          metricResults: [
+            {
+              metricId: 'reward_rate',
+              variantId: 'arm-b',
+              controlMean: 0.312,
+              treatmentMean: 0.364,
+              absoluteEffect: 0.052,
+              relativeEffect: 0.1667,
+              ciLower: 0.017,
+              ciUpper: 0.087,
+              pValue: 0.004,
+              isSignificant: true,
+              varianceReductionPct: 18,
+              cupedAdjustedEffect: 0.048,
+              cupedCiLower: 0.019,
+              cupedCiUpper: 0.077,
+              ipwResult: {
+                effect: 0.045,
+                se: 0.016,
+                ciLower: 0.014,
+                ciUpper: 0.076,
+                pValue: 0.005,
+                isSignificant: true,
+                nClipped: 15,
+                effectiveSampleSize: 4820,
+              },
+            },
+          ],
+          srmResult: {
+            chiSquared: 0.31,
+            pValue: 0.58,
+          },
+          computedAt: '2026-03-10T08:00:00Z',
+        }),
+      ),
+    );
+
+    const result = await getAnalysisResult('ipw-test');
+    expect(result.metricResults).toHaveLength(1);
+
+    const mr = result.metricResults[0];
+    expect(mr.ipwResult).toBeDefined();
+    expect(mr.ipwResult!.effect).toBe(0.045);
+    expect(mr.ipwResult!.se).toBe(0.016);
+    expect(mr.ipwResult!.ciLower).toBe(0.014);
+    expect(mr.ipwResult!.ciUpper).toBe(0.076);
+    expect(mr.ipwResult!.pValue).toBe(0.005);
+    expect(mr.ipwResult!.isSignificant).toBe(true);
+    expect(mr.ipwResult!.nClipped).toBe(15);
+    expect(mr.ipwResult!.effectiveSampleSize).toBe(4820);
+  });
+
+  it('handles proto3 zero omission for ipwResult fields', async () => {
+    server.use(
+      http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, () =>
+        HttpResponse.json({
+          experimentId: 'ipw-zero',
+          metricResults: [
+            {
+              metricId: 'reward_rate',
+              variantId: 'arm-a',
+              controlMean: 0.3,
+              treatmentMean: 0.3,
+              // absoluteEffect: 0.0 → omitted
+              // relativeEffect: 0.0 → omitted
+              // pValue: 0.0 → omitted
+              ipwResult: {
+                // effect: 0.0 → omitted by proto3
+                se: 0.02,
+                // ciLower: 0.0 → omitted
+                ciUpper: 0.04,
+                // pValue: 0.0 → omitted
+                // nClipped: 0 → omitted by proto3
+                effectiveSampleSize: 5000,
+              },
+            },
+          ],
+          srmResult: {},
+          computedAt: '2026-03-10T08:00:00Z',
+        }),
+      ),
+    );
+
+    const result = await getAnalysisResult('ipw-zero');
+    const ipw = result.metricResults[0].ipwResult!;
+    expect(ipw).toBeDefined();
+    expect(ipw.se).toBe(0.02);
+    expect(ipw.effectiveSampleSize).toBe(5000);
+    // Proto3 zero-omitted fields defaulted to 0/false by adaptIpwResult
+    expect(ipw.effect).toBe(0);
+    expect(ipw.isSignificant).toBe(false);
+    expect(ipw.nClipped).toBe(0);
+  });
+
+  it('MetricResult without ipwResult (non-bandit experiment)', async () => {
+    server.use(
+      http.post(`${ANALYSIS_SVC}/GetAnalysisResult`, () =>
+        HttpResponse.json({
+          experimentId: 'no-ipw',
+          metricResults: [
+            {
+              metricId: 'click_through_rate',
+              variantId: 'v1-treatment',
+              controlMean: 0.124,
+              treatmentMean: 0.138,
+              absoluteEffect: 0.014,
+              relativeEffect: 0.1129,
+              ciLower: 0.003,
+              ciUpper: 0.025,
+              pValue: 0.008,
+              isSignificant: true,
+              // no ipwResult field — standard A/B test
+            },
+          ],
+          srmResult: {},
+          computedAt: '2026-03-10T08:00:00Z',
+        }),
+      ),
+    );
+
+    const result = await getAnalysisResult('no-ipw');
+    expect(result.metricResults[0].ipwResult).toBeUndefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 10. RPCs called by Agent-6 that DON'T exist in proto yet (KNOWN GAPS)
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('M4a wire format: RPCs not yet in analysis_service.proto', () => {
@@ -858,7 +993,7 @@ describe('M4a wire format: RPCs not yet in analysis_service.proto', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// 10. UI fields not in proto (KNOWN GAPS — will need proto additions)
+// 11. UI fields not in proto (KNOWN GAPS — will need proto additions)
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('M4a wire format: UI fields absent from proto', () => {

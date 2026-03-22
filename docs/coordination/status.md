@@ -17,7 +17,7 @@
 | Agent | Module | Status | Details |
 |-------|--------|--------|---------|
 | Agent-1 | M1 Assignment | 🔵 Polish | [agent-1.md](status/agent-1.md) |
-| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | [agent-2.md](status/agent-2.md) |
+| Agent-2 | M2 Pipeline | 🔵 Polish | [agent-2.md](status/agent-2.md) |
 | Agent-3 | M3 Metrics | 🟢 All Phases Complete | [agent-3.md](status/agent-3.md) |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟢 All Phases Complete | [agent-4.md](status/agent-4.md) |
 | Agent-5 | M5 Management | 🟢 All Phases Complete | [agent-5.md](status/agent-5.md) |
@@ -237,11 +237,25 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 - [x] Devin: 12 bugs + optimizations from early PR review, human review checklist passed 6/6 (PR #161)
 - [x] Agent-1: Post-review cleanup — doc ports, iOS SDK, Python drift (PR #162)
 
+- [x] Agent-2: PGO build + k6 load test + 6 Grafana panels + 2 alert rules (PR #179)
+
 **In progress:**
 - Agent-1: Mobile SDK CI builds — guard UniFFI imports (PR #163, open)
+- Agent-6: IPW-adjusted results integration (branch `agent-6/feat/ipw-results`)
+
+### Week 4 — 2026-03-16
+
+**Completed this week:**
+- [x] Agent-6: Experiment creation wizard — 5-step type-aware flow (PR #169)
+- [x] Agent-6: Real-time monitoring page /monitoring (PR #176)
+- [x] Agent-6: Experiment comparison view /compare (PR #177)
+- [x] Agent-6: Audit log viewer /audit (PR #178)
+- [x] Agent-6: IPW-adjusted results integration — IpwToggle, IpwDetailsPanel, wire-format contract tests
 
 **Platform status:**
 - 6 of 7 agents at 🟢 All Phases Complete
 - Agent-1 in polish mode (PR #163 pending)
+- Agent-6 in polish mode (wizard, monitoring, comparison, audit, IPW)
 - All 10 pair integrations at 🟢
 - Cross-cutting Devin review addressed 12 bugs across 6 crates/services
+- Agent-6 at 416 tests (40 wire-format contract, 37 wizard, 11 metric browser)

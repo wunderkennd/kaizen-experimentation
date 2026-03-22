@@ -10,6 +10,8 @@ import { Breadcrumb } from '@/components/breadcrumb';
 import { SrmBanner } from '@/components/srm-banner';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
+import { IpwToggle } from '@/components/ipw-toggle';
+import { IpwDetailsPanel } from '@/components/ipw-details-panel';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
 
 // Dynamic imports — recharts + tab components only load when their tab is active
@@ -73,6 +75,7 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCuped, setShowCuped] = useState(false);
+  const [showIpw, setShowIpw] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawTab = searchParams.get('tab');
@@ -177,6 +180,7 @@ export default function ResultsPage() {
 
   const hasCupedData = analysisResult.metricResults.some((m) => m.varianceReductionPct > 0);
   const maxVarianceReduction = Math.max(...analysisResult.metricResults.map((m) => m.varianceReductionPct));
+  const hasIpwData = analysisResult.metricResults.some((m) => m.ipwResult);
   const hasSurrogateProjections = (analysisResult.surrogateProjections?.length ?? 0) > 0;
   const isHoldout = experiment.type === 'CUMULATIVE_HOLDOUT';
   const hasGuardrails = experiment.guardrailConfigs.length > 0;
@@ -255,23 +259,34 @@ export default function ResultsPage() {
       {/* Tab content */}
       {effectiveTab === 'overview' && (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}>
-          {/* CUPED Toggle */}
-          {hasCupedData && (
-            <CupedToggle
-              enabled={showCuped}
-              onToggle={() => setShowCuped((prev) => !prev)}
-              varianceReductionPct={maxVarianceReduction}
-            />
-          )}
+          {/* Adjustment Toggles */}
+          <div className="flex flex-wrap items-start gap-6">
+            {hasCupedData && (
+              <CupedToggle
+                enabled={showCuped}
+                onToggle={() => setShowCuped((prev) => !prev)}
+                varianceReductionPct={maxVarianceReduction}
+              />
+            )}
+            {hasIpwData && (
+              <IpwToggle
+                enabled={showIpw}
+                onToggle={() => setShowIpw((prev) => !prev)}
+              />
+            )}
+          </div>
 
           {/* Treatment Effects Table */}
           <section className="mb-6">
             <h2 className="mb-3 text-lg font-semibold text-gray-900">Metric Results</h2>
-            <TreatmentEffectsTable metricResults={analysisResult.metricResults} showCuped={showCuped} />
+            <TreatmentEffectsTable metricResults={analysisResult.metricResults} showCuped={showCuped} showIpw={showIpw} />
           </section>
 
+          {/* IPW Details Panel (when IPW data exists) */}
+          {hasIpwData && <IpwDetailsPanel metricResults={analysisResult.metricResults} />}
+
           {/* Forest Plot */}
-          <ForestPlot metricResults={analysisResult.metricResults} showCuped={showCuped} />
+          <ForestPlot metricResults={analysisResult.metricResults} showCuped={showCuped} showIpw={showIpw} />
 
           {/* Sequential Boundary Plot */}
           {experiment.sequentialTestConfig && (
