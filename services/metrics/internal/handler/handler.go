@@ -171,7 +171,20 @@ func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[m
 		m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("experiment_id is required"))
 	}
-	entries, err := h.queryLog.GetLogs(ctx, id, req.Msg.GetMetricId())
+	filter := querylog.LogFilter{
+		ExperimentID: id,
+		MetricID:     req.Msg.GetMetricId(),
+		JobType:      req.Msg.GetJobType(),
+		PageSize:     int(req.Msg.GetPageSize()),
+		PageToken:    req.Msg.GetPageToken(),
+	}
+	if req.Msg.GetAfter() != nil {
+		filter.After = req.Msg.GetAfter().AsTime()
+	}
+	if req.Msg.GetBefore() != nil {
+		filter.Before = req.Msg.GetBefore().AsTime()
+	}
+	entries, nextToken, err := h.queryLog.GetLogsFiltered(ctx, filter)
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("GetQueryLog", "error").Inc()
 		m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "error").Observe(time.Since(start).Seconds())
@@ -186,5 +199,5 @@ func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[m
 	}
 	m3metrics.RPCTotal.WithLabelValues("GetQueryLog", "ok").Inc()
 	m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "ok").Observe(time.Since(start).Seconds())
-	return connect.NewResponse(&metricsv1.GetQueryLogResponse{Entries: pe}), nil
+	return connect.NewResponse(&metricsv1.GetQueryLogResponse{Entries: pe, NextPageToken: nextToken}), nil
 }

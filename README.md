@@ -1,154 +1,275 @@
-# Experimentation Platform
+# Kaizen — SVOD Experimentation Platform
 
-A full-stack experimentation platform for SVOD content optimization, supporting A/B testing, interleaving experiments, multi-armed bandits, and feature flags.
+A full-stack experimentation system purpose-built for streaming platforms. Supports A/B testing, interleaving, multi-armed bandits (Thompson Sampling, LinUCB, Neural Contextual), feature flags, sequential testing (mSPRT, GST), CUPED variance reduction, surrogate metrics, novelty detection, content interference analysis, lifecycle segmentation, and session-level experiments.
+
+**Status**: Phases 0–4 complete (163 PRs, 10 pair integration suites green). Phase 5 in progress — 15 proposed ADRs across multi-stakeholder optimization, statistical methodology, bandit/RL advances, quasi-experimental designs, platform operations, and language migration.
 
 ## Architecture
 
-| Module | Owner | Language | Description |
-|--------|-------|----------|-------------|
-| M1 | Agent-1 | Rust | Assignment Service — deterministic user bucketing |
-| M2 | Agent-2 | Rust + Go | Event Pipeline — ingestion, validation, Kafka publishing |
-| M3 | Agent-3 | Go + Spark | Metric Computation Engine — SQL-transparent aggregation |
-| M4a | Agent-4 | Rust | Statistical Analysis — t-tests, sequential tests, bootstrap |
-| M4b | Agent-4 | Rust | Bandit Policy — Thompson Sampling, LinUCB, neural contextual |
-| M5 | Agent-5 | Go | Experiment Management — lifecycle state machine, CRUD APIs |
-| M6 | Agent-6 | TypeScript | Decision Support UI — dashboards, results, "View SQL" |
-| M7 | Agent-7 | Go | Feature Flag Service — boolean/multivariate flags, promotion |
+```
+┌──────────────────────────────────────────────────────────────┐
+│                        Client SDKs                           │
+│    Web (TS)  ·  iOS (Swift)  ·  Android (Kotlin)            │
+│    Server-Go  ·  Server-Python                               │
+└──────────────┬───────────────────────────────────────────────┘
+               │ JSON HTTP (ConnectRPC)
+               ▼
+┌──────────────────────────┐    ┌──────────────────────────────┐
+│  M1 Assignment (Rust)    │───▶│  M4b Bandit Policy (Rust)    │
+│  :50051                  │    │  :50054                      │
+│  Hash bucketing,         │    │  Thompson, LinUCB, Neural,   │
+│  interleaving, slate     │    │  cold-start, LMAX core       │
+└──────────────────────────┘    └──────────────────────────────┘
+               │                            │
+               ▼                            ▼
+┌──────────────────────────┐    ┌──────────────────────────────┐
+│  M2 Event Pipeline       │    │  M4a Statistical Analysis    │
+│  :50052 (Rust)           │    │  :50053 (Rust)               │
+│  :50058 (Go orch)        │    │  Frequentist, Bayesian,      │
+│  Validation, dedup,      │    │  sequential, CUPED, CATE,    │
+│  Kafka publish            │    │  IPW, interference, novelty  │
+└──────────┬───────────────┘    └──────────────────────────────┘
+           │ Kafka                          ▲
+           ▼                                │
+┌──────────────────────────┐    ┌──────────────────────────────┐
+│  M3 Metric Computation   │───▶│  M5 Experiment Management    │
+│  :50056 (Go)             │    │  :50055 (Go)                 │
+│  Spark SQL, Delta Lake,  │    │  CRUD, lifecycle, RBAC,      │
+│  surrogates, providers   │    │  guardrails, bucket reuse    │
+└──────────────────────────┘    └──────────────────────────────┘
+                                            │
+┌──────────────────────────┐    ┌──────────────────────────────┐
+│  M7 Feature Flags        │    │  M6 Decision Support UI      │
+│  :50057 (Go→Rust)        │    │  :3000 (TypeScript)          │
+│  Flags, rollout,         │    │  Next.js 14, React 18,       │
+│  promote to experiment   │    │  Recharts, D3, shadcn/ui     │
+└──────────────────────────┘    └──────────────────────────────┘
+```
 
-## Quick Start
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Hot-path services | Rust (tonic gRPC, tonic-web JSON HTTP) |
+| Orchestration services | Go (ConnectRPC) |
+| UI | TypeScript (Next.js 14, React 18) |
+| Schema | Protobuf (buf v2, 17 .proto files, 8 packages) |
+| Streaming | Apache Kafka (MSK/Confluent, 7 topics) |
+| Lakehouse | Delta Lake on S3/GCS |
+| ML Models | MLflow on S3 |
+| Database | PostgreSQL 16 |
+| Policy Store | RocksDB (embedded, crash-only) |
+| Feature Store | Redis Cluster |
+| Observability | Prometheus, Grafana, Jaeger (OpenTelemetry) |
+
+## SVOD-Specific Capabilities
+
+| Capability | Module(s) | Description |
+| --- | --- | --- |
+| Interleaving | M1, M4a | Team Draft, Optimized, Multileave — 10–100× more sensitive than A/B |
+| Surrogate Metrics | M3, M4a | MLflow-calibrated projection of 90-day churn from 7-day signals |
+| Novelty Detection | M4a | Gauss-Newton exponential decay fitting — prevents shipping based on fading lift |
+| Content Interference | M4a | JSD, Jaccard, Gini on consumption distributions with BH correction |
+| Lifecycle Segmentation | M4a | CATE + Cochran Q across TRIAL/NEW/ESTABLISHED/MATURE/AT_RISK/WINBACK |
+| Session-Level Experiments | M1, M4a | HC1 sandwich estimator for clustered standard errors |
+| Playback QoE | M2, M3, M4a | TTFF, rebuffer, bitrate, resolution switches with engagement correlation |
+| Cold-Start Bandit | M4b | Contextual bandit for new content targeting with affinity score export |
+| Cumulative Holdout | M1, M4a | Fail-closed holdout assignment measuring total algorithmic lift |
+
+## Getting Started
 
 ### Prerequisites
-- Rust 1.80+ (install via [rustup](https://rustup.rs))
-- Go 1.22+ (install via [go.dev](https://go.dev/dl/))
-- Node.js 20+ (install via [nvm](https://github.com/nvm-sh/nvm))
-- Docker + Docker Compose
-- [buf](https://buf.build/docs/installation) CLI for proto toolchain
-- [just](https://github.com/casey/just#installation) command runner
 
-### One-Command Setup
+- Rust 1.80+ with `cargo`
+- Go 1.22+
+- Node.js 20+ with `npm`
+- Docker and Docker Compose
+- `buf` CLI v2 (proto toolchain)
+- PostgreSQL 16
+- `tmux` (for Multiclaude agent orchestration)
 
-```bash
-cp .env.example .env
-just setup
-```
-
-This starts infrastructure, generates proto stubs, installs all dependencies,
-loads seed data, and runs the full test suite. Run `just --list` to see all
-available commands.
-
-### Manual Steps (if not using just)
-
-### 1. Start Infrastructure
+### Development Setup
 
 ```bash
-docker-compose up -d
-```
+# Clone
+git clone https://github.com/your-org/kaizen.git
+cd kaizen
 
-This starts PostgreSQL, Kafka (with topics), Schema Registry, Redis, and a Kafka UI (http://localhost:8080).
+# Start infrastructure
+docker compose up -d   # Kafka, PostgreSQL, Redis, Prometheus, Grafana, Jaeger
 
-### 2. Build Proto Schema
-
-```bash
-cd proto
-buf lint
-buf generate
-```
-
-Generates Go types in `gen/go/` and TypeScript types in `gen/ts/`. Rust types are generated by `tonic-build` during `cargo build`.
-
-### 3. Build & Test Rust
-
-```bash
-cd crates
-cargo clippy --workspace --all-features -- -D warnings
+# Rust services
+cargo build --workspace
 cargo test --workspace
+
+# Go services
+go build ./...
+go test ./...
+
+# UI
+cd ui && npm install && npm test && cd ..
+
+# Proto validation
+buf lint proto/
 ```
 
-### 4. Build & Test Go
+### Running Services
 
 ```bash
-cd services
-CGO_ENABLED=1 go test -race -cover ./...
+# Use justfile for common tasks
+just run-assignment      # M1 on :50051
+just run-pipeline        # M2 on :50052
+just run-metrics         # M3 on :50056
+just run-analysis        # M4a on :50053
+just run-policy          # M4b on :50054
+just run-management      # M5 on :50055
+just run-ui              # M6 on :3000
+just run-flags           # M7 on :50057
 ```
 
-### 5. Build & Test UI
+## Phase 5: Architecture Evolution
+
+Phase 5 implements 15 proposed ADRs driven by a 2024–2026 experimentation research gap analysis (50+ papers, Netflix/Spotify/Meta/Etsy/LinkedIn):
+
+| Cluster | ADRs | Capability |
+| --- | --- | --- |
+| A: Multi-Stakeholder | 011–014 | Multi-objective bandits, LP constraint layer, meta-experiments, provider-side metrics |
+| B: Statistical Methods | 015, 018, 020 | AVLM (sequential CUPED), e-value framework + online FDR, adaptive sample size |
+| C: Bandit & RL | 016, 017 | Slate-level bandits, offline RL for long-term causal estimation |
+| D: Quasi-Experimental | 022, 023 | Switchback experiments, synthetic control methods |
+| E: Platform Operations | 019, 021 | Portfolio optimization, feedback loop interference detection |
+| F: Language Migration | 024, 025 | M7 Go→Rust (unconditional), M5 Go→Rust (conditional) |
+
+### Development Orchestration
+
+Phase 5 uses a hybrid multi-agent orchestration model:
+
+- **Multiclaude** for persistent sprint-level work — each agent gets its own git worktree and tmux window, CI-gated merge queue, supervisor health-checks.
+- **Agent Teams** for ephemeral ad-hoc collaboration — contract test debugging, proto schema design, interactive PR review.
+- Per-agent status files at `docs/coordination/status/agent-N-status.md`.
+- Agent definitions at `.multiclaude/agents/`.
 
 ```bash
-cd ui
-npm ci
-npm run lint && npm run type-check && npm run test -- --run
-npm run dev  # http://localhost:3000
+# Setup (one-time)
+go install github.com/dlorenc/multiclaude/cmd/multiclaude@latest
+multiclaude start
+multiclaude repo init https://github.com/your-org/kaizen
+
+# Launch a sprint (example: Sprint 5.0)
+# See docs/coordination/sprint-prompts.md for pre-written commands
+multiclaude worker create "Implement AVLM (ADR-015)..." --agent agent-4-analysis-bandit
+multiclaude worker create "Port M7 to Rust (ADR-024)..." --agent agent-7-flags
+
+# Monitor
+multiclaude status
+tmux attach -t mc-kaizen
 ```
 
-### 6. Validate Hash Parity
-
-```bash
-python scripts/generate_hash_vectors.py    # Generate reference vectors
-python scripts/verify_hash_parity.py       # Verify cross-language parity
-```
-
-## Repository Structure
+## Project Structure
 
 ```
-├── proto/                  # Protobuf schema (17 .proto files, buf toolchain)
-├── crates/                 # Rust Cargo workspace (13 crates)
-│   ├── experimentation-core/         # Foundation: timestamps, errors
-│   ├── experimentation-hash/         # MurmurHash3 deterministic bucketing
-│   ├── experimentation-proto/        # Generated proto types (tonic-build)
-│   ├── experimentation-stats/        # Statistical methods (t-test, SRM, bootstrap, ...)
-│   ├── experimentation-bandit/       # Bandit algorithms (Thompson, LinUCB, neural)
-│   ├── experimentation-interleaving/ # Interleaving (Team Draft, Optimized, Multileave)
-│   ├── experimentation-ingest/       # Event validation + dedup
-│   ├── experimentation-ffi/          # C FFI for Go CGo bridge
-│   ├── experimentation-assignment/   # M1 binary
-│   ├── experimentation-analysis/     # M4a binary
-│   ├── experimentation-pipeline/     # M2 binary
-│   └── experimentation-policy/       # M4b binary
-├── services/               # Go services
-│   ├── management/         # M5: Experiment Management
-│   ├── metrics/            # M3: Metric Computation
-│   ├── flags/              # M7: Feature Flags
-│   └── orchestration/      # M2: Go orchestration layer
-├── ui/                     # M6: TypeScript (Next.js)
-├── sql/                    # PostgreSQL migrations
-├── delta/                  # Delta Lake table definitions
-├── kafka/                  # Kafka topic configurations
-├── test-vectors/           # 10,000 hash test vectors (cross-language parity)
-├── dev/                    # Local development configs
-├── scripts/                # CI/CD and utility scripts
-├── adrs/                   # Architecture Decision Records
-├── .github/workflows/      # CI: PR pipeline, nightly validation, weekly chaos
-└── docker-compose.yml      # Local infrastructure
+kaizen/
+├── CLAUDE.md                          # Agent context (read by all Claude Code sessions)
+├── README.md                          # This file
+├── CONTRIBUTING.md                    # General contribution guide
+├── Cargo.toml                         # Workspace root
+├── justfile                           # Task runner
+│
+├── .claude/
+│   └── settings.json                  # Project-level Claude Code settings
+│
+├── .multiclaude/
+│   ├── config.json                    # Multiclaude repo config
+│   └── agents/                        # 7 agent definitions (committed)
+│
+├── crates/                            # Rust workspace (13 crates)
+│   ├── experimentation-core/
+│   ├── experimentation-hash/
+│   ├── experimentation-proto/
+│   ├── experimentation-stats/         # All statistical computation
+│   ├── experimentation-bandit/        # All bandit algorithms
+│   ├── experimentation-interleaving/
+│   ├── experimentation-ingest/
+│   ├── experimentation-assignment/    # M1 service binary
+│   ├── experimentation-analysis/      # M4a service binary
+│   ├── experimentation-pipeline/      # M2 service binary
+│   ├── experimentation-policy/        # M4b service binary
+│   └── experimentation-flags/         # M7 service binary (ADR-024)
+│
+├── services/                          # Go services
+│   ├── management/                    # M5
+│   ├── metrics/                       # M3
+│   ├── pipeline-orch/                 # M2 orchestration
+│   └── flags/                         # M7 (legacy Go — replaced by crates/experimentation-flags/)
+│
+├── ui/                                # M6 (Next.js 14)
+│
+├── proto/experimentation/             # Protobuf schema (17 files, 8 packages)
+│   ├── common/v1/                     # Shared types
+│   ├── assignment/v1/
+│   ├── pipeline/v1/
+│   ├── metrics/v1/
+│   ├── analysis/v1/
+│   ├── bandit/v1/
+│   ├── management/v1/
+│   └── flags/v1/
+│
+├── sdks/                              # Client SDKs (5 platforms)
+│   ├── web/                           # TypeScript
+│   ├── ios/                           # Swift
+│   ├── android/                       # Kotlin
+│   ├── server-go/                     # Go
+│   └── server-python/                 # Python
+│
+├── sql/migrations/                    # PostgreSQL DDL
+├── delta/                             # Delta Lake table schemas
+├── test-vectors/                      # Hash parity vectors (10K)
+│
+├── docs/
+│   ├── design/
+│   │   └── design_doc_v7.0.md         # System design document
+│   ├── adrs/
+│   │   ├── README.md                  # ADR index (001–025)
+│   │   ├── 001-language-selection.md  # through 025-m5-conditional-rust-port.md
+│   │   └── ...
+│   └── coordination/
+│       ├── phase5-implementation-plan.md
+│       ├── phase5-playbook.md
+│       ├── sprint-prompts.md
+│       ├── CONTRIBUTING-phase5.md
+│       └── status/                    # Per-agent status files
+│           ├── agent-1-status.md
+│           └── ...
+│
+├── docker-compose.yml                 # Infrastructure (Kafka, PG, Redis)
+├── docker-compose.monitoring.yml      # Prometheus, Grafana, Jaeger
+└── .github/workflows/                 # CI/CD
 ```
 
-## Key Documents
+## Documentation
 
-| Document | Location | Purpose |
-|----------|----------|---------|
-| Design doc v5.1 | (ask project lead) | Complete system specification |
-| Agent onboarding | `onboarding/agent-{N}-*.md` | Per-agent quickstart guides |
-| ADRs | `adrs/` | Architectural decision rationale |
-| CI/CD design | `cicd/pipeline_design.md` | Pipeline architecture |
-| Proto schema | `proto/` | API contracts |
-| Infrastructure | `sql/`, `delta/`, `kafka/` | Database + streaming schemas |
+| Document | Description |
+| --- | --- |
+| [Design Document v7.0](docs/design/design_doc_v7.0.md) | Complete system reference + Phase 5 architecture plan |
+| [ADR Index](docs/adrs/README.md) | 25 architecture decision records (10 accepted, 15 proposed) |
+| [Phase 5 Implementation Plan](docs/coordination/phase5-implementation-plan.md) | 6 sprints, agent assignments, milestones |
+| [Phase 5 Playbook](docs/coordination/phase5-playbook.md) | Multiclaude + Agent Teams operational guide |
+| [Sprint Prompts](docs/coordination/sprint-prompts.md) | Pre-written `multiclaude worker create` commands |
+| [Contributing (Phase 5)](docs/coordination/CONTRIBUTING-phase5.md) | Branching, PR, merge, status file conventions |
+| [Agent Teams vs. Multiclaude](docs/coordination/agent-teams-vs-multiclaude-evaluation.md) | Evaluation and hybrid model rationale |
 
-## Development Workflow
+## Verified Performance
 
-1. **Read your onboarding guide** — `onboarding/agent-{N}-*.md`
-2. **Read the ADRs** for decisions affecting your module
-3. **Start local infra** — `docker-compose up -d`
-4. **Implement your first PR** (defined in onboarding guide)
-5. **Run tests** — `cargo test` / `go test` / `npm test`
-6. **Open PR** — CI validates schema, builds, tests, hash parity
-
-## CI/CD
-
-| Pipeline | Trigger | Duration | Purpose |
-|----------|---------|----------|---------|
-| PR pipeline | Every PR | ~15min | Lint, build, test, hash parity |
-| Nightly | 3 AM UTC | ~45min | Extended proptest, GST validation, benchmarks |
-| Weekly chaos | Sunday 2 AM | ~30min | Kill services under load, verify recovery |
+| Service | Metric | Target | Achieved |
+| --- | --- | --- | --- |
+| M1 Assignment | GetAssignment p99 | < 5ms | ✅ at 50K rps |
+| M1 Assignment | GetInterleavedList p99 | < 15ms | ✅ |
+| M4b Bandit | SelectArm p99 | < 15ms at 10K rps | ✅ |
+| M4b Bandit | Crash recovery | < 10 seconds | ✅ |
+| M7 Flags | EvaluateFlag p99 | < 10ms at 20K rps | ✅ (< 5ms post-Rust-port) |
+| All stateless | Crash recovery | < 2 seconds | ✅ |
+| Hash parity | Rust ↔ WASM ↔ CGo ↔ Python ↔ TS | 10K vectors | ✅ |
 
 ## License
 
-Proprietary.
+Proprietary. See LICENSE.

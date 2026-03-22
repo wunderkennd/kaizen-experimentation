@@ -6,6 +6,7 @@ const nextConfig = {
     const metricsUrl = process.env.BACKEND_METRICS_URL || 'http://localhost:50056';
     const analysisUrl = process.env.BACKEND_ANALYSIS_URL || 'http://localhost:50053';
     const banditUrl = process.env.BACKEND_BANDIT_URL || 'http://localhost:50054';
+    const flagsUrl = process.env.BACKEND_FLAGS_URL || 'http://localhost:50057';
 
     return [
       {
@@ -23,6 +24,10 @@ const nextConfig = {
       {
         source: '/api/rpc/bandit/:path*',
         destination: `${banditUrl}/:path*`,
+      },
+      {
+        source: '/api/rpc/flags/:path*',
+        destination: `${flagsUrl}/:path*`,
       },
     ];
   },

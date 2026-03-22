@@ -77,6 +77,14 @@ func (w *FailingWriter) GetLogs(_ context.Context, _ string, _ string) ([]queryl
 	return nil, nil
 }
 
+func (w *FailingWriter) GetLogsFiltered(_ context.Context, _ querylog.LogFilter) ([]querylog.Entry, string, error) {
+	return nil, "", nil
+}
+
+func (w *FailingWriter) PurgeOldLogs(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
+
 func (w *FailingWriter) CallCount() int64 {
 	return w.callCount.Load()
 }
