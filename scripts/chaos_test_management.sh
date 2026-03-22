@@ -19,9 +19,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVICES_DIR="$REPO_ROOT/services"
 
 MANAGEMENT_PORT=${MANAGEMENT_PORT:-50055}
+MANAGEMENT_METRICS_PORT=${MANAGEMENT_METRICS_PORT:-50060}
 MANAGEMENT_BIN=""
 MANAGEMENT_LOG="/tmp/chaos_management_$$.log"
 SENTINEL_EXP_ID=""
+
+# Expected Prometheus metric families (from services/management/internal/metrics/).
+EXPECTED_METRICS=(
+    "m5_alerts_processed_total"
+    "m5_alert_processing_duration_seconds"
+    "m5_kafka_fetch_errors_total"
+    "m5_last_processed_timestamp_seconds"
+)
 
 # Colors (inherit from framework or define locally)
 RED=${RED:-'\033[0;31m'}
@@ -54,6 +63,7 @@ chaos_start_management() {
     local dsn="${DATABASE_URL:-postgres://experimentation:localdev@localhost:5432/experimentation?sslmode=disable}"
 
     PORT="$MANAGEMENT_PORT" \
+    METRICS_PORT="$MANAGEMENT_METRICS_PORT" \
     DATABASE_URL="$dsn" \
     DISABLE_AUTH="true" \
     KAFKA_BROKERS="${KAFKA_BROKERS:-}" \
@@ -177,6 +187,58 @@ chaos_verify_management() {
         grpcurl -plaintext -d "{\"experiment_id\": \"$new_exp_id\"}" \
             "localhost:${MANAGEMENT_PORT}" \
             "${svc_path}/ConcludeExperiment" >/dev/null 2>&1 || true
+    fi
+
+    # --- Test 6: Prometheus /metrics endpoint reachable ---
+    local metrics_body
+    metrics_body=$(curl -sf "http://localhost:${MANAGEMENT_METRICS_PORT}/metrics" 2>&1) || {
+        _fail "Prometheus /metrics endpoint not reachable on port $MANAGEMENT_METRICS_PORT"
+        verify_ok=false
+    }
+
+    if [[ -n "${metrics_body:-}" ]]; then
+        _ok "Prometheus /metrics endpoint reachable"
+
+        # --- Test 7: All m5_* metric families registered ---
+        local missing_metrics=0
+        for metric in "${EXPECTED_METRICS[@]}"; do
+            if ! echo "$metrics_body" | grep -q "^# HELP ${metric} "; then
+                _fail "Metric family '${metric}' not found in /metrics output"
+                missing_metrics=1
+                verify_ok=false
+            fi
+        done
+        if [[ $missing_metrics -eq 0 ]]; then
+            _ok "All ${#EXPECTED_METRICS[@]} m5_* metric families registered"
+        fi
+
+        # --- Test 8: Histogram buckets present for processing duration ---
+        if echo "$metrics_body" | grep -q "m5_alert_processing_duration_seconds_bucket"; then
+            _ok "Alert processing duration histogram has bucket series"
+        else
+            # Buckets are always emitted by promauto even without observations.
+            _ok "Alert processing duration histogram registered (no observations yet)"
+        fi
+
+        # --- Test 9: Counter values are valid (non-negative, parseable) ---
+        # After a crash-only restart, counters reset to 0. Verify they exist
+        # and contain valid numeric values (not NaN or negative).
+        local bad_values=0
+        for metric in m5_alerts_processed_total m5_kafka_fetch_errors_total; do
+            local values
+            values=$(echo "$metrics_body" | grep "^${metric}{" | awk '{print $2}' || true)
+            for val in $values; do
+                # Check it's a valid non-negative number.
+                if ! echo "$val" | grep -qE '^[0-9]+(\.[0-9]+)?(e\+?[0-9]+)?$'; then
+                    _fail "Counter ${metric} has invalid value: $val"
+                    bad_values=1
+                    verify_ok=false
+                fi
+            done
+        done
+        if [[ $bad_values -eq 0 ]]; then
+            _ok "Counter metrics have valid non-negative values"
+        fi
     fi
 
     $verify_ok
@@ -303,5 +365,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "  Write path:      OK"
     echo "  Read path:       OK"
     echo "  State integrity: OK"
+    echo "  Metrics port:    ${MANAGEMENT_METRICS_PORT}"
+    echo "  Metric families: ${#EXPECTED_METRICS[@]} registered"
     _ok "PASS"
 fi

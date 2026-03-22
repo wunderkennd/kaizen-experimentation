@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+
+	"github.com/org/experimentation-platform/services/management/internal/metrics"
 )
 
 const (
@@ -55,6 +57,8 @@ func (c *Consumer) consume(ctx context.Context) {
 	defer close(c.done)
 	slog.Info("guardrail consumer: started", "topic", Topic, "group", ConsumerGroup)
 
+	const consumer = "guardrail"
+
 	for {
 		msg, err := c.reader.FetchMessage(ctx)
 		if err != nil {
@@ -62,6 +66,7 @@ func (c *Consumer) consume(ctx context.Context) {
 				slog.Info("guardrail consumer: shutting down")
 				return
 			}
+			metrics.FetchErrors.WithLabelValues(consumer).Inc()
 			slog.Error("guardrail consumer: fetch error, retrying", "error", err)
 			select {
 			case <-ctx.Done():
@@ -71,8 +76,10 @@ func (c *Consumer) consume(ctx context.Context) {
 			continue
 		}
 
+		processStart := time.Now()
 		var alert Alert
 		if err := json.Unmarshal(msg.Value, &alert); err != nil {
+			metrics.AlertsProcessed.WithLabelValues(consumer, "invalid_message").Inc()
 			slog.Error("guardrail consumer: invalid message payload",
 				"error", err, "offset", msg.Offset, "partition", msg.Partition)
 			// Commit and skip malformed messages.
@@ -82,6 +89,7 @@ func (c *Consumer) consume(ctx context.Context) {
 
 		result, err := c.processor.ProcessAlert(ctx, alert)
 		if err != nil {
+			metrics.AlertsProcessed.WithLabelValues(consumer, "error").Inc()
 			slog.Error("guardrail consumer: process error",
 				"error", err,
 				"experiment_id", alert.ExperimentID,
@@ -95,13 +103,18 @@ func (c *Consumer) consume(ctx context.Context) {
 			continue
 		}
 
+		rs := resultString(result)
+		metrics.AlertsProcessed.WithLabelValues(consumer, rs).Inc()
+		metrics.AlertProcessingDuration.WithLabelValues(consumer).Observe(time.Since(processStart).Seconds())
 		slog.Info("guardrail consumer: processed alert",
 			"experiment_id", alert.ExperimentID,
 			"metric_id", alert.MetricID,
-			"result", resultString(result))
+			"result", rs)
 
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			slog.Error("guardrail consumer: commit error", "error", err)
+		} else {
+			metrics.LastProcessedTimestamp.WithLabelValues(consumer).SetToCurrentTime()
 		}
 	}
 }

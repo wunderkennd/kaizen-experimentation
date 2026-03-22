@@ -871,3 +871,585 @@ func TestStress_ConcurrentAllocDuringCooldown(t *testing.T) {
 	require.NoError(t, err)
 	assertNoOverlap(t, allocs.Msg.Allocations, "post-cooldown-concurrent")
 }
+
+// --- Phase 5 Concurrent State Transition Stress Tests ---
+// These tests harden every lifecycle transition under concurrent contention,
+// verifying atomicity, audit integrity, and correct error codes.
+
+// TestStress_ConcurrentConclude_100 races 100 goroutines trying to conclude
+// the same RUNNING experiment. Exactly one must succeed; all others must get
+// FAILED_PRECONDITION. No partial state (e.g., stuck in CONCLUDING) allowed.
+func TestStress_ConcurrentConclude_100(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "stress-cc100-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("cc-conclude-100", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// Start the experiment so it's in RUNNING state.
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	const goroutines = 100
+	var successes atomic.Int32
+	var preconditionErrors atomic.Int32
+	var otherErrors atomic.Int32
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err == nil {
+				successes.Add(1)
+			} else if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+				preconditionErrors.Add(1)
+			} else {
+				otherErrors.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), successes.Load(),
+		"exactly 1 goroutine should succeed concluding the experiment")
+	assert.Equal(t, int32(goroutines-1), preconditionErrors.Load(),
+		"all other goroutines should get FAILED_PRECONDITION")
+	assert.Equal(t, int32(0), otherErrors.Load(),
+		"no unexpected errors should occur")
+
+	// Verify final state is CONCLUDED (not stuck in CONCLUDING).
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_CONCLUDED, got.Msg.State,
+		"experiment should be in CONCLUDED state after concurrent conclude attempts")
+
+	// Verify audit trail: create(1) + start(2) + conclude(2) = 5 entries total.
+	entries := fetchAuditRows(t, env.pool, id)
+	concludeEntries := 0
+	for _, e := range entries {
+		if e.Action == "conclude" {
+			concludeEntries++
+		}
+	}
+	assert.Equal(t, 2, concludeEntries,
+		"exactly 2 conclude audit entries (RUNNING→CONCLUDING + CONCLUDING→CONCLUDED), got actions: %v",
+		auditActions(entries))
+}
+
+// TestStress_ConcurrentArchive_50 races 50 goroutines trying to archive
+// the same CONCLUDED experiment. Exactly one must succeed.
+func TestStress_ConcurrentArchive_50(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "stress-ca50-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("ca-archive-50", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	// Drive to CONCLUDED state.
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	_, err = client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	const goroutines = 50
+	var successes atomic.Int32
+	var preconditionErrors atomic.Int32
+	var otherErrors atomic.Int32
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err == nil {
+				successes.Add(1)
+			} else if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+				preconditionErrors.Add(1)
+			} else {
+				otherErrors.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), successes.Load(),
+		"exactly 1 goroutine should succeed archiving the experiment")
+	assert.Equal(t, int32(goroutines-1), preconditionErrors.Load(),
+		"all other goroutines should get FAILED_PRECONDITION")
+	assert.Equal(t, int32(0), otherErrors.Load(),
+		"no unexpected errors should occur")
+
+	// Verify terminal state.
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_ARCHIVED, got.Msg.State)
+
+	// Verify audit trail: create(1) + start(2) + conclude(2) + archive(1) = 6
+	entries := fetchAuditRows(t, env.pool, id)
+	archiveEntries := 0
+	for _, e := range entries {
+		if e.Action == "archive" {
+			archiveEntries++
+		}
+	}
+	assert.Equal(t, 1, archiveEntries,
+		"exactly 1 archive audit entry, got actions: %v", auditActions(entries))
+}
+
+// TestStress_ConcurrentPauseResume races pause and resume operations on the
+// same RUNNING experiment from 50 goroutines each (100 total). All should
+// succeed since RUNNING→RUNNING is always valid. The audit trail must contain
+// exactly as many entries as successful operations.
+func TestStress_ConcurrentPauseResume(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "stress-pr-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("pr-concurrent", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	const pauseGoroutines = 50
+	const resumeGoroutines = 50
+	var pauseSuccesses atomic.Int32
+	var resumeSuccesses atomic.Int32
+	var wg sync.WaitGroup
+
+	// Fire pauses and resumes concurrently.
+	for i := 0; i < pauseGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+				ExperimentId: id,
+				Reason:       "stress test",
+			}))
+			if err == nil {
+				pauseSuccesses.Add(1)
+			}
+		}()
+	}
+	for i := 0; i < resumeGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.ResumeExperiment(ctx, connect.NewRequest(&mgmtv1.ResumeExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err == nil {
+				resumeSuccesses.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// All should succeed since the experiment is RUNNING throughout.
+	assert.Equal(t, int32(pauseGoroutines), pauseSuccesses.Load(),
+		"all pause operations should succeed on RUNNING experiment")
+	assert.Equal(t, int32(resumeGoroutines), resumeSuccesses.Load(),
+		"all resume operations should succeed on RUNNING experiment")
+
+	// Experiment should still be RUNNING.
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, got.Msg.State)
+
+	// Audit trail must have: create(1) + start(2) + pause(50) + resume(50) = 103.
+	entries := fetchAuditRows(t, env.pool, id)
+	var pauseCount, resumeCount int
+	for _, e := range entries {
+		switch e.Action {
+		case "pause":
+			pauseCount++
+		case "resume":
+			resumeCount++
+		}
+	}
+	assert.Equal(t, pauseGoroutines, pauseCount,
+		"audit trail should have exactly %d pause entries", pauseGoroutines)
+	assert.Equal(t, resumeGoroutines, resumeCount,
+		"audit trail should have exactly %d resume entries", resumeGoroutines)
+}
+
+// TestStress_ConcurrentMixedTransitions fires multiple different transition
+// types simultaneously on the same RUNNING experiment: 10 pause, 10 resume,
+// 10 conclude, 10 archive, 10 start. Only conclude should succeed (once);
+// start/archive must all fail; pause/resume should succeed until conclude wins.
+func TestStress_ConcurrentMixedTransitions(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "stress-mixed-trans-"+t.Name(), 0)
+
+	created, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("mixed-trans", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	id := created.Msg.ExperimentId
+
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+
+	const perOp = 10
+	var concludeSuccesses atomic.Int32
+	var startErrors atomic.Int32
+	var archiveErrors atomic.Int32
+	var wg sync.WaitGroup
+
+	// Conclude attempts.
+	for i := 0; i < perOp; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err == nil {
+				concludeSuccesses.Add(1)
+			}
+		}()
+	}
+
+	// Start attempts (invalid from RUNNING).
+	for i := 0; i < perOp; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err != nil {
+				startErrors.Add(1)
+			}
+		}()
+	}
+
+	// Archive attempts (invalid from RUNNING).
+	for i := 0; i < perOp; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := client.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+				ExperimentId: id,
+			}))
+			if err != nil {
+				archiveErrors.Add(1)
+			}
+		}()
+	}
+
+	// Pause attempts (valid while RUNNING, fail after conclude).
+	for i := 0; i < perOp; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client.PauseExperiment(ctx, connect.NewRequest(&mgmtv1.PauseExperimentRequest{
+				ExperimentId: id,
+				Reason:       "mixed stress",
+			}))
+		}()
+	}
+
+	// Resume attempts (valid while RUNNING, fail after conclude).
+	for i := 0; i < perOp; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client.ResumeExperiment(ctx, connect.NewRequest(&mgmtv1.ResumeExperimentRequest{
+				ExperimentId: id,
+			}))
+		}()
+	}
+
+	wg.Wait()
+
+	// Exactly one conclude must succeed.
+	assert.Equal(t, int32(1), concludeSuccesses.Load(),
+		"exactly 1 conclude should succeed")
+
+	// All start and archive attempts must fail.
+	assert.Equal(t, int32(perOp), startErrors.Load(),
+		"all start attempts should fail on RUNNING/CONCLUDED experiment")
+	assert.Equal(t, int32(perOp), archiveErrors.Load(),
+		"all archive attempts should fail on RUNNING/CONCLUDED experiment")
+
+	// Final state must be CONCLUDED (the only valid terminal transition from RUNNING).
+	got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: id,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_CONCLUDED, got.Msg.State)
+
+	// Verify no duplicate conclude audit entries.
+	entries := fetchAuditRows(t, env.pool, id)
+	concludeCount := 0
+	for _, e := range entries {
+		if e.Action == "conclude" {
+			concludeCount++
+		}
+	}
+	assert.Equal(t, 2, concludeCount,
+		"exactly 2 conclude audit entries (RUNNING→CONCLUDING + CONCLUDING→CONCLUDED), got actions: %v",
+		auditActions(entries))
+}
+
+// TestStress_ConcurrentConcludeAndAllocate concludes one experiment and starts
+// another on the same layer simultaneously. The layer has exactly 100% capacity
+// used by the concluding experiment. The new experiment must wait for the
+// conclude to release capacity (or fail if it races ahead).
+func TestStress_ConcurrentConcludeAndAllocate(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	pool := env.pool
+	ctx := context.Background()
+
+	// Layer with 0-second cooldown so released buckets are immediately reusable.
+	layer := createTestLayerWithBuckets(t, client, "stress-ca-"+t.Name(), 10000, 0)
+
+	// Experiment-A at 50%.
+	expA, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("ca-a", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, expA.Msg.ExperimentId, 0.5)
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: expA.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+
+	// Experiment-B at 50%.
+	expB, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("ca-b", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, expB.Msg.ExperimentId, 0.5)
+	_, err = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+		ExperimentId: expB.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+
+	// Layer is now 100% full. Prepare experiment-C at 50%.
+	expC, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+		Experiment: newABExperimentInLayer("ca-c", layer.LayerId),
+	}))
+	require.NoError(t, err)
+	setTrafficPercentage(t, pool, expC.Msg.ExperimentId, 0.5)
+
+	// Concurrently: conclude A (freeing 50%) and start C (needing 50%).
+	var concludeErr error
+	var startErr error
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, concludeErr = client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+			ExperimentId: expA.Msg.ExperimentId,
+		}))
+	}()
+	go func() {
+		defer wg.Done()
+		_, startErr = client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+			ExperimentId: expC.Msg.ExperimentId,
+		}))
+	}()
+	wg.Wait()
+
+	// The conclude must always succeed.
+	assert.NoError(t, concludeErr, "conclude should succeed")
+
+	// The start may succeed or fail depending on race order.
+	if startErr != nil {
+		// If it failed, it should be ResourceExhausted (raced ahead of conclude).
+		assert.Equal(t, connect.CodeResourceExhausted, connect.CodeOf(startErr),
+			"start failure should be ResourceExhausted, not a different error")
+
+		// Experiment-C should be back in DRAFT (rolled back from STARTING).
+		gotC, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+			ExperimentId: expC.Msg.ExperimentId,
+		}))
+		require.NoError(t, err)
+		assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_DRAFT, gotC.Msg.State,
+			"failed start should roll back to DRAFT")
+	} else {
+		// If it succeeded, verify no overlapping allocations.
+		allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
+			LayerId: layer.LayerId,
+		}))
+		require.NoError(t, err)
+		assertNoOverlap(t, allocs.Msg.Allocations, "conclude-and-allocate")
+
+		gotC, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+			ExperimentId: expC.Msg.ExperimentId,
+		}))
+		require.NoError(t, err)
+		assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, gotC.Msg.State)
+	}
+
+	// Experiment-A must be CONCLUDED either way.
+	gotA, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: expA.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_CONCLUDED, gotA.Msg.State)
+
+	// Experiment-B must still be RUNNING, unaffected.
+	gotB, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+		ExperimentId: expB.Msg.ExperimentId,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_RUNNING, gotB.Msg.State)
+}
+
+// TestStress_ConcurrentFullLifecycleRace drives 10 experiments through their
+// entire lifecycle (create→start→conclude→archive) concurrently on the same
+// layer with 10% traffic each. This tests the full pipeline under contention,
+// verifying that all transitions complete without deadlocks or inconsistencies.
+func TestStress_ConcurrentFullLifecycleRace(t *testing.T) {
+	env, cleanup := setupTestServer(t)
+	defer cleanup()
+	client := env.client
+	pool := env.pool
+	ctx := context.Background()
+
+	layer := createTestLayer(t, client, "stress-flr-"+t.Name(), 0)
+
+	const numExperiments = 10
+	ids := make([]string, numExperiments)
+	for i := 0; i < numExperiments; i++ {
+		exp, err := client.CreateExperiment(ctx, connect.NewRequest(&mgmtv1.CreateExperimentRequest{
+			Experiment: newABExperimentInLayer(fmt.Sprintf("flr-%d", i), layer.LayerId),
+		}))
+		require.NoError(t, err)
+		ids[i] = exp.Msg.ExperimentId
+		setTrafficPercentage(t, pool, ids[i], 0.1)
+	}
+
+	// All start concurrently.
+	var startSuccesses atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < numExperiments; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := client.StartExperiment(ctx, connect.NewRequest(&mgmtv1.StartExperimentRequest{
+				ExperimentId: ids[idx],
+			}))
+			if err == nil {
+				startSuccesses.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(numExperiments), startSuccesses.Load(),
+		"all experiments should start (10%% each = 100%%)")
+
+	// All conclude concurrently.
+	var concludeSuccesses atomic.Int32
+	for i := 0; i < numExperiments; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := client.ConcludeExperiment(ctx, connect.NewRequest(&mgmtv1.ConcludeExperimentRequest{
+				ExperimentId: ids[idx],
+			}))
+			if err == nil {
+				concludeSuccesses.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(numExperiments), concludeSuccesses.Load(),
+		"all experiments should conclude")
+
+	// All archive concurrently.
+	var archiveSuccesses atomic.Int32
+	for i := 0; i < numExperiments; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := client.ArchiveExperiment(ctx, connect.NewRequest(&mgmtv1.ArchiveExperimentRequest{
+				ExperimentId: ids[idx],
+			}))
+			if err == nil {
+				archiveSuccesses.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int32(numExperiments), archiveSuccesses.Load(),
+		"all experiments should archive")
+
+	// All should be ARCHIVED with complete audit trails.
+	for i, id := range ids {
+		got, err := client.GetExperiment(ctx, connect.NewRequest(&mgmtv1.GetExperimentRequest{
+			ExperimentId: id,
+		}))
+		require.NoError(t, err)
+		assert.Equal(t, commonv1.ExperimentState_EXPERIMENT_STATE_ARCHIVED, got.Msg.State,
+			"experiment %d should be ARCHIVED", i)
+
+		entries := fetchAuditRows(t, pool, id)
+		// create(1) + start(2) + conclude(2) + archive(1) = 6
+		assert.Len(t, entries, 6,
+			"experiment %d should have 6 audit entries, got actions: %v",
+			i, auditActions(entries))
+	}
+
+	// All allocations should be released.
+	allocs, err := client.GetLayerAllocations(ctx, connect.NewRequest(&mgmtv1.GetLayerAllocationsRequest{
+		LayerId: layer.LayerId,
+	}))
+	require.NoError(t, err)
+	activeAllocs := filterActiveAllocations(allocs.Msg.Allocations)
+	assert.Len(t, activeAllocs, 0,
+		"all allocations should be released after archiving all experiments")
+}

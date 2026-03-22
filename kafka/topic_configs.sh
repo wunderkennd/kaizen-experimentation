@@ -76,6 +76,21 @@ kafka-topics.sh --create --topic guardrail_alerts \
   --config max.message.bytes=1048576 \
   --config min.insync.replicas=2
 
+# --- sequential_boundary_alerts ---
+# Source: M4a Analysis (Rust, when mSPRT/GST boundary is crossed)
+# Consumers: M5 Management Service (Go, triggers auto-conclude)
+# Key: experiment_id
+# Volume estimate: ~10 events/hour (rare; only on boundary crossing)
+# Low-latency: M5 must consume promptly for auto-conclude SLA.
+kafka-topics.sh --create --topic sequential_boundary_alerts \
+  --partitions 8 \
+  --replication-factor 3 \
+  --config retention.ms=2592000000 \       # 30 days
+  --config cleanup.policy=delete \
+  --config segment.bytes=268435456 \       # 256 MB segments
+  --config max.message.bytes=1048576 \
+  --config min.insync.replicas=2
+
 # --- surrogate_recalibration_requests ---
 # Source: M5 Management Service (Go, on TriggerSurrogateRecalibration RPC)
 # Consumers: M3 Metric Engine (Go, triggers surrogate model recalibration)
@@ -96,6 +111,7 @@ kafka-topics.sh --create --topic surrogate_recalibration_requests \
 # metric-engine-spark       : M3 reads exposures, metric_events, qoe_events (batch)
 # bandit-policy-service     : M4b reads reward_events (real-time, committed offsets for crash recovery)
 # management-guardrail      : M5 reads guardrail_alerts (real-time, auto-pause trigger)
+# management-sequential     : M5 reads sequential_boundary_alerts (real-time, auto-conclude trigger)
 # metric-engine-surrogate   : M3 reads surrogate_recalibration_requests (on-demand recalibration)
 # delta-lake-sink           : Kafka Connect writes all topics to Delta Lake
 
@@ -110,4 +126,5 @@ kafka-topics.sh --create --topic surrogate_recalibration_requests \
 #   reward_events     -> experimentation.common.v1.RewardEvent
 #   qoe_events        -> experimentation.common.v1.QoEEvent
 #   guardrail_alerts  -> experimentation.common.v1.GuardrailAlert
+#   sequential_boundary_alerts -> experimentation.common.v1.SequentialBoundaryAlert
 #   surrogate_recalibration_requests -> JSON (surrogate.RecalibrationRequest)

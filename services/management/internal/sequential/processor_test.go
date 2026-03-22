@@ -4,6 +4,7 @@ package sequential_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -250,4 +251,114 @@ func TestProcessAlert_ExperimentNotRunning(t *testing.T) {
 	result, err := proc.ProcessAlert(ctx, alert)
 	require.NoError(t, err)
 	assert.Equal(t, sequential.ResultSkipped, result)
+}
+
+func TestProcessAlert_DuplicateAlertAfterConclude(t *testing.T) {
+	pool := newPool(t)
+	ctx := context.Background()
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	concluder := &mockConcluder{}
+	proc := sequential.NewProcessor(es, as, nil, concluder)
+
+	expID := createSequentialExperiment(t, pool, "seq-dup-conclude-test", "MSPRT")
+
+	alert := sequential.BoundaryAlert{
+		ExperimentID:   expID,
+		MetricID:       "watch_time_minutes",
+		CurrentLook:    3,
+		AlphaSpent:     0.04,
+		AlphaRemaining: 0.01,
+		AdjustedPValue: 0.003,
+		DetectedAt:     time.Now(),
+	}
+
+	// First alert — should auto-conclude.
+	result, err := proc.ProcessAlert(ctx, alert)
+	require.NoError(t, err)
+	assert.Equal(t, sequential.ResultConcluded, result)
+
+	// Simulate concluder's effect: transition experiment to CONCLUDED.
+	_, err = pool.Exec(ctx,
+		`UPDATE experiments SET state = 'CONCLUDING' WHERE experiment_id = $1`, expID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`UPDATE experiments SET state = 'CONCLUDED', concluded_at = NOW() WHERE experiment_id = $1`, expID)
+	require.NoError(t, err)
+
+	// Second alert — should be skipped because experiment is CONCLUDED.
+	result, err = proc.ProcessAlert(ctx, alert)
+	require.NoError(t, err)
+	assert.Equal(t, sequential.ResultSkipped, result)
+
+	// Concluder should have been called exactly once (from the first alert).
+	require.Len(t, concluder.calls, 1)
+}
+
+func TestProcessAlert_ConcluderError(t *testing.T) {
+	pool := newPool(t)
+	ctx := context.Background()
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	concluder := &mockConcluder{err: fmt.Errorf("db connection lost")}
+	proc := sequential.NewProcessor(es, as, nil, concluder)
+
+	expID := createSequentialExperiment(t, pool, "seq-concluder-err-test", "MSPRT")
+
+	alert := sequential.BoundaryAlert{
+		ExperimentID:   expID,
+		MetricID:       "watch_time_minutes",
+		CurrentLook:    2,
+		AlphaSpent:     0.03,
+		AlphaRemaining: 0.02,
+		AdjustedPValue: 0.01,
+		DetectedAt:     time.Now(),
+	}
+
+	// Process alert — should return error from concluder.
+	_, err := proc.ProcessAlert(ctx, alert)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db connection lost")
+
+	// Audit trail should still have the "sequential_boundary_crossed" entry
+	// because audit happens before the conclude call (processor.go:109-118).
+	var action string
+	err = pool.QueryRow(ctx,
+		`SELECT action FROM audit_trail WHERE experiment_id = $1 AND action = 'sequential_boundary_crossed'`, expID,
+	).Scan(&action)
+	require.NoError(t, err)
+	assert.Equal(t, "sequential_boundary_crossed", action)
+}
+
+func TestProcessAlert_GSTMethodVariant(t *testing.T) {
+	pool := newPool(t)
+	ctx := context.Background()
+
+	es := store.NewExperimentStore(pool)
+	as := store.NewAuditStore(pool)
+	concluder := &mockConcluder{}
+	proc := sequential.NewProcessor(es, as, nil, concluder)
+
+	expID := createSequentialExperiment(t, pool, "seq-gst-pocock-test", "GST_POCOCK")
+
+	alert := sequential.BoundaryAlert{
+		ExperimentID:   expID,
+		MetricID:       "watch_time_minutes",
+		CurrentLook:    5,
+		AlphaSpent:     0.045,
+		AlphaRemaining: 0.005,
+		AdjustedPValue: 0.002,
+		DetectedAt:     time.Now(),
+	}
+
+	result, err := proc.ProcessAlert(ctx, alert)
+	require.NoError(t, err)
+	assert.Equal(t, sequential.ResultConcluded, result)
+
+	// Verify concluder was called for GST method.
+	require.Len(t, concluder.calls, 1)
+	assert.Equal(t, expID, concluder.calls[0].ID)
+	assert.Equal(t, "sequential_auto_conclude", concluder.calls[0].Actor)
 }
