@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
-import { getExperiment, getAnalysisResult } from '@/lib/api';
+import { getExperiment, getAnalysisResult, RpcError } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { SrmBanner } from '@/components/srm-banner';
@@ -116,7 +116,11 @@ export default function ResultsPage() {
     getExperiment(params.id)
       .then((exp) => {
         setExperiment(exp);
-        return getAnalysisResult(params.id).catch(() => null);
+        return getAnalysisResult(params.id).catch((err) => {
+          // Only treat 404 (no data yet) as null; propagate real server errors
+          if (err instanceof RpcError && err.status === 404) return null;
+          throw err;
+        });
       })
       .then((analysis) => {
         if (analysis) setAnalysisResult(analysis);
