@@ -70,6 +70,24 @@ groups:
         annotations:
           summary: "Bloom filter FPR exceeding 0.5% — consider resizing"
 
+      - alert: PipelineAcceptedThroughputDrop
+        expr: sum(rate(events_accepted_total[5m])) < 100
+        for: 5m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Pipeline accepted throughput below 100 events/sec for 5m"
+
+      - alert: PipelineRejectionSpike
+        expr: sum(rate(events_rejected_total[5m])) / (sum(rate(events_accepted_total[5m])) + sum(rate(events_rejected_total[5m])) + 0.001) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Pipeline rejection rate exceeds 5% for 3m"
+
   # --------------------------------------------------------------------------
   # Metric Computation (M3) — SLA: daily <2h, guardrail <30min
   # --------------------------------------------------------------------------

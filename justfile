@@ -367,6 +367,14 @@ loadtest-flags:
 loadtest-policy:
     bash scripts/loadtest_policy.sh
 
+# Run M2 pipeline load test: p99 < 10ms at 10K rps (builds, starts server, validates SLA)
+loadtest-pipeline:
+    bash scripts/loadtest_pipeline.sh
+
+# Build pipeline service with PGO optimization (instrument → profile → optimize)
+pgo-build-pipeline:
+    @echo "  Building PGO-optimized pipeline service..."
+    bash scripts/pgo_build_pipeline.sh
 
 # ==============================================================================
 # Chaos Engineering
