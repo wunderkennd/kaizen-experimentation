@@ -3,7 +3,7 @@ import type {
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
-  SurrogateProjection, SrmResult, MetricResult, SegmentResult,
+  SurrogateProjection, SrmResult, MetricResult, SegmentResult, IpwResult,
   MetricDefinition, ListMetricDefinitionsResponse,
   Flag, FlagType, ListFlagsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
@@ -390,12 +390,27 @@ function adaptSrmResult(proto: Record<string, unknown>): SrmResult {
   };
 }
 
-/** Adapt proto MetricResult — coerce segmentResults int64 fields. */
+/** Adapt proto IpwResult — default proto3 zero-omitted fields to 0/false. */
+function adaptIpwResult(proto: Record<string, unknown>): IpwResult {
+  return {
+    effect: (proto.effect as number) || 0,
+    se: (proto.se as number) || 0,
+    ciLower: (proto.ciLower as number) || 0,
+    ciUpper: (proto.ciUpper as number) || 0,
+    pValue: (proto.pValue as number) || 0,
+    isSignificant: (proto.isSignificant as boolean) || false,
+    nClipped: (proto.nClipped as number) || 0,
+    effectiveSampleSize: (proto.effectiveSampleSize as number) || 0,
+  };
+}
+
+/** Adapt proto MetricResult — coerce segmentResults int64 fields + IPW. */
 function adaptMetricResult(proto: Record<string, unknown>): MetricResult {
-  const raw = proto as unknown as MetricResult & { segmentResults?: Record<string, unknown>[] };
+  const raw = proto as unknown as MetricResult & { segmentResults?: Record<string, unknown>[]; ipwResult?: Record<string, unknown> };
   return {
     ...raw,
     segmentResults: raw.segmentResults?.map(adaptSegmentResult),
+    ipwResult: raw.ipwResult ? adaptIpwResult(raw.ipwResult) : undefined,
   };
 }
 
