@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-16 by Agent-4 (chaos hardening: kill-9 policy test, analysis hooks, CI wiring, review fixes)
+> **Last updated**: 2026-03-22 by Agent-3 (PR #171 query log lifecycle merge)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.

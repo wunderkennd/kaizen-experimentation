@@ -1,8 +1,8 @@
 # Agent-3 — M3 Metrics Computation
 
 **Status**: All Phases Complete
-**Current Branch**: agent-3/feat/ipw-edge-case-contracts
-**Current Milestone**: IPW support + query log lifecycle + scheduler
+**Current Branch**: agent-3/feat/query-log-lifecycle
+**Current Milestone**: Query log lifecycle + proto codegen + scheduler
 **Blocked By**: —
 
 ## Summary
@@ -38,7 +38,7 @@ Phase 1–4 done. IPW `assignment_probability` propagated through all metric tem
 | #148 | Prometheus observability (7 metrics on :50056) | Merged |
 | #149 | Grafana dashboard (6 M3 panels + alert rules) | Merged |
 | #170 | IPW support + edge-case contract tests | Open |
-| #171 | Query log lifecycle (filtering, pagination, purge) | Open |
+| #171 | Query log lifecycle (filtering, pagination, purge) + codegen | Open |
 | #172 | Scheduler (daily/hourly/weekly job orchestration) | Open |
 
 ## Pair Integrations
