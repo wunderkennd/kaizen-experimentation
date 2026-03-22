@@ -44,6 +44,14 @@ export function NavHeader() {
             Metrics
           </Link>
           <Link
+            href="/audit"
+            className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/audit') ? 'text-indigo-600' : 'text-gray-600'}`}
+            aria-current={pathname.startsWith('/audit') ? 'page' : undefined}
+            data-testid="nav-audit"
+          >
+            Audit Log
+          </Link>
+          <Link
             href="/monitoring"
             className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/monitoring') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/monitoring') ? 'page' : undefined}

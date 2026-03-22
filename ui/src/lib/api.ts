@@ -7,6 +7,7 @@ import type {
   MetricDefinition, ListMetricDefinitionsResponse,
   Flag, FlagType, ListFlagsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
+  AuditLogEntry, AuditAction, ListAuditLogResponse,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -547,6 +548,56 @@ export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilte
   );
   return {
     metrics: (raw.metrics || []).map(adaptMetricDefinition),
+    nextPageToken: raw.nextPageToken || '',
+  };
+}
+
+export interface ListAuditLogFilters {
+  experimentId?: string;
+  actionFilter?: AuditAction;
+  actorEmail?: string;
+  pageSize?: number;
+  pageToken?: string;
+}
+
+/** Adapt proto AuditLogEntry — strip AUDIT_ACTION_ prefix from action enum. */
+function adaptAuditLogEntry(proto: Record<string, unknown>): AuditLogEntry {
+  return {
+    entryId: (proto.entryId as string) || '',
+    experimentId: (proto.experimentId as string) || '',
+    experimentName: (proto.experimentName as string) || '',
+    action: stripEnumPrefix((proto.action as string) || '', 'AUDIT_ACTION_') as AuditAction,
+    actorEmail: (proto.actorEmail as string) || '',
+    timestamp: (proto.timestamp as string) || '',
+    details: (proto.details as string) || '',
+    previousValue: proto.previousValue as string | undefined,
+    newValue: proto.newValue as string | undefined,
+  };
+}
+
+export async function listAuditLog(filters?: ListAuditLogFilters): Promise<ListAuditLogResponse> {
+  const request: Record<string, unknown> = {};
+  if (filters?.experimentId) {
+    request.experimentId = filters.experimentId;
+  }
+  if (filters?.actionFilter) {
+    request.actionFilter = `AUDIT_ACTION_${filters.actionFilter}`;
+  }
+  if (filters?.actorEmail) {
+    request.actorEmail = filters.actorEmail;
+  }
+  if (filters?.pageSize) {
+    request.pageSize = filters.pageSize;
+  }
+  if (filters?.pageToken) {
+    request.pageToken = filters.pageToken;
+  }
+
+  const raw = await callRpc<Record<string, unknown>, { entries?: Record<string, unknown>[]; nextPageToken?: string }>(
+    MGMT_URL, MGMT_SVC, 'ListAuditLog', request,
+  );
+  return {
+    entries: (raw.entries || []).map(adaptAuditLogEntry),
     nextPageToken: raw.nextPageToken || '',
   };
 }

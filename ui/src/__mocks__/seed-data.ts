@@ -2,7 +2,8 @@ import type {
   AnalysisResult, Experiment, QueryLogEntry,
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
-  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition, Flag,
+  GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
+  AuditLogEntry, Flag,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -1388,6 +1389,154 @@ const INITIAL_METRIC_DEFINITIONS: MetricDefinition[] = [
   },
 ];
 
+// --- Audit Log seed data ---
+
+const INITIAL_AUDIT_LOG: AuditLogEntry[] = [
+  {
+    entryId: 'audit-001',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CREATED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-01-15T09:00:00Z',
+    details: 'Created experiment homepage_recs_v2 (A/B test)',
+  },
+  {
+    entryId: 'audit-002',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CONFIG_CHANGED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-01-16T10:30:00Z',
+    details: 'Updated variant traffic allocation',
+    previousValue: '{"control": 0.5, "neural_recs": 0.5}',
+    newValue: '{"control": 0.6, "neural_recs": 0.4}',
+  },
+  {
+    entryId: 'audit-003',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'STARTED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-01-20T14:00:00Z',
+    details: 'Experiment moved from DRAFT to RUNNING',
+  },
+  {
+    entryId: 'audit-004',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'CREATED',
+    actorEmail: 'bob@streamco.com',
+    timestamp: '2026-01-22T08:15:00Z',
+    details: 'Created experiment search_ranking_boost (A/B test)',
+  },
+  {
+    entryId: 'audit-005',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'STARTED',
+    actorEmail: 'bob@streamco.com',
+    timestamp: '2026-01-25T11:00:00Z',
+    details: 'Experiment moved from DRAFT to RUNNING',
+  },
+  {
+    entryId: 'audit-006',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'GUARDRAIL_BREACH',
+    actorEmail: 'system@streamco.com',
+    timestamp: '2026-02-01T03:45:00Z',
+    details: 'crash_rate exceeded threshold (0.012 > 0.01) for variant neural_recs',
+    previousValue: '0.008',
+    newValue: '0.012',
+  },
+  {
+    entryId: 'audit-007',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'PAUSED',
+    actorEmail: 'system@streamco.com',
+    timestamp: '2026-02-01T03:45:01Z',
+    details: 'Auto-paused due to guardrail breach on crash_rate',
+  },
+  {
+    entryId: 'audit-008',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'RESUMED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-02-02T10:00:00Z',
+    details: 'Manually resumed after crash_rate stabilized',
+  },
+  {
+    entryId: 'audit-009',
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    experimentName: 'playback_buffer_strategy',
+    action: 'CREATED',
+    actorEmail: 'carol@streamco.com',
+    timestamp: '2026-02-05T09:30:00Z',
+    details: 'Created experiment playback_buffer_strategy (Playback QoE)',
+  },
+  {
+    entryId: 'audit-010',
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    experimentName: 'playback_buffer_strategy',
+    action: 'UPDATED',
+    actorEmail: 'carol@streamco.com',
+    timestamp: '2026-02-06T14:20:00Z',
+    details: 'Updated experiment description and secondary metrics',
+    previousValue: '{"secondaryMetricIds": ["rebuffer_rate"]}',
+    newValue: '{"secondaryMetricIds": ["rebuffer_rate", "startup_time"]}',
+  },
+  {
+    entryId: 'audit-011',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'CONCLUDED',
+    actorEmail: 'bob@streamco.com',
+    timestamp: '2026-02-15T16:00:00Z',
+    details: 'Experiment moved from RUNNING to CONCLUDED — statistical significance reached',
+  },
+  {
+    entryId: 'audit-012',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'ARCHIVED',
+    actorEmail: 'admin@streamco.com',
+    timestamp: '2026-02-20T09:00:00Z',
+    details: 'Experiment archived after winner rolled out',
+  },
+  {
+    entryId: 'audit-013',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CONFIG_CHANGED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-02-25T11:30:00Z',
+    details: 'Reverted variant traffic allocation to equal split',
+    previousValue: '{"control": 0.6, "neural_recs": 0.4}',
+    newValue: '{"control": 0.5, "neural_recs": 0.5}',
+  },
+  {
+    entryId: 'audit-014',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CONCLUDED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-03-01T15:00:00Z',
+    details: 'Experiment moved from RUNNING to CONCLUDED',
+  },
+  {
+    entryId: 'audit-015',
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    experimentName: 'playback_buffer_strategy',
+    action: 'STARTED',
+    actorEmail: 'carol@streamco.com',
+    timestamp: '2026-03-05T08:00:00Z',
+    details: 'Experiment moved from DRAFT to RUNNING',
+  },
+];
+
 const INITIAL_FLAGS: Flag[] = [
   {
     flagId: 'flag-bool-rollout',
@@ -1456,6 +1605,7 @@ export let SEED_GST_RESULTS: Record<string, GstTrajectoryResult[]> = structuredC
 export let SEED_CATE_RESULTS: Record<string, CateAnalysisResult> = structuredClone(INITIAL_CATE_RESULTS);
 export let SEED_LAYERS: Record<string, Layer> = structuredClone(INITIAL_LAYERS);
 export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structuredClone(INITIAL_LAYER_ALLOCATIONS);
+export let SEED_AUDIT_LOG: AuditLogEntry[] = structuredClone(INITIAL_AUDIT_LOG);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
@@ -1475,4 +1625,5 @@ export function resetSeedData(): void {
   SEED_CATE_RESULTS = structuredClone(INITIAL_CATE_RESULTS);
   SEED_LAYERS = structuredClone(INITIAL_LAYERS);
   SEED_LAYER_ALLOCATIONS = structuredClone(INITIAL_LAYER_ALLOCATIONS);
+  SEED_AUDIT_LOG = structuredClone(INITIAL_AUDIT_LOG);
 }
