@@ -3,6 +3,7 @@ import type {
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
+  AuditLogEntry, Flag,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -762,6 +763,72 @@ const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
     },
     computedAt: '2026-03-02T18:00:00Z',
   },
+  // cold_start_bandit — CONTEXTUAL_BANDIT with IPW-adjusted results
+  {
+    experimentId: '44444444-4444-4444-4444-444444444444',
+    metricResults: [
+      {
+        metricId: 'play_through_rate',
+        variantId: 'v4-arm2',
+        controlMean: 0.42,
+        treatmentMean: 0.48,
+        absoluteEffect: 0.06,
+        relativeEffect: 0.1429,
+        ciLower: 0.01,
+        ciUpper: 0.11,
+        pValue: 0.019,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+        ipwResult: {
+          effect: 0.052,
+          se: 0.018,
+          ciLower: 0.017,
+          ciUpper: 0.087,
+          pValue: 0.004,
+          isSignificant: true,
+          nClipped: 23,
+          effectiveSampleSize: 4820,
+        },
+      },
+      {
+        metricId: 'completion_rate',
+        variantId: 'v4-arm2',
+        controlMean: 0.35,
+        treatmentMean: 0.38,
+        absoluteEffect: 0.03,
+        relativeEffect: 0.0857,
+        ciLower: -0.02,
+        ciUpper: 0.08,
+        pValue: 0.21,
+        isSignificant: false,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+        ipwResult: {
+          effect: 0.027,
+          se: 0.022,
+          ciLower: -0.016,
+          ciUpper: 0.070,
+          pValue: 0.22,
+          isSignificant: false,
+          nClipped: 23,
+          effectiveSampleSize: 4820,
+        },
+      },
+    ],
+    srmResult: {
+      chiSquared: 1.8,
+      pValue: 0.41,
+      isMismatch: false,
+      observedCounts: { 'v4-arm1': 1250, 'v4-arm2': 1310, 'v4-arm3': 1220, 'v4-arm4': 1240 },
+      expectedCounts: { 'v4-arm1': 1255, 'v4-arm2': 1255, 'v4-arm3': 1255, 'v4-arm4': 1255 },
+    },
+    computedAt: '2026-03-10T14:00:00Z',
+  },
 ];
 
 /** Novelty analysis mock — homepage_recs_v2 shows novelty decay in CTR. */
@@ -1388,7 +1455,207 @@ const INITIAL_METRIC_DEFINITIONS: MetricDefinition[] = [
   },
 ];
 
+// --- Audit Log seed data ---
+
+const INITIAL_AUDIT_LOG: AuditLogEntry[] = [
+  {
+    entryId: 'audit-001',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CREATED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-01-15T09:00:00Z',
+    details: 'Created experiment homepage_recs_v2 (A/B test)',
+  },
+  {
+    entryId: 'audit-002',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CONFIG_CHANGED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-01-16T10:30:00Z',
+    details: 'Updated variant traffic allocation',
+    previousValue: '{"control": 0.5, "neural_recs": 0.5}',
+    newValue: '{"control": 0.6, "neural_recs": 0.4}',
+  },
+  {
+    entryId: 'audit-003',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'STARTED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-01-20T14:00:00Z',
+    details: 'Experiment moved from DRAFT to RUNNING',
+  },
+  {
+    entryId: 'audit-004',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'CREATED',
+    actorEmail: 'bob@streamco.com',
+    timestamp: '2026-01-22T08:15:00Z',
+    details: 'Created experiment search_ranking_boost (A/B test)',
+  },
+  {
+    entryId: 'audit-005',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'STARTED',
+    actorEmail: 'bob@streamco.com',
+    timestamp: '2026-01-25T11:00:00Z',
+    details: 'Experiment moved from DRAFT to RUNNING',
+  },
+  {
+    entryId: 'audit-006',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'GUARDRAIL_BREACH',
+    actorEmail: 'system@streamco.com',
+    timestamp: '2026-02-01T03:45:00Z',
+    details: 'crash_rate exceeded threshold (0.012 > 0.01) for variant neural_recs',
+    previousValue: '0.008',
+    newValue: '0.012',
+  },
+  {
+    entryId: 'audit-007',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'PAUSED',
+    actorEmail: 'system@streamco.com',
+    timestamp: '2026-02-01T03:45:01Z',
+    details: 'Auto-paused due to guardrail breach on crash_rate',
+  },
+  {
+    entryId: 'audit-008',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'RESUMED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-02-02T10:00:00Z',
+    details: 'Manually resumed after crash_rate stabilized',
+  },
+  {
+    entryId: 'audit-009',
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    experimentName: 'playback_buffer_strategy',
+    action: 'CREATED',
+    actorEmail: 'carol@streamco.com',
+    timestamp: '2026-02-05T09:30:00Z',
+    details: 'Created experiment playback_buffer_strategy (Playback QoE)',
+  },
+  {
+    entryId: 'audit-010',
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    experimentName: 'playback_buffer_strategy',
+    action: 'UPDATED',
+    actorEmail: 'carol@streamco.com',
+    timestamp: '2026-02-06T14:20:00Z',
+    details: 'Updated experiment description and secondary metrics',
+    previousValue: '{"secondaryMetricIds": ["rebuffer_rate"]}',
+    newValue: '{"secondaryMetricIds": ["rebuffer_rate", "startup_time"]}',
+  },
+  {
+    entryId: 'audit-011',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'CONCLUDED',
+    actorEmail: 'bob@streamco.com',
+    timestamp: '2026-02-15T16:00:00Z',
+    details: 'Experiment moved from RUNNING to CONCLUDED — statistical significance reached',
+  },
+  {
+    entryId: 'audit-012',
+    experimentId: '22222222-2222-2222-2222-222222222222',
+    experimentName: 'search_ranking_boost',
+    action: 'ARCHIVED',
+    actorEmail: 'admin@streamco.com',
+    timestamp: '2026-02-20T09:00:00Z',
+    details: 'Experiment archived after winner rolled out',
+  },
+  {
+    entryId: 'audit-013',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CONFIG_CHANGED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-02-25T11:30:00Z',
+    details: 'Reverted variant traffic allocation to equal split',
+    previousValue: '{"control": 0.6, "neural_recs": 0.4}',
+    newValue: '{"control": 0.5, "neural_recs": 0.5}',
+  },
+  {
+    entryId: 'audit-014',
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    experimentName: 'homepage_recs_v2',
+    action: 'CONCLUDED',
+    actorEmail: 'alice@streamco.com',
+    timestamp: '2026-03-01T15:00:00Z',
+    details: 'Experiment moved from RUNNING to CONCLUDED',
+  },
+  {
+    entryId: 'audit-015',
+    experimentId: '33333333-3333-3333-3333-333333333333',
+    experimentName: 'playback_buffer_strategy',
+    action: 'STARTED',
+    actorEmail: 'carol@streamco.com',
+    timestamp: '2026-03-05T08:00:00Z',
+    details: 'Experiment moved from DRAFT to RUNNING',
+  },
+];
+
+const INITIAL_FLAGS: Flag[] = [
+  {
+    flagId: 'flag-bool-rollout',
+    name: 'dark_mode_rollout',
+    description: 'Progressive dark mode rollout to subscribers',
+    type: 'BOOLEAN',
+    defaultValue: 'false',
+    enabled: true,
+    rolloutPercentage: 0.5,
+    variants: [],
+    targetingRuleId: 'rule-premium-users',
+  },
+  {
+    flagId: 'flag-string-ab',
+    name: 'checkout_flow_variant',
+    description: 'A/B test for checkout page layout',
+    type: 'STRING',
+    defaultValue: 'control',
+    enabled: true,
+    rolloutPercentage: 1.0,
+    variants: [
+      { variantId: 'v-ctrl', value: 'control', trafficFraction: 0.5 },
+      { variantId: 'v-new', value: 'streamlined', trafficFraction: 0.5 },
+    ],
+  },
+  {
+    flagId: 'flag-disabled-zero',
+    name: 'upcoming_feature',
+    description: 'Not yet launched — proto3 zero-value test',
+    type: 'BOOLEAN',
+    defaultValue: 'false',
+    enabled: false,
+    rolloutPercentage: 0,
+    variants: [],
+  },
+  {
+    flagId: 'flag-json-config',
+    name: 'player_config_override',
+    description: 'JSON config override for video player settings',
+    type: 'JSON',
+    defaultValue: '{"bitrate":"auto"}',
+    enabled: true,
+    rolloutPercentage: 0.25,
+    variants: [
+      { variantId: 'v-low', value: '{"bitrate":"720p","buffer":2}', trafficFraction: 0.34 },
+      { variantId: 'v-mid', value: '{"bitrate":"1080p","buffer":4}', trafficFraction: 0.33 },
+      { variantId: 'v-high', value: '{"bitrate":"4k","buffer":8}', trafficFraction: 0.33 },
+    ],
+  },
+];
+
 /** Mutable copy of seed data — MSW handlers mutate this in-place. */
+export let SEED_FLAGS: Flag[] = structuredClone(INITIAL_FLAGS);
 export let SEED_METRIC_DEFINITIONS: MetricDefinition[] = structuredClone(INITIAL_METRIC_DEFINITIONS);
 export let SEED_EXPERIMENTS: Experiment[] = structuredClone(INITIAL_EXPERIMENTS);
 export let SEED_QUERY_LOG: Record<string, QueryLogEntry[]> = structuredClone(INITIAL_QUERY_LOG);
@@ -1404,9 +1671,11 @@ export let SEED_GST_RESULTS: Record<string, GstTrajectoryResult[]> = structuredC
 export let SEED_CATE_RESULTS: Record<string, CateAnalysisResult> = structuredClone(INITIAL_CATE_RESULTS);
 export let SEED_LAYERS: Record<string, Layer> = structuredClone(INITIAL_LAYERS);
 export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structuredClone(INITIAL_LAYER_ALLOCATIONS);
+export let SEED_AUDIT_LOG: AuditLogEntry[] = structuredClone(INITIAL_AUDIT_LOG);
 
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
+  SEED_FLAGS = structuredClone(INITIAL_FLAGS);
   SEED_METRIC_DEFINITIONS = structuredClone(INITIAL_METRIC_DEFINITIONS);
   SEED_EXPERIMENTS = structuredClone(INITIAL_EXPERIMENTS);
   SEED_QUERY_LOG = structuredClone(INITIAL_QUERY_LOG);
@@ -1422,4 +1691,5 @@ export function resetSeedData(): void {
   SEED_CATE_RESULTS = structuredClone(INITIAL_CATE_RESULTS);
   SEED_LAYERS = structuredClone(INITIAL_LAYERS);
   SEED_LAYER_ALLOCATIONS = structuredClone(INITIAL_LAYER_ALLOCATIONS);
+  SEED_AUDIT_LOG = structuredClone(INITIAL_AUDIT_LOG);
 }

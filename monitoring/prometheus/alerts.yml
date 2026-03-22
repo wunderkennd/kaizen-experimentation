@@ -70,6 +70,24 @@ groups:
         annotations:
           summary: "Bloom filter FPR exceeding 0.5% — consider resizing"
 
+      - alert: PipelineAcceptedThroughputDrop
+        expr: sum(rate(events_accepted_total[5m])) < 100
+        for: 5m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Pipeline accepted throughput below 100 events/sec for 5m"
+
+      - alert: PipelineRejectionSpike
+        expr: sum(rate(events_rejected_total[5m])) / (sum(rate(events_accepted_total[5m])) + sum(rate(events_rejected_total[5m])) + 0.001) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          module: m2
+        annotations:
+          summary: "Pipeline rejection rate exceeds 5% for 3m"
+
   # --------------------------------------------------------------------------
   # Metric Computation (M3) — SLA: daily <2h, guardrail <30min
   # --------------------------------------------------------------------------
@@ -155,8 +173,37 @@ groups:
           summary: "Sample Ratio Mismatch detected for experiment {{ $labels.experiment_id }}"
           description: "SRM p-value: {{ $value }} — experiment integrity compromised"
 
+      - alert: AnalysisServiceDown
+        expr: up{job="analysis-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          module: m4a
+        annotations:
+          summary: "Analysis service is unreachable"
+
+      - alert: AnalysisLatencyHigh
+        expr: histogram_quantile(0.95, rate(analysis_request_duration_seconds_bucket[5m])) > 60
+        for: 5m
+        labels:
+          severity: warning
+          module: m4a
+        annotations:
+          summary: "Analysis p95 latency above 60s"
+          description: "p95 latency: {{ $value | humanizeDuration }} (target: <60s for 1M-user experiment)"
+
+      - alert: AnalysisErrorRate
+        expr: rate(analysis_errors_total[5m]) / rate(analysis_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          module: m4a
+        annotations:
+          summary: "Analysis error rate above 5%"
+          description: "Error rate: {{ $value | humanizePercentage }}"
+
   # --------------------------------------------------------------------------
-  # Bandit Policy (M4b) — SLA: <10s recovery
+  # Bandit Policy (M4b) — SLA: p99 <15ms SelectArm, <10s recovery
   # --------------------------------------------------------------------------
   - name: policy
     rules:
@@ -177,6 +224,45 @@ groups:
           module: m4b
         annotations:
           summary: "Bandit policy service is unreachable"
+
+      - alert: PolicySelectArmLatencyHigh
+        expr: histogram_quantile(0.99, rate(policy_select_arm_duration_seconds_bucket[5m])) > 0.015
+        for: 2m
+        labels:
+          severity: critical
+          module: m4b
+        annotations:
+          summary: "SelectArm p99 latency above 15ms SLA"
+          description: "p99 latency: {{ $value | humanizeDuration }} (SLA: 15ms)"
+
+      - alert: PolicyChannelBackpressure
+        expr: policy_channel_pending / policy_channel_capacity > 0.8
+        for: 1m
+        labels:
+          severity: warning
+          module: m4b
+        annotations:
+          summary: "Policy channel >80% full — backpressure risk"
+          description: "Pending: {{ $value | humanizePercentage }} of capacity. Consider increasing channel_depth or reducing load."
+
+      - alert: PolicySnapshotFailed
+        expr: increase(policy_snapshot_errors_total[1h]) > 0
+        labels:
+          severity: critical
+          module: m4b
+        annotations:
+          summary: "RocksDB snapshot write failed"
+          description: "Experiment: {{ $labels.experiment_id }}. Crash recovery data may be stale."
+
+      - alert: PolicyErrorRate
+        expr: rate(policy_errors_total[5m]) / rate(policy_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          module: m4b
+        annotations:
+          summary: "Policy error rate above 1%"
+          description: "Error rate: {{ $value | humanizePercentage }}"
 
   # --------------------------------------------------------------------------
   # Management Service (M5)

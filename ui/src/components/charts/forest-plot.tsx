@@ -17,22 +17,26 @@ import type { MetricResult } from '@/lib/types';
 interface ForestPlotProps {
   metricResults: MetricResult[];
   showCuped: boolean;
+  showIpw?: boolean;
 }
 
-function ForestPlotInner({ metricResults, showCuped }: ForestPlotProps) {
+function ForestPlotInner({ metricResults, showCuped, showIpw }: ForestPlotProps) {
   const data = metricResults.map((m) => {
+    const useIpw = showIpw && m.ipwResult;
     const useCuped = showCuped && m.varianceReductionPct > 0;
-    const effect = useCuped ? m.cupedAdjustedEffect : m.absoluteEffect;
-    const ciLow = useCuped ? m.cupedCiLower : m.ciLower;
-    const ciHigh = useCuped ? m.cupedCiUpper : m.ciUpper;
+
+    const effect = useIpw ? m.ipwResult!.effect : useCuped ? m.cupedAdjustedEffect : m.absoluteEffect;
+    const ciLow = useIpw ? m.ipwResult!.ciLower : useCuped ? m.cupedCiLower : m.ciLower;
+    const ciHigh = useIpw ? m.ipwResult!.ciUpper : useCuped ? m.cupedCiUpper : m.ciUpper;
+    const significant = useIpw ? m.ipwResult!.isSignificant : m.isSignificant;
 
     return {
       metric: m.metricId,
       effect,
       errorLow: effect - ciLow,
       errorHigh: ciHigh - effect,
-      isSignificant: m.isSignificant,
-      fill: m.isSignificant ? '#16a34a' : '#9ca3af',
+      isSignificant: significant,
+      fill: significant ? (useIpw ? '#d97706' : '#16a34a') : '#9ca3af',
     };
   });
 

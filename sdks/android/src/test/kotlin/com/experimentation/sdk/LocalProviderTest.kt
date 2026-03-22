@@ -16,7 +16,7 @@ class MockHashProvider : HashProvider {
             hash = hash xor byte.toInt()
             hash = (hash.toLong() * 0x01000193L).toInt()
         }
-        return (hash.toLong() and 0xFFFFFFFFL).toInt() % totalBuckets
+        return ((hash.toLong() and 0xFFFFFFFFL) % totalBuckets).toInt()
     }
 
     override fun isInAllocation(bucket: Int, startBucket: Int, endBucket: Int): Boolean =

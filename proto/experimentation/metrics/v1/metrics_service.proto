@@ -45,9 +45,21 @@ message GetQueryLogRequest {
   string experiment_id = 1;
   // Optional: filter to specific metric.
   string metric_id = 2;
+  // Optional: filter by job type (e.g. "daily_metric", "hourly_guardrail").
+  string job_type = 3;
+  // Optional: only return logs after this timestamp.
+  google.protobuf.Timestamp after = 4;
+  // Optional: only return logs before this timestamp.
+  google.protobuf.Timestamp before = 5;
+  // Pagination: max entries to return (default 100, max 1000).
+  int32 page_size = 6;
+  // Pagination: opaque cursor from a previous response's next_page_token.
+  string page_token = 7;
 }
 message GetQueryLogResponse {
   repeated QueryLogEntry entries = 1;
+  // Opaque cursor for the next page. Empty if no more results.
+  string next_page_token = 2;
 }
 message QueryLogEntry {
   string experiment_id = 1;

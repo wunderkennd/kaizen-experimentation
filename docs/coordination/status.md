@@ -1,6 +1,6 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-15 by Agent-2 (PR #161 cross-cutting fixes merged + status sync PRs #142–#162)
+> **Last updated**: 2026-03-22 by Agent-3 (PR #171 query log lifecycle merge)
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
@@ -17,7 +17,7 @@
 | Agent | Module | Status | Details |
 |-------|--------|--------|---------|
 | Agent-1 | M1 Assignment | 🔵 Polish | [agent-1.md](status/agent-1.md) |
-| Agent-2 | M2 Pipeline | 🟢 All Phases Complete | [agent-2.md](status/agent-2.md) |
+| Agent-2 | M2 Pipeline | 🔵 Polish | [agent-2.md](status/agent-2.md) |
 | Agent-3 | M3 Metrics | 🟢 All Phases Complete | [agent-3.md](status/agent-3.md) |
 | Agent-4 | M4a Analysis + M4b Bandit | 🟢 All Phases Complete | [agent-4.md](status/agent-4.md) |
 | Agent-5 | M5 Management | 🟢 All Phases Complete | [agent-5.md](status/agent-5.md) |
@@ -125,7 +125,7 @@
 | 4.6 | Performance targets (dashboard <1s, SQL <200ms, export <5s) | Agent-6 | 🟢 | — | In-memory RPC cache (30s TTL), code-split dynamic imports (11 tab/chart components), React.memo (7 components), prism-react-renderer SQL highlighting, Web Worker base64 decode for notebook export. 239 tests. |
 | 4.7 | Live API integration prep (port fix, pause/resume, filters, contract tests) | Agent-6 | 🟢 | — | Fixed metrics/bandit port mapping swap. Added PauseExperiment/ResumeExperiment RPCs + MSW handlers. Server-side ListExperiments filters (state, type, owner, pagination). CATE/GST enum prefix stripping. 37 proto wire-format contract tests. 281 total tests. Ready to integrate with Agent-5 management service. |
 | 4.8 | Error boundary + chaos resilience | Agent-6 | 🟢 | — | React ErrorBoundary wrapping page content, RetryableError component on all pages/tabs, 404 vs 500 distinction (no-data vs service-down), 8 MSW chaos tests. 317 total tests. |
-| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-1: `chaos_test_assignment.sh` (E2E framework hook) + `chaos_kill_assignment.sh` (standalone kill-9 + determinism verification). Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78) + full pipeline E2E test `test_full_pipeline_e2e.sh` (PR #124) — 7 phases, ~24 tests across M1/M2/M3/M4a. Agent-3: 20 resilience tests (PR #69). Agent-4: chaos_test_analysis.sh (M4a, 6 RPC verification tests) + chaos_test_policy.sh (M4b, cold-start + RocksDB state recovery) + 4 Rust crash recovery integration tests (multi-experiment concurrent restore, Kafka offset verification, high-volume 2200+ rewards, recovery timing <10s SLA). Agent-5: chaos_test_management.sh (PR #96). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. |
+| 4.5 | End-to-end chaos testing passing | All | 🔵 | Production readiness | Agent-1: `chaos_test_assignment.sh` (E2E framework hook) + `chaos_kill_assignment.sh` (standalone kill-9 + determinism verification). Agent-2: chaos scripts + crash-recovery tests merged + E2E chaos framework with pluggable hooks (PR #78) + full pipeline E2E test `test_full_pipeline_e2e.sh` (PR #124) — 7 phases, ~24 tests across M1/M2/M3/M4a. Agent-3: 20 resilience tests (PR #69). Agent-4: `chaos_kill_policy.sh` (M4b, 8-phase kill-9 under load — create experiment, feed rewards, baseline capture, sustained SelectArm load, SIGKILL, RocksDB recovery <10s SLA, arm distribution comparison, full RPC verification) + `chaos_test_analysis.sh` (M4a, 7 RPC verification tests for all 5 wired RPCs + input validation) + `chaos_test_policy.sh` (M4b framework hook) + 4 Rust crash recovery integration tests + Justfile recipes (`just chaos`, `just chaos-policy`, `just chaos-analysis`) + weekly-chaos.yml wiring (M4a standalone + multi-service E2E framework). Agent-5: chaos_test_management.sh (PR #96). Agent-7: 13 chaos tests — ChaosStore decorator, atomicity, concurrent CRUD, restart simulation. |
 
 ## Pair Integration Schedule
 
@@ -142,6 +142,7 @@ Track integration test results between agent pairs.
 | 5 | Agent-2 ↔ Agent-4 (reward events: pipeline → bandit policy) | 🟢 | PR #99: 24 integration tests — 17 protobuf contract (encode/decode parity, context_json parsing, key contract) + 7 Kafka roundtrip (headers, partition determinism, consumer group offsets, ordering). |
 | 6 | Agent-3 ↔ Agent-5 (experiment/metric/surrogate definitions) | 🟢 | 22 tests, 49 subtests (PR #139): M3 reads experiment definitions, metric definitions, and surrogate models from M5's PostgreSQL tables. Validates wire-format roundtrip for all definition types M3 consumes. |
 | 6 | Agent-1 ↔ Agent-4 (bandit delegation: assignment → SelectArm) | 🟢 | 10 contract tests (`m1m4b_contract_test.rs`): Thompson roundtrip, deterministic user seeding, LinUCB context feature serialization, NOT_FOUND error code, cold-start full lifecycle (Create → SelectArm → ExportAffinity), affinity score finiteness, concurrent SelectArm (20 parallel calls), user distribution across arms, default window_days. Uses real Thompson Sampling + LinUCB from `experimentation-bandit` (not mocks). |
+| 6 | Agent-7 ↔ Agent-6 (flag management UI integration) | 🟢 | Agent-7: Flag types, API layer (listFlags/getFlag/createFlag/updateFlag/promoteToExperiment), MSW handlers + seed data (4 flags), nav link. Agent-6 UI: /flags list page, /flags/[id] detail page with promote-to-experiment, /flags/new create form. next.config.js rewrite for flags service port 50057. 376 total UI tests passing. Wire-format contract tests validate FLAG_TYPE_ prefix stripping, proto3 zero-value omission, pagination, EvaluateFlag/EvaluateFlags response shape, PromoteToExperiment → Experiment adapter. |
 | 6 | Agent-4 ↔ Agent-6 (analysis results → UI rendering) | 🟢 | Agent-4: 12 Rust wire-format contract tests (`m4a_m6_contract_test.rs`) — AnalysisResult field presence, MetricResult 14-field contract (finite + CI containment + p-value range), SRM map fields + mismatch detection, SegmentResult lifecycle enum values (TRIAL=1, ESTABLISHED=3, MATURE=4), proto3 zero-value omission for optional sub-messages, InterleavingAnalysisResult (win rates + sign test + Bradley-Terry + position analysis), NoveltyAnalysisResult (decay params + stabilization), InterferenceAnalysisResult (JSD + Jaccard + Gini + coverage + spillover titles), NOT_FOUND for all 5 RPCs, INVALID_ARGUMENT for all 5 RPCs, Cochran Q heterogeneity detection. Agent-6: 27 TS wire-format contract tests (`m4a-wire-format.test.ts`) — proto3 zero-value omission, int64 string→number coercion (SRM counts + segment sampleSize), LIFECYCLE_SEGMENT_/SEQUENTIAL_METHOD_ prefix stripping, SurrogateProjection adapter (modelId→metricId, variantId→surrogateMetricId), cochranQPValue + segmentResults added to UI types, 5 missing RPCs cataloged, 2 UI-only fields remaining (dailyEffects, Lorenz curves). `adaptAnalysisResult()` pipeline transforms proto3 JSON to typed UI objects. Error boundary distinguishes 404 (no data) from 500 (service down) with retry. 344 total tests. |
 
 ### Cross-Cutting Fixes (Devin AI + Manual Review)
@@ -236,11 +237,25 @@ Track any changes to proto schemas, shared crate APIs, or database schemas.
 - [x] Devin: 12 bugs + optimizations from early PR review, human review checklist passed 6/6 (PR #161)
 - [x] Agent-1: Post-review cleanup — doc ports, iOS SDK, Python drift (PR #162)
 
+- [x] Agent-2: PGO build + k6 load test + 6 Grafana panels + 2 alert rules (PR #179)
+
 **In progress:**
 - Agent-1: Mobile SDK CI builds — guard UniFFI imports (PR #163, open)
+- Agent-6: IPW-adjusted results integration (branch `agent-6/feat/ipw-results`)
+
+### Week 4 — 2026-03-16
+
+**Completed this week:**
+- [x] Agent-6: Experiment creation wizard — 5-step type-aware flow (PR #169)
+- [x] Agent-6: Real-time monitoring page /monitoring (PR #176)
+- [x] Agent-6: Experiment comparison view /compare (PR #177)
+- [x] Agent-6: Audit log viewer /audit (PR #178)
+- [x] Agent-6: IPW-adjusted results integration — IpwToggle, IpwDetailsPanel, wire-format contract tests
 
 **Platform status:**
 - 6 of 7 agents at 🟢 All Phases Complete
 - Agent-1 in polish mode (PR #163 pending)
+- Agent-6 in polish mode (wizard, monitoring, comparison, audit, IPW)
 - All 10 pair integrations at 🟢
 - Cross-cutting Devin review addressed 12 bugs across 6 crates/services
+- Agent-6 at 416 tests (40 wire-format contract, 37 wizard, 11 metric browser)

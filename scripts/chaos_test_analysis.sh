@@ -4,11 +4,15 @@
 # =============================================================================
 # Exports:
 #   chaos_start_analysis   — Build & start the analysis Rust binary, echo PID
-#   chaos_health_analysis  — Exit 0 if gRPC responds (Unimplemented is healthy)
-#   chaos_verify_analysis  — Verify all RPCs respond correctly after recovery
+#   chaos_health_analysis  — Exit 0 if gRPC responds
+#   chaos_verify_analysis  — Verify all 5 RPCs respond correctly after recovery
 #
 # M4a is stateless (no RocksDB, no Kafka). Crash recovery is trivial:
 # restart the binary and verify gRPC is responsive.
+#
+# All 5 analysis RPCs are fully wired (PR #107):
+#   RunAnalysis, GetAnalysisResult, GetInterleavingAnalysis,
+#   GetNoveltyAnalysis, GetInterferenceAnalysis
 #
 # Usage:
 #   Standalone:  ./scripts/chaos_test_analysis.sh
@@ -73,15 +77,16 @@ chaos_start_analysis() {
 # Hook: chaos_health_analysis — Exit 0 if gRPC is reachable
 # ---------------------------------------------------------------------------
 chaos_health_analysis() {
-    # Call a stub RPC. If the service is up, we get UNIMPLEMENTED.
-    # If the service is down, grpcurl connection fails.
+    # Call RunAnalysis with a nonexistent experiment. If the service is up,
+    # we get NotFound or Internal (no Delta data). If down, grpcurl fails.
     local result
     result=$(grpcurl -plaintext \
         -d '{"experiment_id": "health-check"}' \
         "[::1]:${ANALYSIS_PORT}" \
         "experimentation.analysis.v1.AnalysisService/RunAnalysis" 2>&1) || true
 
-    if echo "$result" | grep -q "Unimplemented\|UNIMPLEMENTED\|not yet available"; then
+    # Service is healthy if we get any gRPC-level response
+    if echo "$result" | grep -q "NotFound\|not found\|Internal\|INTERNAL\|InvalidArgument\|INVALID_ARGUMENT\|error\|result"; then
         return 0
     fi
 
@@ -89,65 +94,65 @@ chaos_health_analysis() {
 }
 
 # ---------------------------------------------------------------------------
-# Hook: chaos_verify_analysis — Verify all RPCs respond correctly
+# Hook: chaos_verify_analysis — Verify all 5 RPCs respond correctly
 # ---------------------------------------------------------------------------
 chaos_verify_analysis() {
     local svc_path="experimentation.analysis.v1.AnalysisService"
     local verify_ok=true
 
-    # --- Test 1: RunAnalysis returns Unimplemented ---
+    # --- Test 1: RunAnalysis with nonexistent experiment → NotFound/Internal ---
     local run_result
     run_result=$(grpcurl -plaintext \
-        -d '{"experiment_id": "test-exp"}' \
+        -d '{"experiment_id": "chaos-verify-exp"}' \
         "[::1]:${ANALYSIS_PORT}" \
         "${svc_path}/RunAnalysis" 2>&1) || true
 
-    if echo "$run_result" | grep -q "Unimplemented\|UNIMPLEMENTED\|not yet available"; then
-        _ok "RunAnalysis: returns Unimplemented (stub working)"
+    if echo "$run_result" | grep -q "NotFound\|not found\|Internal\|INTERNAL\|No metric summaries"; then
+        _ok "RunAnalysis: handles missing experiment data"
     else
         _fail "RunAnalysis: unexpected response: $run_result"
         verify_ok=false
     fi
 
-    # --- Test 2: GetAnalysisResult returns Unimplemented ---
+    # --- Test 2: GetAnalysisResult with nonexistent experiment → NotFound ---
     local get_result
     get_result=$(grpcurl -plaintext \
-        -d '{"experiment_id": "test-exp"}' \
+        -d '{"experiment_id": "chaos-verify-exp"}' \
         "[::1]:${ANALYSIS_PORT}" \
         "${svc_path}/GetAnalysisResult" 2>&1) || true
 
-    if echo "$get_result" | grep -q "Unimplemented\|UNIMPLEMENTED\|not yet available"; then
-        _ok "GetAnalysisResult: returns Unimplemented (stub working)"
+    if echo "$get_result" | grep -q "NotFound\|not found\|no cached\|no analysis"; then
+        _ok "GetAnalysisResult: NotFound for missing experiment"
     else
-        _fail "GetAnalysisResult: unexpected response"
+        _fail "GetAnalysisResult: unexpected response: $get_result"
         verify_ok=false
     fi
 
-    # --- Test 3: GetInterleavingAnalysis returns Unimplemented ---
+    # --- Test 3: GetInterleavingAnalysis with nonexistent experiment → NotFound ---
     local interleaving_result
     interleaving_result=$(grpcurl -plaintext \
-        -d '{"experiment_id": "test-exp"}' \
+        -d '{"experiment_id": "chaos-verify-exp"}' \
         "[::1]:${ANALYSIS_PORT}" \
         "${svc_path}/GetInterleavingAnalysis" 2>&1) || true
 
-    if echo "$interleaving_result" | grep -q "Unimplemented\|UNIMPLEMENTED\|not yet available"; then
-        _ok "GetInterleavingAnalysis: returns Unimplemented (stub working)"
+    if echo "$interleaving_result" | grep -q "NotFound\|not found\|Internal\|INTERNAL"; then
+        _ok "GetInterleavingAnalysis: handles missing experiment"
     else
-        _fail "GetInterleavingAnalysis: unexpected response"
+        _fail "GetInterleavingAnalysis: unexpected response: $interleaving_result"
         verify_ok=false
     fi
 
-    # --- Test 4: GetNoveltyAnalysis returns Unimplemented ---
+    # --- Test 4: GetNoveltyAnalysis with nonexistent experiment → NotFound ---
     local novelty_result
     novelty_result=$(grpcurl -plaintext \
-        -d '{"experiment_id": "test-exp"}' \
+        -d '{"experiment_id": "chaos-verify-exp"}' \
         "[::1]:${ANALYSIS_PORT}" \
         "${svc_path}/GetNoveltyAnalysis" 2>&1) || true
 
-    if echo "$novelty_result" | grep -q "Unimplemented\|UNIMPLEMENTED\|not yet available"; then
-        _ok "GetNoveltyAnalysis: returns Unimplemented (stub working)"
+    if echo "$novelty_result" | grep -q "NotFound\|not found\|Internal\|INTERNAL"; then
+        _ok "GetNoveltyAnalysis: handles missing experiment"
     else
-        _fail "GetNoveltyAnalysis: unexpected response"
+        _fail "GetNoveltyAnalysis: unexpected response: $novelty_result"
         verify_ok=false
     fi
 
@@ -158,10 +163,10 @@ chaos_verify_analysis() {
         "[::1]:${ANALYSIS_PORT}" \
         "${svc_path}/GetInterferenceAnalysis" 2>&1) || true
 
-    if echo "$interference_result" | grep -q "InvalidArgument\|INVALID_ARGUMENT\|required"; then
+    if echo "$interference_result" | grep -q "InvalidArgument\|INVALID_ARGUMENT\|required\|empty"; then
         _ok "GetInterferenceAnalysis: validates input (InvalidArgument for empty id)"
     else
-        _fail "GetInterferenceAnalysis: unexpected response for empty id"
+        _fail "GetInterferenceAnalysis: unexpected response for empty id: $interference_result"
         verify_ok=false
     fi
 
@@ -172,10 +177,24 @@ chaos_verify_analysis() {
         "[::1]:${ANALYSIS_PORT}" \
         "${svc_path}/GetInterferenceAnalysis" 2>&1) || true
 
-    if echo "$interference_missing" | grep -q "not found\|NotFound\|Internal\|INTERNAL\|error"; then
+    if echo "$interference_missing" | grep -q "not found\|NotFound\|Internal\|INTERNAL"; then
         _ok "GetInterferenceAnalysis: handles missing Delta data gracefully"
     else
-        _fail "GetInterferenceAnalysis: unexpected response for missing data"
+        _fail "GetInterferenceAnalysis: unexpected response for missing data: $interference_missing"
+        verify_ok=false
+    fi
+
+    # --- Test 7: RunAnalysis with empty experiment_id → InvalidArgument ---
+    local run_empty
+    run_empty=$(grpcurl -plaintext \
+        -d '{"experiment_id": ""}' \
+        "[::1]:${ANALYSIS_PORT}" \
+        "${svc_path}/RunAnalysis" 2>&1) || true
+
+    if echo "$run_empty" | grep -q "InvalidArgument\|INVALID_ARGUMENT\|required\|empty"; then
+        _ok "RunAnalysis: validates input (InvalidArgument for empty id)"
+    else
+        _fail "RunAnalysis: unexpected response for empty id: $run_empty"
         verify_ok=false
     fi
 
@@ -278,8 +297,8 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     _log "=== Chaos Test Report: Analysis Service (M4a) ==="
     echo "  Recovery time:    ${RECOVERY_MS}ms"
     echo "  Recovery SLA:     ${RECOVERY_SLA_MS}ms"
-    echo "  gRPC stubs:       OK (4 RPCs return Unimplemented)"
-    echo "  Interference RPC: OK (validates input, handles missing data)"
+    echo "  RPCs verified:    7 (RunAnalysis, GetAnalysisResult, GetInterleavingAnalysis,"
+    echo "                       GetNoveltyAnalysis, GetInterferenceAnalysis + input validation)"
     echo "  State:            Stateless (no persistence needed)"
     _ok "PASS"
 fi
