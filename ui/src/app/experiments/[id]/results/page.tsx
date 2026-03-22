@@ -64,6 +64,8 @@ const SessionLevelTab = dynamic(
 
 type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session';
 
+const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session'];
+
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
   const [experiment, setExperiment] = useState<Experiment | null>(null);
@@ -73,10 +75,16 @@ export default function ResultsPage() {
   const [showCuped, setShowCuped] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session'];
   const rawTab = searchParams.get('tab');
   const initialTab: AnalysisTab = rawTab && VALID_TABS.includes(rawTab as AnalysisTab) ? (rawTab as AnalysisTab) : 'overview';
   const [activeTab, setActiveTabState] = useState<AnalysisTab>(initialTab);
+
+  // Sync activeTab when URL changes via browser back/forward navigation
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const validated = tab && VALID_TABS.includes(tab as AnalysisTab) ? (tab as AnalysisTab) : 'overview';
+    setActiveTabState(validated);
+  }, [searchParams]);
 
   const setActiveTab = useCallback((tab: AnalysisTab) => {
     setActiveTabState(tab);
@@ -155,15 +163,13 @@ export default function ResultsPage() {
               ? 'This experiment is still running. Results will appear here once enough data has been collected and the analysis pipeline completes.'
               : 'No analysis results are available for this experiment yet.'}
           </p>
-          {isRunning && (
-            <button
-              type="button"
-              onClick={fetchData}
-              className="mt-4 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-            >
-              Check again
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={fetchData}
+            className="mt-4 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+          >
+            {isRunning ? 'Check again' : 'Retry'}
+          </button>
         </div>
       </div>
     );
