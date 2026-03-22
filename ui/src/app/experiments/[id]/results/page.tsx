@@ -82,12 +82,20 @@ export default function ResultsPage() {
   const initialTab: AnalysisTab = rawTab && VALID_TABS.includes(rawTab as AnalysisTab) ? (rawTab as AnalysisTab) : 'overview';
   const [activeTab, setActiveTabState] = useState<AnalysisTab>(initialTab);
 
-  // Sync activeTab when URL changes via browser back/forward navigation
+  // Sync activeTab when URL changes via browser back/forward navigation.
+  // We listen to popstate (fired by browser back/forward) instead of watching
+  // searchParams, because searchParams may return a new reference on every
+  // render in some environments, clobbering programmatic tab changes.
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    const validated = tab && VALID_TABS.includes(tab as AnalysisTab) ? (tab as AnalysisTab) : 'overview';
-    setActiveTabState(validated);
-  }, [searchParams]);
+    const handlePopState = () => {
+      const url = new URL(window.location.href);
+      const tab = url.searchParams.get('tab');
+      const validated = tab && VALID_TABS.includes(tab as AnalysisTab) ? (tab as AnalysisTab) : 'overview';
+      setActiveTabState(validated);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const setActiveTab = useCallback((tab: AnalysisTab) => {
     setActiveTabState(tab);
