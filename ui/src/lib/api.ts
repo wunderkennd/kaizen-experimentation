@@ -5,6 +5,7 @@ import type {
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
   SurrogateProjection, SrmResult, MetricResult, SegmentResult,
   MetricDefinition, ListMetricDefinitionsResponse,
+  Flag, FlagType, ListFlagsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
@@ -23,6 +24,9 @@ const ANALYSIS_SVC = 'experimentation.analysis.v1.AnalysisService';
 
 const BANDIT_URL = process.env.NEXT_PUBLIC_BANDIT_URL || '/api/rpc/bandit';
 const BANDIT_SVC = 'experimentation.bandit.v1.BanditPolicyService';
+
+const FLAGS_URL = process.env.NEXT_PUBLIC_FLAGS_URL || '/api/rpc/flags';
+const FLAGS_SVC = 'experimentation.flags.v1.FeatureFlagService';
 
 // --- Auth header injection ---
 let _authEmail = '';
@@ -545,4 +549,84 @@ export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilte
     metrics: (raw.metrics || []).map(adaptMetricDefinition),
     nextPageToken: raw.nextPageToken || '',
   };
+}
+
+// --- Feature Flags (M7) ---
+
+/** Convert proto JSON flag to local Flag type. */
+function adaptFlag(proto: Record<string, unknown>): Flag {
+  const type = stripEnumPrefix(
+    (proto.type as string) || 'BOOLEAN',
+    'FLAG_TYPE_',
+  ) as FlagType;
+
+  return {
+    flagId: (proto.flagId as string) || '',
+    name: (proto.name as string) || '',
+    description: (proto.description as string) || '',
+    type,
+    defaultValue: (proto.defaultValue as string) || '',
+    enabled: (proto.enabled as boolean) || false,
+    rolloutPercentage: (proto.rolloutPercentage as number) || 0,
+    variants: ((proto.variants as Record<string, unknown>[]) || []).map((v) => ({
+      variantId: (v.variantId as string) || '',
+      value: (v.value as string) || '',
+      trafficFraction: (v.trafficFraction as number) || 0,
+    })),
+    targetingRuleId: proto.targetingRuleId as string | undefined,
+  };
+}
+
+export async function listFlags(pageSize?: number, pageToken?: string): Promise<ListFlagsResponse> {
+  const request: Record<string, unknown> = {};
+  if (pageSize) request.pageSize = pageSize;
+  if (pageToken) request.pageToken = pageToken;
+
+  const raw = await callRpc<Record<string, unknown>, { flags?: Record<string, unknown>[]; nextPageToken?: string }>(
+    FLAGS_URL, FLAGS_SVC, 'ListFlags', request,
+  );
+  return {
+    flags: (raw.flags || []).map(adaptFlag),
+    nextPageToken: raw.nextPageToken || '',
+  };
+}
+
+export async function getFlag(flagId: string): Promise<Flag> {
+  const raw = await callRpc<{ flagId: string }, Record<string, unknown>>(
+    FLAGS_URL, FLAGS_SVC, 'GetFlag', { flagId },
+  );
+  return adaptFlag(raw);
+}
+
+export async function createFlag(flag: Partial<Flag>): Promise<Flag> {
+  const raw = await callRpc<{ flag: Partial<Flag> }, Record<string, unknown>>(
+    FLAGS_URL, FLAGS_SVC, 'CreateFlag', { flag },
+    { skipCache: true, clearCacheOnSuccess: true },
+  );
+  return adaptFlag(raw);
+}
+
+export async function updateFlag(flag: Flag): Promise<Flag> {
+  const raw = await callRpc<{ flag: Flag }, Record<string, unknown>>(
+    FLAGS_URL, FLAGS_SVC, 'UpdateFlag', { flag },
+    { skipCache: true, clearCacheOnSuccess: true },
+  );
+  return adaptFlag(raw);
+}
+
+export async function promoteToExperiment(
+  flagId: string,
+  experimentType: string,
+  primaryMetricId: string,
+  secondaryMetricIds?: string[],
+): Promise<Experiment> {
+  const raw = await callRpc<
+    { flagId: string; experimentType: string; primaryMetricId: string; secondaryMetricIds?: string[] },
+    Record<string, unknown>
+  >(
+    FLAGS_URL, FLAGS_SVC, 'PromoteToExperiment',
+    { flagId, experimentType: `EXPERIMENT_TYPE_${experimentType}`, primaryMetricId, secondaryMetricIds },
+    { skipCache: true, clearCacheOnSuccess: true },
+  );
+  return adaptExperiment(raw);
 }

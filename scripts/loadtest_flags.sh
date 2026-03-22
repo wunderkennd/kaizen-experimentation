@@ -150,13 +150,14 @@ log "Running k6 load test: ${TARGET_RPS} rps for ${DURATION}..."
 echo ""
 
 cd "$REPO_ROOT"
+k6_exit=0
 k6 run \
     --env "FLAGS_URL=${FLAGS_URL}" \
     --env "TARGET_RPS=${TARGET_RPS}" \
     --env "DURATION=${DURATION}" \
     --env "FLAG_IDS=${FLAG_IDS}" \
     scripts/loadtest_flags.js \
-    2>&1
+    2>&1 || k6_exit=$?
 
 echo ""
 
@@ -190,5 +191,5 @@ print(f\"  Error rate:          {r.get('eval_error_rate', 0)*100:.3f}%\")
 else
     warn "No results file found — k6 may have reported inline"
     # k6 thresholds cause exit code 99 on failure
-    exit 0
+    exit $k6_exit
 fi

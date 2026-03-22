@@ -2,12 +2,12 @@
 
 **Status**: All Phases Complete
 **Current Branch**: agent-3/feat/query-log-lifecycle
-**Current Milestone**: Query log lifecycle + proto codegen
+**Current Milestone**: Query log lifecycle + proto codegen + scheduler
 **Blocked By**: —
 
 ## Summary
 
-Phase 1-3 done. Prometheus observability with 7 metrics on dedicated :50056 metrics server. Grafana dashboard with 6 M3 panels.
+Phase 1–4 done. IPW `assignment_probability` propagated through all metric templates (unblocks M4a IPW analysis). Query log lifecycle: filtered retrieval, pagination, PurgeOldLogs. Scheduler: daily StandardJob (2 AM UTC), hourly GuardrailJob, weekly log purge. Prometheus observability with 10 metrics on dedicated :50056 metrics server. Grafana dashboard with 6 M3 panels.
 
 ## Key PRs
 
