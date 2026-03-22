@@ -226,7 +226,7 @@ export default function ResultsPage() {
           {hasIpwData && <IpwDetailsPanel metricResults={analysisResult.metricResults} />}
 
           {/* Forest Plot */}
-          <ForestPlot metricResults={analysisResult.metricResults} showCuped={showCuped} />
+          <ForestPlot metricResults={analysisResult.metricResults} showCuped={showCuped} showIpw={showIpw} />
 
           {/* Sequential Boundary Plot */}
           {experiment.sequentialTestConfig && (
