@@ -22,6 +22,7 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: mockFlagId }),
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/flags',
 }));
 
 vi.mock('next/link', () => ({

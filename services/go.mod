@@ -1,6 +1,6 @@
 module github.com/org/experimentation-platform/services
 
-go 1.25.0
+go 1.25
 
 require (
 	connectrpc.com/connect v1.17.0
