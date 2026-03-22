@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
-import { getExperiment, getAnalysisResult } from '@/lib/api';
+import { getExperiment, getAnalysisResult, RpcError } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 import { SrmBanner } from '@/components/srm-banner';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
@@ -66,6 +66,8 @@ const SessionLevelTab = dynamic(
 
 type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session';
 
+const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session'];
+
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
   const [experiment, setExperiment] = useState<Experiment | null>(null);
@@ -74,16 +76,54 @@ export default function ResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCuped, setShowCuped] = useState(false);
   const [showIpw, setShowIpw] = useState(false);
-  const [activeTab, setActiveTab] = useState<AnalysisTab>('overview');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const rawTab = searchParams.get('tab');
+  const initialTab: AnalysisTab = rawTab && VALID_TABS.includes(rawTab as AnalysisTab) ? (rawTab as AnalysisTab) : 'overview';
+  const [activeTab, setActiveTabState] = useState<AnalysisTab>(initialTab);
+
+  // Sync activeTab when URL changes via browser back/forward navigation.
+  // We listen to popstate (fired by browser back/forward) instead of watching
+  // searchParams, because searchParams may return a new reference on every
+  // render in some environments, clobbering programmatic tab changes.
+  useEffect(() => {
+    const handlePopState = () => {
+      const url = new URL(window.location.href);
+      const tab = url.searchParams.get('tab');
+      const validated = tab && VALID_TABS.includes(tab as AnalysisTab) ? (tab as AnalysisTab) : 'overview';
+      setActiveTabState(validated);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const setActiveTab = useCallback((tab: AnalysisTab) => {
+    setActiveTabState(tab);
+    const url = new URL(window.location.href);
+    if (tab === 'overview') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', tab);
+    }
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [router]);
 
   const fetchData = useCallback(() => {
     if (!params.id) return;
     setLoading(true);
     setError(null);
-    Promise.all([getExperiment(params.id), getAnalysisResult(params.id)])
-      .then(([exp, analysis]) => {
+    setAnalysisResult(null);
+    getExperiment(params.id)
+      .then((exp) => {
         setExperiment(exp);
-        setAnalysisResult(analysis);
+        return getAnalysisResult(params.id).catch((err) => {
+          // Only treat 404 (no data yet) as null; propagate real server errors
+          if (err instanceof RpcError && err.status === 404) return null;
+          throw err;
+        });
+      })
+      .then((analysis) => {
+        if (analysis) setAnalysisResult(analysis);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -100,21 +140,52 @@ export default function ResultsPage() {
     );
   }
 
-  if (error || !experiment || !analysisResult) {
+  if (error) {
     return (
       <div>
-        <nav className="mb-4 text-sm text-gray-500">
-          <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-          <span className="mx-2">/</span>
-          <Link href={`/experiments/${params.id}`} className="hover:text-indigo-600">Detail</Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900">Results</span>
-        </nav>
+        <Breadcrumb items={[
+          { label: 'Experiments', href: '/' },
+          { label: 'Detail', href: `/experiments/${params.id}` },
+          { label: 'Results' },
+        ]} />
         <RetryableError
-          message={error || 'No analysis results available for this experiment.'}
+          message={error}
           onRetry={fetchData}
           context="analysis results"
         />
+      </div>
+    );
+  }
+
+  if (!experiment || !analysisResult) {
+    const isRunning = experiment?.state === 'RUNNING' || experiment?.state === 'STARTING';
+    return (
+      <div>
+        <Breadcrumb items={[
+          { label: 'Experiments', href: '/' },
+          { label: 'Detail', href: `/experiments/${params.id}` },
+          { label: 'Results' },
+        ]} />
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center" data-testid="no-results-yet">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+          </svg>
+          <h3 className="mt-4 text-lg font-semibold text-gray-900">
+            {isRunning ? 'Analysis in progress' : 'No results yet'}
+          </h3>
+          <p className="mt-2 text-sm text-gray-500">
+            {isRunning
+              ? 'This experiment is still running. Results will appear here once enough data has been collected and the analysis pipeline completes.'
+              : 'No analysis results are available for this experiment yet.'}
+          </p>
+          <button
+            type="button"
+            onClick={fetchData}
+            className="mt-4 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+          >
+            {isRunning ? 'Check again' : 'Retry'}
+          </button>
+        </div>
       </div>
     );
   }
@@ -154,16 +225,17 @@ export default function ResultsPage() {
     tabs.push({ key: 'guardrails', label: 'Guardrails' });
   }
 
+  // Fall back to overview if activeTab isn't in the dynamic tab list for this experiment
+  // (e.g. ?tab=holdout for a non-holdout experiment)
+  const effectiveTab = tabs.some(t => t.key === activeTab) ? activeTab : 'overview';
+
   return (
     <div>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-        <span className="mx-2">/</span>
-        <Link href={`/experiments/${params.id}`} className="hover:text-indigo-600">Detail</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">Results</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Detail', href: `/experiments/${params.id}` },
+        { label: 'Results' },
+      ]} />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Results Dashboard</h1>
 
@@ -182,11 +254,11 @@ export default function ResultsPage() {
               id={`tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={`whitespace-nowrap border-b-2 pb-3 pt-1 text-sm font-medium transition-colors ${
-                activeTab === tab.key
+                effectiveTab === tab.key
                   ? 'border-indigo-600 text-indigo-600'
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
               }`}
-              aria-selected={activeTab === tab.key}
+              aria-selected={effectiveTab === tab.key}
               aria-controls={`tabpanel-${tab.key}`}
               role="tab"
             >
@@ -197,7 +269,7 @@ export default function ResultsPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && (
+      {effectiveTab === 'overview' && (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}>
           {/* Adjustment Toggles */}
           <div className="flex flex-wrap items-start gap-6">
@@ -251,31 +323,31 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {activeTab === 'novelty' && (
+      {effectiveTab === 'novelty' && (
         <div role="tabpanel" id="tabpanel-novelty" aria-labelledby="tab-novelty" tabIndex={0}>
           <NoveltyTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'interference' && (
+      {effectiveTab === 'interference' && (
         <div role="tabpanel" id="tabpanel-interference" aria-labelledby="tab-interference" tabIndex={0}>
           <InterferenceTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'interleaving' && (
+      {effectiveTab === 'interleaving' && (
         <div role="tabpanel" id="tabpanel-interleaving" aria-labelledby="tab-interleaving" tabIndex={0}>
           <InterleavingTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'lifecycle' && (
+      {effectiveTab === 'lifecycle' && (
         <div role="tabpanel" id="tabpanel-lifecycle" aria-labelledby="tab-lifecycle" tabIndex={0}>
           <CateTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'session' && (
+      {effectiveTab === 'session' && (
         <div role="tabpanel" id="tabpanel-session" aria-labelledby="tab-session" tabIndex={0}>
           <SessionLevelTab
             metricResults={analysisResult.metricResults.filter(m => m.sessionLevelResult)}
@@ -283,25 +355,25 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {activeTab === 'surrogate' && analysisResult.surrogateProjections && (
+      {effectiveTab === 'surrogate' && analysisResult.surrogateProjections && (
         <div role="tabpanel" id="tabpanel-surrogate" aria-labelledby="tab-surrogate" tabIndex={0}>
           <SurrogateTab projections={analysisResult.surrogateProjections} />
         </div>
       )}
 
-      {activeTab === 'holdout' && (
+      {effectiveTab === 'holdout' && (
         <div role="tabpanel" id="tabpanel-holdout" aria-labelledby="tab-holdout" tabIndex={0}>
           <HoldoutTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'guardrails' && (
+      {effectiveTab === 'guardrails' && (
         <div role="tabpanel" id="tabpanel-guardrails" aria-labelledby="tab-guardrails" tabIndex={0}>
           <GuardrailTab experimentId={params.id} />
         </div>
       )}
 
-      {activeTab === 'qoe' && (
+      {effectiveTab === 'qoe' && (
         <div role="tabpanel" id="tabpanel-qoe" aria-labelledby="tab-qoe" tabIndex={0}>
           <QoeTab experimentId={params.id} />
         </div>

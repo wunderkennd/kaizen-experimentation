@@ -7,25 +7,28 @@ import type { CreateExperimentRequest } from '@/lib/types';
 import { createExperiment } from '@/lib/api';
 import { ExperimentForm } from '@/components/experiment-form';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
 import { ROLE_LABELS } from '@/lib/auth';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 export default function NewExperimentPage() {
   const router = useRouter();
   const { canAtLeast, user } = useAuth();
+  const { addToast } = useToast();
   const canCreate = canAtLeast('experimenter');
 
   const handleSubmit = useCallback(async (req: CreateExperimentRequest) => {
     const experiment = await createExperiment(req);
+    addToast('Experiment created successfully', 'success');
     router.push(`/experiments/${experiment.experimentId}`);
-  }, [router]);
+  }, [router, addToast]);
 
   return (
     <div>
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">New Experiment</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'New Experiment' },
+      ]} />
 
       {canCreate ? (
         <>

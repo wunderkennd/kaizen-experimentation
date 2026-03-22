@@ -81,7 +81,8 @@ export function useExperimentFilters(): ExperimentFilters {
           (e) =>
             e.name.toLowerCase().includes(q) ||
             e.ownerEmail.toLowerCase().includes(q) ||
-            e.description.toLowerCase().includes(q),
+            e.description.toLowerCase().includes(q) ||
+            e.experimentId.toLowerCase().includes(q),
         );
       }
 

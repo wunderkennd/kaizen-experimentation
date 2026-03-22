@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { Experiment } from '@/lib/types';
 import { listExperiments } from '@/lib/api';
-import { ExperimentCard } from '@/components/experiment-card';
+import { ExperimentRow } from '@/components/experiment-card';
 import { ExperimentFiltersToolbar } from '@/components/experiment-filters';
 import { useExperimentFilters, type SortField } from '@/lib/use-experiment-filters';
 import { useAuth } from '@/lib/auth-context';
@@ -177,7 +177,7 @@ export default function ExperimentListPage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filtered.map((exp) => (
-                <ExperimentCard key={exp.experimentId} experiment={exp} />
+                <ExperimentRow key={exp.experimentId} experiment={exp} />
               ))}
             </tbody>
           </table>
