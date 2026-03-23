@@ -5,32 +5,20 @@
 
 ## Current Sprint
 
-Sprint: 5.0
-Focus: ADR-024 M7 Rust port
-Branch: work/lively-badger
+Sprint: 5.1
+Focus: ADR-024 M7 Rust port — **COMPLETE**
+Branch: work/kind-lion
 
 ## In Progress
 
-- [ ] Phase 2: PromoteToExperiment (M5 tonic client), audit trail write, stale flag detection (ADR-024)
-  - Blocked by: none
-  - ETA: next sprint
+_None — ADR-024 fully delivered._
 
 ## Completed (Phase 5)
 
-- [x] **ADR-024 Phase 1**: `crates/experimentation-flags/` scaffold
-  - Cargo workspace member added
-  - `tonic` + `tonic-web` gRPC server with `accept_http1(true)` for JSON HTTP mode
-  - `sqlx` PostgreSQL store (runtime queries, matches project pattern from M4a)
-  - Flag CRUD: CreateFlag, GetFlag, UpdateFlag, DeleteFlag, ListFlags
-  - EvaluateFlag / EvaluateFlags: direct `experimentation_hash::bucket()` call — no CGo, no FFI
-  - PromoteToExperiment: stub returning `UNIMPLEMENTED` (Phase 2)
-  - Wire-format contract tests (13 tests, all green):
-    - Proto3 binary round-trips for Flag, EvaluateFlagResponse, ListFlagsResponse
-    - FlagType enum value correctness
-    - Proto3 zero-value handling
-    - Evaluation bucket logic parity vs Go (rollout 0%, rollout 100%, bucket determinism)
-    - Pagination token base64 format
-    - Optional live parity test gate (GO_M7_ADDR + RUST_M7_ADDR env vars)
+- [x] **ADR-024 Phase 1** (previous sprint, PR: `work/lively-badger`): scaffold, CRUD, EvaluateFlag, wire-format contract tests
+- [x] **ADR-024 Phase 2**: PromoteToExperiment (M5 tonic client), multi-variant allocation, audit trail (`flag_audit_trail` inserts via `AuditStore`), stale flag detection (SQL view query), admin HTTP endpoints (axum 0.7, port 9090)
+- [x] **ADR-024 Phase 3**: Kafka lifecycle consumer (`rdkafka`, consumer group `flags-reconciler`, `experiment_lifecycle` JSON topic), polling reconciler (M5 `GetExperiment`, `ResolutionAction`: RolloutFull/Rollback/Keep), `kafka/topic_configs.sh` updated
+- [x] **ADR-024 Phase 4**: 13 chaos tests (MockFlagStore + ChaosStore per-operation fault injection), k6 load test (20K rps, p99 < 5ms target), `crates/experimentation-ffi/` deleted, `services/flags/` Go service deleted, Cargo workspace updated, justfile updated, Go SDK `hash_cgo.go` deleted / `hash_pure.go` promoted to primary
 
 ## Blocked
 
@@ -38,17 +26,16 @@ _None._
 
 ## Next Up
 
-- Phase 2: PromoteToExperiment (M5 tonic client), flag audit trail (PostgreSQL writes), stale flag view query
-- Phase 3: rdkafka Kafka consumer for experiment conclusion events, reconciler
-- Phase 4: Port 13 chaos tests, k6 20K rps load test, shadow traffic comparison, then delete `experimentation-ffi`
+ADR-024 is done. Ready for ADR-025 (M5 Rust port, conditional) if scheduled.
 
 ## Dependencies
 
-- `experimentation-hash`: direct dep (same source, zero parity risk) — ADR-024 §Architecture
-- `experimentation-proto`: flags proto compiled by `experimentation-proto` build.rs
-- `experimentation-ffi`: NOT a dependency — this is the crate ADR-024 will delete after Phase 4 cutover
-- M5 Management (Agent-5): needed in Phase 2 for PromoteToExperiment RPC client
+- `experimentation-hash`: direct dep — EvaluateFlag uses `murmur3_x86_32()` natively (no FFI)
+- `experimentation-proto`: flags proto via `experimentation-proto` build.rs
+- `experimentation-ffi`: **DELETED** — CGo bridge eliminated by this PR
+- M5 Management (Agent-5): reconciler calls `GetExperiment`; falls back gracefully when M5_ADDR not set
 
-## PR
+## PRs
 
-- Phase 1 PR: `work/lively-badger` → `main`
+- Phase 1 PR: `work/lively-badger` → `main` (merged)
+- Phase 2-4 PR: `work/kind-lion` → `main` (this sprint)
