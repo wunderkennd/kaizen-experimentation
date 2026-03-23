@@ -4,7 +4,7 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY proto/ proto/
-RUN apt-get update && apt-get install -y protobuf-compiler cmake g++ libssl-dev libcurl4-openssl-dev pkg-config
+RUN apt-get update && apt-get install -y protobuf-compiler cmake g++ libssl-dev libcurl4-openssl-dev pkg-config clang libclang-dev
 RUN cargo build --release --package experimentation-policy
 
 FROM debian:bookworm-slim
