@@ -11,10 +11,11 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
 use experimentation_proto::experimentation::analysis::v1::{
     AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult, GetAnalysisResultRequest,
     GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest,
-    InterferenceAnalysisResult, InterleavingAnalysisResult, IpwResult as ProtoIpwResult,
-    MetricResult, NoveltyAnalysisResult, PositionAnalysis as ProtoPositionAnalysis,
-    RunAnalysisRequest, SegmentResult, SessionLevelResult, SrmResult as ProtoSrmResult,
-    TitleSpillover,
+    GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
+    InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
+    PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
+    SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
+    SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_stats::{
     cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
@@ -114,6 +115,11 @@ fn to_proto_interference_result(
             })
             .collect(),
         computed_at: Some(now_timestamp()),
+        // ADR-021 feedback-loop fields — populated by future feedback-loop analysis
+        feedback_loop_detected: false,
+        feedback_loop_bias_estimate: 0.0,
+        contamination_effect_correlation: 0.0,
+        feedback_loop_computed_at: None,
     }
 }
 
@@ -322,6 +328,9 @@ async fn compute_analysis(
                     variant_id,
                     alpha,
                 ),
+                // ADR-018 e-value fields — populated when sequential e-value test is run
+                e_value: 0.0,
+                log_e_value: 0.0,
             });
         }
     }
@@ -743,6 +752,24 @@ impl AnalysisService for AnalysisServiceHandler {
         }
 
         Ok(Response::new(proto_result))
+    }
+
+    async fn get_synthetic_control_analysis(
+        &self,
+        _request: Request<GetSyntheticControlAnalysisRequest>,
+    ) -> Result<Response<SyntheticControlAnalysisResult>, Status> {
+        Err(Status::unimplemented(
+            "GetSyntheticControlAnalysis not yet implemented (ADR-023)",
+        ))
+    }
+
+    async fn get_switchback_analysis(
+        &self,
+        _request: Request<GetSwitchbackAnalysisRequest>,
+    ) -> Result<Response<SwitchbackAnalysisResult>, Status> {
+        Err(Status::unimplemented(
+            "GetSwitchbackAnalysis not yet implemented (ADR-022)",
+        ))
     }
 }
 
