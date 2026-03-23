@@ -13,6 +13,7 @@ members = [
     "crates/experimentation-analysis",
     "crates/experimentation-pipeline",
     "crates/experimentation-policy",
+    "crates/experimentation-flags",
 ]
 
 [workspace.package]
@@ -90,6 +91,8 @@ tokio-util = "0.7"
 chrono = { version = ">=0.4, <0.4.40", features = ["serde"] }
 # UUID
 uuid = { version = "1.10", features = ["v4", "serde"] }
+# Base64
+base64 = "0.22"
 
 [profile.release]
 opt-level = 3
