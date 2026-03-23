@@ -127,7 +127,7 @@ impl MetricStats {
 /// values) for every metric that has been observed.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MetricNormalizer {
-    stats: HashMap<String, MetricStats>,
+    pub stats: HashMap<String, MetricStats>,
 }
 
 impl MetricNormalizer {

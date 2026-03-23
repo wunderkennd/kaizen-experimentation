@@ -1585,7 +1585,7 @@ mod tests {
                 .normalizer
                 .stats
                 .get("engagement")
-                .map(|s| s.n_obs)
+                .map(|s| s.n)
                 .unwrap_or(0);
             assert!(
                 eng_n_obs >= 45,
