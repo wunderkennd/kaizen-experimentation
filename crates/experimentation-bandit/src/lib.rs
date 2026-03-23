@@ -13,6 +13,7 @@ pub mod linucb;
 #[cfg(feature = "gpu")]
 pub mod neural;
 pub mod policy;
+pub mod reward_composer;
 pub mod thompson;
 
 use std::collections::HashMap;

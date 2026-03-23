@@ -1,6 +1,13 @@
 //! Thompson Sampling for binary and continuous rewards.
+//!
+//! When a [`crate::reward_composer::RewardComposer`] is attached to the policy
+//! (via [`ThompsonSamplingPolicy::with_reward_composer`] or by constructing with
+//! [`ThompsonSamplingPolicy::new_multi_objective`]), multi-objective rewards are
+//! composed into a scalar before the Beta posterior is updated. The composer's
+//! EMA normalizer state is persisted alongside the arm posteriors.
 
 use crate::policy::Policy;
+use crate::reward_composer::{CompositionMethod, MetricNormalizer, Objective, RewardComposer};
 use crate::ArmSelection;
 use experimentation_core::error::assert_finite;
 use rand::Rng;
@@ -112,30 +119,115 @@ struct PolicyState {
     experiment_id: String,
     arms: Vec<BetaArm>,
     total_rewards: u64,
+    /// Persisted alongside arm posteriors when multi-objective reward composition
+    /// is configured. `None` for single-objective policies (ADR-011).
+    reward_composer: Option<RewardComposer>,
 }
 
 /// Thompson Sampling policy implementation for the LMAX policy core.
+///
+/// Optionally embeds a [`RewardComposer`] for multi-objective reward
+/// composition (ADR-011). When present, call [`Self::update_multi_objective`]
+/// instead of [`Policy::update`] to pass per-metric raw values; the composer
+/// scalarizes them before the Beta posterior update.
 #[derive(Debug, Clone)]
 pub struct ThompsonSamplingPolicy {
     experiment_id: String,
     arms: Vec<BetaArm>,
     total_rewards: u64,
+    /// Optional multi-objective reward composer (ADR-011).
+    /// Serialized to RocksDB alongside arm posteriors.
+    reward_composer: Option<RewardComposer>,
 }
 
 impl ThompsonSamplingPolicy {
-    /// Create a new policy with the given arm IDs and uniform priors.
+    /// Create a new single-objective policy with uniform priors.
     pub fn new(experiment_id: String, arm_ids: Vec<String>) -> Self {
         let arms = arm_ids.into_iter().map(BetaArm::new).collect();
         Self {
             experiment_id,
             arms,
             total_rewards: 0,
+            reward_composer: None,
         }
+    }
+
+    /// Create a new multi-objective policy (ADR-011).
+    ///
+    /// The embedded [`RewardComposer`] will normalize and compose per-metric
+    /// raw reward values on each call to [`Self::update_multi_objective`].
+    pub fn new_multi_objective(
+        experiment_id: String,
+        arm_ids: Vec<String>,
+        objectives: Vec<Objective>,
+        method: CompositionMethod,
+    ) -> Self {
+        let arms = arm_ids.into_iter().map(BetaArm::new).collect();
+        Self {
+            experiment_id,
+            arms,
+            total_rewards: 0,
+            reward_composer: Some(RewardComposer::new(objectives, method)),
+        }
+    }
+
+    /// Attach or replace the reward composer on an existing policy.
+    pub fn with_reward_composer(mut self, composer: RewardComposer) -> Self {
+        self.reward_composer = Some(composer);
+        self
     }
 
     /// Get experiment ID.
     pub fn experiment_id(&self) -> &str {
         &self.experiment_id
+    }
+
+    /// Returns a reference to the embedded reward composer, if any.
+    pub fn reward_composer(&self) -> Option<&RewardComposer> {
+        self.reward_composer.as_ref()
+    }
+
+    /// Update the posterior using multiple raw metric observations.
+    ///
+    /// The embedded [`RewardComposer`] normalizes and scalarizes `metric_values`
+    /// into a single reward in [0, 1] (via sigmoid), then updates the Beta
+    /// posterior for `arm_id`.
+    ///
+    /// # Panics
+    /// - No reward composer is configured (call `new_multi_objective` first).
+    /// - `arm_id` is unknown.
+    /// - Any metric in the composer's objectives is absent from `metric_values`.
+    pub fn update_multi_objective(
+        &mut self,
+        arm_id: &str,
+        metric_values: &HashMap<String, f64>,
+    ) {
+        let composer = self.reward_composer.as_mut().expect(
+            "update_multi_objective requires a reward_composer — use new_multi_objective()",
+        );
+        let scalar = composer.compose(metric_values);
+        // Map scalar (unbounded z-score) to binary reward in [0, 1] via sigmoid.
+        // This is required by the Beta–Bernoulli model which expects reward ∈ [0, 1].
+        let binary_reward = 1.0 / (1.0 + (-scalar).exp());
+        assert_finite(binary_reward, "sigmoid-mapped multi-objective reward");
+
+        let arm = self
+            .arms
+            .iter_mut()
+            .find(|a| a.arm_id == arm_id)
+            .unwrap_or_else(|| panic!("unknown arm_id: {arm_id}"));
+        arm.update(binary_reward);
+        self.total_rewards += 1;
+    }
+
+    /// Returns `true` if this policy has multi-objective reward composition enabled.
+    pub fn is_multi_objective(&self) -> bool {
+        self.reward_composer.is_some()
+    }
+
+    /// Access the EMA normalizer's metric statistics directly (for diagnostics / UI).
+    pub fn metric_normalizer(&self) -> Option<&MetricNormalizer> {
+        self.reward_composer.as_ref().map(|c| &c.normalizer)
     }
 }
 
@@ -160,6 +252,7 @@ impl Policy for ThompsonSamplingPolicy {
             experiment_id: self.experiment_id.clone(),
             arms: self.arms.clone(),
             total_rewards: self.total_rewards,
+            reward_composer: self.reward_composer.clone(),
         };
         serde_json::to_vec(&state).expect("policy state serialization should not fail")
     }
@@ -171,6 +264,7 @@ impl Policy for ThompsonSamplingPolicy {
             experiment_id: state.experiment_id,
             arms: state.arms,
             total_rewards: state.total_rewards,
+            reward_composer: state.reward_composer,
         }
     }
 

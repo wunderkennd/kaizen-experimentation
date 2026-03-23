@@ -7,12 +7,29 @@
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/nice-lion
+Branch: work/bright-platypus
 
 ## In Progress
 
-- [ ] ADR-011 Multi-objective bandits
 - [ ] ADR-012 LP constraints
+
+## Completed (Phase 5) — latest first
+
+- [x] **ADR-011 Multi-objective reward composition** (2026-03-23, work/bright-platypus)
+  - `crates/experimentation-bandit/src/reward_composer.rs` (new, ~450 LOC)
+  - `MetricNormalizer`: EMA running mean/variance per metric (α=0.01); tracks running-max ideal point for Tchebycheff; serializable alongside posterior state
+  - `RewardComposer`: three strategies fully implemented:
+    - `WeightedScalarization`: Σ wᵢ × normalized(rᵢ); weights validated to sum 1.0 (±1e-6)
+    - `EpsilonConstraint`: Lagrangian relaxation — primary objective + credit for secondaries exceeding floor thresholds
+    - `Tchebycheff`: −max_i { wᵢ × max(0, ideal_i − normalized(rᵢ)) }; Pareto-optimal for non-convex frontiers
+  - `ThompsonSamplingPolicy` extended:
+    - `new_multi_objective()` constructor with embedded `RewardComposer`
+    - `update_multi_objective()` method: composes raw metric values → sigmoid-mapped scalar → Beta posterior update
+    - Composer state persisted in `PolicyState` (RocksDB via existing snapshot mechanism)
+    - Fully backward-compatible; single-objective policies unaffected
+  - 18 unit tests + 4 proptest invariants (all three methods always-finite, Tchebycheff post-warmup)
+  - Convergence test: 2-arm Thompson Sampling bandit with 2-metric weighted-sum reward converges to optimal arm >60% after 2000 rounds
+  - All 46 bandit crate tests green (including 2 integration convergence tests)
 
 ## Completed (Phase 5)
 
