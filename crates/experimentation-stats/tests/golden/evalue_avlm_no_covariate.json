@@ -1,0 +1,18 @@
+{
+  "test_name": "evalue_avlm_no_covariate",
+  "derivation": "ctrl_y=[0,1,-1] trt_y=[2,3,1] no covariate; θ=0, Δ_adj=2, σ²_adj=2, se²=4/3, τ²=1; logE=½ln(4/7)+9/14=0.363049…; E=(4/7)^0.5·exp(9/14)≈1.437706 (Ramdas&Wang §3.1)",
+  "control_y": [0.0, 1.0, -1.0],
+  "treatment_y": [2.0, 3.0, 1.0],
+  "control_x": [0.0, 0.0, 0.0],
+  "treatment_x": [0.0, 0.0, 0.0],
+  "tau_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 1.437706,
+    "log_e_value": 0.363049,
+    "reject": false,
+    "theta": 0.0,
+    "delta_adj": 2.0,
+    "se_sq_adj": 1.3333333333333333
+  }
+}

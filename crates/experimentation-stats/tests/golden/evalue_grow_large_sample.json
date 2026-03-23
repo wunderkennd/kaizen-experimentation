@@ -1,0 +1,13 @@
+{
+  "test_name": "evalue_grow_large_sample",
+  "derivation": "obs=[2]*10, σ²=1: t=1 λ=0→logK=0; t=2..10 μ̂=2 λ=2→logK=2*2-0.5*4=2.0; logW=9*2=18; E=exp(18)>>20",
+  "observations": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+  "sigma_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 65659969.13733051,
+    "log_e_value": 18.0,
+    "reject": true,
+    "log_wealth_trajectory": [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0]
+  }
+}
