@@ -725,6 +725,10 @@ mod tests {
                 p_value: 0.001,
             }],
             computed_at: None,
+            feedback_loop_detected: false,
+            feedback_loop_bias_estimate: 0.0,
+            contamination_effect_correlation: 0.0,
+            feedback_loop_computed_at: None,
         };
 
         store.save_interference_result(&id, &result).await.unwrap();
