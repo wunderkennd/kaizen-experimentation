@@ -3,6 +3,7 @@ syntax = "proto3";
 package experimentation.analysis.v1;
 
 import "google/protobuf/timestamp.proto";
+import "experimentation/common/v1/experiment.proto";
 import "experimentation/common/v1/lifecycle.proto";
 import "experimentation/common/v1/surrogate.proto";
 
@@ -22,6 +23,10 @@ service AnalysisService {
   rpc GetNoveltyAnalysis(GetNoveltyAnalysisRequest) returns (NoveltyAnalysisResult);
   // Get content interference analysis.
   rpc GetInterferenceAnalysis(GetInterferenceAnalysisRequest) returns (InterferenceAnalysisResult);
+  // Get synthetic control analysis for QUASI experiments (ADR-023).
+  rpc GetSyntheticControlAnalysis(GetSyntheticControlAnalysisRequest) returns (SyntheticControlAnalysisResult);
+  // Get switchback temporal analysis for SWITCHBACK experiments (ADR-022).
+  rpc GetSwitchbackAnalysis(GetSwitchbackAnalysisRequest) returns (SwitchbackAnalysisResult);
 }
 
 message RunAnalysisRequest { string experiment_id = 1; }
@@ -29,6 +34,8 @@ message GetAnalysisResultRequest { string experiment_id = 1; }
 message GetInterleavingAnalysisRequest { string experiment_id = 1; }
 message GetNoveltyAnalysisRequest { string experiment_id = 1; }
 message GetInterferenceAnalysisRequest { string experiment_id = 1; }
+message GetSyntheticControlAnalysisRequest { string experiment_id = 1; }
+message GetSwitchbackAnalysisRequest { string experiment_id = 1; }
 
 // MetricResult contains the treatment effect estimate for one metric, one variant.
 message MetricResult {
@@ -55,6 +62,12 @@ message MetricResult {
   SessionLevelResult session_level_result = 17;
   // IPW-adjusted result for bandit experiments (when assignment_probability available).
   IpwResult ipw_result = 18;
+
+  // Phase 5 extensions (ADR-018).
+  // GROW martingale e-value alongside p-value. Non-negative; large values = strong evidence.
+  double e_value = 19;
+  // Log e-value for numerical stability when e-values are very large.
+  double log_e_value = 20;
 }
 
 message SequentialResult {
@@ -178,6 +191,16 @@ message InterferenceAnalysisResult {
   // Titles with significant treatment/control consumption differences.
   repeated TitleSpillover spillover_titles = 9;
   google.protobuf.Timestamp computed_at = 10;
+
+  // Phase 5 feedback loop analysis (ADR-021).
+  // Whether feedback loop contamination was detected from model retraining events.
+  bool feedback_loop_detected = 11;
+  // Estimated bias in treatment effect due to feedback loop contamination.
+  double feedback_loop_bias_estimate = 12;
+  // Pearson correlation between training data contamination fraction and effect estimate
+  // across retraining events. High correlation indicates feedback loop distortion.
+  double contamination_effect_correlation = 13;
+  google.protobuf.Timestamp feedback_loop_computed_at = 14;
 }
 
 message TitleSpillover {
@@ -185,4 +208,46 @@ message TitleSpillover {
   double treatment_watch_rate = 2;
   double control_watch_rate = 3;
   double p_value = 4;
+}
+
+// SyntheticControlAnalysisResult from quasi-experimental analysis (ADR-023).
+// Produced by M4a experimentation-stats::synthetic_control module.
+message SyntheticControlAnalysisResult {
+  string experiment_id = 1;
+  // Method used for this analysis.
+  experimentation.common.v1.SyntheticControlMethod method = 2;
+  // Treatment effect estimate on the outcome metric.
+  double treatment_effect = 3;
+  double ci_lower = 4;
+  double ci_upper = 5;
+  // Placebo permutation p-value. Validates that treatment effect exceeds
+  // what would be observed for donor units.
+  double permutation_p_value = 6;
+  // Donor unit weights assigned by the SCM optimizer. Sum to 1.0, all >= 0.
+  // Key: donor_unit_id, Value: weight.
+  map<string, double> donor_weights = 7;
+  // Pre-treatment RMSPE: root mean squared prediction error measuring fit quality.
+  // Lower is better; M6 UI shows warning if RMSPE > 0.2.
+  double pre_treatment_rmspe = 8;
+  google.protobuf.Timestamp computed_at = 9;
+}
+
+// SwitchbackAnalysisResult from temporal alternation analysis (ADR-022).
+// Produced by M4a experimentation-stats::switchback module.
+message SwitchbackAnalysisResult {
+  string experiment_id = 1;
+  // Treatment effect estimate with HAC (Newey-West) standard errors.
+  double treatment_effect = 2;
+  double hac_se = 3;
+  double ci_lower = 4;
+  double ci_upper = 5;
+  double hac_p_value = 6;
+  // Randomization inference p-value.
+  // Exact permutation if planned_cycles <= 20; otherwise 10K Monte Carlo.
+  double ri_p_value = 7;
+  // Carryover diagnostic: lag-1 autocorrelation test p-value.
+  // p_value < 0.05 indicates significant carryover; extend washout period.
+  double carryover_p_value = 8;
+  bool carryover_detected = 9;
+  google.protobuf.Timestamp computed_at = 10;
 }

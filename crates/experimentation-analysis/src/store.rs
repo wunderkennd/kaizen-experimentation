@@ -191,6 +191,8 @@ impl From<&CachedMetricResult> for MetricResult {
                 .as_ref()
                 .map(SessionLevelResult::from),
             ipw_result: c.ipw_result.as_ref().map(ProtoIpwResult::from),
+            e_value: 0.0,
+            log_e_value: 0.0,
         }
     }
 }
@@ -523,6 +525,10 @@ impl AnalysisStore {
                 control_catalog_coverage: 0.0,
                 spillover_titles: vec![],
                 computed_at: Some(super::grpc::now_timestamp()),
+                feedback_loop_detected: false,
+                feedback_loop_bias_estimate: 0.0,
+                contamination_effect_correlation: 0.0,
+                feedback_loop_computed_at: None,
             })),
             None => Ok(None),
         }
@@ -590,6 +596,8 @@ mod tests {
                 segment_results: vec![],
                 session_level_result: None,
                 ipw_result: None,
+                e_value: 0.0,
+                log_e_value: 0.0,
             }],
             srm_result: Some(ProtoSrmResult {
                 chi_squared: 0.1,
@@ -717,6 +725,10 @@ mod tests {
                 p_value: 0.001,
             }],
             computed_at: None,
+            feedback_loop_detected: false,
+            feedback_loop_bias_estimate: 0.0,
+            contamination_effect_correlation: 0.0,
+            feedback_loop_computed_at: None,
         };
 
         store.save_interference_result(&id, &result).await.unwrap();

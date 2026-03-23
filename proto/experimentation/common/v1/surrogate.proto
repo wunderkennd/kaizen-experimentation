@@ -37,6 +37,16 @@ message SurrogateModelConfig {
   string mlflow_model_uri = 8;
   google.protobuf.Timestamp last_calibrated_at = 9;
   google.protobuf.Timestamp created_at = 10;
+
+  // Phase 5 TC/JIVE calibration fields (ADR-017).
+  // If true, surrogate calibration uses cross-fold IV estimation (TC/JIVE) to
+  // correct for endogeneity bias in the surrogate-outcome relationship.
+  bool use_tc_jive_calibration = 11;
+  // Number of cross-fitting folds for TC/JIVE de-biasing. Default 5.
+  int32 jive_cross_fitting_folds = 12;
+  // TC/JIVE-corrected calibration R-squared. Populated after first JIVE calibration run.
+  // Typically lower than calibration_r_squared (corrects for upward bias).
+  double jive_calibration_r_squared = 13;
 }
 
 // SurrogateProjection is produced by M3 and reported by M4a alongside

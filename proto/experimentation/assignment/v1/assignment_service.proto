@@ -29,6 +29,11 @@ service AssignmentService {
   // Stream experiment config updates from M5 Management Service.
   // M1 caches config in-process. On crash, re-subscribes from latest.
   rpc StreamConfigUpdates(StreamConfigUpdatesRequest) returns (stream ConfigUpdate);
+
+  // Get slate assignment from a slate bandit experiment (ADR-016).
+  // M1 forwards candidate items to M4b SlatePolicy and returns an ordered slate.
+  // Timeout at 10ms falls back to random slate ordering.
+  rpc GetSlateAssignment(GetSlateAssignmentRequest) returns (GetSlateAssignmentResponse);
 }
 
 message GetAssignmentRequest {
@@ -92,4 +97,32 @@ message ConfigUpdate {
   // Whether this is a deletion (experiment archived or allocation freed).
   bool is_deletion = 2;
   int64 version = 3;
+}
+
+message GetSlateAssignmentRequest {
+  string user_id = 1;
+  string experiment_id = 2;
+  // Candidate item IDs to rank. Must not exceed SlateConfig.candidate_pool_size.
+  repeated string candidate_item_ids = 3;
+  // User attributes for contextual slate bandits.
+  map<string, string> attributes = 4;
+}
+
+message GetSlateAssignmentResponse {
+  string experiment_id = 1;
+  // Ordered slate of item IDs. Length = SlateConfig.num_slots.
+  repeated string slate_item_ids = 2;
+  // Per-slot assignment probabilities for IPW computation.
+  repeated SlotProbability slot_probabilities = 3;
+  // Whether this observation was drawn from the uniform random component (MAD mixing).
+  // When true, this observation is valid for e-process computation in M4a.
+  bool is_uniform_random = 4;
+}
+
+// SlotProbability records the assignment probability for one item in one slot.
+// Used by M4a for IPW-adjusted slate analysis.
+message SlotProbability {
+  int32 slot_index = 1;
+  string item_id = 2;
+  double probability = 3;
 }
