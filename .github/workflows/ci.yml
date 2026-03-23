@@ -64,6 +64,17 @@ jobs:
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
+      - name: Cache Rust build artifacts (including C++ native deps)
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: rust-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
