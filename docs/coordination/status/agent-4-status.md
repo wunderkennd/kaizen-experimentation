@@ -7,13 +7,29 @@
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-platypus
+Branch: work/bright-bear
 
 ## In Progress
 
 - [ ] ADR-012 LP constraints
 
 ## Completed (Phase 5) — latest first
+
+- [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
+  - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`
+    with `sequential_method` (field 2) and `tau_sq` (field 3) — AVLM now selectable per-call
+  - `crates/experimentation-analysis/src/config.rs`: added `default_tau_sq: f64` (env: `ANALYSIS_DEFAULT_TAU_SQ`, default 0.5)
+  - `crates/experimentation-analysis/src/grpc.rs`:
+    - Added `avlm` + `SequentialResult` imports; `SEQUENTIAL_METHOD_AVLM = 4` constant
+    - `compute_avlm_result()` helper: streams observations into `AvlmSequentialTest`, uses `cov.unwrap_or(0.0)` fallback (null covariate → unadjusted mSPRT CS)
+    - `compute_analysis()` branched: AVLM path when `sequential_method == 4`, CUPED path otherwise
+    - AVLM results placed in `cuped_adjusted_effect/cuped_ci_lower/cuped_ci_upper/variance_reduction_pct`; `sequential_result.boundary_crossed` = `is_significant`
+    - `run_analysis` handler now extracts `sequential_method` and `tau_sq` from request
+    - `get_analysis_result` passes (0, 0.0) → fixed-horizon, backward compatible
+  - `crates/experimentation-analysis/tests/m4a_m6_contract_test.rs`:
+    - `test_avlm_narrower_ci_than_msprt_on_golden_data`: 20-obs golden dataset (Y = 2X + effect + noise, R² ≈ 0.999); confirms AVLM CI narrower than mSPRT CI, variance reduction > 80%, boundary crossed
+    - All existing tests updated to `..Default::default()` for new `RunAnalysisRequest` fields
+  - All 52 analysis tests + 181 stats tests + full workspace green (0 failures)
 
 - [x] **ADR-021 — Feedback Loop Interference Detection** (2026-03-23, work/fancy-bear)
   - `crates/experimentation-stats/src/feedback_loop.rs`: `FeedbackLoopDetector`
