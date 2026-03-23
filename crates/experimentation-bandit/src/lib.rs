@@ -10,6 +10,7 @@
 
 pub mod cold_start;
 pub mod linucb;
+pub mod multi_objective;
 #[cfg(feature = "gpu")]
 pub mod neural;
 pub mod policy;

@@ -13,6 +13,7 @@ use crate::types::{
 };
 use experimentation_bandit::cold_start;
 use experimentation_bandit::linucb::LinUcbPolicy;
+use experimentation_bandit::multi_objective::{sigmoid, RewardComposer};
 use experimentation_bandit::policy::AnyPolicy;
 use experimentation_bandit::thompson::ThompsonSamplingPolicy;
 use std::collections::HashMap;
@@ -41,6 +42,9 @@ pub struct PolicyCore {
     rewards_since_snapshot: HashMap<String, u64>,
     /// Last Kafka offset processed per experiment.
     last_kafka_offset: HashMap<String, i64>,
+    /// Multi-objective reward composers (ADR-011), keyed by experiment_id.
+    /// Present only for experiments registered with `reward_objectives`.
+    reward_composers: HashMap<String, RewardComposer>,
 }
 
 impl PolicyCore {
@@ -53,6 +57,7 @@ impl PolicyCore {
             config,
             rewards_since_snapshot: HashMap::new(),
             last_kafka_offset: HashMap::new(),
+            reward_composers: HashMap::new(),
         }
     }
 
@@ -76,6 +81,14 @@ impl PolicyCore {
             );
             self.last_kafka_offset
                 .insert(envelope.experiment_id.clone(), envelope.kafka_offset);
+
+            // ADR-011: restore RewardComposer state if present.
+            if let Some(composer_bytes) = &envelope.reward_composer_state {
+                let composer = RewardComposer::deserialize(composer_bytes);
+                self.reward_composers
+                    .insert(envelope.experiment_id.clone(), composer);
+            }
+
             self.policies
                 .insert(envelope.experiment_id, policy);
         }
@@ -126,6 +139,32 @@ impl PolicyCore {
                     min_exploration_fraction,
                 ))
             });
+    }
+
+    /// Register a Thompson Sampling experiment with multi-objective reward composition
+    /// (ADR-011).  If the experiment already exists, only the composer is updated.
+    ///
+    /// `composer` encapsulates all objective weights, composition method, and the
+    /// running [`MetricNormalizer`].  Reward events for this experiment must carry
+    /// `metric_values` in their [`RewardUpdate`]; the core will call
+    /// `composer.compose()` before updating the bandit posterior.
+    #[allow(dead_code)]
+    pub fn register_multi_objective_experiment(
+        &mut self,
+        experiment_id: String,
+        arm_ids: Vec<String>,
+        composer: RewardComposer,
+    ) {
+        self.policies
+            .entry(experiment_id.clone())
+            .or_insert_with(|| {
+                info!(%experiment_id, arms = ?arm_ids, "Registered new multi-objective Thompson experiment");
+                AnyPolicy::Thompson(ThompsonSamplingPolicy::new(
+                    experiment_id.clone(),
+                    arm_ids,
+                ))
+            });
+        self.reward_composers.insert(experiment_id, composer);
     }
 
     /// Run the single-threaded event loop.
@@ -206,6 +245,24 @@ impl PolicyCore {
     }
 
     fn handle_reward_update(&mut self, update: RewardUpdate) {
+        // ADR-011: if metric_values are present and a RewardComposer is
+        // registered for this experiment, compose the scalar reward first.
+        let scalar_reward = if let Some(metrics) = &update.metric_values {
+            if let Some(composer) = self.reward_composers.get_mut(&update.experiment_id) {
+                let composed = composer.compose(metrics);
+                // Beta-Bernoulli (Thompson) expects reward ∈ [0, 1].
+                // Map the real-valued composed score via sigmoid.
+                match self.policies.get(&update.experiment_id) {
+                    Some(AnyPolicy::Thompson(_)) => sigmoid(composed),
+                    _ => composed,
+                }
+            } else {
+                update.reward
+            }
+        } else {
+            update.reward
+        };
+
         let policy = match self.policies.get_mut(&update.experiment_id) {
             Some(p) => p,
             None => {
@@ -217,7 +274,7 @@ impl PolicyCore {
             }
         };
 
-        policy.update(&update.arm_id, update.reward, update.context.as_ref());
+        policy.update(&update.arm_id, scalar_reward, update.context.as_ref());
         self.last_kafka_offset
             .insert(update.experiment_id.clone(), update.kafka_offset);
 
@@ -380,12 +437,19 @@ impl PolicyCore {
             .copied()
             .unwrap_or(-1);
 
-        let envelope = SnapshotStore::make_envelope(
+        // ADR-011: persist RewardComposer state alongside policy posteriors.
+        let reward_composer_state = self
+            .reward_composers
+            .get(experiment_id)
+            .map(|c| c.serialize());
+
+        let envelope = SnapshotStore::make_envelope_with_composer(
             experiment_id.to_string(),
             policy.policy_type().to_string(),
             policy.serialize(),
             policy.total_rewards(),
             kafka_offset,
+            reward_composer_state,
         );
 
         if let Err(e) = self.snapshot_store.write_snapshot(&envelope) {
@@ -491,6 +555,7 @@ mod tests {
                     reward: 1.0,
                     context: None,
                     kafka_offset: 1,
+                    metric_values: None,
                 })
                 .await
                 .unwrap();
@@ -552,6 +617,7 @@ mod tests {
                         reward: 1.0,
                         context: None,
                         kafka_offset: i,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -649,6 +715,7 @@ mod tests {
                     reward: 1.0,
                     context: Some(ctx.clone()),
                     kafka_offset: 1,
+                    metric_values: None,
                 })
                 .await
                 .unwrap();
@@ -704,6 +771,7 @@ mod tests {
                         reward: 1.0,
                         context: Some(ctx.clone()),
                         kafka_offset: i,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -811,6 +879,7 @@ mod tests {
                     reward: 1.0,
                     context: Some(ctx.clone()),
                     kafka_offset: i,
+                    metric_values: None,
                 })
                 .await
                 .unwrap();
@@ -821,6 +890,7 @@ mod tests {
                     reward: 0.2,
                     context: Some(ctx.clone()),
                     kafka_offset: 50 + i,
+                    metric_values: None,
                 })
                 .await
                 .unwrap();
@@ -921,6 +991,7 @@ mod tests {
                         reward: 1.0,
                         context: Some(ctx.clone()),
                         kafka_offset: i * 2,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -931,6 +1002,7 @@ mod tests {
                         reward: 0.0,
                         context: Some(ctx.clone()),
                         kafka_offset: i * 2 + 1,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1036,6 +1108,7 @@ mod tests {
                         reward: 1.0,
                         context: None,
                         kafka_offset: i * 3,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1047,6 +1120,7 @@ mod tests {
                         reward: 1.0,
                         context: Some(ctx.clone()),
                         kafka_offset: i * 3 + 1,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1058,6 +1132,7 @@ mod tests {
                         reward: 1.0,
                         context: Some(ctx.clone()),
                         kafka_offset: i * 3 + 2,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1161,6 +1236,7 @@ mod tests {
                         reward: 1.0,
                         context: None,
                         kafka_offset: i,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1243,6 +1319,7 @@ mod tests {
                         reward,
                         context: None,
                         kafka_offset: i,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1264,6 +1341,7 @@ mod tests {
                         reward,
                         context: Some(ctx.clone()),
                         kafka_offset: 1200 + i,
+                        metric_values: None,
                     })
                     .await
                     .unwrap();
@@ -1418,6 +1496,104 @@ mod tests {
         drop(_reward_tx);
         drop(mgmt_tx);
         handle.await.unwrap();
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    /// ADR-011: verify that RewardComposer state (normaliser mean/variance)
+    /// survives a crash-and-restore cycle via RocksDB.
+    #[tokio::test]
+    async fn test_multi_objective_composer_crash_recovery() {
+        use experimentation_bandit::multi_objective::{
+            CompositionMethod, RewardComposer, RewardObjective,
+        };
+
+        let db_path = temp_db_path("multi-obj-crash");
+
+        // Phase 1: train a multi-objective experiment for 50 rewards then crash.
+        let saved_n_obs;
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+
+            let composer = RewardComposer::new(
+                vec![
+                    RewardObjective::new("engagement".into(), 0.7),
+                    RewardObjective::new("quality".into(), 0.3),
+                ],
+                CompositionMethod::WeightedSum,
+            );
+
+            let mut core = PolicyCore::new(store, config);
+            core.register_multi_objective_experiment(
+                "mo-exp".into(),
+                vec!["arm_a".into(), "arm_b".into()],
+                composer,
+            );
+
+            let (_policy_tx, reward_tx, _mgmt_tx, handle) = spawn_core(core);
+
+            // Send enough rewards to trigger snapshots (snapshot_interval = 5).
+            for i in 0..50i64 {
+                reward_tx
+                    .send(RewardUpdate {
+                        experiment_id: "mo-exp".into(),
+                        arm_id: "arm_a".into(),
+                        reward: 0.0, // unused — composer takes over
+                        context: None,
+                        kafka_offset: i,
+                        metric_values: Some(
+                            [("engagement".into(), 0.8_f64), ("quality".into(), 0.6_f64)]
+                                .into_iter()
+                                .collect(),
+                        ),
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            // Peek at the composer state before crash so we can verify restoration.
+            // We can't inspect core directly after spawn_core (it's moved), so we
+            // rely on the snapshot. Just store the expected n_obs.
+            saved_n_obs = 50u64;
+
+            drop(reward_tx);
+            drop(_policy_tx);
+            drop(_mgmt_tx);
+            handle.await.unwrap();
+        }
+
+        // Phase 2: restore and verify composer state was persisted.
+        {
+            let store = SnapshotStore::open(&db_path).unwrap();
+            let config = test_config(db_path.to_str().unwrap());
+
+            let mut core = PolicyCore::new(store, config);
+            let restored = core.restore_from_snapshots().unwrap();
+            assert_eq!(restored, 1, "should restore 1 multi-objective experiment");
+
+            // The composer should have been restored — check it is present.
+            assert!(
+                core.reward_composers.contains_key("mo-exp"),
+                "RewardComposer should be restored from RocksDB snapshot"
+            );
+
+            let composer = &core.reward_composers["mo-exp"];
+            // Normaliser should have accumulated at least some observations for
+            // the snapshotted batches (snapshot_interval = 5 → ≥ 45 obs in last snap).
+            let eng_n_obs = composer
+                .normalizer
+                .stats
+                .get("engagement")
+                .map(|s| s.n_obs)
+                .unwrap_or(0);
+            assert!(
+                eng_n_obs >= 45,
+                "engagement normaliser should have ≥ 45 obs after restore, got {eng_n_obs} (saved {saved_n_obs})"
+            );
+        }
 
         let _ = std::fs::remove_dir_all(&db_path);
     }
