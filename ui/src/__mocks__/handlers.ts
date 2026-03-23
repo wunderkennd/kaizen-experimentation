@@ -4,7 +4,7 @@ import {
   SEED_NOVELTY_RESULTS, SEED_INTERFERENCE_RESULTS, SEED_INTERLEAVING_RESULTS,
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
   SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
-  SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS,
+  SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS, SEED_PROVIDER_HEALTH,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -742,6 +742,19 @@ export const handlers = [
   }),
 
   // PromoteToExperiment
+  // GetProviderHealth (ADR-014)
+  http.post(`${METRICS_SVC}/GetProviderHealth`, async ({ request }) => {
+    const body = await request.json() as { providerId?: string };
+    const allSeries = SEED_PROVIDER_HEALTH.series;
+    const filteredSeries = body.providerId
+      ? allSeries.filter((s) => s.providerId === body.providerId)
+      : allSeries;
+    return HttpResponse.json({
+      ...SEED_PROVIDER_HEALTH,
+      series: filteredSeries,
+    });
+  }),
+
   http.post(`${FLAGS_SVC}/PromoteToExperiment`, async ({ request }) => {
     const denied = checkAuth(request.headers, 'experimenter');
     if (denied) return denied;

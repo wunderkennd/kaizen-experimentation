@@ -59,6 +59,14 @@ export function NavHeader() {
           >
             Monitoring
           </Link>
+          <Link
+            href="/portfolio/provider-health"
+            className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/portfolio') ? 'text-indigo-600' : 'text-gray-600'}`}
+            aria-current={pathname.startsWith('/portfolio') ? 'page' : undefined}
+            data-testid="nav-portfolio"
+          >
+            Portfolio
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">

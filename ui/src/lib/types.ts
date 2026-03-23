@@ -571,3 +571,31 @@ export interface BanditDashboardResult {
   minExplorationFraction: number;
   rewardHistory: RewardHistoryPoint[];
 }
+
+// --- Provider Health (ADR-014) ---
+
+export interface ProviderHealthPoint {
+  date: string;
+  catalogCoverage: number;
+  providerGini: number;
+  longTailImpressionShare: number;
+}
+
+export interface ProviderHealthSeries {
+  providerId: string;
+  providerName: string;
+  experimentId: string;
+  experimentName: string;
+  points: ProviderHealthPoint[];
+}
+
+export interface ProviderInfo {
+  providerId: string;
+  providerName: string;
+}
+
+export interface ProviderHealthResult {
+  series: ProviderHealthSeries[];
+  providers: ProviderInfo[];
+  computedAt: string;
+}
