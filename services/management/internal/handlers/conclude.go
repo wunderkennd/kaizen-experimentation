@@ -13,6 +13,60 @@ import (
 	"github.com/org/experimentation-platform/services/management/internal/store"
 )
 
+// submitFdrDecision reads the primary metric's e-value from metric_results and
+// submits it to the e-LOND Online FDR controller (ADR-018 Phase 2).
+//
+// The call is best-effort: any error is logged and silently dropped so that
+// experiment conclusion is never blocked by FDR controller failures.
+func (s *ExperimentService) submitFdrDecision(ctx context.Context, experimentID, primaryMetricID string) {
+	if s.fdrController == nil || s.pool == nil {
+		return
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	// Read the most-recently computed e-value for the primary metric.
+	// M4a stores results in metric_results after RunAnalysis completes.
+	var eValue float64
+	err := s.pool.QueryRow(callCtx, `
+		SELECT e_value
+		FROM   metric_results
+		WHERE  experiment_id = $1
+		  AND  metric_id     = $2
+		  AND  e_value IS NOT NULL
+		ORDER  BY computed_at DESC
+		LIMIT  1
+	`, experimentID, primaryMetricID).Scan(&eValue)
+	if err != nil {
+		slog.Warn("fdr: primary metric e-value not available, skipping FDR submission",
+			"experiment_id", experimentID,
+			"metric_id", primaryMetricID,
+			"error", err,
+		)
+		return
+	}
+
+	decision, err := s.fdrController.Test(callCtx, experimentID, eValue)
+	if err != nil {
+		slog.Error("fdr: controller.Test failed",
+			"experiment_id", experimentID,
+			"e_value", eValue,
+			"error", err,
+		)
+		return
+	}
+
+	slog.Info("fdr: experiment submitted to e-LOND controller",
+		"experiment_id", experimentID,
+		"e_value", eValue,
+		"rejected", decision.Rejected,
+		"alpha_allocated", decision.AlphaAllocated,
+		"wealth_after", decision.WealthAfter,
+		"num_tested", decision.NumTested,
+	)
+}
+
 // analysisTypeForExperiment maps experiment type to the analysis method used at conclude time.
 func analysisTypeForExperiment(expType string) string {
 	switch expType {

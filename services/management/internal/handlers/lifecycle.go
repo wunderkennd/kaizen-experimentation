@@ -289,6 +289,10 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		for k, v := range concludeDetails {
 			extraDetails[k] = v
 		}
+
+		// Submit primary metric e-value to the e-LOND Online FDR controller
+		// (ADR-018 Phase 2). Best-effort — never blocks conclusion.
+		s.submitFdrDecision(ctx, expForConclude.ExperimentID, expForConclude.PrimaryMetricID)
 	}
 	slog.Info("concluding experiment: type-specific conclude complete", "id", id)
 
