@@ -14,6 +14,7 @@ use tonic::{Request, Response, Status};
 use experimentation_proto::experimentation::assignment::v1::{
     assignment_service_server::AssignmentService, ConfigUpdate, GetAssignmentRequest,
     GetAssignmentResponse, GetAssignmentsRequest, GetAssignmentsResponse,
+    GetSlateAssignmentRequest, GetSlateAssignmentResponse,
     GetInterleavedListRequest, GetInterleavedListResponse, RankedList, StreamConfigUpdatesRequest,
 };
 
@@ -495,6 +496,15 @@ impl AssignmentService for AssignmentServiceImpl {
     ) -> Result<Response<Self::StreamConfigUpdatesStream>, Status> {
         Err(Status::unimplemented(
             "StreamConfigUpdates not yet implemented (M5 integration)",
+        ))
+    }
+
+    async fn get_slate_assignment(
+        &self,
+        _request: Request<GetSlateAssignmentRequest>,
+    ) -> Result<Response<GetSlateAssignmentResponse>, Status> {
+        Err(Status::unimplemented(
+            "GetSlateAssignment not yet implemented (ADR-016)",
         ))
     }
 }
