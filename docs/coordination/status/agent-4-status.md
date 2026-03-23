@@ -79,6 +79,29 @@ Branch: work/bright-bear
 
 ## Completed (Phase 5)
 
+- [x] **ADR-011 — Multi-objective reward composition** (2026-03-23, work/happy-koala)
+  - `crates/experimentation-bandit/src/multi_objective.rs` (new)
+    - `MetricStats`: EMA running mean/variance (α=0.01), Welford-style update
+    - `MetricNormalizer`: keyed EMA normaliser over arbitrary metric names; serialize/deserialize for RocksDB
+    - `RewardObjective`: metric_name, weight, `constraint_slack: Option<f64>`, reference_value
+    - `CompositionMethod`: `WeightedSum`, `EpsilonConstraint` (Lagrangian), `Tchebycheff`
+    - `RewardComposer`: 3-phase compose (collect → normalise → scalarise); clamps to ±10σ; serialize/deserialize
+    - `sigmoid()`: maps composed real reward to (0, 1) for Beta-Bernoulli policies
+  - `crates/experimentation-bandit/src/lib.rs`: added `pub mod multi_objective`
+  - `crates/experimentation-policy/src/types.rs`: `RewardUpdate` gains `metric_values: Option<HashMap<String, f64>>`
+  - `crates/experimentation-policy/src/snapshot.rs`: `SnapshotEnvelope` gains `reward_composer_state: Option<Vec<u8>>` (serde default for backward compat); `make_envelope_with_composer()` factory
+  - `crates/experimentation-policy/src/core.rs`:
+    - `PolicyCore` gains `reward_composers: HashMap<String, RewardComposer>`
+    - `register_multi_objective_experiment()`: registers Thompson + composer atomically
+    - `handle_reward_update()`: composes metric_values → scalar, applies sigmoid for Thompson policies
+    - `write_snapshot()`: persists composer state alongside policy posteriors
+    - `restore_from_snapshots()`: restores composer state on startup
+  - Tests:
+    - 10 unit tests in `multi_objective.rs` (MetricStats convergence, normalisation direction, WeightedSum, EpsilonConstraint penalty, Tchebycheff balance, roundtrip)
+    - `test_weighted_sum_convergence`: 1000-round simulation — arm_a (E[eng]=0.8, E[qual]=0.6) beats arm_b (E[eng]=0.3, E[qual]=0.7) with w=(0.7, 0.3); arm_a selection rate >60% in final 200 rounds
+    - `test_multi_objective_composer_crash_recovery`: normaliser survives crash-and-restore via RocksDB; ≥45 obs restored after 50 reward events
+    - All 35 policy tests + 33 bandit tests green; workspace-wide 0 failures
+
 - [x] **ADR-014 Phase 1 — Guardrail Bonferroni beta-correction** (2026-03-23, work/nice-lion)
   - `guardrail_bonferroni()` in `crates/experimentation-stats/src/multiple_comparison.rs`
     - Per-guardrail threshold = alpha/K; `rejected[i]` = true when p_i ≤ alpha/K
