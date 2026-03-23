@@ -1,0 +1,13 @@
+{
+  "test_name": "evalue_grow_constant_effect",
+  "derivation": "obs=[1,1,1], σ²=1: t=1 λ=0→K=1; t=2 λ=1→logK=0.5; t=3 λ=1→logK=0.5; logW=1.0; E=e",
+  "observations": [1.0, 1.0, 1.0],
+  "sigma_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 2.718281828459045,
+    "log_e_value": 1.0,
+    "reject": false,
+    "log_wealth_trajectory": [0.0, 0.5, 1.0]
+  }
+}

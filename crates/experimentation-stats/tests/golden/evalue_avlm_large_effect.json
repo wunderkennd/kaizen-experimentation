@@ -1,0 +1,18 @@
+{
+  "test_name": "evalue_avlm_large_effect",
+  "derivation": "ctrl_y=[0]*10 trt_y=[5]*10 no covariate; θ=0, Δ_adj=5, σ²_adj=125/19, se²=25/19, τ²=1; logE=½ln(25/44)+9025/2200≈3.819613; E>>20 so reject=true",
+  "control_y": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "treatment_y": [5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+  "control_x": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "treatment_x": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "tau_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 45.58669158638349,
+    "log_e_value": 3.819616,
+    "reject": true,
+    "theta": 0.0,
+    "delta_adj": 5.0,
+    "se_sq_adj": 1.3157894736842106
+  }
+}

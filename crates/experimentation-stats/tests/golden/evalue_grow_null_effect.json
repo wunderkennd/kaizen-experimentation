@@ -1,0 +1,13 @@
+{
+  "test_name": "evalue_grow_null_effect",
+  "derivation": "observations all zero → all lambda_t = 0 → log K_t = 0 → E_n = 1 exactly",
+  "observations": [0.0, 0.0, 0.0, 0.0],
+  "sigma_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 1.0,
+    "log_e_value": 0.0,
+    "reject": false,
+    "log_wealth_trajectory": [0.0, 0.0, 0.0, 0.0]
+  }
+}

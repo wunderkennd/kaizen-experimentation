@@ -16,6 +16,7 @@
 //! - `bootstrap` — BCa bootstrap confidence intervals
 //! - `avlm` — Anytime-Valid Linear Model (AVLM): regression-adjusted confidence sequences (ADR-015)
 //! - `sequential` — mSPRT and Group Sequential Tests
+//! - `evalue` — GROW martingale and AVLM e-values (ADR-018)
 //! - `multiple_comparison` — Holm-Bonferroni, Benjamini-Hochberg
 //! - `novelty` — Exponential decay fitting for novelty effects
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
@@ -27,6 +28,7 @@ pub mod bootstrap;
 pub mod cate;
 pub mod clustering;
 pub mod cuped;
+pub mod evalue;
 pub mod interference;
 pub mod interleaving;
 pub mod ipw;

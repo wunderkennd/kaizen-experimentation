@@ -1,0 +1,18 @@
+{
+  "test_name": "evalue_avlm_perfect_covariate",
+  "derivation": "ctrl_y=[0,1,-1] ctrl_x=[1,2,0] trt_y=[2,3,1] trt_x=[1,2,0]; θ=1, Δ_adj=2, σ²_adj=1.2, se²=0.8, τ²=1; logE=ln(2)-ln(3)+25/18≈0.983424; E=2/3·exp(25/18)≈2.673594 (Ramdas&Wang §3.1)",
+  "control_y": [0.0, 1.0, -1.0],
+  "treatment_y": [2.0, 3.0, 1.0],
+  "control_x": [1.0, 2.0, 0.0],
+  "treatment_x": [1.0, 2.0, 0.0],
+  "tau_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 2.673594,
+    "log_e_value": 0.983424,
+    "reject": false,
+    "theta": 1.0,
+    "delta_adj": 2.0,
+    "se_sq_adj": 0.8
+  }
+}

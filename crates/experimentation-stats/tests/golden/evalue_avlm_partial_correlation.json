@@ -1,0 +1,18 @@
+{
+  "test_name": "evalue_avlm_partial_correlation",
+  "derivation": "ctrl_y=[0,.5,-.5,1,-1] ctrl_x=[0,1,-1,0,0] same x for trt, trt_y=ctrl_y+1; pooled θ=0.5, Δ_adj=1, σ²_adj=13/18, se²=13/45, τ²=1; logE=½ln(13/58)+2025/1508≈0.595091; E≈1.813195 (Ramdas&Wang §3.1)",
+  "control_y": [0.0, 0.5, -0.5, 1.0, -1.0],
+  "treatment_y": [1.0, 1.5, 0.5, 2.0, 0.0],
+  "control_x": [0.0, 1.0, -1.0, 0.0, 0.0],
+  "treatment_x": [0.0, 1.0, -1.0, 0.0, 0.0],
+  "tau_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 1.813197,
+    "log_e_value": 0.595091,
+    "reject": false,
+    "theta": 0.5,
+    "delta_adj": 1.0,
+    "se_sq_adj": 0.28888888888888886
+  }
+}

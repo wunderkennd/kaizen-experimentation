@@ -7,7 +7,7 @@
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-panda
+Branch: work/eager-koala
 
 ## In Progress
 
@@ -42,6 +42,12 @@ Branch: work/bright-panda
   - PR #198 merged
 
 - [x] **Proto schema extensions** (PR #196 merged) — All Phase 5 proto additions, buf lint + breaking clean.
+- [x] ADR-018 Phase 1 — E-value computation (PR open 2026-03-23)
+  - `e_value_grow()`: Sequential GROW martingale (plug-in betting, valid e-process)
+  - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value
+  - SQL migration 006_evalue_columns.sql: `e_value` + `log_e_value` on metric_results
+  - 8 golden-file tests (GROW: 4 analytic; AVLM: 4 formula-validated to 6dp)
+  - All 144+ workspace tests green
 
 ### Proto changes landed:
 
@@ -92,8 +98,8 @@ _None._
 
 ## Next Up
 
+- ADR-015 Phase 1 (AVLM AvlmSequentialTest) — unblocked
 - ADR-017 Phase 2 — Offline RL policy evaluation (doubly-robust estimator)
-- ADR-018 E-values — GROW martingale e-values alongside p-values
 - ADR-011 Multi-objective bandits
 - ADR-012 LP constraints
 
@@ -112,3 +118,7 @@ the new types. Key dependencies:
 ## Notes
 
 - ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) does not exist in repo yet — implementation based on design_doc_v7.0.md Section 7.3 and 17.1 plus Lindon et al. (2025) algorithm.
+- The `e_value_avlm` function implements the Gaussian mixture e-value from Ramdas & Wang
+  (2024) §3.1, validated to 6 decimal places against analytically computable examples.
+- GROW martingale uses the causal plug-in strategy (safe start λ_1=0); valid as an
+  e-process since E_{H0}[exp(λX − λ²σ²/2)] = 1 for X ~ N(0,σ²).

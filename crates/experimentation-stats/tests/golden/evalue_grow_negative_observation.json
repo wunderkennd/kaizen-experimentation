@@ -1,0 +1,13 @@
+{
+  "test_name": "evalue_grow_negative_observation",
+  "derivation": "obs=[1,-2], σ²=1: t=1 λ=0→logK=0; t=2 μ̂=1 λ=1→logK=1*(-2)-0.5=-2.5; logW=-2.5; E=exp(-2.5)",
+  "observations": [1.0, -2.0],
+  "sigma_sq": 1.0,
+  "alpha": 0.05,
+  "expected": {
+    "e_value": 0.08208499862389880,
+    "log_e_value": -2.5,
+    "reject": false,
+    "log_wealth_trajectory": [0.0, -2.5]
+  }
+}
