@@ -9,6 +9,7 @@ import type {
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
   AuditLogEntry, AuditAction, ListAuditLogResponse,
   ProviderHealthResult,
+  AvlmResult, AdaptiveNResult, FeedbackLoopResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -705,5 +706,29 @@ export async function getProviderHealth(providerId?: string): Promise<ProviderHe
   if (providerId) request.providerId = providerId;
   return callRpc<Record<string, unknown>, ProviderHealthResult>(
     METRICS_URL, METRICS_SVC, 'GetProviderHealth', request,
+  );
+}
+
+// --- AVLM Confidence Sequence (ADR-015) ---
+
+export async function getAvlmResult(experimentId: string, metricId: string): Promise<AvlmResult> {
+  return callRpc<{ experimentId: string; metricId: string }, AvlmResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetAvlmResult', { experimentId, metricId },
+  );
+}
+
+// --- Adaptive Sample Size (ADR-020) ---
+
+export async function getAdaptiveN(experimentId: string): Promise<AdaptiveNResult> {
+  return callRpc<{ experimentId: string }, AdaptiveNResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetAdaptiveN', { experimentId },
+  );
+}
+
+// --- Feedback Loop Analysis ---
+
+export async function getFeedbackLoopAnalysis(experimentId: string): Promise<FeedbackLoopResult> {
+  return callRpc<{ experimentId: string }, FeedbackLoopResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetFeedbackLoopAnalysis', { experimentId },
   );
 }

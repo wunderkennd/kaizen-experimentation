@@ -4,6 +4,7 @@ import type {
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
   AuditLogEntry, Flag, ProviderHealthResult,
+  AvlmResult, AdaptiveNResult, FeedbackLoopResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -1738,6 +1739,163 @@ const INITIAL_PROVIDER_HEALTH: ProviderHealthResult = {
 
 export let SEED_PROVIDER_HEALTH: ProviderHealthResult = structuredClone(INITIAL_PROVIDER_HEALTH);
 
+// --- AVLM Seed Data (ADR-015) ---
+
+function makeAvlmPoints(nLooks: number, finalEstimate: number, reductionPct: number): AvlmResult['boundaryPoints'] {
+  return Array.from({ length: nLooks }, (_, i) => {
+    const frac = (i + 1) / nLooks;
+    const shrink = Math.sqrt(frac); // boundaries shrink as information accumulates
+    const est = finalEstimate * shrink;
+    const raw = est * (1 + (1 - reductionPct / 100) * 0.2);
+    return {
+      look: i + 1,
+      informationFraction: frac,
+      upperBound: est + (0.05 / shrink) * 1.2,
+      lowerBound: est - (0.05 / shrink) * 1.2,
+      estimate: est,
+      estimateRaw: raw,
+    };
+  });
+}
+
+const INITIAL_AVLM_RESULTS: AvlmResult[] = [
+  {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    metricId: 'click_through_rate',
+    boundaryPoints: makeAvlmPoints(5, 0.014, 32),
+    varianceReductionPct: 32,
+    isConclusive: true,
+    conclusiveLook: 3,
+    finalEstimate: 0.014,
+    finalCiLower: 0.005,
+    finalCiUpper: 0.023,
+    computedAt: '2026-03-05T14:30:00Z',
+  },
+  {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    metricId: 'watch_time_per_session',
+    boundaryPoints: makeAvlmPoints(5, 108, 28),
+    varianceReductionPct: 28,
+    isConclusive: false,
+    finalEstimate: 108,
+    finalCiLower: 42,
+    finalCiUpper: 174,
+    computedAt: '2026-03-05T14:30:05Z',
+  },
+];
+
+export let SEED_AVLM_RESULTS: AvlmResult[] = structuredClone(INITIAL_AVLM_RESULTS);
+
+// --- Adaptive N Seed Data (ADR-020) ---
+
+function makeTimelinePoints(startDate: string, days: number, plannedN: number): AdaptiveNResult['timelineProjection'] {
+  const start = new Date(startDate);
+  return Array.from({ length: days }, (_, i) => ({
+    date: new Date(start.getTime() + i * 86400_000).toISOString().slice(0, 10),
+    estimatedN: Math.round(plannedN * ((i + 1) / days)),
+  }));
+}
+
+const INITIAL_ADAPTIVE_N_RESULTS: AdaptiveNResult[] = [
+  {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    zone: 'FAVORABLE',
+    currentN: 95000,
+    plannedN: 120000,
+    conditionalPower: 0.94,
+    projectedConclusionDate: '2026-03-20T00:00:00Z',
+    timelineProjection: makeTimelinePoints('2026-02-16', 14, 120000),
+    computedAt: '2026-03-05T14:30:00Z',
+  },
+  {
+    experimentId: '88888888-8888-8888-8888-888888888888',
+    zone: 'PROMISING',
+    currentN: 80000,
+    plannedN: 120000,
+    recommendedN: 150000,
+    conditionalPower: 0.67,
+    projectedConclusionDate: '2026-04-15T00:00:00Z',
+    extensionDays: 21,
+    timelineProjection: makeTimelinePoints('2026-01-21', 30, 150000),
+    computedAt: '2026-02-15T12:00:00Z',
+  },
+];
+
+export let SEED_ADAPTIVE_N_RESULTS: AdaptiveNResult[] = structuredClone(INITIAL_ADAPTIVE_N_RESULTS);
+
+// --- Feedback Loop Seed Data ---
+
+const INITIAL_FEEDBACK_LOOP_RESULTS: FeedbackLoopResult[] = [
+  {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    retrainingEvents: [
+      {
+        eventId: 're-001',
+        retrainedAt: '2026-02-22T02:00:00Z',
+        triggerReason: 'Scheduled weekly retrain',
+        modelVersion: 'neural_cf_v2.1',
+      },
+      {
+        eventId: 're-002',
+        retrainedAt: '2026-03-01T02:00:00Z',
+        triggerReason: 'Scheduled weekly retrain',
+        modelVersion: 'neural_cf_v2.2',
+      },
+    ],
+    prePostComparison: [
+      { date: '2026-02-20', preEffect: 0.011, postEffect: 0.014 },
+      { date: '2026-02-21', preEffect: 0.012, postEffect: 0.015 },
+      { date: '2026-02-22', preEffect: 0.013, postEffect: 0.014 },
+      { date: '2026-02-23', preEffect: 0.014, postEffect: 0.013 },
+      { date: '2026-02-24', preEffect: 0.013, postEffect: 0.014 },
+      { date: '2026-03-01', preEffect: 0.014, postEffect: 0.016 },
+      { date: '2026-03-02', preEffect: 0.015, postEffect: 0.015 },
+      { date: '2026-03-03', preEffect: 0.014, postEffect: 0.014 },
+    ],
+    contaminationTimeline: [
+      { date: '2026-02-22', contaminationFraction: 0.0 },
+      { date: '2026-02-23', contaminationFraction: 0.08 },
+      { date: '2026-02-24', contaminationFraction: 0.15 },
+      { date: '2026-02-25', contaminationFraction: 0.19 },
+      { date: '2026-02-26', contaminationFraction: 0.21 },
+      { date: '2026-03-01', contaminationFraction: 0.24 },
+      { date: '2026-03-02', contaminationFraction: 0.22 },
+      { date: '2026-03-03', contaminationFraction: 0.20 },
+    ],
+    rawEstimate: 0.014,
+    biasCorrectedEstimate: 0.013,
+    biasCorrectedCiLower: 0.004,
+    biasCorrectedCiUpper: 0.022,
+    contaminationFraction: 0.20,
+    recommendations: [
+      {
+        recommendationId: 'rec-001',
+        severity: 'HIGH',
+        title: 'Enable pre-period washout',
+        description: 'Exclude 48h of data after each retraining event to allow the model to stabilize.',
+        action: 'Apply washout window in metric computation SQL.',
+      },
+      {
+        recommendationId: 'rec-002',
+        severity: 'MEDIUM',
+        title: 'Use bias-corrected estimate for decision',
+        description: 'The raw estimate inflates treatment effect due to feedback contamination. Use the doubly-robust corrected estimate.',
+        action: 'Override primary decision with biasCorrectedEstimate.',
+      },
+      {
+        recommendationId: 'rec-003',
+        severity: 'LOW',
+        title: 'Reduce retraining frequency during experiment',
+        description: 'Retraining more than once per week creates persistent feedback bias. Consider pausing retrains or using a holdout model.',
+        action: 'Coordinate with ML platform team to freeze model during active experiment windows.',
+      },
+    ],
+    computedAt: '2026-03-05T14:30:00Z',
+  },
+];
+
+export let SEED_FEEDBACK_LOOP_RESULTS: FeedbackLoopResult[] = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -1758,4 +1916,7 @@ export function resetSeedData(): void {
   SEED_LAYER_ALLOCATIONS = structuredClone(INITIAL_LAYER_ALLOCATIONS);
   SEED_AUDIT_LOG = structuredClone(INITIAL_AUDIT_LOG);
   SEED_PROVIDER_HEALTH = structuredClone(INITIAL_PROVIDER_HEALTH);
+  SEED_AVLM_RESULTS = structuredClone(INITIAL_AVLM_RESULTS);
+  SEED_ADAPTIVE_N_RESULTS = structuredClone(INITIAL_ADAPTIVE_N_RESULTS);
+  SEED_FEEDBACK_LOOP_RESULTS = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
 }

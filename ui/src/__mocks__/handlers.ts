@@ -5,6 +5,7 @@ import {
   SEED_BANDIT_RESULTS, SEED_HOLDOUT_RESULTS, SEED_GUARDRAIL_STATUS, SEED_QOE_RESULTS,
   SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
   SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS, SEED_PROVIDER_HEALTH,
+  SEED_AVLM_RESULTS, SEED_ADAPTIVE_N_RESULTS, SEED_FEEDBACK_LOOP_RESULTS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -780,5 +781,46 @@ export const handlers = [
       primaryMetricId: body.primaryMetricId,
       createdAt: new Date().toISOString(),
     });
+  }),
+
+  // GetAvlmResult (ADR-015)
+  http.post(`${ANALYSIS_SVC}/GetAvlmResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string; metricId: string };
+    const result = SEED_AVLM_RESULTS.find(
+      (r) => r.experimentId === body.experimentId && r.metricId === body.metricId,
+    );
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No AVLM result found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetAdaptiveN (ADR-020)
+  http.post(`${ANALYSIS_SVC}/GetAdaptiveN`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_ADAPTIVE_N_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No adaptive-N result found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetFeedbackLoopAnalysis
+  http.post(`${ANALYSIS_SVC}/GetFeedbackLoopAnalysis`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_FEEDBACK_LOOP_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No feedback loop analysis found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
   }),
 ];

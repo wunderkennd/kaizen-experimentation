@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
-import { getExperiment, getAnalysisResult, RpcError } from '@/lib/api';
+import { getExperiment, getAnalysisResult, getAdaptiveN, RpcError } from '@/lib/api';
+import type { AdaptiveNResult } from '@/lib/types';
 import { RetryableError } from '@/components/retryable-error';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { SrmBanner } from '@/components/srm-banner';
@@ -63,10 +64,22 @@ const SessionLevelTab = dynamic(
   () => import('@/components/session-level-tab').then(m => ({ default: m.SessionLevelTab })),
   { ssr: false },
 );
+const FeedbackLoopTab = dynamic(
+  () => import('@/components/feedback-loop-tab').then(m => ({ default: m.FeedbackLoopTab })),
+  { ssr: false },
+);
+const AvlmBoundaryPlot = dynamic(
+  () => import('@/components/charts/avlm-boundary-plot').then(m => ({ default: m.AvlmBoundaryPlot })),
+  { ssr: false },
+);
+const AdaptiveNTimeline = dynamic(
+  () => import('@/components/adaptive-n-timeline').then(m => ({ default: m.AdaptiveNTimeline })),
+  { ssr: false },
+);
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback';
 
-const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session'];
+const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session', 'feedback'];
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -76,6 +89,7 @@ export default function ResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCuped, setShowCuped] = useState(false);
   const [showIpw, setShowIpw] = useState(false);
+  const [adaptiveN, setAdaptiveN] = useState<AdaptiveNResult | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawTab = searchParams.get('tab');
@@ -116,14 +130,18 @@ export default function ResultsPage() {
     getExperiment(params.id)
       .then((exp) => {
         setExperiment(exp);
-        return getAnalysisResult(params.id).catch((err) => {
-          // Only treat 404 (no data yet) as null; propagate real server errors
-          if (err instanceof RpcError && err.status === 404) return null;
-          throw err;
-        });
+        // Fetch analysis result and adaptive-N in parallel
+        return Promise.all([
+          getAnalysisResult(params.id).catch((err) => {
+            if (err instanceof RpcError && err.status === 404) return null;
+            throw err;
+          }),
+          getAdaptiveN(params.id).catch(() => null), // best-effort; 404 = not applicable
+        ]);
       })
-      .then((analysis) => {
+      .then(([analysis, adaptiveNResult]) => {
         if (analysis) setAnalysisResult(analysis);
+        setAdaptiveN(adaptiveNResult);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -224,6 +242,10 @@ export default function ResultsPage() {
   if (hasGuardrails) {
     tabs.push({ key: 'guardrails', label: 'Guardrails' });
   }
+  // Feedback loop tab is always available for bandit/MAB experiments or any experiment with analysis
+  if (experiment.type === 'MAB' || experiment.type === 'CONTEXTUAL_BANDIT' || experiment.type === 'AB') {
+    tabs.push({ key: 'feedback', label: 'Feedback Loop' });
+  }
 
   // Fall back to overview if activeTab isn't in the dynamic tab list for this experiment
   // (e.g. ?tab=holdout for a non-holdout experiment)
@@ -300,13 +322,45 @@ export default function ResultsPage() {
           {/* Forest Plot */}
           <ForestPlot metricResults={analysisResult.metricResults} showCuped={showCuped} showIpw={showIpw} />
 
-          {/* Sequential Boundary Plot */}
+          {/* Adaptive N timeline (PROMISING zone only) */}
+          {adaptiveN && adaptiveN.zone === 'PROMISING' && (
+            <section className="mb-6">
+              <AdaptiveNTimeline result={adaptiveN} />
+            </section>
+          )}
+
+          {/* AVLM Confidence Sequence (ADR-015) — replaces separate mSPRT/CUPED views */}
           {experiment.sequentialTestConfig && (
-            <>
-              <SequentialBoundaryPlot
-                metricResults={analysisResult.metricResults}
-                overallAlpha={experiment.sequentialTestConfig.overallAlpha}
-              />
+            <section className="mb-6">
+              <h2 className="mb-3 text-lg font-semibold text-gray-900">
+                Sequential Analysis (AVLM)
+              </h2>
+              <p className="mb-3 text-sm text-gray-500">
+                Anytime-Valid Linear Models unify CUPED variance reduction with sequential
+                testing in a single confidence sequence. The shaded band is the 95% confidence
+                sequence; when it excludes zero the experiment is conclusive.
+              </p>
+              {analysisResult.metricResults.map((m) => (
+                <div key={m.metricId} className="mb-4">
+                  <AvlmBoundaryPlot
+                    experimentId={params.id}
+                    metricId={m.metricId}
+                  />
+                </div>
+              ))}
+
+              {/* Legacy alpha-spending summary (keep for experiments that haven't migrated to AVLM) */}
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600">
+                  Show alpha-spending summary (legacy)
+                </summary>
+                <div className="mt-2">
+                  <SequentialBoundaryPlot
+                    metricResults={analysisResult.metricResults}
+                    overallAlpha={experiment.sequentialTestConfig.overallAlpha}
+                  />
+                </div>
+              </details>
 
               {/* GST Stopping Boundary Trajectory */}
               {analysisResult.metricResults
@@ -318,7 +372,7 @@ export default function ResultsPage() {
                     metricId={m.metricId}
                   />
                 ))}
-            </>
+            </section>
           )}
         </div>
       )}
@@ -376,6 +430,12 @@ export default function ResultsPage() {
       {effectiveTab === 'qoe' && (
         <div role="tabpanel" id="tabpanel-qoe" aria-labelledby="tab-qoe" tabIndex={0}>
           <QoeTab experimentId={params.id} />
+        </div>
+      )}
+
+      {effectiveTab === 'feedback' && (
+        <div role="tabpanel" id="tabpanel-feedback" aria-labelledby="tab-feedback" tabIndex={0}>
+          <FeedbackLoopTab experimentId={params.id} />
         </div>
       )}
     </div>

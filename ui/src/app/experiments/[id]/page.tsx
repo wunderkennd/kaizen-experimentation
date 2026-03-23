@@ -18,6 +18,7 @@ import { StateActions } from '@/components/state-actions';
 import { StartingChecklist } from '@/components/starting-checklist';
 import { ConcludingProgress } from '@/components/concluding-progress';
 import { LayerAllocationChart } from '@/components/layer-allocation-chart';
+import { AdaptiveNBadge } from '@/components/adaptive-n-badge';
 
 export default function ExperimentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -127,6 +128,9 @@ export default function ExperimentDetailPage() {
             </button>
             <StateBadge state={experiment.state} />
             <TypeBadge type={experiment.type} />
+            {(experiment.state === 'RUNNING' || experiment.state === 'CONCLUDED') && (
+              <AdaptiveNBadge experimentId={experiment.experimentId} />
+            )}
           </div>
           <p className="mt-1 text-sm text-gray-600">{experiment.description}</p>
         </div>

@@ -572,6 +572,96 @@ export interface BanditDashboardResult {
   rewardHistory: RewardHistoryPoint[];
 }
 
+// --- AVLM Confidence Sequence (ADR-015) ---
+
+export interface AvlmBoundaryPoint {
+  look: number;
+  informationFraction: number; // 0–1
+  upperBound: number;          // upper confidence sequence boundary
+  lowerBound: number;          // lower confidence sequence boundary
+  estimate: number;            // CUPED-adjusted point estimate
+  estimateRaw: number;         // unadjusted point estimate
+}
+
+export interface AvlmResult {
+  experimentId: string;
+  metricId: string;
+  boundaryPoints: AvlmBoundaryPoint[];
+  varianceReductionPct: number;
+  isConclusive: boolean;
+  conclusiveLook?: number;
+  finalEstimate: number;
+  finalCiLower: number;
+  finalCiUpper: number;
+  computedAt: string;
+}
+
+// --- Adaptive Sample Size (ADR-020) ---
+
+export type AdaptiveNZone = 'FAVORABLE' | 'PROMISING' | 'FUTILE' | 'INCONCLUSIVE';
+
+export interface AdaptiveNTimelinePoint {
+  date: string;
+  estimatedN: number;
+}
+
+export interface AdaptiveNResult {
+  experimentId: string;
+  zone: AdaptiveNZone;
+  currentN: number;
+  plannedN: number;
+  recommendedN?: number;
+  conditionalPower: number;
+  projectedConclusionDate?: string;
+  extensionDays?: number;
+  timelineProjection: AdaptiveNTimelinePoint[];
+  computedAt: string;
+}
+
+// --- Feedback Loop Analysis ---
+
+export interface RetrainingEvent {
+  eventId: string;
+  retrainedAt: string;
+  triggerReason: string;
+  modelVersion: string;
+}
+
+export interface FeedbackLoopPrePost {
+  date: string;
+  preEffect: number;
+  postEffect: number;
+}
+
+export interface ContaminationPoint {
+  date: string;
+  contaminationFraction: number;
+}
+
+export type MitigationSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface MitigationRecommendation {
+  recommendationId: string;
+  severity: MitigationSeverity;
+  title: string;
+  description: string;
+  action: string;
+}
+
+export interface FeedbackLoopResult {
+  experimentId: string;
+  retrainingEvents: RetrainingEvent[];
+  prePostComparison: FeedbackLoopPrePost[];
+  contaminationTimeline: ContaminationPoint[];
+  rawEstimate: number;
+  biasCorrectedEstimate: number;
+  biasCorrectedCiLower: number;
+  biasCorrectedCiUpper: number;
+  contaminationFraction: number;
+  recommendations: MitigationRecommendation[];
+  computedAt: string;
+}
+
 // --- Provider Health (ADR-014) ---
 
 export interface ProviderHealthPoint {
