@@ -1,4 +1,5 @@
-//go:build !cgo || !has_ffi
+// Pure-Go MurmurHash3 implementation — primary hash path after ADR-024.
+// The CGo/FFI bridge (hash_cgo.go) was deleted; this file is now unconditional.
 
 package experimentation
 

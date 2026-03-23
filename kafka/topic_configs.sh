@@ -3,6 +3,19 @@
 # Applied via kafka-topics.sh or Terraform/Pulumi IaC
 # ============================================================================
 
+# --- experiment_lifecycle ---
+# Source: M5 Management Service — published on CONCLUDED or ARCHIVED transitions.
+# Consumers: M7 Flags Service (Rust, flags-reconciler) — instant flag auto-resolution.
+# Payload: JSON {"experiment_id": "<uuid>", "state": "CONCLUDED"}
+# Volume estimate: ~10 events/day
+kafka-topics.sh --create --topic experiment_lifecycle \
+  --partitions 4 \
+  --replication-factor 3 \
+  --config retention.ms=2592000000 \       # 30 days
+  --config cleanup.policy=delete \
+  --config max.message.bytes=65536 \
+  --config min.insync.replicas=2
+
 # --- exposures ---
 # Source: M2 Event Ingestion (Rust)
 # Consumers: M3 Metric Engine (Spark), M4a Analysis (SRM check)

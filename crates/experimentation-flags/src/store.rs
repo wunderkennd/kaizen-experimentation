@@ -131,6 +131,16 @@ impl FlagStore {
         Ok(Self { pool })
     }
 
+    /// Return the underlying pool (needed to share it with AuditStore and gRPC serve).
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
+    /// Build a FlagStore from an existing pool (no new connection, clones the Arc).
+    pub fn from_pool(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
     // --- CRUD ---
 
     pub async fn create_flag(&self, f: &Flag) -> Result<Flag, StoreError> {
@@ -372,6 +382,117 @@ impl FlagStore {
         .await
         .map_err(StoreError::Db)?
         .rows_affected();
+
+        if rows_affected == 0 {
+            return Err(StoreError::NotFound(flag_id.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Return the flag promoted to a given experiment, if any.
+    pub async fn get_flag_by_experiment(
+        &self,
+        experiment_id: Uuid,
+    ) -> Result<Flag, StoreError> {
+        let row: Option<FlagRow> = sqlx::query_as(
+            r#"SELECT flag_id, name, description,
+                      type AS flag_type,
+                      default_value, enabled, rollout_percentage, salt, targeting_rule_id,
+                      created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
+               FROM feature_flags WHERE promoted_experiment_id = $1"#,
+        )
+        .bind(experiment_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+
+        let row = row.ok_or_else(|| {
+            StoreError::NotFound(format!("no flag for experiment {experiment_id}"))
+        })?;
+        let mut flag = Flag::from(row);
+        flag.variants = self.get_variants(flag.flag_id).await?;
+        Ok(flag)
+    }
+
+    /// Return all flags that reference a given targeting rule.
+    pub async fn get_flags_by_targeting_rule(
+        &self,
+        targeting_rule_id: Uuid,
+    ) -> Result<Vec<Flag>, StoreError> {
+        let rows: Vec<FlagRow> = sqlx::query_as(
+            r#"SELECT flag_id, name, description,
+                      type AS flag_type,
+                      default_value, enabled, rollout_percentage, salt, targeting_rule_id,
+                      created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
+               FROM feature_flags WHERE targeting_rule_id = $1 ORDER BY name"#,
+        )
+        .bind(targeting_rule_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+
+        let mut flags: Vec<Flag> = rows.into_iter().map(Flag::from).collect();
+        for flag in &mut flags {
+            flag.variants = self.get_variants(flag.flag_id).await?;
+        }
+        Ok(flags)
+    }
+
+    /// Return all flags that have been promoted to experiments (promoted_experiment_id IS NOT NULL).
+    pub async fn get_promoted_flags(&self) -> Result<Vec<Flag>, StoreError> {
+        let rows: Vec<FlagRow> = sqlx::query_as(
+            r#"SELECT flag_id, name, description,
+                      type AS flag_type,
+                      default_value, enabled, rollout_percentage, salt, targeting_rule_id,
+                      created_at, updated_at, promoted_experiment_id, promoted_at, resolved_at
+               FROM feature_flags
+               WHERE promoted_experiment_id IS NOT NULL
+               ORDER BY promoted_at DESC"#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+
+        let mut flags: Vec<Flag> = rows.into_iter().map(Flag::from).collect();
+        for flag in &mut flags {
+            flag.variants = self.get_variants(flag.flag_id).await?;
+        }
+        Ok(flags)
+    }
+
+    /// Resolve a promoted flag: apply action, set resolved_at = NOW().
+    pub async fn resolve_flag(
+        &self,
+        flag_id: Uuid,
+        action: crate::reconciler::ResolutionAction,
+    ) -> Result<(), StoreError> {
+        use crate::reconciler::ResolutionAction;
+        let sql = match action {
+            ResolutionAction::RolloutFull => {
+                r#"UPDATE feature_flags
+                   SET rollout_percentage = 1.0, enabled = TRUE,
+                       resolved_at = NOW(), updated_at = NOW()
+                   WHERE flag_id = $1"#
+            }
+            ResolutionAction::Rollback => {
+                r#"UPDATE feature_flags
+                   SET rollout_percentage = 0.0, enabled = FALSE,
+                       resolved_at = NOW(), updated_at = NOW()
+                   WHERE flag_id = $1"#
+            }
+            ResolutionAction::Keep => {
+                r#"UPDATE feature_flags
+                   SET resolved_at = NOW(), updated_at = NOW()
+                   WHERE flag_id = $1"#
+            }
+        };
+
+        let rows_affected = sqlx::query(sql)
+            .bind(flag_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Db)?
+            .rows_affected();
 
         if rows_affected == 0 {
             return Err(StoreError::NotFound(flag_id.to_string()));

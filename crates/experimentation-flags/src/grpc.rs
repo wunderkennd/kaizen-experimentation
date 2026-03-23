@@ -1,14 +1,19 @@
 //! tonic gRPC service implementation for FeatureFlagService (M7 Rust port).
 //!
-//! Phase 1: CRUD + EvaluateFlag/EvaluateFlags.
-//! PromoteToExperiment is stubbed — returns UNIMPLEMENTED (Phase 2).
+//! Phase 1: Flag CRUD + EvaluateFlag/EvaluateFlags.
+//! Phase 2: PromoteToExperiment (M5 tonic client), audit trail writes.
 
 use std::sync::Arc;
 
+use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use experimentation_proto::experimentation::common::v1::{
+    BanditAlgorithm, BanditArm, BanditConfig, Experiment, ExperimentState, ExperimentType,
+    InterleavingConfig, InterleavingMethod, CreditAssignment, SessionConfig, Variant,
+};
 use experimentation_proto::experimentation::flags::v1::{
     feature_flag_service_server::{FeatureFlagService, FeatureFlagServiceServer},
     CreateFlagRequest, EvaluateFlagRequest, EvaluateFlagResponse, EvaluateFlagsRequest,
@@ -16,8 +21,12 @@ use experimentation_proto::experimentation::flags::v1::{
     GetFlagRequest, ListFlagsRequest, ListFlagsResponse, PromoteToExperimentRequest,
     UpdateFlagRequest,
 };
-use experimentation_proto::experimentation::common::v1::Experiment;
+use experimentation_proto::experimentation::management::v1::{
+    experiment_management_service_client::ExperimentManagementServiceClient,
+    CreateExperimentRequest,
+};
 
+use crate::audit::AuditStore;
 use crate::config::FlagsConfig;
 use crate::store::{Flag, FlagStore, FlagVariant, StoreError};
 
@@ -28,18 +37,42 @@ use crate::store::{Flag, FlagStore, FlagVariant, StoreError};
 #[derive(Clone)]
 pub struct FlagsServiceHandler {
     store: Arc<FlagStore>,
+    audit: Option<Arc<AuditStore>>,
+    m5_client: Option<ExperimentManagementServiceClient<Channel>>,
+    default_layer_id: String,
 }
 
 impl FlagsServiceHandler {
-    pub fn new(store: FlagStore) -> Self {
+    pub fn new(store: FlagStore, config: &FlagsConfig) -> Self {
         Self {
             store: Arc::new(store),
+            audit: None,
+            m5_client: None,
+            default_layer_id: config.default_layer_id.clone(),
         }
+    }
+
+    pub fn with_audit(mut self, audit: Arc<AuditStore>) -> Self {
+        self.audit = Some(audit);
+        self
+    }
+
+    pub fn with_m5_client(mut self, client: ExperimentManagementServiceClient<Channel>) -> Self {
+        self.m5_client = Some(client);
+        self
+    }
+
+    pub fn store(&self) -> Arc<FlagStore> {
+        self.store.clone()
+    }
+
+    pub fn audit(&self) -> Option<Arc<AuditStore>> {
+        self.audit.clone()
     }
 }
 
 // ---------------------------------------------------------------------------
-// Proto ↔ domain conversions
+// Proto ↔ domain conversions (unchanged from Phase 1)
 // ---------------------------------------------------------------------------
 
 fn flag_type_to_str(t: i32) -> &'static str {
@@ -87,7 +120,7 @@ fn domain_to_proto(f: &Flag) -> ProtoFlag {
     }
 }
 
-#[allow(clippy::result_large_err)] // tonic::Status is intentionally large; boxing would obscure gRPC error handling
+#[allow(clippy::result_large_err)]
 fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
     let flag_id = if pb.flag_id.is_empty() {
         Uuid::nil()
@@ -109,7 +142,7 @@ fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
         .variants
         .iter()
         .map(|v| FlagVariant {
-            variant_id: Uuid::nil(), // assigned by DB on insert
+            variant_id: Uuid::nil(),
             flag_id,
             value: v.value.clone(),
             traffic_fraction: v.traffic_fraction,
@@ -125,7 +158,7 @@ fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
         default_value: pb.default_value.clone(),
         enabled: pb.enabled,
         rollout_percentage: pb.rollout_percentage,
-        salt: String::new(), // assigned by DB on insert
+        salt: String::new(),
         targeting_rule_id,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
@@ -136,7 +169,7 @@ fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
     })
 }
 
-#[allow(clippy::result_large_err)] // tonic::Status is intentionally large; boxing would obscure gRPC error handling
+#[allow(clippy::result_large_err)]
 fn validate_flag(pb: &ProtoFlag) -> Result<(), Status> {
     if pb.name.trim().is_empty() {
         return Err(Status::invalid_argument("name is required"));
@@ -188,6 +221,46 @@ fn store_err_to_status(e: StoreError) -> Status {
 }
 
 // ---------------------------------------------------------------------------
+// Audit helpers
+// ---------------------------------------------------------------------------
+
+fn flag_snapshot(f: &Flag) -> serde_json::Value {
+    serde_json::json!({
+        "name": f.name,
+        "description": f.description,
+        "type": f.flag_type,
+        "default_value": f.default_value,
+        "enabled": f.enabled,
+        "rollout_percentage": f.rollout_percentage,
+        "targeting_rule_id": f.targeting_rule_id.map(|u| u.to_string()),
+        "variant_count": f.variants.len(),
+    })
+}
+
+async fn record_audit_nonfatal(
+    audit: &Option<Arc<AuditStore>>,
+    flag_id: Uuid,
+    action: &str,
+    actor_email: &str,
+    previous: Option<&Flag>,
+    current: Option<&Flag>,
+) {
+    let Some(audit) = audit else { return };
+    let prev_val = previous
+        .map(flag_snapshot)
+        .unwrap_or(serde_json::Value::Null);
+    let new_val = current
+        .map(flag_snapshot)
+        .unwrap_or(serde_json::Value::Null);
+    if let Err(e) = audit
+        .record_audit(flag_id, action, actor_email, &prev_val, &new_val)
+        .await
+    {
+        warn!(error = %e, %flag_id, %action, "audit write failed (non-fatal)");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Evaluation logic — direct call to experimentation_hash::bucket()
 // No CGo, no FFI. Hash parity guaranteed by construction.
 // ---------------------------------------------------------------------------
@@ -204,7 +277,6 @@ fn evaluate_flag(f: &Flag, user_id: &str) -> (String, String) {
         return (f.default_value.clone(), String::new());
     }
 
-    // User is in rollout.
     if f.variants.is_empty() {
         if f.flag_type == "BOOLEAN" {
             return ("true".to_string(), String::new());
@@ -225,6 +297,133 @@ fn evaluate_flag(f: &Flag, user_id: &str) -> (String, String) {
     // Fallback to last variant (handles float rounding).
     let last = f.variants.last().unwrap();
     (last.value.clone(), last.variant_id.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// PromoteToExperiment helpers (Phase 2)
+// ---------------------------------------------------------------------------
+
+fn build_variants(f: &Flag) -> Vec<Variant> {
+    if !f.variants.is_empty() {
+        return f
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(i, v)| Variant {
+                name: format!("variant_{i}"),
+                traffic_fraction: v.traffic_fraction,
+                is_control: i == 0,
+                payload_json: format!(r#"{{"value": {:?}}}"#, v.value),
+                variant_id: v.variant_id.to_string(),
+            })
+            .collect();
+    }
+
+    vec![
+        Variant {
+            name: "control".into(),
+            traffic_fraction: 1.0 - f.rollout_percentage,
+            is_control: true,
+            payload_json: r#"{"value": "false"}"#.into(),
+            variant_id: String::new(),
+        },
+        Variant {
+            name: "treatment".into(),
+            traffic_fraction: f.rollout_percentage,
+            is_control: false,
+            payload_json: r#"{"value": "true"}"#.into(),
+            variant_id: String::new(),
+        },
+    ]
+}
+
+fn apply_type_config(exp: &mut Experiment, f: &Flag) -> Result<(), Status> {
+    let exp_type = ExperimentType::try_from(exp.r#type).unwrap_or(ExperimentType::Unspecified);
+
+    match exp_type {
+        ExperimentType::Ab
+        | ExperimentType::Multivariate
+        | ExperimentType::PlaybackQoe
+        | ExperimentType::CumulativeHoldout => {
+            if exp_type == ExperimentType::CumulativeHoldout {
+                exp.is_cumulative_holdout = true;
+            }
+        }
+
+        ExperimentType::Interleaving => {
+            if f.variants.len() < 2 {
+                return Err(Status::invalid_argument(
+                    "interleaving requires at least 2 variants (algorithm_ids)",
+                ));
+            }
+            let algorithm_ids: Vec<String> = f.variants.iter().map(|v| v.value.clone()).collect();
+            exp.interleaving_config = Some(InterleavingConfig {
+                method: InterleavingMethod::TeamDraft as i32,
+                algorithm_ids,
+                max_list_size: 50,
+                credit_assignment: CreditAssignment::BinaryWin as i32,
+                credit_metric_event: String::new(),
+            });
+        }
+
+        ExperimentType::SessionLevel => {
+            exp.session_config = Some(SessionConfig {
+                session_id_attribute: "session_id".into(),
+                allow_cross_session_variation: true,
+                min_sessions_per_user: 0,
+            });
+        }
+
+        ExperimentType::Mab => {
+            if f.variants.len() < 2 {
+                return Err(Status::invalid_argument(
+                    "MAB requires at least 2 variants (arms)",
+                ));
+            }
+            exp.bandit_config = Some(build_bandit_config(BanditAlgorithm::ThompsonSampling, f));
+        }
+
+        ExperimentType::ContextualBandit => {
+            if f.variants.len() < 2 {
+                return Err(Status::invalid_argument(
+                    "contextual bandit requires at least 2 variants (arms)",
+                ));
+            }
+            exp.bandit_config = Some(build_bandit_config(BanditAlgorithm::LinearUcb, f));
+        }
+
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn build_bandit_config(algo: BanditAlgorithm, f: &Flag) -> BanditConfig {
+    let arms: Vec<BanditArm> = f
+        .variants
+        .iter()
+        .map(|v| BanditArm {
+            arm_id: v.variant_id.to_string(),
+            name: v.value.clone(),
+            payload_json: format!(r#"{{"value": {:?}}}"#, v.value),
+        })
+        .collect();
+
+    BanditConfig {
+        algorithm: algo as i32,
+        arms,
+        min_exploration_fraction: 0.1,
+        reward_metric_id: String::new(),
+        context_feature_keys: vec![],
+        warmup_observations: 1000,
+        cold_start_window: None,
+        reward_objectives: vec![],
+        composition_method: 0,
+        arm_constraints: vec![],
+        global_constraints: vec![],
+        slate_config: None,
+        mad_randomization_fraction: 0.0,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +451,8 @@ impl FeatureFlagService for FlagsServiceHandler {
             .map_err(store_err_to_status)?;
 
         info!(flag_id = %created.flag_id, name = %created.name, "flag created");
+        record_audit_nonfatal(&self.audit, created.flag_id, "create", "system", None, Some(&created)).await;
+
         Ok(Response::new(domain_to_proto(&created)))
     }
 
@@ -291,6 +492,18 @@ impl FeatureFlagService for FlagsServiceHandler {
 
         validate_flag(&pb)?;
 
+        // Fetch previous state for audit delta.
+        let previous = if self.audit.is_some() {
+            let flag_id = Uuid::parse_str(&pb.flag_id).ok();
+            if let Some(id) = flag_id {
+                self.store.get_flag(id).await.ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let domain = proto_to_domain(&pb)?;
         let updated = self
             .store
@@ -298,7 +511,30 @@ impl FeatureFlagService for FlagsServiceHandler {
             .await
             .map_err(store_err_to_status)?;
 
-        info!(flag_id = %updated.flag_id, "flag updated");
+        // Determine specific audit action.
+        let action = if let Some(ref prev) = previous {
+            if prev.enabled != updated.enabled {
+                if updated.enabled { "enable" } else { "disable" }
+            } else if (prev.rollout_percentage - updated.rollout_percentage).abs() > 1e-9 {
+                "rollout_change"
+            } else {
+                "update"
+            }
+        } else {
+            "update"
+        };
+
+        info!(flag_id = %updated.flag_id, %action, "flag updated");
+        record_audit_nonfatal(
+            &self.audit,
+            updated.flag_id,
+            action,
+            "system",
+            previous.as_ref(),
+            Some(&updated),
+        )
+        .await;
+
         Ok(Response::new(domain_to_proto(&updated)))
     }
 
@@ -379,14 +615,135 @@ impl FeatureFlagService for FlagsServiceHandler {
         Ok(Response::new(EvaluateFlagsResponse { evaluations }))
     }
 
-    /// Phase 2: stub — M5 gRPC client not yet wired.
+    /// Phase 2: promote a flag to a tracked experiment via M5 CreateExperiment.
     async fn promote_to_experiment(
         &self,
-        _request: Request<PromoteToExperimentRequest>,
+        request: Request<PromoteToExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        Err(Status::unimplemented(
-            "PromoteToExperiment: Phase 2 — not yet implemented in Rust port",
-        ))
+        let req = request.into_inner();
+
+        if req.flag_id.is_empty() {
+            return Err(Status::invalid_argument("flag_id is required"));
+        }
+        if req.primary_metric_id.is_empty() {
+            return Err(Status::invalid_argument("primary_metric_id is required"));
+        }
+        let exp_type = ExperimentType::try_from(req.experiment_type)
+            .unwrap_or(ExperimentType::Unspecified);
+        if exp_type == ExperimentType::Unspecified {
+            return Err(Status::invalid_argument("experiment_type is required"));
+        }
+
+        let flag_id = Uuid::parse_str(&req.flag_id)
+            .map_err(|_| Status::invalid_argument("invalid flag_id UUID"))?;
+
+        let flag = self
+            .store
+            .get_flag(flag_id)
+            .await
+            .map_err(store_err_to_status)?;
+
+        if !flag.enabled {
+            return Err(Status::failed_precondition(
+                "flag must be enabled to promote to experiment",
+            ));
+        }
+
+        let variants = build_variants(&flag);
+        let mut experiment = Experiment {
+            name: format!("Promoted from flag: {}", flag.name),
+            description: format!(
+                "Auto-promoted from feature flag {} ({})",
+                flag.name, flag.flag_id
+            ),
+            owner_email: "system".into(),
+            r#type: exp_type as i32,
+            layer_id: self.default_layer_id.clone(),
+            variants,
+            primary_metric_id: req.primary_metric_id.clone(),
+            secondary_metric_ids: req.secondary_metric_ids.clone(),
+            targeting_rule_id: flag
+                .targeting_rule_id
+                .map(|u| u.to_string())
+                .unwrap_or_default(),
+            hash_salt: flag.salt.clone(),
+            ..Default::default()
+        };
+
+        apply_type_config(&mut experiment, &flag)?;
+
+        let result = match &self.m5_client {
+            Some(client) => {
+                let mut client = client.clone();
+                let resp = client
+                    .create_experiment(CreateExperimentRequest {
+                        experiment: Some(experiment),
+                    })
+                    .await
+                    .map_err(|e| {
+                        warn!(error = %e, "M5 CreateExperiment failed");
+                        Status::internal(format!("create experiment in M5: {e}"))
+                    })?;
+                resp.into_inner()
+            }
+            None => {
+                // Development / test fallback: mock experiment.
+                let mut mock_exp = Experiment {
+                    name: format!("Promoted from flag: {}", flag.name),
+                    description: format!(
+                        "Auto-promoted from feature flag {} ({})",
+                        flag.name, flag.flag_id
+                    ),
+                    owner_email: "system".into(),
+                    r#type: exp_type as i32,
+                    layer_id: self.default_layer_id.clone(),
+                    primary_metric_id: req.primary_metric_id.clone(),
+                    secondary_metric_ids: req.secondary_metric_ids.clone(),
+                    hash_salt: flag.salt.clone(),
+                    experiment_id: Uuid::new_v4().to_string(),
+                    state: ExperimentState::Draft as i32,
+                    ..Default::default()
+                };
+                apply_type_config(&mut mock_exp, &flag)?;
+                info!(
+                    flag_id = %flag.flag_id,
+                    experiment_id = %mock_exp.experiment_id,
+                    "PromoteToExperiment (mocked — M5_ADDR not configured)"
+                );
+                mock_exp
+            }
+        };
+
+        // Link flag → experiment (non-fatal on failure).
+        if !result.experiment_id.is_empty() {
+            if let Ok(exp_uuid) = Uuid::parse_str(&result.experiment_id) {
+                if let Err(e) = self.store.link_flag_to_experiment(flag_id, exp_uuid).await {
+                    warn!(
+                        error = %e,
+                        %flag_id,
+                        experiment_id = %result.experiment_id,
+                        "link_flag_to_experiment failed (non-fatal)"
+                    );
+                }
+            }
+        }
+
+        record_audit_nonfatal(
+            &self.audit,
+            flag_id,
+            "promote_to_experiment",
+            "system",
+            Some(&flag),
+            None,
+        )
+        .await;
+
+        info!(
+            %flag_id,
+            experiment_id = %result.experiment_id,
+            "PromoteToExperiment succeeded"
+        );
+        Ok(Response::new(result))
     }
 }
 
@@ -394,13 +751,34 @@ impl FeatureFlagService for FlagsServiceHandler {
 // Server entrypoint
 // ---------------------------------------------------------------------------
 
-pub async fn serve(config: FlagsConfig, store: FlagStore) -> Result<(), String> {
+pub async fn serve(config: FlagsConfig, store: FlagStore, audit: Option<Arc<AuditStore>>) -> Result<(), String> {
     let addr = config
         .grpc_addr
         .parse()
         .map_err(|e| format!("invalid gRPC address '{}': {e}", config.grpc_addr))?;
 
-    let handler = FlagsServiceHandler::new(store);
+    let mut handler = FlagsServiceHandler::new(store, &config);
+    if let Some(a) = audit {
+        handler = handler.with_audit(a);
+    }
+
+    if let Some(m5_addr) = &config.m5_addr {
+        match tonic::transport::Channel::from_shared(m5_addr.clone())
+            .map_err(|e| format!("invalid M5_ADDR: {e}"))?
+            .connect()
+            .await
+        {
+            Ok(channel) => {
+                let client = ExperimentManagementServiceClient::new(channel);
+                handler = handler.with_m5_client(client);
+                info!(%m5_addr, "connected to M5 management service");
+            }
+            Err(e) => {
+                warn!(error = %e, %m5_addr, "M5 connection failed — PromoteToExperiment will use mock");
+            }
+        }
+    }
+
     let svc = FeatureFlagServiceServer::new(handler);
 
     info!(%addr, "feature flag gRPC server starting (tonic-web enabled)");
