@@ -87,6 +87,7 @@ fn domain_to_proto(f: &Flag) -> ProtoFlag {
     }
 }
 
+#[allow(clippy::result_large_err)] // tonic::Status is intentionally large; boxing would obscure gRPC error handling
 fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
     let flag_id = if pb.flag_id.is_empty() {
         Uuid::nil()
@@ -135,6 +136,7 @@ fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
     })
 }
 
+#[allow(clippy::result_large_err)] // tonic::Status is intentionally large; boxing would obscure gRPC error handling
 fn validate_flag(pb: &ProtoFlag) -> Result<(), Status> {
     if pb.name.trim().is_empty() {
         return Err(Status::invalid_argument("name is required"));
