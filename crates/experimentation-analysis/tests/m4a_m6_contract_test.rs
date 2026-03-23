@@ -51,6 +51,7 @@ fn test_config(path: &str) -> AnalysisConfig {
         default_alpha: 0.05,
         default_js_threshold: 0.05,
         database_url: None,
+        default_tau_sq: 0.5,
     }
 }
 
@@ -298,6 +299,7 @@ async fn contract_analysis_result_field_presence() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -348,6 +350,7 @@ async fn contract_metric_result_all_fields() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -409,6 +412,7 @@ async fn contract_srm_result_map_fields() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -471,6 +475,7 @@ async fn contract_srm_mismatch_detected() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -540,6 +545,7 @@ async fn contract_segment_result_lifecycle_enum_values() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -601,6 +607,7 @@ async fn contract_optional_sub_messages_absent() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -679,6 +686,7 @@ async fn contract_interleaving_analysis() {
     let resp = handler
         .get_interleaving_analysis(Request::new(GetInterleavingAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -753,6 +761,7 @@ async fn contract_novelty_analysis() {
     let resp = handler
         .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -841,6 +850,7 @@ async fn contract_interference_analysis_with_spillover() {
     let resp = handler
         .get_interference_analysis(Request::new(GetInterferenceAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -951,6 +961,7 @@ async fn contract_not_found_for_missing_experiment() {
     let err = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: missing.into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -960,6 +971,7 @@ async fn contract_not_found_for_missing_experiment() {
     let err = handler
         .get_analysis_result(Request::new(GetAnalysisResultRequest {
             experiment_id: missing.into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -969,6 +981,7 @@ async fn contract_not_found_for_missing_experiment() {
     let err = handler
         .get_interleaving_analysis(Request::new(GetInterleavingAnalysisRequest {
             experiment_id: missing.into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -978,6 +991,7 @@ async fn contract_not_found_for_missing_experiment() {
     let err = handler
         .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
             experiment_id: missing.into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -987,6 +1001,7 @@ async fn contract_not_found_for_missing_experiment() {
     let err = handler
         .get_interference_analysis(Request::new(GetInterferenceAnalysisRequest {
             experiment_id: missing.into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1002,6 +1017,7 @@ async fn contract_empty_experiment_id_invalid_argument() {
     let err = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1011,6 +1027,7 @@ async fn contract_empty_experiment_id_invalid_argument() {
     let err = handler
         .get_analysis_result(Request::new(GetAnalysisResultRequest {
             experiment_id: "".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1020,6 +1037,7 @@ async fn contract_empty_experiment_id_invalid_argument() {
     let err = handler
         .get_interleaving_analysis(Request::new(GetInterleavingAnalysisRequest {
             experiment_id: "".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1029,6 +1047,7 @@ async fn contract_empty_experiment_id_invalid_argument() {
     let err = handler
         .get_novelty_analysis(Request::new(GetNoveltyAnalysisRequest {
             experiment_id: "".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1038,6 +1057,7 @@ async fn contract_empty_experiment_id_invalid_argument() {
     let err = handler
         .get_interference_analysis(Request::new(GetInterferenceAnalysisRequest {
             experiment_id: "".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1093,6 +1113,7 @@ async fn contract_cochran_q_heterogeneity() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -1123,6 +1144,7 @@ async fn contract_cochran_q_heterogeneity() {
     let resp2 = handler2
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -1132,5 +1154,155 @@ async fn contract_cochran_q_heterogeneity() {
         (result_no.cochran_q_p_value - 0.0).abs() < 1e-10,
         "no segments: cochran_q_p_value should be 0.0 (proto3 omits), got {}",
         result_no.cochran_q_p_value
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ADR-015: AVLM integration test — narrower CIs than mSPRT on golden-file data
+// ---------------------------------------------------------------------------
+//
+// Golden-file data: outcome Y strongly correlated with covariate X (θ ≈ 2.0,
+// R² ≈ 0.999). AVLM regression-adjusts away ~99% of outcome variance, producing
+// a confidence sequence much narrower than the unadjusted mSPRT CI.
+//
+// AVLM run:  covariates non-null → full regression adjustment → narrow CI
+// mSPRT run: same Y values, null covariates → x=0 → unadjusted mSPRT CS → wide CI
+//
+// Asserts:
+//   - AVLM CI width < mSPRT CI width (primary goal of ADR-015)
+//   - AVLM sequential_result.boundary_crossed == true (treatment effect = 1.0 detected)
+//   - AVLM variance_reduction_pct > 80% (confirms regression adjustment is effective)
+
+#[tokio::test]
+async fn test_avlm_narrower_ci_than_msprt_on_golden_data() {
+    // Golden-file data: Y = 2·X + treatment_effect + small_noise
+    // Control: 10 users, X in [3.0, 7.5], Y ≈ 2·X (residuals ~0.1)
+    // Treatment: 10 users, X in [3.0, 7.5], Y ≈ 2·X + 1.0
+    let exp_id = "exp-avlm-golden";
+
+    // Outcome values (Y)
+    let y_control = [6.1, 8.0, 10.1, 12.0, 14.1, 7.1, 9.0, 11.0, 13.0, 15.1_f64];
+    let y_treatment = [7.1, 9.0, 11.0, 13.1, 15.0, 8.0, 10.1, 12.0, 14.1, 16.0_f64];
+
+    // Covariate values (X) — same for both arms
+    let x = [3.0, 4.0, 5.0, 6.0, 7.0, 3.5, 4.5, 5.5, 6.5, 7.5_f64];
+
+    let n = y_control.len();
+    let exp_ids: Vec<&str> = vec![exp_id; 2 * n];
+    let user_ids: Vec<String> = (0..2 * n).map(|i| format!("u{}", i)).collect();
+    let user_id_refs: Vec<&str> = user_ids.iter().map(|s| s.as_str()).collect();
+    let metric_ids: Vec<&str> = vec!["watch_time"; 2 * n];
+
+    let mut variant_ids: Vec<&str> = vec!["control"; n];
+    variant_ids.extend(vec!["treatment"; n]);
+
+    let mut values: Vec<f64> = y_control.to_vec();
+    values.extend_from_slice(&y_treatment);
+
+    // AVLM run: non-null covariates (strong correlation)
+    let covariates_avlm: Vec<Option<f64>> = x.iter().map(|&v| Some(v))
+        .chain(x.iter().map(|&v| Some(v)))
+        .collect();
+
+    // mSPRT run: null covariates → AVLM falls back to unadjusted CS (= mSPRT)
+    let covariates_msprt: Vec<Option<f64>> = vec![None; 2 * n];
+
+    // Build Delta Lake tables in separate temp dirs.
+    let tmp_avlm = TempDir::new().unwrap();
+    let tmp_msprt = TempDir::new().unwrap();
+
+    let batch_avlm = make_analysis_data(
+        &exp_ids,
+        &user_id_refs,
+        &variant_ids,
+        &metric_ids,
+        &values,
+        &covariates_avlm,
+    );
+    write_table(tmp_avlm.path(), "metric_summaries", batch_avlm).await;
+
+    let batch_msprt = make_analysis_data(
+        &exp_ids,
+        &user_id_refs,
+        &variant_ids,
+        &metric_ids,
+        &values,
+        &covariates_msprt,
+    );
+    write_table(tmp_msprt.path(), "metric_summaries", batch_msprt).await;
+
+    let handler_avlm = test_handler(tmp_avlm.path().to_str().unwrap());
+    let handler_msprt = test_handler(tmp_msprt.path().to_str().unwrap());
+
+    // SEQUENTIAL_METHOD_AVLM = 4
+    let avlm_resp = handler_avlm
+        .run_analysis(Request::new(RunAnalysisRequest {
+            experiment_id: exp_id.into(),
+            sequential_method: 4,
+            tau_sq: 0.5,
+        }))
+        .await
+        .expect("AVLM RunAnalysis should succeed");
+
+    let msprt_resp = handler_msprt
+        .run_analysis(Request::new(RunAnalysisRequest {
+            experiment_id: exp_id.into(),
+            sequential_method: 4,
+            tau_sq: 0.5,
+        }))
+        .await
+        .expect("mSPRT (null covariates) RunAnalysis should succeed");
+
+    let avlm_result = avlm_resp.into_inner();
+    let msprt_result = msprt_resp.into_inner();
+
+    // Locate the treatment variant metric result for "watch_time".
+    let avlm_mr = avlm_result
+        .metric_results
+        .iter()
+        .find(|r| r.metric_id == "watch_time" && r.variant_id == "treatment")
+        .expect("AVLM: watch_time/treatment metric result missing");
+
+    let msprt_mr = msprt_result
+        .metric_results
+        .iter()
+        .find(|r| r.metric_id == "watch_time" && r.variant_id == "treatment")
+        .expect("mSPRT: watch_time/treatment metric result missing");
+
+    // AVLM CI is in cuped_ci_lower/upper (regression-adjusted confidence sequence).
+    let avlm_width = avlm_mr.cuped_ci_upper - avlm_mr.cuped_ci_lower;
+    let msprt_width = msprt_mr.cuped_ci_upper - msprt_mr.cuped_ci_lower;
+
+    assert_finite(avlm_width, "avlm_width");
+    assert_finite(msprt_width, "msprt_width");
+
+    assert!(
+        avlm_width > 0.0,
+        "AVLM CI width must be positive, got {avlm_width}"
+    );
+    assert!(
+        msprt_width > 0.0,
+        "mSPRT CI width must be positive, got {msprt_width}"
+    );
+    assert!(
+        avlm_width < msprt_width,
+        "AVLM CI (width={avlm_width:.4}) must be narrower than mSPRT CI (width={msprt_width:.4})"
+    );
+
+    // Variance reduction should exceed 80% for this strongly correlated covariate.
+    assert!(
+        avlm_mr.variance_reduction_pct > 80.0,
+        "expected variance reduction > 80%, got {:.1}%",
+        avlm_mr.variance_reduction_pct
+    );
+
+    // Treatment effect = 1.0 should be detected at this sample size.
+    let seq = avlm_mr
+        .sequential_result
+        .as_ref()
+        .expect("AVLM: sequential_result should be populated");
+    assert!(
+        seq.boundary_crossed,
+        "AVLM: confidence sequence should exclude 0 (treatment effect = 1.0 is large)"
     );
 }

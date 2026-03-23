@@ -29,7 +29,15 @@ service AnalysisService {
   rpc GetSwitchbackAnalysis(GetSwitchbackAnalysisRequest) returns (SwitchbackAnalysisResult);
 }
 
-message RunAnalysisRequest { string experiment_id = 1; }
+message RunAnalysisRequest {
+  string experiment_id = 1;
+  // Optional: override sequential testing method for this run.
+  // SEQUENTIAL_METHOD_UNSPECIFIED (default) = fixed-horizon t-test only.
+  // SEQUENTIAL_METHOD_AVLM: anytime-valid LM with regression adjustment (ADR-015).
+  experimentation.common.v1.SequentialMethod sequential_method = 2;
+  // Mixing variance τ² for AVLM/mSPRT martingale. 0.0 = use service default (0.5).
+  double tau_sq = 3;
+}
 message GetAnalysisResultRequest { string experiment_id = 1; }
 message GetInterleavingAnalysisRequest { string experiment_id = 1; }
 message GetNoveltyAnalysisRequest { string experiment_id = 1; }

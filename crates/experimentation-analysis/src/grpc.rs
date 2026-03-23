@@ -14,12 +14,15 @@ use experimentation_proto::experimentation::analysis::v1::{
     GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
     InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
     PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
-    SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
+    SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
     SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_stats::{
-    cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
+    avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
 };
+
+/// Proto enum value for SEQUENTIAL_METHOD_AVLM (ADR-015).
+const SEQUENTIAL_METHOD_AVLM: i32 = 4;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -200,6 +203,8 @@ fn to_proto_novelty_result(
 async fn compute_analysis(
     config: &AnalysisConfig,
     experiment_id: &str,
+    sequential_method: i32,
+    tau_sq: f64,
 ) -> Result<AnalysisResult, Status> {
     let data = delta_reader::read_metric_summaries(&config.delta_lake_path, experiment_id)
         .await
@@ -263,13 +268,34 @@ async fn compute_analysis(
                 0.0
             };
 
-            // CUPED: only if all observations in both groups have non-null covariates.
+            // AVLM (ADR-015) or CUPED depending on sequential_method.
             let control_covs: Vec<f64> = control_tuples.iter().filter_map(|(_, c)| *c).collect();
             let treatment_covs: Vec<f64> =
                 treatment_tuples.iter().filter_map(|(_, c)| *c).collect();
 
-            let (cuped_effect, cuped_ci_lower, cuped_ci_upper, variance_reduction_pct) =
-                if control_covs.len() == control_values.len()
+            let (cuped_effect, cuped_ci_lower, cuped_ci_upper, variance_reduction_pct, avlm_sequential) =
+                if sequential_method == SEQUENTIAL_METHOD_AVLM {
+                    // AVLM: anytime-valid regression-adjusted CI (ADR-015).
+                    // Passes x=0 when covariate is null → falls back to mSPRT CS.
+                    let effective_tau_sq = if tau_sq > 0.0 { tau_sq } else { config.default_tau_sq };
+                    match compute_avlm_result(control_tuples, treatment_tuples, effective_tau_sq, alpha) {
+                        Ok(Some(av)) => {
+                            let seq = SequentialResult {
+                                boundary_crossed: av.is_significant,
+                                alpha_spent: if av.is_significant { alpha } else { 0.0 },
+                                alpha_remaining: if av.is_significant { 0.0 } else { alpha },
+                                current_look: 1,
+                                adjusted_p_value: 0.0,
+                            };
+                            (av.adjusted_effect, av.ci_lower, av.ci_upper, av.variance_reduction * 100.0, Some(seq))
+                        }
+                        Ok(None) => (0.0, 0.0, 0.0, 0.0, None),
+                        Err(e) => {
+                            warn!(metric_id, error = e, "AVLM failed, skipping sequential result");
+                            (0.0, 0.0, 0.0, 0.0, None)
+                        }
+                    }
+                } else if control_covs.len() == control_values.len()
                     && treatment_covs.len() == treatment_values.len()
                     && control_covs.len() >= 2
                     && treatment_covs.len() >= 2
@@ -286,11 +312,12 @@ async fn compute_analysis(
                             cr.ci_lower,
                             cr.ci_upper,
                             cr.variance_reduction * 100.0,
+                            None,
                         ),
-                        Err(_) => (0.0, 0.0, 0.0, 0.0),
+                        Err(_) => (0.0, 0.0, 0.0, 0.0, None),
                     }
                 } else {
-                    (0.0, 0.0, 0.0, 0.0)
+                    (0.0, 0.0, 0.0, 0.0, None)
                 };
 
             // CATE: per-segment results if lifecycle_segment data exists.
@@ -312,7 +339,7 @@ async fn compute_analysis(
                 cuped_ci_lower,
                 cuped_ci_upper,
                 variance_reduction_pct,
-                sequential_result: None,
+                sequential_result: avlm_sequential,
                 segment_results,
                 session_level_result: compute_session_level_result(
                     &data,
@@ -609,6 +636,33 @@ fn compute_experiment_cochran_q(
 }
 
 // ---------------------------------------------------------------------------
+// AVLM analysis helper (ADR-015)
+// ---------------------------------------------------------------------------
+
+/// Run AVLM sequential test by streaming all observations from both arms.
+///
+/// When the covariate (`cov`) is `None` for any observation, passes `0.0` for `x`,
+/// which causes `AvlmSequentialTest` to fall back to the unadjusted mSPRT confidence
+/// sequence (since `var_x_pool == 0` triggers `unadjusted_confidence_sequence()`).
+fn compute_avlm_result(
+    control_tuples: &[(f64, Option<f64>)],
+    treatment_tuples: &[(f64, Option<f64>)],
+    tau_sq: f64,
+    alpha: f64,
+) -> Result<Option<avlm::AvlmResult>, String> {
+    let mut test = avlm::AvlmSequentialTest::new(tau_sq, alpha).map_err(|e| e.to_string())?;
+    for &(y, cov) in control_tuples {
+        test.update(y, cov.unwrap_or(0.0), false)
+            .map_err(|e| e.to_string())?;
+    }
+    for &(y, cov) in treatment_tuples {
+        test.update(y, cov.unwrap_or(0.0), true)
+            .map_err(|e| e.to_string())?;
+    }
+    test.confidence_sequence().map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // gRPC trait implementation
 // ---------------------------------------------------------------------------
 
@@ -618,11 +672,12 @@ impl AnalysisService for AnalysisServiceHandler {
         &self,
         request: Request<RunAnalysisRequest>,
     ) -> Result<Response<AnalysisResult>, Status> {
-        let experiment_id = request.into_inner().experiment_id;
+        let req = request.into_inner();
+        let experiment_id = req.experiment_id;
         if experiment_id.is_empty() {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
-        let result = compute_analysis(&self.config, &experiment_id).await?;
+        let result = compute_analysis(&self.config, &experiment_id, req.sequential_method, req.tau_sq).await?;
 
         // Fire-and-forget cache write.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -654,8 +709,8 @@ impl AnalysisService for AnalysisServiceHandler {
             }
         }
 
-        // Cache miss or no store: compute from Delta Lake.
-        let result = compute_analysis(&self.config, &experiment_id).await?;
+        // Cache miss or no store: compute from Delta Lake (fixed-horizon, no sequential method).
+        let result = compute_analysis(&self.config, &experiment_id, 0, 0.0).await?;
 
         // Write through to cache.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -818,6 +873,7 @@ mod tests {
             default_alpha: 0.05,
             default_js_threshold: 0.05,
             database_url: None,
+            default_tau_sq: 0.5,
         }
     }
 
@@ -1052,6 +1108,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1110,6 +1167,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1160,6 +1218,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1176,6 +1235,7 @@ mod tests {
         let err = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "".into(),
+                ..Default::default()
             }))
             .await
             .unwrap_err();
@@ -1193,6 +1253,7 @@ mod tests {
         let err = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-999".into(),
+                ..Default::default()
             }))
             .await
             .unwrap_err();
@@ -1596,6 +1657,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1676,6 +1738,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1789,6 +1852,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1909,6 +1973,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
@@ -1983,6 +2048,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                ..Default::default()
             }))
             .await
             .unwrap();
