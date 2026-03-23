@@ -300,6 +300,24 @@ jobs:
           name: generated-code
           path: gen/
 
+      - name: Create gen/go module file
+        run: |
+          cat > gen/go/go.mod << 'GOMOD'
+          module github.com/org/experimentation/gen/go
+
+          go 1.25
+
+          require (
+          	connectrpc.com/connect v1.17.0
+          	google.golang.org/protobuf v1.35.0
+          )
+
+          require (
+          	github.com/google/go-cmp v0.6.0 // indirect
+          	golang.org/x/net v0.29.0 // indirect
+          )
+          GOMOD
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
