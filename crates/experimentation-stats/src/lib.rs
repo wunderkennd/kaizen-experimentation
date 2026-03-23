@@ -30,6 +30,7 @@ pub mod interleaving;
 pub mod ipw;
 pub mod multiple_comparison;
 pub mod novelty;
+pub mod orl;
 pub mod sequential;
 pub mod srm;
 pub mod surrogate;

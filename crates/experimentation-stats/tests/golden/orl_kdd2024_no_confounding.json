@@ -1,0 +1,38 @@
+{
+  "test_name": "kdd2024_table2_scenario_a_no_confounding",
+  "description": "KDD 2024 Table 2 Scenario A: strong surrogate (rho_ZS=1), no confounding (rho_UY=0). JIVE = OLS = true_gamma = 0.3. Deterministic: S=0.5+Z, Y=0.3*S, n=20, K=4.",
+  "n_folds": 4,
+  "alpha": 0.05,
+  "observations": [
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45},
+    {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+    {"treatment": 1.0, "surrogate": 1.5, "outcome": 0.45}
+  ],
+  "expected": {
+    "iv_estimate": 0.3,
+    "ols_estimate": 0.3,
+    "bias_correction_abs_max": 1e-10,
+    "instrument_strength": "Strong",
+    "first_stage_f_stat_min": 10.0,
+    "ci_contains_truth": true,
+    "true_gamma": 0.3
+  },
+  "tolerance": 1e-10
+}

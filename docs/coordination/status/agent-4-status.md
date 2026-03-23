@@ -6,10 +6,30 @@
 ## Current Sprint
 
 Sprint: 5.0
-Focus: Proto schema unblock (Phase 5 proto extensions)
-Branch: work/lively-owl
+Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-011 Multi-objective, ADR-012 LP constraints
+Branch: work/bright-elephant
+
+## In Progress
+
+- [ ] ADR-015 AVLM (sequential CUPED)
+- [ ] ADR-018 E-values + online FDR
+- [ ] ADR-011 Multi-objective bandits
+- [ ] ADR-012 LP constraints
 
 ## Completed (Phase 5)
+
+- [x] **ADR-017 Phase 1 — TC/JIVE surrogate calibration fix** (2026-03-23)
+  - Implemented `crates/experimentation-stats/src/orl.rs`
+  - `kfold_iv_calibrate()`: K-fold cross-fit IV estimation replacing R²-based calibration
+  - `InstrumentStrength` enum (Strong/Moderate/Weak) based on first-stage F-stat (Stock-Yogo rule-of-thumb)
+  - HC0 sandwich SE; OLS vs JIVE bias-correction reported
+  - Golden files: 3 scenarios from Netflix KDD 2024 Table 2
+    - Scenario A: no confounding → JIVE = OLS = true γ = 0.3 (exact)
+    - Scenario B: positive confounding → OLS biased up, JIVE corrects
+    - Scenario C: weak instrument (F ≈ 0.41) → `InstrumentStrength::Weak` detected
+  - 141 lib tests pass + 3 golden integration tests pass (0 failures)
+  - Proptest invariants: `iv_result_all_finite`, `bias_correction_sign_with_positive_confounder`
+  - PR: work/bright-elephant
 
 - [x] **Proto schema extensions** (PR: work/lively-owl) — All Phase 5 proto additions, buf lint + breaking clean.
 
@@ -56,21 +76,15 @@ Branch: work/lively-owl
 **surrogate.proto**
 - `SurrogateModelConfig` fields 11–13: TC/JIVE calibration fields (ADR-017)
 
-## In Progress
-
-_None — proto unblock complete._
-
 ## Blocked
 
 _None._
 
 ## Next Up
 
-- ADR-015 AVLM implementation in `experimentation-stats/src/avlm.rs`
-- ADR-017 Phase 1: TC/JIVE in `experimentation-stats/src/orl.rs`
-- ADR-018: E-value computation in `experimentation-stats/src/evalue.rs`
-- ADR-011: Multi-objective reward composition in `experimentation-bandit`
-- ADR-016: Slate-level bandit policy in `experimentation-bandit`
+- ADR-017 Phase 2 — Offline RL policy evaluation (doubly-robust estimator)
+- ADR-015 AVLM — sequential CUPED, depends on: none (can start)
+- ADR-018 E-values — depends on: none (can start)
 
 ## Dependencies Provided to Other Agents
 
