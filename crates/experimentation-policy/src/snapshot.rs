@@ -23,6 +23,11 @@ pub struct SnapshotEnvelope {
     pub kafka_offset: i64,
     /// Snapshot creation time (epoch milliseconds).
     pub snapshot_at_epoch_ms: i64,
+    /// Serialized [`RewardComposer`] state for multi-objective bandits (ADR-011).
+    /// `None` for single-objective experiments.  Old snapshots without this
+    /// field deserialize to `None` via the serde default.
+    #[serde(default)]
+    pub reward_composer_state: Option<Vec<u8>>,
 }
 
 fn default_policy_type() -> String {
@@ -138,6 +143,28 @@ impl SnapshotStore {
             total_rewards_processed,
             kafka_offset,
             snapshot_at_epoch_ms: Utc::now().timestamp_millis(),
+            reward_composer_state: None,
+        }
+    }
+
+    /// Create a snapshot envelope that also embeds [`RewardComposer`] state
+    /// (ADR-011).
+    pub fn make_envelope_with_composer(
+        experiment_id: String,
+        policy_type: String,
+        policy_state: Vec<u8>,
+        total_rewards_processed: u64,
+        kafka_offset: i64,
+        reward_composer_state: Option<Vec<u8>>,
+    ) -> SnapshotEnvelope {
+        SnapshotEnvelope {
+            experiment_id,
+            policy_type,
+            policy_state,
+            total_rewards_processed,
+            kafka_offset,
+            snapshot_at_epoch_ms: Utc::now().timestamp_millis(),
+            reward_composer_state,
         }
     }
 }
@@ -185,6 +212,7 @@ mod tests {
             total_rewards_processed: 100,
             kafka_offset: 42,
             snapshot_at_epoch_ms: 1000,
+            reward_composer_state: None,
         };
         let env2 = SnapshotEnvelope {
             experiment_id: "exp-1".into(),
@@ -193,6 +221,7 @@ mod tests {
             total_rewards_processed: 200,
             kafka_offset: 84,
             snapshot_at_epoch_ms: 2000,
+            reward_composer_state: None,
         };
 
         store.write_snapshot(&env1).unwrap();
@@ -221,6 +250,7 @@ mod tests {
                     total_rewards_processed: ts as u64,
                     kafka_offset: 0,
                     snapshot_at_epoch_ms: ts,
+                    reward_composer_state: None,
                 })
                 .unwrap();
         }
@@ -248,6 +278,7 @@ mod tests {
                     total_rewards_processed: ts as u64,
                     kafka_offset: 0,
                     snapshot_at_epoch_ms: ts,
+                    reward_composer_state: None,
                 })
                 .unwrap();
         }
@@ -280,6 +311,7 @@ mod tests {
                     total_rewards_processed: ts as u64,
                     kafka_offset: 0,
                     snapshot_at_epoch_ms: ts,
+                    reward_composer_state: None,
                 })
                 .unwrap();
         }

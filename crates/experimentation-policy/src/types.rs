@@ -28,12 +28,18 @@ pub struct RewardUpdate {
     pub experiment_id: String,
     /// Arm that was shown to the user.
     pub arm_id: String,
-    /// Observed reward value (0.0 or 1.0 for binary).
+    /// Scalar reward (0.0–1.0 for binary rewards; used when `metric_values` is
+    /// absent or no composer is registered for this experiment).
     pub reward: f64,
     /// Optional context features for contextual bandits.
     pub context: Option<HashMap<String, f64>>,
     /// Kafka offset for snapshot bookmarking.
     pub kafka_offset: i64,
+    /// Per-metric observed values for multi-objective composition (ADR-011).
+    /// When non-empty and a [`RewardComposer`] is registered for this
+    /// experiment, the policy core composes these into a scalar reward before
+    /// calling `policy.update()`.
+    pub metric_values: Option<HashMap<String, f64>>,
 }
 
 /// Request to create a cold-start bandit.

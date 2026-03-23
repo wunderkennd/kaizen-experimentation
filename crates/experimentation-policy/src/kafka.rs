@@ -145,6 +145,7 @@ async fn consume_loop(
             reward: reward_event.reward,
             context,
             kafka_offset: message.offset(),
+               metric_values: None,
         };
 
         // Send to PolicyCore; blocks if channel is full (backpressure)
@@ -314,6 +315,7 @@ mod tests {
             reward: event.reward,
             context,
             kafka_offset: 42,
+            metric_values: None,
         };
         assert_eq!(update.experiment_id, "exp-2");
         assert_eq!(update.arm_id, "arm-b");
@@ -343,6 +345,7 @@ mod tests {
             reward: event.reward,
             context,
             kafka_offset: 0,
+            metric_values: None,
         };
         assert!(update.context.is_none());
         assert_eq!(update.reward, 0.0);
