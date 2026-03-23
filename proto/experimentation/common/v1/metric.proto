@@ -4,6 +4,31 @@ package experimentation.common.v1;
 
 option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
 
+// MetricStakeholder identifies who benefits from a metric (ADR-014).
+// Drives provider-side metric computation and multi-stakeholder analysis.
+enum MetricStakeholder {
+  METRIC_STAKEHOLDER_UNSPECIFIED = 0;
+  // User-side metric: measures subscriber experience (e.g., watch time, churn).
+  METRIC_STAKEHOLDER_USER = 1;
+  // Provider-side metric: measures content provider outcomes (e.g., catalog coverage,
+  // long-tail impression share, Gini coefficient).
+  METRIC_STAKEHOLDER_PROVIDER = 2;
+  // Platform-side metric: measures platform health (e.g., revenue, infrastructure cost).
+  METRIC_STAKEHOLDER_PLATFORM = 3;
+}
+
+// MetricAggregationLevel determines the unit of observation for analysis (ADR-014).
+enum MetricAggregationLevel {
+  METRIC_AGGREGATION_LEVEL_UNSPECIFIED = 0;
+  // Aggregated per user. Standard M4a analysis unit.
+  METRIC_AGGREGATION_LEVEL_USER = 1;
+  // Aggregated per experiment per time window (e.g., catalog-level metrics).
+  // Bootstrap CIs computed; one observation per time window, not per user.
+  METRIC_AGGREGATION_LEVEL_EXPERIMENT = 2;
+  // Aggregated per content provider. Requires content_catalog Delta Lake join.
+  METRIC_AGGREGATION_LEVEL_PROVIDER = 3;
+}
+
 // MetricType determines the aggregation method M3 uses.
 enum MetricType {
   METRIC_TYPE_UNSPECIFIED = 0;
@@ -50,4 +75,10 @@ message MetricDefinition {
   string cuped_covariate_metric_id = 13;
   // Minimum detectable effect size. Used by M5 for power calculations.
   double minimum_detectable_effect = 14;
+
+  // Phase 5 extensions (ADR-014).
+  // Stakeholder this metric measures. Drives multi-stakeholder analysis in M4a.
+  MetricStakeholder stakeholder = 15;
+  // Unit of observation for this metric. Drives M3 computation pipeline selection.
+  MetricAggregationLevel aggregation_level = 16;
 }

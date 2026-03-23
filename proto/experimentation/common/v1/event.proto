@@ -64,6 +64,28 @@ message RewardEvent {
   string context_json = 7;
 }
 
+// ModelRetrainingEvent is published to model_retraining_events Kafka topic
+// when a recommendation model is retrained (ADR-021).
+// M3 joins this with exposure data to compute training data contamination
+// fractions per retraining event for feedback loop analysis in M4a.
+message ModelRetrainingEvent {
+  string event_id = 1;
+  // Identifier of the recommendation model being retrained.
+  string model_id = 2;
+  // Start of training data window. Used to identify which exposures were
+  // included in training data.
+  google.protobuf.Timestamp training_data_start = 3;
+  // End of training data window.
+  google.protobuf.Timestamp training_data_end = 4;
+  google.protobuf.Timestamp retrained_at = 5;
+  // Experiment IDs active during the training data window.
+  // Populated by M5 at retraining time for cross-reference in feedback loop analysis.
+  repeated string active_experiment_ids = 6;
+  // Fraction of training data containing treatment exposures [0.0, 1.0].
+  // Computed post-hoc by M3 feedback loop contamination pipeline.
+  double treatment_contamination_fraction = 7;
+}
+
 // GuardrailAlert is published to guardrail_alerts Kafka topic when M3
 // detects a guardrail metric breach. Consumed by M5 for auto-pause.
 message GuardrailAlert {

@@ -19,6 +19,103 @@ enum BanditAlgorithm {
   BANDIT_ALGORITHM_THOMPSON_LINEAR = 3;
   // 2-layer MLP with dropout (tch-rs). Requires gpu feature flag.
   BANDIT_ALGORITHM_NEURAL_CONTEXTUAL = 4;
+  // Slot-wise factorized Thompson Sampling for slate-level bandits (ADR-016).
+  // Sequential per-slot posterior sampling with shared context propagation.
+  // O(L × K) inference for L slots and K candidates.
+  BANDIT_ALGORITHM_SLATE_FACTORIZED_TS = 5;
+  // GeMS VAE slate generation via continuous latent space optimization (ADR-016).
+  // Requires gpu feature flag and SlateConfig.use_generative_model = true.
+  BANDIT_ALGORITHM_SLATE_GENERATIVE = 6;
+}
+
+// RewardCompositionMethod selects the multi-objective scalarization strategy (ADR-011).
+enum RewardCompositionMethod {
+  REWARD_COMPOSITION_METHOD_UNSPECIFIED = 0;
+  // Weighted sum of per-metric normalized rewards: Σ w_i × normalized(r_i).
+  REWARD_COMPOSITION_METHOD_WEIGHTED_SCALARIZATION = 1;
+  // Maximize primary objective subject to floor constraints on secondaries.
+  // Floors enforced via Lagrangian relaxation.
+  REWARD_COMPOSITION_METHOD_EPSILON_CONSTRAINT = 2;
+  // Minimize max weighted deviation from ideal point.
+  // Pareto-optimal for non-convex frontiers.
+  REWARD_COMPOSITION_METHOD_TCHEBYCHEFF = 3;
+}
+
+// PositionBiasModel selects bias correction for slate position effects (ADR-016).
+enum PositionBiasModel {
+  POSITION_BIAS_MODEL_UNSPECIFIED = 0;
+  // No position bias correction.
+  POSITION_BIAS_MODEL_NONE = 1;
+  // Cascade model: examination probability decreases monotonically with position.
+  POSITION_BIAS_MODEL_CASCADE = 2;
+  // Examination hypothesis: position-specific examination probability estimated from data.
+  POSITION_BIAS_MODEL_EXAMINATION = 3;
+}
+
+// RewardObjective defines one component of a multi-objective reward (ADR-011).
+// Per-metric running normalization (EMA mean/variance) is persisted in RocksDB.
+message RewardObjective {
+  // Metric ID contributing to the composed reward.
+  string metric_id = 1;
+  // Weight for this objective. All weights in BanditConfig.reward_objectives must sum to 1.0.
+  double weight = 2;
+  // Floor constraint for EPSILON_CONSTRAINT method (minimum normalized value).
+  // Ignored for other composition methods.
+  double floor = 3;
+  // Exactly one objective must be primary. The primary objective is maximized
+  // subject to constraints on secondary objectives.
+  bool is_primary = 4;
+}
+
+// ArmConstraint defines per-arm traffic bounds for the LP post-processing layer (ADR-012).
+// The LP layer solves KL(q || p) minimization over the constraint polytope.
+message ArmConstraint {
+  string arm_id = 1;
+  // Minimum traffic allocation fraction. Overrides min_exploration_fraction for this arm.
+  double min_fraction = 2;
+  // Maximum traffic allocation fraction. Default 1.0 (unconstrained).
+  double max_fraction = 3;
+}
+
+// GlobalConstraint defines a general linear constraint across arms (ADR-012).
+// Enforced via warm-started interior point; runs on the LMAX thread (<50μs).
+message GlobalConstraint {
+  // Human-readable label for audit trail and debugging.
+  string label = 1;
+  // Coefficient for each arm. Key: arm_id, Value: linear coefficient.
+  map<string, double> coefficients = 2;
+  // Right-hand side: sum(coeff_i × p_i) <= rhs.
+  double rhs = 3;
+}
+
+// SlateInteractionModel defines reward attribution for slate experiments (ADR-016).
+message SlateInteractionModel {
+  // Reward attribution model for multi-slot interactions.
+  enum AttributionModel {
+    ATTRIBUTION_MODEL_UNSPECIFIED = 0;
+    // Only the clicked/engaged slot earns reward.
+    ATTRIBUTION_MODEL_CLICKED_SLOT_ONLY = 1;
+    // Reward weighted by position (higher reward for earlier slots).
+    ATTRIBUTION_MODEL_POSITION_WEIGHTED = 2;
+    // Counterfactual leave-one-out attribution.
+    ATTRIBUTION_MODEL_LEAVE_ONE_OUT = 3;
+  }
+  AttributionModel attribution_model = 1;
+  PositionBiasModel position_bias_model = 2;
+}
+
+// SlateConfig configures slate-level bandit assignment (ADR-016).
+// Required when algorithm is SLATE_FACTORIZED_TS or SLATE_GENERATIVE.
+message SlateConfig {
+  // Number of slots in the returned slate.
+  int32 num_slots = 1;
+  // Maximum number of candidate items. Must be >= num_slots.
+  int32 candidate_pool_size = 2;
+  // Interaction and reward attribution model for this slate.
+  SlateInteractionModel interaction_model = 3;
+  // If true, use GeMS VAE for slate generation (requires gpu feature flag).
+  // Maps to BANDIT_ALGORITHM_SLATE_GENERATIVE.
+  bool use_generative_model = 4;
 }
 
 // BanditConfig is required for MAB, CONTEXTUAL_BANDIT, and CUMULATIVE_HOLDOUT
@@ -41,6 +138,31 @@ message BanditConfig {
   // For content cold-start bandits: how long the bandit runs before
   // exporting affinity scores to the recommendation system.
   google.protobuf.Duration cold_start_window = 7;
+
+  // Phase 5 extensions.
+
+  // Multi-objective reward composition (ADR-011).
+  // If set, reward = compose(reward_objectives) using composition_method.
+  // reward_metric_id is ignored when reward_objectives is non-empty.
+  repeated RewardObjective reward_objectives = 8;
+  // Composition strategy for multi-objective reward. Default WEIGHTED_SCALARIZATION.
+  RewardCompositionMethod composition_method = 9;
+
+  // LP constraint post-processing layer (ADR-012).
+  // Per-arm traffic bounds. Overrides min_exploration_fraction for specified arms.
+  repeated ArmConstraint arm_constraints = 10;
+  // General linear constraints across arms.
+  repeated GlobalConstraint global_constraints = 11;
+
+  // Slate-level bandit config (ADR-016).
+  // Required when algorithm is SLATE_FACTORIZED_TS or SLATE_GENERATIVE.
+  SlateConfig slate_config = 12;
+
+  // MAD randomization fraction for e-process computation (ADR-018).
+  // When > 0, SelectArm mixes ε-fraction uniform randomization with the bandit policy.
+  // The uniformly randomized subset enables anytime-valid inference in M4a.
+  // Valid range [0.0, 1.0). Default 0.0 (disabled).
+  double mad_randomization_fraction = 13;
 }
 
 // BanditArm represents a single selectable option in a bandit experiment.
