@@ -118,19 +118,6 @@ jobs:
           cargo install wasm-pack --locked
           wasm-pack test --node --features wasm
 
-      - name: FFI build
-        run: cargo build --package experimentation-ffi --features ffi
-
-      - name: FFI test vectors (10K through C ABI)
-        run: cargo test --package experimentation-ffi
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rust-ffi-artifacts
-          path: |
-            target/debug/libexperimentation_ffi.*
-            crates/experimentation-ffi/target/experimentation_ffi.h
-
   # ───────── Stage 3: Go Build & Test ─────────
   go:
     runs-on: ubuntu-latest
@@ -166,17 +153,6 @@ jobs:
           GOMOD
           cd gen/go && go mod download
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: rust-ffi-artifacts
-          path: ffi-artifacts/
-
-      - name: Stage FFI artifacts for CGo
-        run: |
-          mkdir -p target/debug crates/experimentation-ffi/target
-          find ffi-artifacts/ -name 'libexperimentation_ffi.*' -exec cp {} target/debug/ \;
-          find ffi-artifacts/ -name 'experimentation_ffi.h' -exec cp {} crates/experimentation-ffi/target/ \;
-
       - name: Vet
         working-directory: services
         run: go vet ./...
@@ -184,13 +160,10 @@ jobs:
       - name: Unit tests
         working-directory: services
         run: |
-          # LD_LIBRARY_PATH is required so the Linux dynamic linker can find
-          # libexperimentation_ffi.so at runtime (CGo -L only helps at link time).
-          export LD_LIBRARY_PATH=${{ github.workspace }}/target/debug:${LD_LIBRARY_PATH:-}
           # Exclude /cmd packages from coverage — they contain only main() with no
           # test files, which causes "go: no such tool covdata" on Go 1.22 runners.
-          PKGS=$(go list -tags='has_ffi' ./... | grep -v '/cmd$')
-          CGO_ENABLED=1 go test -race -cover -tags='has_ffi' $PKGS
+          PKGS=$(go list ./... | grep -v '/cmd$')
+          go test -race -cover $PKGS
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -289,7 +262,6 @@ jobs:
           - { name: policy, path: crates/experimentation-policy }
           - { name: management, path: services/management }
           - { name: metrics, path: services/metrics }
-          - { name: flags, path: services/flags }
           - { name: ui, path: ui }
     steps:
       - uses: actions/checkout@v4
