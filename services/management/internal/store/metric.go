@@ -24,13 +24,16 @@ type MetricDefinitionRow struct {
 	IsQoeMetric            bool
 	CupedCovariateMetricID string
 	MinimumDetectableEffect *float64
-	CreatedAt              time.Time
+	// ADR-014 Phase 5 fields.
+	Stakeholder      string // "USER" | "PROVIDER" | "PLATFORM"
+	AggregationLevel string // "USER" | "EXPERIMENT" | "PROVIDER"
+	CreatedAt        time.Time
 }
 
 const metricCols = `metric_id, name, COALESCE(description, ''), type, COALESCE(source_event_type, ''),
 	COALESCE(numerator_event_type, ''), COALESCE(denominator_event_type, ''), percentile, COALESCE(custom_sql, ''),
 	lower_is_better, is_qoe_metric, COALESCE(cuped_covariate_metric_id, ''),
-	minimum_detectable_effect, created_at`
+	minimum_detectable_effect, COALESCE(stakeholder, ''), COALESCE(aggregation_level, ''), created_at`
 
 // MetricStore provides database operations for metric definitions.
 type MetricStore struct {
@@ -50,18 +53,18 @@ func (s *MetricStore) Insert(ctx context.Context, row MetricDefinitionRow) (Metr
 			metric_id, name, description, type, source_event_type,
 			numerator_event_type, denominator_event_type, percentile, custom_sql,
 			lower_is_better, is_qoe_metric, cuped_covariate_metric_id,
-			minimum_detectable_effect
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			minimum_detectable_effect, stakeholder, aggregation_level
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		RETURNING `+metricCols,
 		row.MetricID, row.Name, row.Description, row.Type, row.SourceEventType,
 		row.NumeratorEventType, row.DenominatorEventType, row.Percentile, row.CustomSQL,
 		row.LowerIsBetter, row.IsQoeMetric, row.CupedCovariateMetricID,
-		row.MinimumDetectableEffect,
+		row.MinimumDetectableEffect, row.Stakeholder, row.AggregationLevel,
 	).Scan(
 		&out.MetricID, &out.Name, &out.Description, &out.Type, &out.SourceEventType,
 		&out.NumeratorEventType, &out.DenominatorEventType, &out.Percentile, &out.CustomSQL,
 		&out.LowerIsBetter, &out.IsQoeMetric, &out.CupedCovariateMetricID,
-		&out.MinimumDetectableEffect, &out.CreatedAt,
+		&out.MinimumDetectableEffect, &out.Stakeholder, &out.AggregationLevel, &out.CreatedAt,
 	)
 	return out, err
 }
@@ -75,7 +78,7 @@ func (s *MetricStore) GetByID(ctx context.Context, metricID string) (MetricDefin
 		&out.MetricID, &out.Name, &out.Description, &out.Type, &out.SourceEventType,
 		&out.NumeratorEventType, &out.DenominatorEventType, &out.Percentile, &out.CustomSQL,
 		&out.LowerIsBetter, &out.IsQoeMetric, &out.CupedCovariateMetricID,
-		&out.MinimumDetectableEffect, &out.CreatedAt,
+		&out.MinimumDetectableEffect, &out.Stakeholder, &out.AggregationLevel, &out.CreatedAt,
 	)
 	if err != nil {
 		return MetricDefinitionRow{}, err
@@ -136,7 +139,7 @@ func (s *MetricStore) ListMetrics(ctx context.Context, pageSize int32, pageToken
 			&out.MetricID, &out.Name, &out.Description, &out.Type, &out.SourceEventType,
 			&out.NumeratorEventType, &out.DenominatorEventType, &out.Percentile, &out.CustomSQL,
 			&out.LowerIsBetter, &out.IsQoeMetric, &out.CupedCovariateMetricID,
-			&out.MinimumDetectableEffect, &out.CreatedAt,
+			&out.MinimumDetectableEffect, &out.Stakeholder, &out.AggregationLevel, &out.CreatedAt,
 		); err != nil {
 			return nil, "", err
 		}
@@ -203,7 +206,7 @@ func (s *MetricStore) GetByIDTx(ctx context.Context, tx pgx.Tx, metricID string)
 		&out.MetricID, &out.Name, &out.Description, &out.Type, &out.SourceEventType,
 		&out.NumeratorEventType, &out.DenominatorEventType, &out.Percentile, &out.CustomSQL,
 		&out.LowerIsBetter, &out.IsQoeMetric, &out.CupedCovariateMetricID,
-		&out.MinimumDetectableEffect, &out.CreatedAt,
+		&out.MinimumDetectableEffect, &out.Stakeholder, &out.AggregationLevel, &out.CreatedAt,
 	)
 	if err != nil {
 		return MetricDefinitionRow{}, err

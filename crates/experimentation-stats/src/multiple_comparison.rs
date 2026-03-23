@@ -77,6 +77,60 @@ pub fn benjamini_hochberg(p_values: &[f64], fdr: f64) -> Result<MultipleComparis
     })
 }
 
+/// Guardrail Bonferroni correction (ADR-014).
+///
+/// For K guardrail metrics, each runs at significance `alpha / K` to control
+/// the family-wise error rate across all guardrails.  The function returns
+/// the per-guardrail threshold and whether each guardrail is breached at that
+/// threshold.
+///
+/// Semantics differ from the standard `bonferroni` function:
+/// - Input is raw p-values from individual guardrail tests.
+/// - The corrected threshold is `alpha / K` (not `p × K`).
+/// - `rejected[i]` is `true` when the guardrail fires (p_i ≤ alpha/K),
+///   meaning a statistically significant degradation was detected.
+///
+/// # Arguments
+/// * `p_values` — one p-value per guardrail metric (in any order).
+/// * `alpha`    — family-wise significance level, e.g. 0.05.
+///
+/// # Returns
+/// `MultipleComparisonResult` where `p_values_adjusted` contains the raw
+/// p-values unchanged (the correction is applied to the threshold, not the
+/// p-values), and `rejected` reflects the `alpha/K` decision rule.
+pub fn guardrail_bonferroni(p_values: &[f64], alpha: f64) -> Result<GuardrailBonferroniResult> {
+    validate_p_values(p_values)?;
+    if alpha <= 0.0 || alpha >= 1.0 {
+        return Err(Error::Validation("alpha must be in (0, 1)".into()));
+    }
+
+    let k = p_values.len();
+    let threshold = alpha / k as f64;
+    assert_finite(threshold, "guardrail_bonferroni_threshold");
+
+    let rejected: Vec<bool> = p_values.iter().map(|&p| p <= threshold).collect();
+
+    Ok(GuardrailBonferroniResult {
+        p_values: p_values.to_vec(),
+        alpha_per_guardrail: threshold,
+        rejected,
+        num_guardrails: k,
+    })
+}
+
+/// Result of guardrail Bonferroni correction (ADR-014).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GuardrailBonferroniResult {
+    /// Raw p-values (in input order).
+    pub p_values: Vec<f64>,
+    /// Per-guardrail significance threshold: alpha / K.
+    pub alpha_per_guardrail: f64,
+    /// Whether each guardrail fired at the corrected threshold.
+    pub rejected: Vec<bool>,
+    /// K — number of guardrail metrics.
+    pub num_guardrails: usize,
+}
+
 /// Bonferroni FWER correction.
 ///
 /// Matches R's `p.adjust(p, method="bonferroni")`.
@@ -125,6 +179,136 @@ fn validate_p_values(p_values: &[f64]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // -------------------------------------------------------------------------
+    // guardrail_bonferroni tests (ADR-014)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_guardrail_bonferroni_threshold() {
+        // K=3, alpha=0.05 → threshold = 0.05/3 ≈ 0.01667
+        let p = [0.01, 0.04, 0.03];
+        let result = guardrail_bonferroni(&p, 0.05).unwrap();
+        let expected_threshold = 0.05 / 3.0;
+        assert!((result.alpha_per_guardrail - expected_threshold).abs() < 1e-10);
+        assert_eq!(result.num_guardrails, 3);
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_rejection() {
+        // p=0.01 < 0.05/3=0.01667 → fires; others above threshold → no fire
+        let p = [0.01, 0.04, 0.03];
+        let result = guardrail_bonferroni(&p, 0.05).unwrap();
+        assert_eq!(result.rejected, vec![true, false, false]);
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_single_guardrail() {
+        // K=1 → threshold = alpha (no correction needed)
+        let result = guardrail_bonferroni(&[0.03], 0.05).unwrap();
+        assert!((result.alpha_per_guardrail - 0.05).abs() < 1e-10);
+        assert_eq!(result.rejected, vec![true]);
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_pvalues_unchanged() {
+        let p = [0.01, 0.04, 0.03];
+        let result = guardrail_bonferroni(&p, 0.05).unwrap();
+        assert_eq!(result.p_values, p.to_vec());
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_all_fire() {
+        // All p-values below alpha/K=0.01 → all fire
+        let p = [0.005, 0.008, 0.009];
+        let result = guardrail_bonferroni(&p, 0.05).unwrap();
+        assert_eq!(result.rejected, vec![true, true, true]);
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_none_fire() {
+        // All p-values above alpha/K → none fire
+        let p = [0.03, 0.04, 0.05];
+        let result = guardrail_bonferroni(&p, 0.05).unwrap();
+        // threshold = 0.05/3 ≈ 0.01667; all above → none fire
+        assert_eq!(result.rejected, vec![false, false, false]);
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_at_boundary() {
+        // p exactly equal to threshold fires (≤ rule)
+        let alpha = 0.05_f64;
+        let k = 4_f64;
+        let threshold = alpha / k;
+        let result = guardrail_bonferroni(&[threshold], alpha).unwrap();
+        assert_eq!(result.rejected, vec![true]);
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_validation_empty() {
+        assert!(guardrail_bonferroni(&[], 0.05).is_err());
+    }
+
+    #[test]
+    fn test_guardrail_bonferroni_validation_invalid_alpha() {
+        assert!(guardrail_bonferroni(&[0.5], 0.0).is_err());
+        assert!(guardrail_bonferroni(&[0.5], 1.0).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "FAIL-FAST")]
+    fn test_guardrail_bonferroni_nan_panics() {
+        let _ = guardrail_bonferroni(&[f64::NAN], 0.05);
+    }
+
+    mod proptest_guardrail {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn guardrail_threshold_equals_alpha_over_k(
+                p_values in prop::collection::vec(0.0f64..=1.0f64, 1..=20),
+                alpha in (0.001f64..0.5f64),
+            ) {
+                let k = p_values.len();
+                let result = guardrail_bonferroni(&p_values, alpha).unwrap();
+                prop_assert!((result.alpha_per_guardrail - alpha / k as f64).abs() < 1e-14);
+            }
+
+            #[test]
+            fn guardrail_rejection_consistent_with_threshold(
+                p_values in prop::collection::vec(0.0f64..=1.0f64, 1..=20),
+                alpha in (0.001f64..0.5f64),
+            ) {
+                let result = guardrail_bonferroni(&p_values, alpha).unwrap();
+                for (i, &p) in p_values.iter().enumerate() {
+                    prop_assert_eq!(
+                        result.rejected[i],
+                        p <= result.alpha_per_guardrail,
+                        "rejection inconsistency at index {}: p={}, threshold={}",
+                        i, p, result.alpha_per_guardrail
+                    );
+                }
+            }
+
+            #[test]
+            fn guardrail_threshold_decreases_with_k(
+                alpha in (0.001f64..0.5f64),
+            ) {
+                // More guardrails → stricter threshold
+                let r1 = guardrail_bonferroni(&[0.05], alpha).unwrap();
+                let r2 = guardrail_bonferroni(&[0.05, 0.05], alpha).unwrap();
+                let r3 = guardrail_bonferroni(&[0.05, 0.05, 0.05], alpha).unwrap();
+                prop_assert!(r1.alpha_per_guardrail >= r2.alpha_per_guardrail);
+                prop_assert!(r2.alpha_per_guardrail >= r3.alpha_per_guardrail);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // bonferroni tests
+    // -------------------------------------------------------------------------
 
     #[test]
     fn test_bonferroni_basic() {

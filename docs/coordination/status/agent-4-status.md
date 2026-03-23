@@ -6,14 +6,37 @@
 ## Current Sprint
 
 Sprint: 5.0
-Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/eager-koala
+Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
+Branch: work/nice-lion
 
 ## In Progress
 
-- [ ] ADR-018 E-values + online FDR
 - [ ] ADR-011 Multi-objective bandits
 - [ ] ADR-012 LP constraints
+
+## Completed (Phase 5)
+
+- [x] **ADR-014 Phase 1 — Guardrail Bonferroni beta-correction** (2026-03-23, work/nice-lion)
+  - `guardrail_bonferroni()` in `crates/experimentation-stats/src/multiple_comparison.rs`
+    - Per-guardrail threshold = alpha/K; `rejected[i]` = true when p_i ≤ alpha/K
+    - `GuardrailBonferroniResult` struct with `p_values`, `alpha_per_guardrail`, `rejected`, `num_guardrails`
+    - 9 unit tests + 3 proptest invariants (threshold=alpha/K, rejection consistent with threshold, threshold decreases with K)
+    - All 181 experimentation-stats tests green
+  - M5 validation enforcement (`services/management/internal/validation/metric.go`):
+    - `ValidateCreateMetricDefinition` now requires `stakeholder` and `aggregation_level` (not UNSPECIFIED)
+    - PROVIDER aggregation requires PROVIDER stakeholder
+    - New exported: `ValidateBanditRewardMetricAggregation(m)` — enforces USER aggregation
+    - New exported: `ValidateGuardrailMetricAggregation(m)` — enforces USER or EXPERIMENT aggregation
+    - 12 new ADR-014 test cases; all management tests green
+  - Store layer (`services/management/internal/store/`):
+    - `MetricDefinitionRow`: added `Stakeholder`, `AggregationLevel` string fields
+    - `metric_convert.go`: bidirectional proto↔row mapping for new fields
+    - `metric.go`: SQL updated (INSERT, SELECT, Scan) for new columns
+  - DB migration: `sql/migrations/007_metric_stakeholder_aggregation.sql`
+  - Handler enforcement (`services/management/internal/handlers/lifecycle.go`):
+    - `validateMetricsForStart`: after existence check, validates each guardrail metric via `ValidateGuardrailMetricAggregation`
+    - `validateTypeConfigForStart`: after reward metric existence check, validates via `ValidateBanditRewardMetricAggregation`
+  - Infrastructure: generated missing `gen/go/go.mod` + full buf codegen (common/v1, management/v1, analysis/v1, etc.) — unblocked all Go compilation
 
 ## Completed (Phase 5)
 

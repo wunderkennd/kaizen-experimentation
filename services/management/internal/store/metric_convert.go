@@ -4,6 +4,34 @@ import (
 	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
+// --- MetricStakeholder conversions (ADR-014) ---
+
+var stakeholderToString = map[commonv1.MetricStakeholder]string{
+	commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER:     "USER",
+	commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PROVIDER: "PROVIDER",
+	commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PLATFORM: "PLATFORM",
+}
+
+var stringToStakeholder = map[string]commonv1.MetricStakeholder{
+	"USER":     commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+	"PROVIDER": commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PROVIDER,
+	"PLATFORM": commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PLATFORM,
+}
+
+// --- MetricAggregationLevel conversions (ADR-014) ---
+
+var aggregationLevelToString = map[commonv1.MetricAggregationLevel]string{
+	commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER:       "USER",
+	commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT: "EXPERIMENT",
+	commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER:   "PROVIDER",
+}
+
+var stringToAggregationLevel = map[string]commonv1.MetricAggregationLevel{
+	"USER":       commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
+	"EXPERIMENT": commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT,
+	"PROVIDER":   commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER,
+}
+
 // --- MetricType conversions ---
 
 var metricTypeToString = map[commonv1.MetricType]string{
@@ -48,6 +76,8 @@ func MetricDefinitionToRow(m *commonv1.MetricDefinition) MetricDefinitionRow {
 		LowerIsBetter:          m.GetLowerIsBetter(),
 		IsQoeMetric:            m.GetIsQoeMetric(),
 		CupedCovariateMetricID: m.GetCupedCovariateMetricId(),
+		Stakeholder:            stakeholderToString[m.GetStakeholder()],
+		AggregationLevel:       aggregationLevelToString[m.GetAggregationLevel()],
 	}
 
 	if p := m.GetPercentile(); p != 0 {
@@ -74,6 +104,8 @@ func RowToMetricDefinition(row MetricDefinitionRow) *commonv1.MetricDefinition {
 		LowerIsBetter:          row.LowerIsBetter,
 		IsQoeMetric:            row.IsQoeMetric,
 		CupedCovariateMetricId: row.CupedCovariateMetricID,
+		Stakeholder:            stringToStakeholder[row.Stakeholder],
+		AggregationLevel:       stringToAggregationLevel[row.AggregationLevel],
 	}
 
 	if row.Percentile != nil {
