@@ -4,7 +4,7 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY proto/ proto/
-RUN apt-get update && apt-get install -y protobuf-compiler cmake
+RUN apt-get update && apt-get install -y protobuf-compiler cmake g++ libssl-dev pkg-config
 RUN cargo build --release --package experimentation-pipeline
 
 FROM debian:bookworm-slim
