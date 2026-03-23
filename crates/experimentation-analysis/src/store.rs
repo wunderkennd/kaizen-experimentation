@@ -59,6 +59,23 @@ pub struct CachedSequentialResult {
     pub alpha_remaining: f64,
     pub current_look: i32,
     pub adjusted_p_value: f64,
+    // AVLM fields (ADR-015)
+    #[serde(default)]
+    pub avlm_adjusted_effect: f64,
+    #[serde(default)]
+    pub avlm_ci_lower: f64,
+    #[serde(default)]
+    pub avlm_ci_upper: f64,
+    #[serde(default)]
+    pub avlm_half_width: f64,
+    #[serde(default)]
+    pub avlm_variance_reduction: f64,
+    #[serde(default)]
+    pub avlm_is_significant: bool,
+    #[serde(default)]
+    pub avlm_n_control: i64,
+    #[serde(default)]
+    pub avlm_n_treatment: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -205,6 +222,14 @@ impl From<&SequentialResult> for CachedSequentialResult {
             alpha_remaining: s.alpha_remaining,
             current_look: s.current_look,
             adjusted_p_value: s.adjusted_p_value,
+            avlm_adjusted_effect: s.avlm_adjusted_effect,
+            avlm_ci_lower: s.avlm_ci_lower,
+            avlm_ci_upper: s.avlm_ci_upper,
+            avlm_half_width: s.avlm_half_width,
+            avlm_variance_reduction: s.avlm_variance_reduction,
+            avlm_is_significant: s.avlm_is_significant,
+            avlm_n_control: s.avlm_n_control,
+            avlm_n_treatment: s.avlm_n_treatment,
         }
     }
 }
@@ -217,6 +242,14 @@ impl From<&CachedSequentialResult> for SequentialResult {
             alpha_remaining: c.alpha_remaining,
             current_look: c.current_look,
             adjusted_p_value: c.adjusted_p_value,
+            avlm_adjusted_effect: c.avlm_adjusted_effect,
+            avlm_ci_lower: c.avlm_ci_lower,
+            avlm_ci_upper: c.avlm_ci_upper,
+            avlm_half_width: c.avlm_half_width,
+            avlm_variance_reduction: c.avlm_variance_reduction,
+            avlm_is_significant: c.avlm_is_significant,
+            avlm_n_control: c.avlm_n_control,
+            avlm_n_treatment: c.avlm_n_treatment,
         }
     }
 }

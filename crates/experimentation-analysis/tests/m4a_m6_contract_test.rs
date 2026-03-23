@@ -298,6 +298,7 @@ async fn contract_analysis_result_field_presence() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -348,6 +349,7 @@ async fn contract_metric_result_all_fields() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -409,6 +411,7 @@ async fn contract_srm_result_map_fields() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -471,6 +474,7 @@ async fn contract_srm_mismatch_detected() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -540,6 +544,7 @@ async fn contract_segment_result_lifecycle_enum_values() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -601,6 +606,7 @@ async fn contract_optional_sub_messages_absent() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -951,6 +957,7 @@ async fn contract_not_found_for_missing_experiment() {
     let err = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: missing.into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1002,6 +1009,7 @@ async fn contract_empty_experiment_id_invalid_argument() {
     let err = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "".into(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();
@@ -1093,6 +1101,7 @@ async fn contract_cochran_q_heterogeneity() {
     let resp = handler
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();
@@ -1123,6 +1132,7 @@ async fn contract_cochran_q_heterogeneity() {
     let resp2 = handler2
         .run_analysis(Request::new(RunAnalysisRequest {
             experiment_id: "exp-1".into(),
+            ..Default::default()
         }))
         .await
         .unwrap();

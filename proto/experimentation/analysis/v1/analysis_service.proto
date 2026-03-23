@@ -29,7 +29,29 @@ service AnalysisService {
   rpc GetSwitchbackAnalysis(GetSwitchbackAnalysisRequest) returns (SwitchbackAnalysisResult);
 }
 
-message RunAnalysisRequest { string experiment_id = 1; }
+// Sequential testing method selectable in RunAnalysisRequest (ADR-015).
+enum SequentialMethod {
+  SEQUENTIAL_METHOD_UNSPECIFIED = 0;
+  // mSPRT-only: always-valid p-value, no covariate adjustment.
+  SEQUENTIAL_METHOD_MSPRT = 1;
+  // AVLM (ADR-015): anytime-valid regression-adjusted confidence sequence.
+  // Requires cuped_covariate_metric_id and covariates present in metric_summaries.
+  SEQUENTIAL_METHOD_AVLM = 2;
+}
+
+message RunAnalysisRequest {
+  string experiment_id = 1;
+  // Sequential testing method. UNSPECIFIED → sequential_result not populated.
+  SequentialMethod sequential_method = 2;
+  // For SEQUENTIAL_METHOD_AVLM: the metric_id whose cuped_covariate column is
+  // used as the pre-experiment regression covariate (x). When empty, falls back
+  // to the primary metric's own cuped_covariate column.
+  string cuped_covariate_metric_id = 3;
+  // Mixing variance τ² for the normal-mixture martingale (> 0).
+  // If 0.0 (proto3 default), M4a uses 0.1.
+  double tau_sq = 4;
+}
+
 message GetAnalysisResultRequest { string experiment_id = 1; }
 message GetInterleavingAnalysisRequest { string experiment_id = 1; }
 message GetNoveltyAnalysisRequest { string experiment_id = 1; }
@@ -81,6 +103,24 @@ message SequentialResult {
   int32 current_look = 4;
   // Adjusted p-value accounting for multiple looks.
   double adjusted_p_value = 5;
+
+  // AVLM fields (ADR-015) — populated when sequential_method = SEQUENTIAL_METHOD_AVLM.
+  // Regression-adjusted treatment effect: Δ̂_adj = Δ̂_raw − θ̂·(x̄_t − x̄_c).
+  double avlm_adjusted_effect = 6;
+  // Lower bound of the anytime-valid confidence sequence.
+  double avlm_ci_lower = 7;
+  // Upper bound of the anytime-valid confidence sequence.
+  double avlm_ci_upper = 8;
+  // Half-width of the confidence sequence (ci_upper − adjusted_effect).
+  double avlm_half_width = 9;
+  // Fraction of variance removed by regression adjustment ∈ [0, 1).
+  double avlm_variance_reduction = 10;
+  // Whether the confidence sequence excludes zero (reject H₀: Δ = 0).
+  bool avlm_is_significant = 11;
+  // Control arm sample size used in this computation.
+  int64 avlm_n_control = 12;
+  // Treatment arm sample size used in this computation.
+  int64 avlm_n_treatment = 13;
 }
 
 message SegmentResult {

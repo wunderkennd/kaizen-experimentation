@@ -14,11 +14,11 @@ use experimentation_proto::experimentation::analysis::v1::{
     GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
     InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
     PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
-    SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
-    SyntheticControlAnalysisResult, TitleSpillover,
+    SequentialMethod, SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult,
+    SwitchbackAnalysisResult, SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_stats::{
-    cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
+    avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -194,12 +194,75 @@ fn to_proto_novelty_result(
 }
 
 // ---------------------------------------------------------------------------
+// AVLM sequential test helper (ADR-015)
+// ---------------------------------------------------------------------------
+
+/// Configuration for AVLM sequential analysis.
+struct AvlmConfig {
+    /// τ² mixing variance for the normal-mixture martingale.
+    tau_sq: f64,
+    /// Optional metric_id to use as covariate source.
+    covariate_metric_id: String,
+}
+
+/// Compute AVLM regression-adjusted confidence sequence for one metric/variant pair.
+///
+/// Returns `Some(SequentialResult)` with AVLM fields populated when:
+/// - Both arms have ≥ 2 observations
+/// - AVLM computation succeeds
+///
+/// Falls back gracefully (returns `None`) on insufficient data or numerical errors.
+fn compute_avlm_result(
+    control_tuples: &[(f64, Option<f64>)],
+    treatment_tuples: &[(f64, Option<f64>)],
+    avlm_cfg: &AvlmConfig,
+    alpha: f64,
+) -> Option<SequentialResult> {
+    let mut test = avlm::AvlmSequentialTest::new(avlm_cfg.tau_sq, alpha).ok()?;
+
+    // Feed control observations: y = metric value, x = covariate (0.0 when absent).
+    for (y, x_opt) in control_tuples {
+        let x = x_opt.unwrap_or(0.0);
+        if test.update(*y, x, false).is_err() {
+            return None;
+        }
+    }
+
+    // Feed treatment observations.
+    for (y, x_opt) in treatment_tuples {
+        let x = x_opt.unwrap_or(0.0);
+        if test.update(*y, x, true).is_err() {
+            return None;
+        }
+    }
+
+    let result = test.confidence_sequence().ok()??;
+
+    Some(SequentialResult {
+        boundary_crossed: false,
+        alpha_spent: 0.0,
+        alpha_remaining: 0.0,
+        current_look: 0,
+        adjusted_p_value: 0.0,
+        avlm_adjusted_effect: result.adjusted_effect,
+        avlm_ci_lower: result.ci_lower,
+        avlm_ci_upper: result.ci_upper,
+        avlm_half_width: result.half_width,
+        avlm_variance_reduction: result.variance_reduction,
+        avlm_is_significant: result.is_significant,
+        avlm_n_control: result.n_control as i64,
+        avlm_n_treatment: result.n_treatment as i64,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Core analysis computation (shared by run_analysis and get_analysis_result)
 // ---------------------------------------------------------------------------
 
 async fn compute_analysis(
     config: &AnalysisConfig,
     experiment_id: &str,
+    avlm_cfg: Option<&AvlmConfig>,
 ) -> Result<AnalysisResult, Status> {
     let data = delta_reader::read_metric_summaries(&config.delta_lake_path, experiment_id)
         .await
@@ -297,6 +360,12 @@ async fn compute_analysis(
             let segment_results =
                 compute_segment_results(&data, metric_id, &control_variant, variant_id, alpha);
 
+            // AVLM sequential confidence sequence (ADR-015).
+            // Uses primary metric's cuped_covariate column as regression covariate.
+            let sequential_result = avlm_cfg.and_then(|cfg| {
+                compute_avlm_result(control_tuples, treatment_tuples, cfg, alpha)
+            });
+
             metric_results.push(MetricResult {
                 metric_id: metric_id.clone(),
                 variant_id: variant_id.clone(),
@@ -312,7 +381,7 @@ async fn compute_analysis(
                 cuped_ci_lower,
                 cuped_ci_upper,
                 variance_reduction_pct,
-                sequential_result: None,
+                sequential_result,
                 segment_results,
                 session_level_result: compute_session_level_result(
                     &data,
@@ -618,11 +687,24 @@ impl AnalysisService for AnalysisServiceHandler {
         &self,
         request: Request<RunAnalysisRequest>,
     ) -> Result<Response<AnalysisResult>, Status> {
-        let experiment_id = request.into_inner().experiment_id;
+        let req = request.into_inner();
+        let experiment_id = req.experiment_id;
         if experiment_id.is_empty() {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
-        let result = compute_analysis(&self.config, &experiment_id).await?;
+
+        // Build AVLM config when sequential_method = SEQUENTIAL_METHOD_AVLM.
+        let avlm_cfg =
+            if req.sequential_method == SequentialMethod::Avlm as i32 {
+                Some(AvlmConfig {
+                    tau_sq: if req.tau_sq > 0.0 { req.tau_sq } else { 0.1 },
+                    covariate_metric_id: req.cuped_covariate_metric_id,
+                })
+            } else {
+                None
+            };
+
+        let result = compute_analysis(&self.config, &experiment_id, avlm_cfg.as_ref()).await?;
 
         // Fire-and-forget cache write.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -654,8 +736,8 @@ impl AnalysisService for AnalysisServiceHandler {
             }
         }
 
-        // Cache miss or no store: compute from Delta Lake.
-        let result = compute_analysis(&self.config, &experiment_id).await?;
+        // Cache miss or no store: compute from Delta Lake (no AVLM — use RunAnalysis for that).
+        let result = compute_analysis(&self.config, &experiment_id, None).await?;
 
         // Write through to cache.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -1052,6 +1134,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1110,6 +1193,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1160,6 +1244,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1176,6 +1261,7 @@ mod tests {
         let err = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap_err();
@@ -1193,6 +1279,7 @@ mod tests {
         let err = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-999".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap_err();
@@ -1596,6 +1683,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1676,6 +1764,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1789,6 +1878,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1909,6 +1999,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();
@@ -1983,6 +2074,7 @@ mod tests {
         let resp = handler
             .run_analysis(Request::new(RunAnalysisRequest {
                 experiment_id: "exp-1".into(),
+                    ..Default::default()
             }))
             .await
             .unwrap();

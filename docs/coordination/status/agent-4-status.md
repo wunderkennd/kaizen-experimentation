@@ -7,7 +7,7 @@
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/nice-lion
+Branch: work/clever-squirrel
 
 ## In Progress
 
@@ -39,6 +39,18 @@ Branch: work/nice-lion
   - Infrastructure: generated missing `gen/go/go.mod` + full buf codegen (common/v1, management/v1, analysis/v1, etc.) — unblocked all Go compilation
 
 ## Completed (Phase 5)
+
+- [x] **ADR-015 Phase 2 — AVLM wired into M4a RunAnalysis** (2026-03-23, work/clever-squirrel)
+  - `SEQUENTIAL_METHOD_AVLM` enum added to `analysis_service.proto`; `RunAnalysisRequest` extended with `sequential_method`, `cuped_covariate_metric_id`, `tau_sq` fields
+  - `SequentialResult` extended with 8 AVLM fields (`avlm_adjusted_effect`, `avlm_ci_lower`, `avlm_ci_upper`, `avlm_half_width`, `avlm_variance_reduction`, `avlm_is_significant`, `avlm_n_control`, `avlm_n_treatment`)
+  - `grpc.rs`: `compute_avlm_result()` helper builds `AvlmSequentialTest`, feeds observations incrementally in O(n), returns `SequentialResult` with AVLM fields
+  - `store.rs`: `CachedSequentialResult` extended with AVLM fields (all `#[serde(default)]` for backward compatibility)
+  - 3 new integration tests in `crates/experimentation-analysis/tests/avlm_integration_test.rs`:
+    - `avlm_sequential_result_populated`: asserts AVLM fields populated + CI ordered + variance_reduction ∈ [0,1)
+    - `avlm_narrower_ci_than_msprt_on_golden_data`: asserts AVLM half-width < mSPRT-equivalent on r≈0.97 covariate
+    - `no_sequential_result_when_method_unspecified`: backward compatibility (None when UNSPECIFIED)
+  - All 15 analysis tests green (3 new + 12 existing contract tests)
+  - Full workspace green (239 tests)
 
 - [x] **ADR-015 Phase 1 (AVLM)** — PR #199
   - `crates/experimentation-stats/src/avlm.rs` implemented
