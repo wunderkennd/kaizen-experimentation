@@ -1,0 +1,38 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+variant_content_impressions AS (
+    SELECT eu.variant_id, me.content_id, COUNT(*) AS impression_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+    GROUP BY eu.variant_id, me.content_id
+),
+variant_totals AS (
+    SELECT variant_id, SUM(impression_count) AS total_impressions
+    FROM variant_content_impressions
+    GROUP BY variant_id
+),
+entropy_calc AS (
+    SELECT
+        vci.variant_id,
+        -SUM(
+            CASE WHEN vci.impression_count > 0 AND vt.total_impressions > 0 THEN
+                (CAST(vci.impression_count AS DOUBLE) / vt.total_impressions) *
+                LOG(CAST(vci.impression_count AS DOUBLE) / vt.total_impressions)
+            ELSE 0.0 END
+        ) AS catalog_entropy
+    FROM variant_content_impressions vci
+    INNER JOIN variant_totals vt ON vci.variant_id = vt.variant_id
+    GROUP BY vci.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    catalog_entropy AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM entropy_calc

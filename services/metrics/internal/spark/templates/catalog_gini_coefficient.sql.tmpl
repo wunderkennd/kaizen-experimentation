@@ -1,0 +1,51 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+variant_content_impressions AS (
+    SELECT eu.variant_id, me.content_id, COUNT(*) AS impression_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+    GROUP BY eu.variant_id, me.content_id
+),
+catalog_items AS (
+    SELECT DISTINCT content_id FROM delta.content_catalog
+),
+all_variant_items AS (
+    SELECT eu.variant_id, ci.content_id,
+        COALESCE(vci.impression_count, 0) AS impression_count
+    FROM (SELECT DISTINCT variant_id FROM exposed_users) eu
+    CROSS JOIN catalog_items ci
+    LEFT JOIN variant_content_impressions vci
+        ON eu.variant_id = vci.variant_id AND ci.content_id = vci.content_id
+),
+ranked AS (
+    SELECT
+        variant_id,
+        impression_count,
+        ROW_NUMBER() OVER (PARTITION BY variant_id ORDER BY impression_count ASC) AS rank_asc,
+        COUNT(*) OVER (PARTITION BY variant_id) AS n,
+        SUM(impression_count) OVER (PARTITION BY variant_id) AS total_impressions
+    FROM all_variant_items
+),
+gini_calc AS (
+    SELECT
+        variant_id,
+        CASE
+            WHEN MAX(total_impressions) = 0 THEN 0.0
+            ELSE (2.0 * SUM(rank_asc * impression_count) / (MAX(n) * MAX(total_impressions)))
+                 - (MAX(n) + 1.0) / MAX(n)
+        END AS gini_coefficient
+    FROM ranked
+    GROUP BY variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    gini_coefficient AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM gini_calc
