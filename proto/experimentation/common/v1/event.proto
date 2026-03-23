@@ -30,6 +30,10 @@ message ExposureEvent {
   string bandit_context_json = 10;
   // Lifecycle segment at exposure time. Classified by M3 from Redis feature store.
   LifecycleSegment lifecycle_segment = 11;
+  // For switchback experiments (ADR-022): the block index at exposure time.
+  // Populated from GetAssignmentResponse.block_index.
+  // Used by M4a to identify within-block vs cross-block observations.
+  int64 switchback_block_index = 12;
 }
 
 // MetricEvent records a user action or system observation.

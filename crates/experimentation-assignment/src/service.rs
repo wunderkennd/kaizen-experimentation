@@ -105,6 +105,11 @@ impl AssignmentServiceImpl {
                 .await;
         }
 
+        // 5b. Switchback temporal assignment (ADR-022).
+        if exp.r#type == "SWITCHBACK" {
+            return self.assign_switchback(exp, experiment_id, attributes);
+        }
+
         // 6. Hash entity into a bucket (user_id for AB, session_id for SESSION_LEVEL).
         //    SESSION_LEVEL with allow_cross_session_variation=false hashes on user_id
         //    to lock variant across sessions. session_id is still required for metrics.
@@ -150,6 +155,7 @@ impl AssignmentServiceImpl {
             payload_json: variant.payload_json.clone(),
             assignment_probability: variant.traffic_fraction,
             is_active: true,
+            ..Default::default()
         })
     }
 
@@ -193,6 +199,7 @@ impl AssignmentServiceImpl {
                         payload_json: payload,
                         assignment_probability: result.assignment_probability,
                         is_active: true,
+                        ..Default::default()
                     });
                 }
                 Err(e) => {
@@ -226,6 +233,93 @@ impl AssignmentServiceImpl {
             payload_json: selection.payload_json,
             assignment_probability: selection.assignment_probability,
             is_active: true,
+            ..Default::default()
+        })
+    }
+
+    /// Switchback temporal assignment for `SWITCHBACK` experiment type (ADR-022).
+    ///
+    /// Assignment is based on `(current_unix_secs, block_duration, cluster_attribute)`.
+    /// Returns an empty `variant_id` when the request falls in a washout window.
+    #[allow(clippy::result_large_err)]
+    fn assign_switchback(
+        &self,
+        exp: &crate::config::ExperimentConfig,
+        experiment_id: &str,
+        attributes: &HashMap<String, String>,
+    ) -> Result<GetAssignmentResponse, Status> {
+        let sb = exp.switchback_config.as_ref().ok_or_else(|| {
+            Status::failed_precondition(format!(
+                "experiment {experiment_id} is SWITCHBACK but has no switchback_config",
+            ))
+        })?;
+
+        // Validate config — mirrors the M5 STARTING-phase gate.
+        crate::switchback::validate_config(sb)
+            .map_err(Status::failed_precondition)?;
+
+        // Current wall-clock time from the server.
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        // Washout exclusion: return empty assignment during the washout window.
+        if crate::switchback::is_in_washout(
+            now_secs,
+            sb.block_duration_secs,
+            sb.washout_period_secs,
+        ) {
+            tracing::debug!(
+                experiment_id,
+                block_duration_secs = sb.block_duration_secs,
+                washout_period_secs = sb.washout_period_secs,
+                "switchback washout: excluding user",
+            );
+            return Ok(GetAssignmentResponse {
+                experiment_id: experiment_id.to_string(),
+                is_active: true,
+                ..Default::default()
+            });
+        }
+
+        let block_index =
+            crate::switchback::compute_block_index(now_secs, sb.block_duration_secs);
+
+        let cluster_value = if sb.cluster_attribute.is_empty() {
+            String::new()
+        } else {
+            attributes
+                .get(&sb.cluster_attribute)
+                .cloned()
+                .unwrap_or_default()
+        };
+
+        let variant = crate::switchback::select_variant(
+            block_index,
+            &sb.design,
+            &cluster_value,
+            experiment_id,
+            &exp.variants,
+        );
+
+        tracing::debug!(
+            experiment_id,
+            block_index,
+            cluster_value = %cluster_value,
+            design = %sb.design,
+            variant_id = %variant.variant_id,
+            "switchback assignment",
+        );
+
+        Ok(GetAssignmentResponse {
+            experiment_id: experiment_id.to_string(),
+            variant_id: variant.variant_id.clone(),
+            payload_json: variant.payload_json.clone(),
+            // Switchback assignment is deterministic; probability is 1.0.
+            assignment_probability: 1.0,
+            is_active: true,
+            block_index,
         })
     }
 
