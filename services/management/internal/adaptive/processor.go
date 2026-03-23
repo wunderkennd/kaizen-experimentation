@@ -176,7 +176,7 @@ func (p *Processor) Process(ctx context.Context, trigger InterimTrigger, observe
 		}
 
 	case ZonePromising:
-		extended, extErr := p.extendExperiment(ctx, exp, resp.RecommendedNMax)
+		extended, extErr := p.extendExperiment(ctx, &exp, resp.RecommendedNMax)
 		if extErr != nil {
 			log.Error("adaptive-N: experiment extension failed", "error", extErr)
 		}
