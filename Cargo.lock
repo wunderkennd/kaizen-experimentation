@@ -1913,6 +1913,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "experimentation-flags"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "experimentation-core",
+ "experimentation-hash",
+ "experimentation-proto",
+ "prost 0.13.5",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-test",
+ "tonic",
+ "tonic-web",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "experimentation-hash"
 version = "0.1.0"
 dependencies = [
