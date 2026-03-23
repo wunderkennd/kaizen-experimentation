@@ -14,12 +14,14 @@
 //! - `cuped` — CUPED variance reduction
 //! - `delta_method` — Delta method for ratio metrics
 //! - `bootstrap` — BCa bootstrap confidence intervals
+//! - `avlm` — Anytime-Valid Linear Model (AVLM): regression-adjusted confidence sequences (ADR-015)
 //! - `sequential` — mSPRT and Group Sequential Tests
 //! - `multiple_comparison` — Holm-Bonferroni, Benjamini-Hochberg
 //! - `novelty` — Exponential decay fitting for novelty effects
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
 //! - `clustering` — Clustered standard errors for session-level experiments
 
+pub mod avlm;
 pub mod bayesian;
 pub mod bootstrap;
 pub mod cate;
