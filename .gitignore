@@ -1,7 +1,7 @@
 # Rust
 target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is committed — Rust Dockerfiles (COPY Cargo.lock) require it
 
 # Go
 /services/vendor/
