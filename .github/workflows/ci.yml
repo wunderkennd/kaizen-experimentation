@@ -293,6 +293,15 @@ jobs:
           - { name: ui, path: ui }
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: generated-code
+          path: proto/gen/
+
+      - name: Stage generated code for Dockerfiles
+        run: mkdir -p gen && cp -r proto/gen/* gen/
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
