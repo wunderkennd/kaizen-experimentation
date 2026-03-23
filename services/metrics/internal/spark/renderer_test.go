@@ -356,3 +356,33 @@ func TestRenderQoEEngagementCorrelation_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "pearson_correlation")
 	assert.Contains(t, sql, "STDDEV_SAMP")
 }
+
+// ADR-021: Feedback loop contamination template.
+
+func TestRenderFeedbackLoopContamination(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "watch_time_minutes"
+	p.ControlVariantID = "ctrl-001"
+	sql, err := r.RenderFeedbackLoopContamination(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "feedback_loop_contamination_expected.sql"), sql)
+}
+
+func TestRenderFeedbackLoopContamination_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{
+		ExperimentID:    "test-exp-fl",
+		MetricID:        "some_metric",
+		ControlVariantID: "ctrl-variant",
+		ComputationDate: "2024-06-01",
+	}
+	sql, _ := r.RenderFeedbackLoopContamination(p)
+	assert.Contains(t, sql, "delta.model_retraining_events")
+	assert.Contains(t, sql, "treatment_contamination_fraction")
+	assert.Contains(t, sql, "pre_retrain_effect")
+	assert.Contains(t, sql, "post_retrain_effect")
+	assert.Contains(t, sql, "ARRAY_CONTAINS(active_experiment_ids, 'test-exp-fl')")
+	assert.Contains(t, sql, "ctrl-variant")
+}

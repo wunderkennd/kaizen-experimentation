@@ -1,0 +1,68 @@
+-- ADR-021: Feedback Loop Contamination Pipeline
+-- Joins model_retraining_events with exposure-weighted metric summaries to
+-- compute pre/post treatment effects around each retraining event.
+-- Output rows are consumed by M4a FeedbackLoopDetector.
+--
+-- One row per retraining event where both pre- and post-retrain windows have
+-- sufficient data.  NULL rows (insufficient data) are filtered out.
+WITH retraining_events AS (
+    SELECT
+        event_id            AS retraining_event_id,
+        model_id,
+        retrained_at,
+        treatment_contamination_fraction
+    FROM delta.model_retraining_events
+    WHERE ARRAY_CONTAINS(active_experiment_ids, '{{.ExperimentID}}')
+      AND treatment_contamination_fraction IS NOT NULL
+),
+pre_retrain_effects AS (
+    -- 7-day window ending the day before each retraining.
+    SELECT
+        re.retraining_event_id,
+        re.treatment_contamination_fraction,
+        AVG(CASE WHEN ms.variant_id = '{{.ControlVariantID}}' THEN ms.metric_value END)
+            AS control_mean_pre,
+        AVG(CASE WHEN ms.variant_id != '{{.ControlVariantID}}' THEN ms.metric_value END)
+            AS treatment_mean_pre,
+        COUNT(DISTINCT ms.user_id) AS n_users_pre
+    FROM retraining_events re
+    JOIN delta.metric_summaries ms
+        ON  ms.experiment_id   = '{{.ExperimentID}}'
+        AND ms.metric_id       = '{{.MetricID}}'
+        AND ms.computation_date >= DATE_SUB(CAST(re.retrained_at AS DATE), 7)
+        AND ms.computation_date <  CAST(re.retrained_at AS DATE)
+    GROUP BY re.retraining_event_id, re.treatment_contamination_fraction
+),
+post_retrain_effects AS (
+    -- 7-day window starting the day after each retraining.
+    SELECT
+        re.retraining_event_id,
+        AVG(CASE WHEN ms.variant_id = '{{.ControlVariantID}}' THEN ms.metric_value END)
+            AS control_mean_post,
+        AVG(CASE WHEN ms.variant_id != '{{.ControlVariantID}}' THEN ms.metric_value END)
+            AS treatment_mean_post,
+        COUNT(DISTINCT ms.user_id) AS n_users_post
+    FROM retraining_events re
+    JOIN delta.metric_summaries ms
+        ON  ms.experiment_id   = '{{.ExperimentID}}'
+        AND ms.metric_id       = '{{.MetricID}}'
+        AND ms.computation_date >  CAST(re.retrained_at AS DATE)
+        AND ms.computation_date <= DATE_ADD(CAST(re.retrained_at AS DATE), 7)
+    GROUP BY re.retraining_event_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    '{{.MetricID}}' AS metric_id,
+    pre.retraining_event_id,
+    pre.treatment_contamination_fraction,
+    (pre.treatment_mean_pre  - pre.control_mean_pre)   AS pre_retrain_effect,
+    (post.treatment_mean_post - post.control_mean_post) AS post_retrain_effect,
+    pre.n_users_pre,
+    post.n_users_post
+FROM pre_retrain_effects  pre
+JOIN post_retrain_effects post USING (retraining_event_id)
+WHERE pre.control_mean_pre    IS NOT NULL
+  AND pre.treatment_mean_pre  IS NOT NULL
+  AND post.control_mean_post  IS NOT NULL
+  AND post.treatment_mean_post IS NOT NULL
+ORDER BY pre.retraining_event_id
