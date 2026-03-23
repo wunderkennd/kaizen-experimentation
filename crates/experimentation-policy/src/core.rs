@@ -13,7 +13,7 @@ use crate::types::{
 };
 use experimentation_bandit::cold_start;
 use experimentation_bandit::linucb::LinUcbPolicy;
-use experimentation_bandit::reward_composer::{sigmoid, Objective, RewardComposer};
+use experimentation_bandit::reward_composer::{sigmoid, RewardComposer};
 use experimentation_bandit::policy::AnyPolicy;
 use experimentation_bandit::thompson::ThompsonSamplingPolicy;
 use std::collections::HashMap;
@@ -84,7 +84,7 @@ impl PolicyCore {
 
             // ADR-011: restore RewardComposer state if present.
             if let Some(composer_bytes) = &envelope.reward_composer_state {
-                let composer = RewardComposer::deserialize(composer_bytes);
+                let composer = RewardComposer::from_bytes(composer_bytes);
                 self.reward_composers
                     .insert(envelope.experiment_id.clone(), composer);
             }
@@ -441,7 +441,7 @@ impl PolicyCore {
         let reward_composer_state = self
             .reward_composers
             .get(experiment_id)
-            .map(|c| c.serialize());
+            .map(|c| c.to_bytes());
 
         let envelope = SnapshotStore::make_envelope_with_composer(
             experiment_id.to_string(),
@@ -1504,7 +1504,7 @@ mod tests {
     /// survives a crash-and-restore cycle via RocksDB.
     #[tokio::test]
     async fn test_multi_objective_composer_crash_recovery() {
-        use experimentation_bandit::reward_composer::{CompositionMethod, RewardComposer};
+        use experimentation_bandit::reward_composer::{CompositionMethod, Objective, RewardComposer};
 
         let db_path = temp_db_path("multi-obj-crash");
 

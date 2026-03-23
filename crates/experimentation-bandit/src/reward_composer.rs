@@ -356,6 +356,16 @@ impl RewardComposer {
     pub fn is_empty(&self) -> bool {
         self.objectives.is_empty()
     }
+
+    /// Serialize to JSON bytes for RocksDB snapshot persistence.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("RewardComposer serialize")
+    }
+
+    /// Deserialize from JSON bytes produced by [`RewardComposer::to_bytes`].
+    pub fn from_bytes(data: &[u8]) -> Self {
+        serde_json::from_slice(data).expect("RewardComposer deserialize")
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
