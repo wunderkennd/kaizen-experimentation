@@ -51,6 +51,7 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     needs: schema
+    timeout-minutes: 45
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -100,6 +101,7 @@ jobs:
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
       - name: WASM test vectors (10K via wasm-pack)
+        timeout-minutes: 20
         working-directory: crates/experimentation-hash
         run: |
           cargo install wasm-pack --locked
