@@ -15,6 +15,36 @@ Branch: work/bright-platypus
 
 ## Completed (Phase 5) — latest first
 
+- [x] **ADR-021 — Feedback Loop Interference Detection** (2026-03-23, work/fancy-bear)
+  - `crates/experimentation-stats/src/feedback_loop.rs`: `FeedbackLoopDetector`
+    - `RetrainingEffectObservation`: contamination_fraction, pre/post treatment effects per retrain event
+    - `FeedbackLoopResult`: paired t-test p-value, contamination-effect Pearson r, OLS bias estimate, bias-corrected effect
+    - `FeedbackLoopDetector::new(observations)` — validates ≥3 events, contamination in [0,1]
+    - `FeedbackLoopDetector::detect(alpha)` — paired t-test + Pearson r + OLS bias correction
+    - Detection criterion: (`p < alpha` AND `|r| > 0.5`) OR `p < alpha/2`
+    - 11 unit tests: validation errors, no-feedback baseline, strong detection, bias-correction golden, mean stats, uncorrelated contamination
+    - 3 proptest invariants: p_value_in_range, correlation_in_range, all_outputs_finite
+    - All 192 experimentation-stats tests green
+  - Registered in `crates/experimentation-stats/src/lib.rs` as `pub mod feedback_loop`
+  - **M3 contamination pipeline** (`services/metrics/internal/jobs/feedback_loop.go`):
+    - `FeedbackLoopJob` + `FeedbackLoopResult` — orchestrates Spark SQL contamination run
+    - Writes to `delta.feedback_loop_contamination` for M4a to read
+  - **Spark SQL template** (`services/metrics/internal/spark/templates/feedback_loop_contamination.sql.tmpl`):
+    - Joins `delta.model_retraining_events` with `delta.metric_summaries`
+    - 7-day pre/post windows around each retraining event
+    - Filters ARRAY_CONTAINS(active_experiment_ids, experiment_id) for scoped joins
+  - **SQLRenderer** (`services/metrics/internal/spark/renderer.go`):
+    - Added `RenderFeedbackLoopContamination(p TemplateParams) (string, error)`
+  - **Golden SQL** (`services/metrics/testdata/golden/feedback_loop_contamination_expected.sql`):
+    - exp-001 / watch_time_minutes / ctrl-001 — validated via `TestRenderFeedbackLoopContamination`
+  - **SQL migration** (`sql/migrations/008_feedback_loop_results.sql`):
+    - `feedback_loop_results` table for M4a to persist analysis results
+    - Unique index on (experiment_id, metric_id)
+    - Stores: n_retraining_events, feedback_loop_detected, paired_ttest_p_value, mean_pre/post_retrain_effect, mean_effect_shift, contamination_effect_correlation, bias_estimate, bias_corrected_effect
+  - **Proto** — `InterferenceAnalysisResult` fields 11–14 already defined in prior proto PR (#196):
+    - `feedback_loop_detected (11)`, `feedback_loop_bias_estimate (12)`, `contamination_effect_correlation (13)`, `feedback_loop_computed_at (14)`
+  - All spark + jobs Go tests pass
+
 - [x] **ADR-011 Multi-objective reward composition** (2026-03-23, work/bright-platypus)
   - `crates/experimentation-bandit/src/reward_composer.rs` (new, ~450 LOC)
   - `MetricNormalizer`: EMA running mean/variance per metric (α=0.01); tracks running-max ideal point for Tchebycheff; serializable alongside posterior state

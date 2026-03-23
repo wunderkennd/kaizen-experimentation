@@ -102,6 +102,12 @@ func (r *SQLRenderer) RenderUserDiscoveryRate(p TemplateParams) (string, error) 
 func (r *SQLRenderer) RenderUserProviderDiversity(p TemplateParams) (string, error) { return r.Render("user_provider_diversity.sql.tmpl", p) }
 func (r *SQLRenderer) RenderIntraListDistance(p TemplateParams) (string, error)     { return r.Render("intra_list_distance.sql.tmpl", p) }
 
+// Feedback loop contamination (ADR-021).
+// Results go to delta.feedback_loop_contamination; consumed by M4a FeedbackLoopDetector.
+func (r *SQLRenderer) RenderFeedbackLoopContamination(p TemplateParams) (string, error) {
+	return r.Render("feedback_loop_contamination.sql.tmpl", p)
+}
+
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {
 	case "MEAN":

@@ -20,6 +20,7 @@
 //! - `multiple_comparison` — Holm-Bonferroni, Benjamini-Hochberg
 //! - `novelty` — Exponential decay fitting for novelty effects
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
+//! - `feedback_loop` — Feedback loop detection: paired t-test, contamination correlation, bias correction (ADR-021)
 //! - `clustering` — Clustered standard errors for session-level experiments
 
 pub mod avlm;
@@ -29,6 +30,7 @@ pub mod cate;
 pub mod clustering;
 pub mod cuped;
 pub mod evalue;
+pub mod feedback_loop;
 pub mod interference;
 pub mod interleaving;
 pub mod ipw;
