@@ -1,0 +1,33 @@
+{
+  "test_name": "kdd2024_table2_scenario_c_weak_instrument",
+  "description": "KDD 2024 Table 2 Scenario C: weak surrogate. S = 0.5 + 0.1*Z + noise (amplitude 0.5), Y = 0.3*S. First-stage F≈0.41 << 5 (Stock-Yogo weak threshold). Z=0 for first 10, Z=1 for last 10. n=20, K=4.",
+  "n_folds": 4,
+  "alpha": 0.05,
+  "observations": [
+    {"treatment": 0.0, "surrogate": 1.0,  "outcome": 0.30},
+    {"treatment": 0.0, "surrogate": 0.0,  "outcome": 0.00},
+    {"treatment": 0.0, "surrogate": 0.9,  "outcome": 0.27},
+    {"treatment": 0.0, "surrogate": 0.1,  "outcome": 0.03},
+    {"treatment": 0.0, "surrogate": 0.8,  "outcome": 0.24},
+    {"treatment": 0.0, "surrogate": 0.2,  "outcome": 0.06},
+    {"treatment": 0.0, "surrogate": 0.7,  "outcome": 0.21},
+    {"treatment": 0.0, "surrogate": 0.3,  "outcome": 0.09},
+    {"treatment": 0.0, "surrogate": 0.6,  "outcome": 0.18},
+    {"treatment": 0.0, "surrogate": 0.4,  "outcome": 0.12},
+    {"treatment": 1.0, "surrogate": 1.1,  "outcome": 0.33},
+    {"treatment": 1.0, "surrogate": 0.1,  "outcome": 0.03},
+    {"treatment": 1.0, "surrogate": 1.0,  "outcome": 0.30},
+    {"treatment": 1.0, "surrogate": 0.2,  "outcome": 0.06},
+    {"treatment": 1.0, "surrogate": 0.9,  "outcome": 0.27},
+    {"treatment": 1.0, "surrogate": 0.3,  "outcome": 0.09},
+    {"treatment": 1.0, "surrogate": 0.8,  "outcome": 0.24},
+    {"treatment": 1.0, "surrogate": 0.4,  "outcome": 0.12},
+    {"treatment": 1.0, "surrogate": 0.7,  "outcome": 0.21},
+    {"treatment": 1.0, "surrogate": 0.5,  "outcome": 0.15}
+  ],
+  "expected": {
+    "instrument_strength_not_strong": true,
+    "first_stage_f_stat_max": 5.0
+  },
+  "tolerance": 1e-6
+}

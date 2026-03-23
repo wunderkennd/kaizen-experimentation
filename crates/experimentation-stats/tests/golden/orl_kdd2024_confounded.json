@@ -1,0 +1,35 @@
+{
+  "test_name": "kdd2024_table2_scenario_b_confounded",
+  "description": "KDD 2024 Table 2 Scenario B: strong surrogate, positive confounding (rho_UY≈0.5). OLS biased upward vs true gamma=0.3; JIVE corrects. S=0.5+Z+0.8*eta, Y=0.3*S+0.5*eta. eta symmetric within Z groups so Cov(Z,eta)=0 (valid instrument). Z=0 for i<10, Z=1 for i>=10. n=20, K=4.",
+  "n_folds": 4,
+  "alpha": 0.05,
+  "observations": [
+    {"treatment": 0.0, "surrogate": 0.82, "outcome": 0.446},
+    {"treatment": 0.0, "surrogate": 0.18, "outcome": -0.146},
+    {"treatment": 0.0, "surrogate": 0.74, "outcome": 0.372},
+    {"treatment": 0.0, "surrogate": 0.26, "outcome": -0.072},
+    {"treatment": 0.0, "surrogate": 0.66, "outcome": 0.298},
+    {"treatment": 0.0, "surrogate": 0.34, "outcome": 0.002},
+    {"treatment": 0.0, "surrogate": 0.58, "outcome": 0.224},
+    {"treatment": 0.0, "surrogate": 0.42, "outcome": 0.076},
+    {"treatment": 0.0, "surrogate": 0.90, "outcome": 0.520},
+    {"treatment": 0.0, "surrogate": 0.10, "outcome": -0.220},
+    {"treatment": 1.0, "surrogate": 1.82, "outcome": 0.746},
+    {"treatment": 1.0, "surrogate": 1.18, "outcome": 0.154},
+    {"treatment": 1.0, "surrogate": 1.74, "outcome": 0.672},
+    {"treatment": 1.0, "surrogate": 1.26, "outcome": 0.228},
+    {"treatment": 1.0, "surrogate": 1.66, "outcome": 0.598},
+    {"treatment": 1.0, "surrogate": 1.34, "outcome": 0.302},
+    {"treatment": 1.0, "surrogate": 1.58, "outcome": 0.524},
+    {"treatment": 1.0, "surrogate": 1.42, "outcome": 0.376},
+    {"treatment": 1.0, "surrogate": 1.90, "outcome": 0.820},
+    {"treatment": 1.0, "surrogate": 1.10, "outcome": 0.080}
+  ],
+  "expected": {
+    "ols_biased_up": true,
+    "jive_closer_to_truth": true,
+    "true_gamma": 0.3,
+    "instrument_strength": "Strong"
+  },
+  "tolerance": 1e-6
+}
