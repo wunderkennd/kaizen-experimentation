@@ -17,14 +17,15 @@ use experimentation_proto::pipeline::event_ingestion_service_server::EventIngest
 use experimentation_proto::pipeline::{
     IngestBatchResponse, IngestExposureBatchRequest, IngestExposureRequest,
     IngestExposureResponse, IngestMetricEventBatchRequest, IngestMetricEventRequest,
-    IngestMetricEventResponse, IngestQoEEventBatchRequest, IngestQoEEventRequest,
+    IngestMetricEventResponse, IngestModelRetrainingEventRequest,
+    IngestModelRetrainingEventResponse, IngestQoEEventBatchRequest, IngestQoEEventRequest,
     IngestQoEEventResponse, IngestRewardEventRequest, IngestRewardEventResponse,
 };
 
 use crate::buffer::{BufferedEvent, DiskBuffer};
 use crate::kafka::{
     ProduceError, Producer, HEADER_TRACEPARENT, TOPIC_EXPOSURES, TOPIC_METRIC_EVENTS,
-    TOPIC_QOE_EVENTS, TOPIC_REWARD_EVENTS,
+    TOPIC_MODEL_RETRAINING_EVENTS, TOPIC_QOE_EVENTS, TOPIC_REWARD_EVENTS,
 };
 use crate::metrics::PipelineMetrics;
 
@@ -462,6 +463,37 @@ impl EventIngestionService for IngestionServiceImpl {
             invalid_count: invalid,
         }))
     }
+
+    /// ADR-021: Ingest a ModelRetrainingEvent for feedback loop interference detection.
+    ///
+    /// Required: event_id, model_id, training_data_start, training_data_end.
+    /// Published to model_retraining_events topic. Consumed by M3 for contamination analysis.
+    async fn ingest_model_retraining_event(
+        &self,
+        request: Request<IngestModelRetrainingEventRequest>,
+    ) -> Result<Response<IngestModelRetrainingEventResponse>, Status> {
+        let traceparent = extract_traceparent(&request);
+        let event = request
+            .into_inner()
+            .event
+            .ok_or_else(|| Status::invalid_argument("event is required"))?;
+
+        let accepted = process_event(
+            self,
+            &event.event_id,
+            crate::metrics::EVENT_TYPE_MODEL_RETRAINING,
+            TOPIC_MODEL_RETRAINING_EVENTS,
+            &event.model_id,
+            &event,
+            || validation::validate_model_retraining_event(&event),
+            traceparent.as_deref(),
+        )
+        .await?;
+
+        Ok(Response::new(IngestModelRetrainingEventResponse {
+            accepted,
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -473,13 +505,14 @@ mod tests {
     use chrono::{Duration, Utc};
     use experimentation_ingest::dedup::{DedupConfig, DedupMetrics, EventDedup};
     use experimentation_proto::common::{
-        ExposureEvent, MetricEvent, PlaybackMetrics, QoEEvent, RewardEvent,
+        ExposureEvent, MetricEvent, ModelRetrainingEvent, PlaybackMetrics, QoEEvent, RewardEvent,
     };
     use experimentation_proto::pipeline::{
         IngestExposureBatchRequest, IngestExposureRequest, IngestMetricEventBatchRequest,
-        IngestMetricEventRequest, IngestQoEEventBatchRequest, IngestQoEEventRequest,
-        IngestRewardEventRequest,
+        IngestMetricEventRequest, IngestModelRetrainingEventRequest, IngestQoEEventBatchRequest,
+        IngestQoEEventRequest, IngestRewardEventRequest,
     };
+    use prost::Message;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -1288,5 +1321,185 @@ mod tests {
         assert_eq!(published[1].0, "metric_events");
         assert_eq!(published[2].0, "reward_events");
         assert_eq!(published[3].0, "qoe_events");
+    }
+
+    // ---- ModelRetrainingEvent tests (ADR-021) ----
+
+    fn past_proto(offset_hours: i64) -> Option<prost_types::Timestamp> {
+        let t = Utc::now() - Duration::hours(offset_hours);
+        Some(prost_types::Timestamp {
+            seconds: t.timestamp(),
+            nanos: 0,
+        })
+    }
+
+    fn valid_model_retraining_event() -> ModelRetrainingEvent {
+        ModelRetrainingEvent {
+            event_id: "mre-1".into(),
+            model_id: "rec-model-v2".into(),
+            training_data_start: past_proto(48),
+            training_data_end: past_proto(24),
+            active_experiment_ids: vec!["exp-1".into(), "exp-2".into()],
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingest_valid_model_retraining_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let resp = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(valid_model_retraining_event()),
+            }))
+            .await
+            .unwrap();
+
+        assert!(resp.into_inner().accepted);
+        assert_eq!(handle.call_count(), 1);
+        let published = handle.published_events();
+        assert_eq!(published[0].0, "model_retraining_events");
+        assert_eq!(published[0].1, "rec-model-v2"); // keyed by model_id
+    }
+
+    #[tokio::test]
+    async fn test_ingest_model_retraining_missing_model_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_model_retraining_event();
+        event.model_id = String::new();
+        let result = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+        assert_eq!(handle.call_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_model_retraining_missing_training_data_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_model_retraining_event();
+        event.training_data_start = None;
+        let result = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_model_retraining_missing_training_data_end() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let mut event = valid_model_retraining_event();
+        event.training_data_end = None;
+        let result = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(event),
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn test_ingest_model_retraining_duplicate_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        // First call: accepted
+        let resp1 = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(valid_model_retraining_event()),
+            }))
+            .await
+            .unwrap();
+        assert!(resp1.into_inner().accepted);
+
+        // Second call with same event_id: duplicate
+        let resp2 = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(valid_model_retraining_event()),
+            }))
+            .await
+            .unwrap();
+        assert!(!resp2.into_inner().accepted);
+        assert_eq!(handle.call_count(), 1);
+    }
+
+    /// Contract test: Kafka roundtrip serialization (M2 producer → M3 consumer wire format).
+    ///
+    /// Verifies that a ModelRetrainingEvent can be serialized to protobuf bytes (as published
+    /// to the model_retraining_events Kafka topic by M2) and deserialized back faithfully
+    /// by a consumer (M3 feedback loop contamination pipeline). This is the wire-format
+    /// contract between M2 and M3 per ADR-021.
+    #[test]
+    fn test_model_retraining_event_kafka_roundtrip_serialization() {
+        let original = valid_model_retraining_event();
+
+        // Simulate M2 producer: encode to protobuf bytes (what goes onto Kafka)
+        let bytes = original.encode_to_vec();
+        assert!(!bytes.is_empty(), "serialized payload must not be empty");
+
+        // Simulate M3 consumer: decode from protobuf bytes
+        let decoded = ModelRetrainingEvent::decode(bytes.as_slice())
+            .expect("M3 must be able to decode ModelRetrainingEvent from Kafka payload");
+
+        // Wire format contract assertions
+        assert_eq!(decoded.event_id, original.event_id);
+        assert_eq!(decoded.model_id, original.model_id);
+        assert_eq!(
+            decoded.training_data_start,
+            original.training_data_start,
+            "training_data_start must survive Kafka roundtrip"
+        );
+        assert_eq!(
+            decoded.training_data_end,
+            original.training_data_end,
+            "training_data_end must survive Kafka roundtrip"
+        );
+        assert_eq!(
+            decoded.active_experiment_ids,
+            original.active_experiment_ids,
+            "active_experiment_ids must survive Kafka roundtrip"
+        );
+    }
+
+    /// Contract test: model_retraining_events routes to the correct Kafka topic.
+    #[tokio::test]
+    async fn test_model_retraining_event_routes_to_correct_topic() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        svc.ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+            event: Some(valid_model_retraining_event()),
+        }))
+        .await
+        .unwrap();
+
+        let published = handle.published_events();
+        assert_eq!(
+            published[0].0, "model_retraining_events",
+            "ModelRetrainingEvent must be published to model_retraining_events topic (ADR-021)"
+        );
     }
 }

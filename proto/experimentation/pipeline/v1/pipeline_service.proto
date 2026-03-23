@@ -18,6 +18,8 @@ service EventIngestionService {
   rpc IngestRewardEvent(IngestRewardEventRequest) returns (IngestRewardEventResponse);
   rpc IngestQoEEvent(IngestQoEEventRequest) returns (IngestQoEEventResponse);
   rpc IngestQoEEventBatch(IngestQoEEventBatchRequest) returns (IngestBatchResponse);
+  // ADR-021: Model retraining event ingestion for feedback loop interference detection.
+  rpc IngestModelRetrainingEvent(IngestModelRetrainingEventRequest) returns (IngestModelRetrainingEventResponse);
 }
 
 message IngestExposureRequest { experimentation.common.v1.ExposureEvent event = 1; }
@@ -32,3 +34,5 @@ message IngestQoEEventRequest { experimentation.common.v1.QoEEvent event = 1; }
 message IngestQoEEventResponse { bool accepted = 1; }
 message IngestQoEEventBatchRequest { repeated experimentation.common.v1.QoEEvent events = 1; }
 message IngestBatchResponse { int32 accepted_count = 1; int32 duplicate_count = 2; int32 invalid_count = 3; }
+message IngestModelRetrainingEventRequest { experimentation.common.v1.ModelRetrainingEvent event = 1; }
+message IngestModelRetrainingEventResponse { bool accepted = 1; }

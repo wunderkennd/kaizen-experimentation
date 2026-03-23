@@ -3,7 +3,7 @@
 use chrono::{DateTime, Duration, Utc};
 use experimentation_core::error::{assert_finite, Error, Result};
 use experimentation_proto::common::{
-    ExposureEvent, MetricEvent, PlaybackMetrics, QoEEvent, RewardEvent,
+    ExposureEvent, MetricEvent, ModelRetrainingEvent, PlaybackMetrics, QoEEvent, RewardEvent,
 };
 
 /// Validate that a timestamp is within ±24 hours of server time.
@@ -120,6 +120,55 @@ pub fn validate_reward_event(event: &RewardEvent) -> Result<()> {
     assert_finite(event.reward, "RewardEvent.reward");
 
     Ok(())
+}
+
+/// Validate a ModelRetrainingEvent (ADR-021): required fields + training window timestamps.
+///
+/// Required: event_id, model_id, training_data_start, training_data_end.
+/// The training window timestamps are validated for format only (not ±24h, since
+/// training data windows can reference historical time ranges).
+pub fn validate_model_retraining_event(event: &ModelRetrainingEvent) -> Result<()> {
+    validate_required(&event.event_id, "event_id")?;
+    validate_required(&event.model_id, "model_id")?;
+
+    // training_data_start and training_data_end are required but not ±24h validated —
+    // training data windows reference historical ranges.
+    let start = require_retraining_timestamp(&event.training_data_start, "training_data_start")?;
+    let end = require_retraining_timestamp(&event.training_data_end, "training_data_end")?;
+
+    if end <= start {
+        return Err(Error::Validation(
+            "training_data_end must be after training_data_start".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Unwrap and parse a prost Timestamp for retraining event fields.
+/// Unlike require_timestamp, does NOT apply the ±24h window check because
+/// training data windows reference historical periods.
+fn require_retraining_timestamp(
+    ts: &Option<prost_types::Timestamp>,
+    name: &str,
+) -> Result<DateTime<Utc>> {
+    let ts = ts
+        .as_ref()
+        .ok_or_else(|| Error::Validation(format!("{name} is required")))?;
+
+    if ts.nanos < 0 {
+        return Err(Error::Validation(format!(
+            "{name} has negative nanos: {}",
+            ts.nanos
+        )));
+    }
+
+    DateTime::<Utc>::from_timestamp(ts.seconds, ts.nanos as u32).ok_or_else(|| {
+        Error::Validation(format!(
+            "{name} has invalid value: seconds={}, nanos={}",
+            ts.seconds, ts.nanos
+        ))
+    })
 }
 
 /// Validate a QoEEvent: required fields + timestamp + playback metrics.
@@ -461,6 +510,86 @@ mod tests {
         m.rebuffer_count = 10_001;
         let err = validate_playback_metrics(&m).unwrap_err();
         assert!(err.to_string().contains("rebuffer_count"));
+    }
+
+    // --- ModelRetrainingEvent tests (ADR-021) ---
+
+    fn past_proto(offset_hours: i64) -> Option<Timestamp> {
+        let t = Utc::now() - Duration::hours(offset_hours);
+        Some(Timestamp {
+            seconds: t.timestamp(),
+            nanos: 0,
+        })
+    }
+
+    fn valid_model_retraining_event() -> ModelRetrainingEvent {
+        ModelRetrainingEvent {
+            event_id: "mre-1".into(),
+            model_id: "rec-model-v2".into(),
+            training_data_start: past_proto(48),
+            training_data_end: past_proto(24),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_valid_model_retraining_event_accepted() {
+        assert!(validate_model_retraining_event(&valid_model_retraining_event()).is_ok());
+    }
+
+    #[test]
+    fn test_model_retraining_missing_model_id() {
+        let mut e = valid_model_retraining_event();
+        e.model_id = String::new();
+        let err = validate_model_retraining_event(&e).unwrap_err();
+        assert!(err.to_string().contains("model_id is required"));
+    }
+
+    #[test]
+    fn test_model_retraining_missing_event_id() {
+        let mut e = valid_model_retraining_event();
+        e.event_id = String::new();
+        let err = validate_model_retraining_event(&e).unwrap_err();
+        assert!(err.to_string().contains("event_id is required"));
+    }
+
+    #[test]
+    fn test_model_retraining_missing_training_data_start() {
+        let mut e = valid_model_retraining_event();
+        e.training_data_start = None;
+        let err = validate_model_retraining_event(&e).unwrap_err();
+        assert!(err.to_string().contains("training_data_start is required"));
+    }
+
+    #[test]
+    fn test_model_retraining_missing_training_data_end() {
+        let mut e = valid_model_retraining_event();
+        e.training_data_end = None;
+        let err = validate_model_retraining_event(&e).unwrap_err();
+        assert!(err.to_string().contains("training_data_end is required"));
+    }
+
+    #[test]
+    fn test_model_retraining_end_before_start_rejected() {
+        let mut e = valid_model_retraining_event();
+        // swap: end is older than start
+        e.training_data_start = past_proto(24);
+        e.training_data_end = past_proto(48);
+        let err = validate_model_retraining_event(&e).unwrap_err();
+        assert!(err.to_string().contains("training_data_end must be after"));
+    }
+
+    #[test]
+    fn test_model_retraining_historical_window_accepted() {
+        // Training windows can reference time > 24h ago — no ±24h restriction.
+        let e = ModelRetrainingEvent {
+            event_id: "mre-2".into(),
+            model_id: "rec-model-v1".into(),
+            training_data_start: past_proto(720), // 30 days ago
+            training_data_end: past_proto(360),   // 15 days ago
+            ..Default::default()
+        };
+        assert!(validate_model_retraining_event(&e).is_ok());
     }
 
     #[test]
