@@ -6,6 +6,7 @@ import { listAuditLog } from '@/lib/api';
 import { AuditLogTable } from '@/components/audit-log-table';
 import { AuditFilters } from '@/components/audit-filters';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
@@ -101,6 +102,11 @@ export default function AuditLogPage() {
 
   return (
     <div>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Audit Log' },
+      ]} />
+
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Audit Log</h1>
 
       <AuditFilters
