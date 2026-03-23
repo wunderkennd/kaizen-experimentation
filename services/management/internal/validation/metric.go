@@ -20,7 +20,71 @@ func ValidateCreateMetricDefinition(m *commonv1.MetricDefinition) *connect.Error
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("type is required"))
 	}
 
-	return validateMetricTypeFields(m)
+	if err := validateMetricTypeFields(m); err != nil {
+		return err
+	}
+	return validateMetricStakeholderAggregation(m)
+}
+
+// validateMetricStakeholderAggregation enforces ADR-014 structural rules at
+// metric definition time:
+//   - MetricStakeholder must be set (not UNSPECIFIED).
+//   - MetricAggregationLevel must be set (not UNSPECIFIED).
+//   - PROVIDER aggregation is only valid for PROVIDER-stakeholder metrics.
+//
+// Use-case constraints (bandit rewards must use USER aggregation; guardrails
+// accept USER or EXPERIMENT) are enforced at experiment-start time via
+// ValidateBanditRewardMetricAggregation and ValidateGuardrailMetricAggregation
+// when the actual metric definition is fetched from the store.
+func validateMetricStakeholderAggregation(m *commonv1.MetricDefinition) *connect.Error {
+	stakeholder := m.GetStakeholder()
+	aggLevel := m.GetAggregationLevel()
+
+	if stakeholder == commonv1.MetricStakeholder_METRIC_STAKEHOLDER_UNSPECIFIED {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("stakeholder is required (ADR-014): set USER, PROVIDER, or PLATFORM"))
+	}
+	if aggLevel == commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_UNSPECIFIED {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("aggregation_level is required (ADR-014): set USER, EXPERIMENT, or PROVIDER"))
+	}
+
+	// PROVIDER aggregation is only meaningful for provider-stakeholder metrics.
+	if aggLevel == commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER &&
+		stakeholder != commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PROVIDER {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("aggregation_level PROVIDER is only valid for PROVIDER stakeholder metrics; got stakeholder %s", stakeholder))
+	}
+
+	return nil
+}
+
+// ValidateBanditRewardMetricAggregation enforces that a bandit reward metric
+// uses USER aggregation (ADR-014). Called at experiment-start time after
+// fetching the metric definition from the store.
+func ValidateBanditRewardMetricAggregation(m *commonv1.MetricDefinition) *connect.Error {
+	if m.GetAggregationLevel() != commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("bandit reward metric %q must use USER aggregation_level (ADR-014); got %s",
+				m.GetName(), m.GetAggregationLevel()))
+	}
+	return nil
+}
+
+// ValidateGuardrailMetricAggregation enforces that a guardrail metric uses
+// USER or EXPERIMENT aggregation (ADR-014). PROVIDER aggregation is not
+// supported for guardrails. Called at experiment-start time.
+func ValidateGuardrailMetricAggregation(m *commonv1.MetricDefinition) *connect.Error {
+	level := m.GetAggregationLevel()
+	switch level {
+	case commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
+		commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT:
+		return nil
+	default:
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("guardrail metric %q must use USER or EXPERIMENT aggregation_level (ADR-014); got %s",
+				m.GetName(), level))
+	}
 }
 
 func validateMetricTypeFields(m *commonv1.MetricDefinition) *connect.Error {

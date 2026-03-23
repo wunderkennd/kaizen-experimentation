@@ -121,9 +121,11 @@ func TestValidateCreateMetricDefinition_NegativeMDE(t *testing.T) {
 
 func TestValidateCreateMetricDefinition_ValidMean(t *testing.T) {
 	m := &commonv1.MetricDefinition{
-		Name:            "avg_watch_time",
-		Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
-		SourceEventType: "watch_event",
+		Name:             "avg_watch_time",
+		Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+		SourceEventType:  "watch_event",
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 	}
 	err := ValidateCreateMetricDefinition(m)
 	assert.Nil(t, err)
@@ -135,6 +137,8 @@ func TestValidateCreateMetricDefinition_ValidRatio(t *testing.T) {
 		Type:                 commonv1.MetricType_METRIC_TYPE_RATIO,
 		NumeratorEventType:   "revenue",
 		DenominatorEventType: "session",
+		Stakeholder:          commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PLATFORM,
+		AggregationLevel:     commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 	}
 	err := ValidateCreateMetricDefinition(m)
 	assert.Nil(t, err)
@@ -142,10 +146,12 @@ func TestValidateCreateMetricDefinition_ValidRatio(t *testing.T) {
 
 func TestValidateCreateMetricDefinition_ValidPercentile(t *testing.T) {
 	m := &commonv1.MetricDefinition{
-		Name:            "p95_ttff",
-		Type:            commonv1.MetricType_METRIC_TYPE_PERCENTILE,
-		SourceEventType: "ttff_event",
-		Percentile:      0.95,
+		Name:             "p95_ttff",
+		Type:             commonv1.MetricType_METRIC_TYPE_PERCENTILE,
+		SourceEventType:  "ttff_event",
+		Percentile:       0.95,
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 	}
 	err := ValidateCreateMetricDefinition(m)
 	assert.Nil(t, err)
@@ -153,10 +159,146 @@ func TestValidateCreateMetricDefinition_ValidPercentile(t *testing.T) {
 
 func TestValidateCreateMetricDefinition_ValidCustom(t *testing.T) {
 	m := &commonv1.MetricDefinition{
-		Name:      "custom_engagement",
-		Type:      commonv1.MetricType_METRIC_TYPE_CUSTOM,
-		CustomSql: "SELECT AVG(engagement_score) FROM events",
+		Name:             "custom_engagement",
+		Type:             commonv1.MetricType_METRIC_TYPE_CUSTOM,
+		CustomSql:        "SELECT AVG(engagement_score) FROM events",
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PLATFORM,
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT,
 	}
 	err := ValidateCreateMetricDefinition(m)
 	assert.Nil(t, err)
+}
+
+// --- ADR-014: MetricStakeholder / MetricAggregationLevel tests ---
+
+func TestValidateCreateMetricDefinition_StakeholderRequired(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "some_metric",
+		Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+		SourceEventType:  "evt",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
+		// Stakeholder intentionally omitted (UNSPECIFIED)
+	}
+	err := ValidateCreateMetricDefinition(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "stakeholder is required")
+}
+
+func TestValidateCreateMetricDefinition_AggregationLevelRequired(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:            "some_metric",
+		Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
+		SourceEventType: "evt",
+		Stakeholder:     commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+		// AggregationLevel intentionally omitted (UNSPECIFIED)
+	}
+	err := ValidateCreateMetricDefinition(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "aggregation_level is required")
+}
+
+func TestValidateCreateMetricDefinition_ProviderAggRequiresProviderStakeholder(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "catalog_coverage",
+		Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+		SourceEventType:  "impression",
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER, // wrong for PROVIDER agg
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER,
+	}
+	err := ValidateCreateMetricDefinition(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "aggregation_level PROVIDER is only valid for PROVIDER stakeholder")
+}
+
+func TestValidateCreateMetricDefinition_ProviderAggWithProviderStakeholder(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "catalog_coverage",
+		Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+		SourceEventType:  "impression",
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_PROVIDER,
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER,
+	}
+	err := ValidateCreateMetricDefinition(m)
+	assert.Nil(t, err)
+}
+
+func TestValidateCreateMetricDefinition_UserMetricWithExperimentAgg(t *testing.T) {
+	// USER stakeholder with EXPERIMENT aggregation is valid (for guardrail use).
+	m := &commonv1.MetricDefinition{
+		Name:             "churn_rate",
+		Type:             commonv1.MetricType_METRIC_TYPE_PROPORTION,
+		SourceEventType:  "churn",
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT,
+	}
+	err := ValidateCreateMetricDefinition(m)
+	assert.Nil(t, err)
+}
+
+// --- ValidateBanditRewardMetricAggregation tests ---
+
+func TestValidateBanditRewardMetricAggregation_UserAggValid(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "ctr",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
+	}
+	assert.Nil(t, ValidateBanditRewardMetricAggregation(m))
+}
+
+func TestValidateBanditRewardMetricAggregation_ExperimentAggRejected(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "overall_conversion",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT,
+	}
+	err := ValidateBanditRewardMetricAggregation(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "USER aggregation_level")
+}
+
+func TestValidateBanditRewardMetricAggregation_ProviderAggRejected(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "catalog_coverage",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER,
+	}
+	err := ValidateBanditRewardMetricAggregation(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "USER aggregation_level")
+}
+
+// --- ValidateGuardrailMetricAggregation tests ---
+
+func TestValidateGuardrailMetricAggregation_UserAggValid(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "error_rate",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
+	}
+	assert.Nil(t, ValidateGuardrailMetricAggregation(m))
+}
+
+func TestValidateGuardrailMetricAggregation_ExperimentAggValid(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "churn_rate",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_EXPERIMENT,
+	}
+	assert.Nil(t, ValidateGuardrailMetricAggregation(m))
+}
+
+func TestValidateGuardrailMetricAggregation_ProviderAggRejected(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name:             "catalog_metric",
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_PROVIDER,
+	}
+	err := ValidateGuardrailMetricAggregation(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "USER or EXPERIMENT aggregation_level")
+}
+
+func TestValidateGuardrailMetricAggregation_UnspecifiedRejected(t *testing.T) {
+	m := &commonv1.MetricDefinition{
+		Name: "some_guardrail",
+		// AggregationLevel UNSPECIFIED
+	}
+	err := ValidateGuardrailMetricAggregation(m)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "USER or EXPERIMENT aggregation_level")
 }

@@ -22,11 +22,13 @@ func TestCreateMetricDefinition_Mean(t *testing.T) {
 	resp, err := env.client.CreateMetricDefinition(context.Background(),
 		connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 			Metric: &commonv1.MetricDefinition{
-				Name:            "avg_watch_time",
-				Description:     "Average watch time per session",
-				Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
-				SourceEventType: "watch_event",
-				LowerIsBetter:   false,
+				Name:             "avg_watch_time",
+				Description:      "Average watch time per session",
+				Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+				SourceEventType:  "watch_event",
+				LowerIsBetter:    false,
+				Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)
@@ -44,10 +46,12 @@ func TestCreateMetricDefinition_WithExplicitID(t *testing.T) {
 	resp, err := env.client.CreateMetricDefinition(context.Background(),
 		connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 			Metric: &commonv1.MetricDefinition{
-				MetricId:        "custom-metric-001",
-				Name:            "explicit_id_metric",
-				Type:            commonv1.MetricType_METRIC_TYPE_COUNT,
-				SourceEventType: "click",
+				MetricId:         "custom-metric-001",
+				Name:             "explicit_id_metric",
+				Type:             commonv1.MetricType_METRIC_TYPE_COUNT,
+				SourceEventType:  "click",
+				Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)
@@ -65,6 +69,8 @@ func TestCreateMetricDefinition_Ratio(t *testing.T) {
 				Type:                 commonv1.MetricType_METRIC_TYPE_RATIO,
 				NumeratorEventType:   "revenue",
 				DenominatorEventType: "session",
+				Stakeholder:          commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel:     commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)
@@ -79,12 +85,14 @@ func TestCreateMetricDefinition_Percentile(t *testing.T) {
 	resp, err := env.client.CreateMetricDefinition(context.Background(),
 		connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 			Metric: &commonv1.MetricDefinition{
-				Name:            "p95_ttff",
-				Type:            commonv1.MetricType_METRIC_TYPE_PERCENTILE,
-				SourceEventType: "ttff_event",
-				Percentile:      0.95,
-				LowerIsBetter:   true,
-				IsQoeMetric:     true,
+				Name:             "p95_ttff",
+				Type:             commonv1.MetricType_METRIC_TYPE_PERCENTILE,
+				SourceEventType:  "ttff_event",
+				Percentile:       0.95,
+				LowerIsBetter:    true,
+				IsQoeMetric:      true,
+				Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)
@@ -100,9 +108,11 @@ func TestCreateMetricDefinition_Custom(t *testing.T) {
 	resp, err := env.client.CreateMetricDefinition(context.Background(),
 		connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 			Metric: &commonv1.MetricDefinition{
-				Name:      "custom_engagement",
-				Type:      commonv1.MetricType_METRIC_TYPE_CUSTOM,
-				CustomSql: "SELECT AVG(score) FROM engagement_events",
+				Name:             "custom_engagement",
+				Type:             commonv1.MetricType_METRIC_TYPE_CUSTOM,
+				CustomSql:        "SELECT AVG(score) FROM engagement_events",
+				Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)
@@ -176,9 +186,11 @@ func TestGetMetricDefinition(t *testing.T) {
 	createResp, err := env.client.CreateMetricDefinition(context.Background(),
 		connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 			Metric: &commonv1.MetricDefinition{
-				Name:            "get_test_metric",
-				Type:            commonv1.MetricType_METRIC_TYPE_PROPORTION,
-				SourceEventType: "conversion",
+				Name:             "get_test_metric",
+				Type:             commonv1.MetricType_METRIC_TYPE_PROPORTION,
+				SourceEventType:  "conversion",
+				Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)
@@ -221,9 +233,11 @@ func TestListMetricDefinitions(t *testing.T) {
 		_, err := env.client.CreateMetricDefinition(context.Background(),
 			connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 				Metric: &commonv1.MetricDefinition{
-					Name:            fmt.Sprintf("list_test_%d", i),
-					Type:            commonv1.MetricType_METRIC_TYPE_COUNT,
-					SourceEventType: "click",
+					Name:             fmt.Sprintf("list_test_%d", i),
+					Type:             commonv1.MetricType_METRIC_TYPE_COUNT,
+					SourceEventType:  "click",
+					Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+					AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 				},
 			}))
 		require.NoError(t, err)
@@ -266,9 +280,11 @@ func TestListMetricDefinitions_TypeFilter(t *testing.T) {
 		_, err := env.client.CreateMetricDefinition(context.Background(),
 			connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 				Metric: &commonv1.MetricDefinition{
-					Name:            tt.name,
-					Type:            tt.typ,
-					SourceEventType: "test_event",
+					Name:             tt.name,
+					Type:             tt.typ,
+					SourceEventType:  "test_event",
+					Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+					AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 				},
 			}))
 		require.NoError(t, err)
@@ -314,10 +330,12 @@ func TestCreateMetricDefinition_DuplicateID(t *testing.T) {
 	defer cleanup()
 
 	m := &commonv1.MetricDefinition{
-		MetricId:        "dup-metric-id",
-		Name:            "dup_metric",
-		Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
-		SourceEventType: "ev",
+		MetricId:         "dup-metric-id",
+		Name:             "dup_metric",
+		Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+		SourceEventType:  "ev",
+		Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+		AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 	}
 
 	_, err := env.client.CreateMetricDefinition(context.Background(),
@@ -343,6 +361,8 @@ func TestCreateMetricDefinition_WithCupedCovariate(t *testing.T) {
 				SourceEventType:         "view",
 				CupedCovariateMetricId:  "some-covariate-id",
 				MinimumDetectableEffect: 0.02,
+				Stakeholder:             commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+				AggregationLevel:        commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 			},
 		}))
 	require.NoError(t, err)

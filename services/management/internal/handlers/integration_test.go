@@ -1803,12 +1803,14 @@ func createQoeMetric(t *testing.T, client managementv1connect.ExperimentManageme
 	t.Helper()
 	_, err := client.CreateMetricDefinition(context.Background(), connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 		Metric: &commonv1.MetricDefinition{
-			MetricId:        metricID,
-			Name:            metricID + " (QoE)",
-			Description:     "QoE metric for testing",
-			Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
-			SourceEventType: "qoe_rebuffer",
-			IsQoeMetric:     true,
+			MetricId:         metricID,
+			Name:             metricID + " (QoE)",
+			Description:      "QoE metric for testing",
+			Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+			SourceEventType:  "qoe_rebuffer",
+			IsQoeMetric:      true,
+			Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+			AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 		},
 	}))
 	require.NoError(t, err)
@@ -1818,12 +1820,14 @@ func createNonQoeMetric(t *testing.T, client managementv1connect.ExperimentManag
 	t.Helper()
 	_, err := client.CreateMetricDefinition(context.Background(), connect.NewRequest(&mgmtv1.CreateMetricDefinitionRequest{
 		Metric: &commonv1.MetricDefinition{
-			MetricId:        metricID,
-			Name:            metricID + " (non-QoE)",
-			Description:     "Non-QoE metric for testing",
-			Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
-			SourceEventType: "generic_event",
-			IsQoeMetric:     false,
+			MetricId:         metricID,
+			Name:             metricID + " (non-QoE)",
+			Description:      "Non-QoE metric for testing",
+			Type:             commonv1.MetricType_METRIC_TYPE_MEAN,
+			SourceEventType:  "generic_event",
+			IsQoeMetric:      false,
+			Stakeholder:      commonv1.MetricStakeholder_METRIC_STAKEHOLDER_USER,
+			AggregationLevel: commonv1.MetricAggregationLevel_METRIC_AGGREGATION_LEVEL_USER,
 		},
 	}))
 	require.NoError(t, err)

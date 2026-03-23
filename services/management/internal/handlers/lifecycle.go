@@ -14,6 +14,7 @@ import (
 
 	"github.com/org/experimentation-platform/services/management/internal/allocation"
 	"github.com/org/experimentation-platform/services/management/internal/store"
+	"github.com/org/experimentation-platform/services/management/internal/validation"
 )
 
 // rollbackToDraft attempts to roll back an experiment from STARTING to DRAFT,
@@ -532,7 +533,8 @@ func (s *ExperimentService) ResumeExperiment(
 }
 
 // validateMetricsForStart checks that the experiment's primary, secondary, and
-// guardrail metrics all exist in the metric_definitions table.
+// guardrail metrics all exist in the metric_definitions table. Also enforces
+// ADR-014: guardrail metrics must use USER or EXPERIMENT aggregation.
 func (s *ExperimentService) validateMetricsForStart(ctx context.Context, experimentID string) error {
 	expRow, _, guardrails, err := s.store.GetByID(ctx, experimentID)
 	if err != nil {
@@ -554,6 +556,19 @@ func (s *ExperimentService) validateMetricsForStart(ctx context.Context, experim
 		return connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("metric %q does not exist", missing))
 	}
+
+	// ADR-014: guardrail metrics must use USER or EXPERIMENT aggregation.
+	for _, g := range guardrails {
+		mrow, err := s.metrics.GetByID(ctx, g.MetricID)
+		if err != nil {
+			return internalError("fetch guardrail metric for aggregation check", err)
+		}
+		mDef := store.RowToMetricDefinition(mrow)
+		if verr := validation.ValidateGuardrailMetricAggregation(mDef); verr != nil {
+			return verr
+		}
+	}
+
 	return nil
 }
 
@@ -597,6 +612,17 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 		return connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("bandit_config.reward_metric_id %q does not exist in metric_definitions", rewardMetricID))
 	}
+
+	// ADR-014: bandit reward metric must use USER aggregation.
+	mrow, err := s.metrics.GetByID(ctx, rewardMetricID)
+	if err != nil {
+		return internalError("fetch bandit reward metric for aggregation check", err)
+	}
+	mDef := store.RowToMetricDefinition(mrow)
+	if verr := validation.ValidateBanditRewardMetricAggregation(mDef); verr != nil {
+		return verr
+	}
+
 	return nil
 }
 
