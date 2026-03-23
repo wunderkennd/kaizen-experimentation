@@ -10,6 +10,8 @@ pub const EVENT_TYPE_EXPOSURE: &str = "exposure";
 pub const EVENT_TYPE_METRIC: &str = "metric";
 pub const EVENT_TYPE_REWARD: &str = "reward";
 pub const EVENT_TYPE_QOE: &str = "qoe";
+/// ADR-021: Model retraining event type label.
+pub const EVENT_TYPE_MODEL_RETRAINING: &str = "model_retraining";
 
 /// Pipeline metrics registered with a Prometheus registry.
 #[derive(Clone)]

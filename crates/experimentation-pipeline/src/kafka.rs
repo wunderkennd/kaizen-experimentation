@@ -24,6 +24,8 @@ pub const TOPIC_EXPOSURES: &str = "exposures";
 pub const TOPIC_METRIC_EVENTS: &str = "metric_events";
 pub const TOPIC_REWARD_EVENTS: &str = "reward_events";
 pub const TOPIC_QOE_EVENTS: &str = "qoe_events";
+/// ADR-021: Model retraining events for feedback loop interference detection.
+pub const TOPIC_MODEL_RETRAINING_EVENTS: &str = "model_retraining_events";
 
 /// Configuration for the Kafka producer.
 pub struct KafkaConfig {

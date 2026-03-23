@@ -91,6 +91,20 @@ kafka-topics.sh --create --topic sequential_boundary_alerts \
   --config max.message.bytes=1048576 \
   --config min.insync.replicas=2
 
+# --- model_retraining_events ---
+# Source: External recommendation model training pipeline
+# Consumers: M3 Metric Engine (Go, feedback loop contamination analysis per ADR-021)
+# Key: model_id (colocates all retraining events for one model)
+# Volume estimate: ~1-10 events/day (one per model retraining cycle)
+kafka-topics.sh --create --topic model_retraining_events \
+  --partitions 8 \
+  --replication-factor 3 \
+  --config retention.ms=15552000000 \      # 180 days (long retention for historical analysis)
+  --config cleanup.policy=delete \
+  --config segment.bytes=268435456 \       # 256 MB segments
+  --config max.message.bytes=1048576 \     # 1 MB max message
+  --config min.insync.replicas=2
+
 # --- surrogate_recalibration_requests ---
 # Source: M5 Management Service (Go, on TriggerSurrogateRecalibration RPC)
 # Consumers: M3 Metric Engine (Go, triggers surrogate model recalibration)
@@ -108,7 +122,7 @@ kafka-topics.sh --create --topic surrogate_recalibration_requests \
 # ============================================================================
 # Consumer Groups
 # ============================================================================
-# metric-engine-spark       : M3 reads exposures, metric_events, qoe_events (batch)
+# metric-engine-spark       : M3 reads exposures, metric_events, qoe_events, model_retraining_events (batch)
 # bandit-policy-service     : M4b reads reward_events (real-time, committed offsets for crash recovery)
 # management-guardrail      : M5 reads guardrail_alerts (real-time, auto-pause trigger)
 # management-sequential     : M5 reads sequential_boundary_alerts (real-time, auto-conclude trigger)
@@ -128,3 +142,4 @@ kafka-topics.sh --create --topic surrogate_recalibration_requests \
 #   guardrail_alerts  -> experimentation.common.v1.GuardrailAlert
 #   sequential_boundary_alerts -> experimentation.common.v1.SequentialBoundaryAlert
 #   surrogate_recalibration_requests -> JSON (surrogate.RecalibrationRequest)
+#   model_retraining_events          -> experimentation.common.v1.ModelRetrainingEvent
