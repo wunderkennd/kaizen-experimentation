@@ -7,16 +7,26 @@
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-elephant
+Branch: work/bright-panda
 
 ## In Progress
 
-- [ ] ADR-015 AVLM (sequential CUPED)
 - [ ] ADR-018 E-values + online FDR
 - [ ] ADR-011 Multi-objective bandits
 - [ ] ADR-012 LP constraints
 
 ## Completed (Phase 5)
+
+- [x] **ADR-015 Phase 1 (AVLM)** — PR #199
+  - `crates/experimentation-stats/src/avlm.rs` implemented
+  - `AvlmSequentialTest` with 6 sufficient statistics per arm, O(1) `update()`
+  - `confidence_sequence()` returns regression-adjusted anytime-valid CI
+  - Batch convenience API `avlm_confidence_sequence()`
+  - 15 tests passing: 5 golden-file tests, 8 behavioral/unit tests, 2 proptest/coverage tests
+  - Proptest coverage invariant: 200-trial simulation at n=50/arm yields ≥ 90% coverage (conservative threshold)
+  - Variance reduction confirmed for correlated covariates
+  - Degenerate fallback (constant covariate → unadjusted mSPRT)
+  - Registered in `lib.rs` as `pub mod avlm`
 
 - [x] **ADR-017 Phase 1 — TC/JIVE surrogate calibration fix** (2026-03-23)
   - Implemented `crates/experimentation-stats/src/orl.rs`
@@ -29,9 +39,9 @@ Branch: work/bright-elephant
     - Scenario C: weak instrument (F ≈ 0.41) → `InstrumentStrength::Weak` detected
   - 141 lib tests pass + 3 golden integration tests pass (0 failures)
   - Proptest invariants: `iv_result_all_finite`, `bias_correction_sign_with_positive_confounder`
-  - PR: work/bright-elephant
+  - PR #198 merged
 
-- [x] **Proto schema extensions** (PR: work/lively-owl) — All Phase 5 proto additions, buf lint + breaking clean.
+- [x] **Proto schema extensions** (PR #196 merged) — All Phase 5 proto additions, buf lint + breaking clean.
 
 ### Proto changes landed:
 
@@ -83,8 +93,9 @@ _None._
 ## Next Up
 
 - ADR-017 Phase 2 — Offline RL policy evaluation (doubly-robust estimator)
-- ADR-015 AVLM — sequential CUPED, depends on: none (can start)
-- ADR-018 E-values — depends on: none (can start)
+- ADR-018 E-values — GROW martingale e-values alongside p-values
+- ADR-011 Multi-objective bandits
+- ADR-012 LP constraints
 
 ## Dependencies Provided to Other Agents
 
@@ -97,3 +108,7 @@ the new types. Key dependencies:
   `AnnualizedImpact`, new config messages
 - **Agent-6** (M6 UI): All new result types + `SyntheticControlAnalysisResult` +
   `SwitchbackAnalysisResult`
+
+## Notes
+
+- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) does not exist in repo yet — implementation based on design_doc_v7.0.md Section 7.3 and 17.1 plus Lindon et al. (2025) algorithm.
