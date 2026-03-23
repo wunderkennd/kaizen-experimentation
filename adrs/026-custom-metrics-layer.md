@@ -1,4 +1,4 @@
-# ADR-011: Custom Metrics Definition Layer
+# ADR-026: Custom Metrics Definition Layer
 
 - **Status**: Proposed
 - **Date**: 2026-03-17
@@ -139,11 +139,11 @@ message FilterPredicate {
 
 message MetricDefinition {
   // ... existing fields ...
-  repeated FilterPredicate filters = 15;           // For FILTERED_MEAN
-  repeated string funnel_event_types = 16;         // For FUNNEL (ordered steps)
-  int32 retention_day = 17;                        // For RETENTION (e.g., 7, 14, 30)
-  repeated CompositeOperand composite_operands = 18; // For COMPOSITE
-  int32 window_hours = 19;                         // For WINDOWED_COUNT
+  repeated FilterPredicate filters = 17;           // For FILTERED_MEAN
+  repeated string funnel_event_types = 18;         // For FUNNEL (ordered steps)
+  int32 retention_day = 19;                        // For RETENTION (e.g., 7, 14, 30)
+  repeated CompositeOperand composite_operands = 20; // For COMPOSITE
+  int32 window_hours = 21;                         // For WINDOWED_COUNT
 }
 
 message CompositeOperand {
@@ -360,17 +360,17 @@ click, add_to_list, share, rating, download, subscription_change
 
 ```protobuf
 message MetricDefinition {
-  // ... existing fields 1-14 ...
+  // ... existing fields 1-16 (includes stakeholder=15, aggregation_level=16 from ADR-014) ...
 
   // Tier 1 extensions (from Option A)
-  repeated FilterPredicate filters = 15;
-  repeated string funnel_event_types = 16;
-  int32 retention_day = 17;
-  repeated CompositeOperand composite_operands = 18;
-  int32 window_hours = 19;
+  repeated FilterPredicate filters = 17;
+  repeated string funnel_event_types = 18;
+  int32 retention_day = 19;
+  repeated CompositeOperand composite_operands = 20;
+  int32 window_hours = 21;
 
   // Tier 2: MetricQL expression (from Option C)
-  string expression = 20;
+  string expression = 22;
 
   // Tier 3: Raw SQL (existing field 9, now deprecated)
   // string custom_sql = 9; // DEPRECATED: use expression or structured fields instead
