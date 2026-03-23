@@ -220,7 +220,7 @@ pub fn conditional_power(
     assert_finite(cp, "conditional_power");
 
     // Clamp to [0, 1] — numerical precision can produce tiny out-of-range values
-    Ok(cp.max(0.0).min(1.0))
+    Ok(cp.clamp(0.0, 1.0))
 }
 
 // ---------------------------------------------------------------------------
