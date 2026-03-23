@@ -1,5 +1,5 @@
 # Multi-stage build for minimal runtime image.
-FROM rust:1.80-slim as builder
+FROM rust:1.85-slim as builder
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
