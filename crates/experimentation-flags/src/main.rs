@@ -100,7 +100,7 @@ async fn main() {
         if let Some(channel) = channel {
             let m5_client = ExperimentManagementServiceClient::new(channel);
             let default_action =
-                ResolutionAction::from_str(&config.reconciler_default_action)
+                ResolutionAction::parse_action(&config.reconciler_default_action)
                     .unwrap_or(ResolutionAction::RolloutFull);
             let interval = Duration::from_secs(config.reconciler_interval_secs);
 

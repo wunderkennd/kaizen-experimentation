@@ -200,7 +200,7 @@ async fn handle_resolve(
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid flag_id UUID").into_response(),
     };
 
-    let action = match ResolutionAction::from_str(&q.action) {
+    let action = match ResolutionAction::parse_action(&q.action) {
         Some(a) => a,
         None => {
             return (

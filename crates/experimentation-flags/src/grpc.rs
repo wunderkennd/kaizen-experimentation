@@ -337,6 +337,7 @@ fn build_variants(f: &Flag) -> Vec<Variant> {
     ]
 }
 
+#[allow(clippy::result_large_err)] // tonic::Status is intentionally large
 fn apply_type_config(exp: &mut Experiment, f: &Flag) -> Result<(), Status> {
     let exp_type = ExperimentType::try_from(exp.r#type).unwrap_or(ExperimentType::Unspecified);
 

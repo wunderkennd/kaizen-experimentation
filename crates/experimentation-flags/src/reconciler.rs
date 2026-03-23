@@ -31,9 +31,10 @@ use crate::store::FlagStore;
 // ---------------------------------------------------------------------------
 
 /// How the reconciler updates a flag when its experiment concludes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ResolutionAction {
     /// Set rollout to 100% and enable the flag (treatment won).
+    #[default]
     RolloutFull,
     /// Set rollout to 0% and disable the flag (control won / experiment failed).
     Rollback,
@@ -50,7 +51,7 @@ impl ResolutionAction {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_action(s: &str) -> Option<Self> {
         match s {
             "rollout_full" => Some(ResolutionAction::RolloutFull),
             "rollback" => Some(ResolutionAction::Rollback),
@@ -60,11 +61,6 @@ impl ResolutionAction {
     }
 }
 
-impl Default for ResolutionAction {
-    fn default() -> Self {
-        ResolutionAction::RolloutFull
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Reconciler
