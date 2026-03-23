@@ -1,0 +1,55 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+variant_provider_impressions AS (
+    SELECT eu.variant_id, cc.{{.ProviderField}} AS provider_id, COUNT(*) AS impression_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    INNER JOIN delta.content_catalog cc ON me.content_id = cc.content_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+      AND cc.{{.ProviderField}} IS NOT NULL
+    GROUP BY eu.variant_id, cc.{{.ProviderField}}
+),
+all_providers AS (
+    SELECT DISTINCT {{.ProviderField}} AS provider_id
+    FROM delta.content_catalog
+    WHERE {{.ProviderField}} IS NOT NULL
+),
+all_variant_providers AS (
+    SELECT eu.variant_id, ap.provider_id,
+        COALESCE(vpi.impression_count, 0) AS impression_count
+    FROM (SELECT DISTINCT variant_id FROM exposed_users) eu
+    CROSS JOIN all_providers ap
+    LEFT JOIN variant_provider_impressions vpi
+        ON eu.variant_id = vpi.variant_id AND ap.provider_id = vpi.provider_id
+),
+ranked AS (
+    SELECT
+        variant_id,
+        impression_count,
+        ROW_NUMBER() OVER (PARTITION BY variant_id ORDER BY impression_count ASC) AS rank_asc,
+        COUNT(*) OVER (PARTITION BY variant_id) AS n,
+        SUM(impression_count) OVER (PARTITION BY variant_id) AS total_impressions
+    FROM all_variant_providers
+),
+gini_calc AS (
+    SELECT
+        variant_id,
+        CASE
+            WHEN MAX(total_impressions) = 0 THEN 0.0
+            ELSE (2.0 * SUM(rank_asc * impression_count) / (MAX(n) * MAX(total_impressions)))
+                 - (MAX(n) + 1.0) / MAX(n)
+        END AS provider_gini
+    FROM ranked
+    GROUP BY variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    provider_gini AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM gini_calc

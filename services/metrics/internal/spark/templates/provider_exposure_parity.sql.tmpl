@@ -1,0 +1,45 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+variant_provider_impressions AS (
+    SELECT eu.variant_id, cc.{{.ProviderField}} AS provider_id, COUNT(*) AS impression_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    INNER JOIN delta.content_catalog cc ON me.content_id = cc.content_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+      AND cc.{{.ProviderField}} IS NOT NULL
+    GROUP BY eu.variant_id, cc.{{.ProviderField}}
+),
+variant_totals AS (
+    SELECT variant_id, SUM(impression_count) AS total_impressions
+    FROM variant_provider_impressions
+    GROUP BY variant_id
+),
+provider_shares AS (
+    SELECT
+        vpi.variant_id,
+        CAST(vpi.impression_count AS DOUBLE) / NULLIF(vt.total_impressions, 0) AS provider_share
+    FROM variant_provider_impressions vpi
+    INNER JOIN variant_totals vt ON vpi.variant_id = vt.variant_id
+),
+parity_calc AS (
+    SELECT
+        variant_id,
+        -- Parity = min_share / max_share. Range [0, 1] where 1.0 = perfectly equal distribution.
+        CASE
+            WHEN MAX(provider_share) = 0.0 THEN 1.0
+            ELSE MIN(provider_share) / MAX(provider_share)
+        END AS provider_parity
+    FROM provider_shares
+    GROUP BY variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    provider_parity AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM parity_calc

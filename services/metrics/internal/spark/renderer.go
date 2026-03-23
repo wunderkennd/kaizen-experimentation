@@ -43,6 +43,10 @@ type TemplateParams struct {
 	Percentile float64 // percentile value in (0,1), e.g. 0.50 for p50, 0.95 for p95
 	// Custom metric fields
 	CustomSQL string // user-provided Spark SQL expression for CUSTOM metrics
+	// Provider-side metric fields (ADR-014)
+	LongtailThreshold float64 // PERCENT_RANK threshold for longtail classification (e.g. 0.80)
+	ProviderField     string  // provider column name in content_catalog (default "provider_id")
+	GenreField        string  // genre column name in content_catalog (default "genre")
 }
 
 type SQLRenderer struct {
@@ -82,6 +86,21 @@ func (r *SQLRenderer) RenderSessionLevelMean(p TemplateParams) (string, error) {
 func (r *SQLRenderer) RenderQoEEngagementCorrelation(p TemplateParams) (string, error) { return r.Render("qoe_engagement_correlation.sql.tmpl", p) }
 func (r *SQLRenderer) RenderCustom(p TemplateParams) (string, error)               { return r.Render("custom.sql.tmpl", p) }
 func (r *SQLRenderer) RenderPercentile(p TemplateParams) (string, error)           { return r.Render("percentile.sql.tmpl", p) }
+
+// Provider-side metric renderers (ADR-014).
+// Experiment-level metrics — results go to delta.experiment_level_metrics.
+func (r *SQLRenderer) RenderCatalogCoverageRate(p TemplateParams) (string, error)    { return r.Render("catalog_coverage_rate.sql.tmpl", p) }
+func (r *SQLRenderer) RenderCatalogGiniCoefficient(p TemplateParams) (string, error) { return r.Render("catalog_gini_coefficient.sql.tmpl", p) }
+func (r *SQLRenderer) RenderCatalogEntropy(p TemplateParams) (string, error)         { return r.Render("catalog_entropy.sql.tmpl", p) }
+func (r *SQLRenderer) RenderLongtailImpressionShare(p TemplateParams) (string, error) { return r.Render("longtail_impression_share.sql.tmpl", p) }
+func (r *SQLRenderer) RenderProviderExposureGini(p TemplateParams) (string, error)   { return r.Render("provider_exposure_gini.sql.tmpl", p) }
+func (r *SQLRenderer) RenderProviderExposureParity(p TemplateParams) (string, error) { return r.Render("provider_exposure_parity.sql.tmpl", p) }
+
+// User-level provider metrics — results go to delta.metric_summaries.
+func (r *SQLRenderer) RenderUserGenreEntropy(p TemplateParams) (string, error)      { return r.Render("user_genre_entropy.sql.tmpl", p) }
+func (r *SQLRenderer) RenderUserDiscoveryRate(p TemplateParams) (string, error)     { return r.Render("user_discovery_rate.sql.tmpl", p) }
+func (r *SQLRenderer) RenderUserProviderDiversity(p TemplateParams) (string, error) { return r.Render("user_provider_diversity.sql.tmpl", p) }
+func (r *SQLRenderer) RenderIntraListDistance(p TemplateParams) (string, error)     { return r.Render("intra_list_distance.sql.tmpl", p) }
 
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {

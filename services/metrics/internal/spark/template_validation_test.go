@@ -36,6 +36,10 @@ func minimalParams() TemplateParams {
 		EngagementSourceType: "heartbeat",
 		Percentile:           0.50,
 		CustomSQL:            "SELECT user_id, AVG(value) AS metric_value FROM delta.metric_events GROUP BY user_id",
+		// Provider-side metric fields (ADR-014).
+		LongtailThreshold: 0.80,
+		ProviderField:     "provider_id",
+		GenreField:        "genre",
 	}
 }
 
@@ -191,6 +195,90 @@ func allTemplateSpecs() []templateSpec {
 				"CORR(", "pearson_correlation",
 				"delta.qoe_events", "delta.metric_events",
 				"STDDEV_SAMP",
+			},
+		},
+		// Provider-side metrics (ADR-014) — experiment level.
+		{
+			name:   "catalog_coverage_rate",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderCatalogCoverageRate(p) },
+			contains: []string{
+				"delta.content_catalog", "covered_items", "total_items",
+				"NULLIF(ct.total_items", "delta.exposures",
+			},
+		},
+		{
+			name:   "catalog_gini_coefficient",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderCatalogGiniCoefficient(p) },
+			contains: []string{
+				"delta.content_catalog", "gini_coefficient",
+				"ROW_NUMBER()", "rank_asc", "total_impressions",
+			},
+		},
+		{
+			name:   "catalog_entropy",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderCatalogEntropy(p) },
+			contains: []string{
+				"catalog_entropy", "LOG(", "total_impressions",
+				"variant_content_impressions", "delta.metric_events",
+			},
+		},
+		{
+			name:   "longtail_impression_share",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderLongtailImpressionShare(p) },
+			contains: []string{
+				"PERCENT_RANK()", "longtail_content",
+				"longtail_impressions", "0.8", // LongtailThreshold
+				"delta.metric_events",
+			},
+		},
+		{
+			name:   "provider_exposure_gini",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderProviderExposureGini(p) },
+			contains: []string{
+				"delta.content_catalog", "provider_gini", "provider_id",
+				"ROW_NUMBER()", "rank_asc",
+			},
+		},
+		{
+			name:   "provider_exposure_parity",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderProviderExposureParity(p) },
+			contains: []string{
+				"delta.content_catalog", "provider_parity", "provider_id",
+				"MIN(provider_share)", "MAX(provider_share)",
+			},
+		},
+		// Provider-side metrics (ADR-014) — user level.
+		{
+			name:   "user_genre_entropy",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderUserGenreEntropy(p) },
+			contains: []string{
+				"delta.content_catalog", "genre", "user_entropy",
+				"assignment_probability", "LOG(",
+			},
+		},
+		{
+			name:   "user_discovery_rate",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderUserDiscoveryRate(p) },
+			contains: []string{
+				"pre_experiment_content", "experiment_content", "new_content",
+				"2024-01-08", // ExperimentStartDate
+				"assignment_probability",
+			},
+		},
+		{
+			name:   "user_provider_diversity",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderUserProviderDiversity(p) },
+			contains: []string{
+				"delta.content_catalog", "distinct_providers", "provider_id",
+				"COUNT(DISTINCT", "assignment_probability",
+			},
+		},
+		{
+			name:   "intra_list_distance",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderIntraListDistance(p) },
+			contains: []string{
+				"delta.content_catalog", "genre", "POWER(",
+				"user_ild", "1.0 -", "assignment_probability",
 			},
 		},
 	}
@@ -428,7 +516,8 @@ func TestTemplateValidation_PercentileValues(t *testing.T) {
 // catch any new templates that are added without validation coverage.
 func TestTemplateValidation_TemplateCount(t *testing.T) {
 	specs := allTemplateSpecs()
-	// 17 renderable templates (exposure_join is a sub-template, not directly rendered).
-	assert.Equal(t, 17, len(specs),
-		"allTemplateSpecs should cover all 17 renderable templates; if you added a new template, add it to allTemplateSpecs()")
+	// 27 renderable templates: 17 original + 10 provider-side metrics from ADR-014.
+	// (exposure_join is a sub-template, not directly rendered.)
+	assert.Equal(t, 27, len(specs),
+		"allTemplateSpecs should cover all 27 renderable templates; if you added a new template, add it to allTemplateSpecs()")
 }

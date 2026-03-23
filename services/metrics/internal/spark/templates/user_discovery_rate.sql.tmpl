@@ -1,0 +1,46 @@
+WITH exposed_users AS (
+    SELECT user_id, variant_id, MIN(assignment_probability) AS assignment_probability
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+    GROUP BY user_id, variant_id
+),
+pre_experiment_content AS (
+    -- Content each user consumed before the experiment started (lookback for novelty baseline).
+    SELECT DISTINCT user_id, content_id
+    FROM delta.metric_events
+    WHERE event_type = '{{.SourceEventType}}'
+      AND content_id IS NOT NULL
+      AND event_timestamp < CAST('{{.ExperimentStartDate}}' AS TIMESTAMP)
+),
+experiment_content AS (
+    -- Distinct content consumed by each user during the experiment window.
+    SELECT DISTINCT eu.user_id, eu.variant_id, me.content_id
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+      AND me.event_timestamp >= CAST('{{.ExperimentStartDate}}' AS TIMESTAMP)
+),
+user_discovery AS (
+    SELECT
+        ec.user_id,
+        ec.variant_id,
+        COUNT(DISTINCT ec.content_id) AS total_content,
+        COUNT(DISTINCT CASE WHEN pec.content_id IS NULL THEN ec.content_id END) AS new_content
+    FROM experiment_content ec
+    LEFT JOIN pre_experiment_content pec
+        ON ec.user_id = pec.user_id AND ec.content_id = pec.content_id
+    GROUP BY ec.user_id, ec.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    ud.user_id,
+    ud.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    CASE WHEN ud.total_content = 0 THEN 0.0
+         ELSE CAST(ud.new_content AS DOUBLE) / ud.total_content
+    END AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    eu.assignment_probability
+FROM user_discovery ud
+INNER JOIN exposed_users eu ON ud.user_id = eu.user_id AND ud.variant_id = eu.variant_id

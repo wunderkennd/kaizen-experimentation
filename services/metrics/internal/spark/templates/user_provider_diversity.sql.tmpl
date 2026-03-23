@@ -1,0 +1,27 @@
+WITH exposed_users AS (
+    SELECT user_id, variant_id, MIN(assignment_probability) AS assignment_probability
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+    GROUP BY user_id, variant_id
+),
+user_provider_counts AS (
+    SELECT eu.user_id, eu.variant_id,
+        COUNT(DISTINCT cc.{{.ProviderField}}) AS distinct_providers
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    INNER JOIN delta.content_catalog cc ON me.content_id = cc.content_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+      AND cc.{{.ProviderField}} IS NOT NULL
+    GROUP BY eu.user_id, eu.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    upc.user_id,
+    upc.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    CAST(upc.distinct_providers AS DOUBLE) AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    eu.assignment_probability
+FROM user_provider_counts upc
+INNER JOIN exposed_users eu ON upc.user_id = eu.user_id AND upc.variant_id = eu.variant_id

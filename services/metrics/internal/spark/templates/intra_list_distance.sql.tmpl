@@ -1,0 +1,44 @@
+WITH exposed_users AS (
+    -- ILD = 1 - SUM_g(p_g^2) (complement of HHI over genres).
+    -- Range [0,1]: 0 = single genre, 1 = every item is a different genre.
+    SELECT user_id, variant_id, MIN(assignment_probability) AS assignment_probability
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+    GROUP BY user_id, variant_id
+),
+user_genre_counts AS (
+    SELECT eu.user_id, eu.variant_id, cc.{{.GenreField}} AS genre, COUNT(*) AS genre_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    INNER JOIN delta.content_catalog cc ON me.content_id = cc.content_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+      AND cc.{{.GenreField}} IS NOT NULL
+    GROUP BY eu.user_id, eu.variant_id, cc.{{.GenreField}}
+),
+user_totals AS (
+    SELECT user_id, variant_id, SUM(genre_count) AS total_count
+    FROM user_genre_counts
+    GROUP BY user_id, variant_id
+),
+user_ild AS (
+    SELECT
+        ugc.user_id,
+        ugc.variant_id,
+        1.0 - SUM(
+            POWER(CAST(ugc.genre_count AS DOUBLE) / NULLIF(ut.total_count, 0), 2)
+        ) AS metric_value
+    FROM user_genre_counts ugc
+    INNER JOIN user_totals ut ON ugc.user_id = ut.user_id AND ugc.variant_id = ut.variant_id
+    GROUP BY ugc.user_id, ugc.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    uild.user_id,
+    uild.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    uild.metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    eu.assignment_probability
+FROM user_ild uild
+INNER JOIN exposed_users eu ON uild.user_id = eu.user_id AND uild.variant_id = eu.variant_id

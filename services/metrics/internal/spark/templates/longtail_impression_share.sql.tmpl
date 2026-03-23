@@ -1,0 +1,51 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+variant_content_impressions AS (
+    SELECT eu.variant_id, me.content_id, COUNT(*) AS impression_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+    GROUP BY eu.variant_id, me.content_id
+),
+content_global_impressions AS (
+    SELECT content_id, SUM(impression_count) AS total_impressions
+    FROM variant_content_impressions
+    GROUP BY content_id
+),
+content_ranked AS (
+    SELECT
+        content_id,
+        total_impressions,
+        PERCENT_RANK() OVER (ORDER BY total_impressions DESC) AS popularity_pct_rank
+    FROM content_global_impressions
+),
+longtail_content AS (
+    -- Content ranked below LongtailThreshold by popularity is considered longtail.
+    -- e.g. LongtailThreshold=0.80 means the bottom 20% by impressions.
+    SELECT content_id
+    FROM content_ranked
+    WHERE popularity_pct_rank >= {{.LongtailThreshold}}
+),
+longtail_share AS (
+    SELECT
+        vci.variant_id,
+        SUM(CASE WHEN lc.content_id IS NOT NULL THEN vci.impression_count ELSE 0 END)
+            AS longtail_impressions,
+        SUM(vci.impression_count) AS total_impressions
+    FROM variant_content_impressions vci
+    LEFT JOIN longtail_content lc ON vci.content_id = lc.content_id
+    GROUP BY vci.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    CASE WHEN total_impressions = 0 THEN 0.0
+         ELSE CAST(longtail_impressions AS DOUBLE) / total_impressions
+    END AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM longtail_share

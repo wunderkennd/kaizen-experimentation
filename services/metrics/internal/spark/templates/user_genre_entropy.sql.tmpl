@@ -1,0 +1,43 @@
+WITH exposed_users AS (
+    SELECT user_id, variant_id, MIN(assignment_probability) AS assignment_probability
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+    GROUP BY user_id, variant_id
+),
+user_genre_counts AS (
+    SELECT eu.user_id, eu.variant_id, cc.{{.GenreField}} AS genre, COUNT(*) AS genre_count
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    INNER JOIN delta.content_catalog cc ON me.content_id = cc.content_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+      AND cc.{{.GenreField}} IS NOT NULL
+    GROUP BY eu.user_id, eu.variant_id, cc.{{.GenreField}}
+),
+user_totals AS (
+    SELECT user_id, variant_id, SUM(genre_count) AS total_count
+    FROM user_genre_counts
+    GROUP BY user_id, variant_id
+),
+user_entropy AS (
+    SELECT
+        ugc.user_id,
+        ugc.variant_id,
+        -SUM(
+            (CAST(ugc.genre_count AS DOUBLE) / ut.total_count) *
+            LOG(CAST(ugc.genre_count AS DOUBLE) / ut.total_count)
+        ) AS metric_value
+    FROM user_genre_counts ugc
+    INNER JOIN user_totals ut ON ugc.user_id = ut.user_id AND ugc.variant_id = ut.variant_id
+    GROUP BY ugc.user_id, ugc.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    ue.user_id,
+    ue.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    ue.metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    eu.assignment_probability
+FROM user_entropy ue
+INNER JOIN exposed_users eu ON ue.user_id = eu.user_id AND ue.variant_id = eu.variant_id

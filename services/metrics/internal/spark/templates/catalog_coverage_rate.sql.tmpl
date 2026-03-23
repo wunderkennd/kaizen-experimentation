@@ -1,0 +1,32 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+recommended_content AS (
+    SELECT DISTINCT eu.variant_id, me.content_id
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+      AND me.content_id IS NOT NULL
+),
+catalog_total AS (
+    SELECT COUNT(DISTINCT content_id) AS total_items
+    FROM delta.content_catalog
+),
+variant_coverage AS (
+    SELECT
+        rc.variant_id,
+        COUNT(DISTINCT rc.content_id) AS covered_items
+    FROM recommended_content rc
+    INNER JOIN delta.content_catalog cc ON rc.content_id = cc.content_id
+    GROUP BY rc.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    vc.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    CAST(vc.covered_items AS DOUBLE) / NULLIF(ct.total_items, 0) AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM variant_coverage vc
+CROSS JOIN catalog_total ct
