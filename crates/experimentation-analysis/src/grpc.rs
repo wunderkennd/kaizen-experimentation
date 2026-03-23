@@ -202,7 +202,7 @@ struct AvlmConfig {
     /// τ² mixing variance for the normal-mixture martingale.
     tau_sq: f64,
     /// Optional metric_id to use as covariate source.
-    covariate_metric_id: String,
+    _covariate_metric_id: String,
 }
 
 /// Compute AVLM regression-adjusted confidence sequence for one metric/variant pair.
@@ -698,7 +698,7 @@ impl AnalysisService for AnalysisServiceHandler {
             if req.sequential_method == SequentialMethod::Avlm as i32 {
                 Some(AvlmConfig {
                     tau_sq: if req.tau_sq > 0.0 { req.tau_sq } else { 0.1 },
-                    covariate_metric_id: req.cuped_covariate_metric_id,
+                    _covariate_metric_id: req.cuped_covariate_metric_id,
                 })
             } else {
                 None
