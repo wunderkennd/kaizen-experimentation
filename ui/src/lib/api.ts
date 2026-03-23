@@ -8,6 +8,7 @@ import type {
   Flag, FlagType, ListFlagsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
   AuditLogEntry, AuditAction, ListAuditLogResponse,
+  ProviderHealthResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -695,4 +696,14 @@ export async function promoteToExperiment(
     { skipCache: true, clearCacheOnSuccess: true },
   );
   return adaptExperiment(raw);
+}
+
+// --- Provider Health (ADR-014) ---
+
+export async function getProviderHealth(providerId?: string): Promise<ProviderHealthResult> {
+  const request: Record<string, unknown> = {};
+  if (providerId) request.providerId = providerId;
+  return callRpc<Record<string, unknown>, ProviderHealthResult>(
+    METRICS_URL, METRICS_SVC, 'GetProviderHealth', request,
+  );
 }

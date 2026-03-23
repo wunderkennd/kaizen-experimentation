@@ -3,7 +3,7 @@ import type {
   NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
-  AuditLogEntry, Flag,
+  AuditLogEntry, Flag, ProviderHealthResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -1673,6 +1673,71 @@ export let SEED_LAYERS: Record<string, Layer> = structuredClone(INITIAL_LAYERS);
 export let SEED_LAYER_ALLOCATIONS: Record<string, LayerAllocation[]> = structuredClone(INITIAL_LAYER_ALLOCATIONS);
 export let SEED_AUDIT_LOG: AuditLogEntry[] = structuredClone(INITIAL_AUDIT_LOG);
 
+// --- Provider Health Seed Data (ADR-014) ---
+
+function makeProviderPoints(
+  baseCoverage: number,
+  baseGini: number,
+  baseLongTail: number,
+  trendCoverage: number,
+  trendGini: number,
+  trendLongTail: number,
+): ProviderHealthResult['series'][number]['points'] {
+  // 14 daily data points starting 2026-03-09
+  return Array.from({ length: 14 }, (_, i) => {
+    const date = new Date('2026-03-09');
+    date.setDate(date.getDate() + i);
+    const noise = (k: number) => Math.sin(i * k) * 0.005;
+    return {
+      date: date.toISOString().slice(0, 10),
+      catalogCoverage: Math.min(1, Math.max(0, baseCoverage + trendCoverage * i + noise(0.8))),
+      providerGini: Math.min(1, Math.max(0, baseGini + trendGini * i + noise(1.1))),
+      longTailImpressionShare: Math.min(1, Math.max(0, baseLongTail + trendLongTail * i + noise(0.6))),
+    };
+  });
+}
+
+const INITIAL_PROVIDER_HEALTH: ProviderHealthResult = {
+  providers: [
+    { providerId: 'prov-originals', providerName: 'StreamCo Originals' },
+    { providerId: 'prov-studio-a', providerName: 'Studio A' },
+    { providerId: 'prov-indie', providerName: 'Indie Collective' },
+  ],
+  series: [
+    {
+      providerId: 'prov-originals',
+      providerName: 'StreamCo Originals',
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      experimentName: 'homepage_recs_v2',
+      points: makeProviderPoints(0.68, 0.42, 0.14, 0.003, -0.002, 0.004),
+    },
+    {
+      providerId: 'prov-originals',
+      providerName: 'StreamCo Originals',
+      experimentId: '33333333-3333-3333-3333-333333333333',
+      experimentName: 'search_ranking_interleave',
+      points: makeProviderPoints(0.71, 0.40, 0.16, 0.002, -0.001, 0.003),
+    },
+    {
+      providerId: 'prov-studio-a',
+      providerName: 'Studio A',
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      experimentName: 'homepage_recs_v2',
+      points: makeProviderPoints(0.55, 0.51, 0.11, 0.004, -0.003, 0.005),
+    },
+    {
+      providerId: 'prov-indie',
+      providerName: 'Indie Collective',
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      experimentName: 'homepage_recs_v2',
+      points: makeProviderPoints(0.38, 0.62, 0.22, 0.005, -0.004, 0.003),
+    },
+  ],
+  computedAt: '2026-03-23T00:00:00Z',
+};
+
+export let SEED_PROVIDER_HEALTH: ProviderHealthResult = structuredClone(INITIAL_PROVIDER_HEALTH);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -1692,4 +1757,5 @@ export function resetSeedData(): void {
   SEED_LAYERS = structuredClone(INITIAL_LAYERS);
   SEED_LAYER_ALLOCATIONS = structuredClone(INITIAL_LAYER_ALLOCATIONS);
   SEED_AUDIT_LOG = structuredClone(INITIAL_AUDIT_LOG);
+  SEED_PROVIDER_HEALTH = structuredClone(INITIAL_PROVIDER_HEALTH);
 }
