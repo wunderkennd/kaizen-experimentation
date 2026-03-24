@@ -9,6 +9,9 @@ Sprint: 5.0
 Focus: ADR-016 GetSlateAssignment contract tests, ADR-019 portfolio contract tests, ADR-021 M2→M3 Kafka contract tests
 Branch: work/nice-bear
 
+Focus: ADR-016 GetSlateAssignment, ADR-022 Switchback assignment, ADR-013 META routing
+Branch: work/clever-lion
+
 ## In Progress
 
 _None._
@@ -22,6 +25,15 @@ _None._
   - Proto additions: `GetSlateAssignment` RPC + messages (ADR-016), `GetPortfolioAllocation` RPC + messages (ADR-019)
   - Stubs added to `BanditPolicyServiceHandler` (policy/grpc.rs) and `AnalysisServiceHandler` (analysis/grpc.rs)
   - `cargo test --workspace`: all 0 failures
+
+- [x] GetSlateAssignment RPC — ADR-016 M1 side (2026-03-24)
+  - Added `SelectSlate` RPC to M4b bandit_service.proto with `SelectSlateRequest`, `SlotAssignment`, `SlateSelection` messages
+  - Added `SlateConfig` to local config (`crates/experimentation-assignment/src/config.rs`)
+  - Added `select_slate` method to `GrpcBanditClient` with 10ms timeout + fallback to random ordering
+  - Implemented `AssignmentServiceImpl::assign_slate` (public, callable from HTTP layer)
+  - Registered `GetSlateAssignment` route in JSON HTTP handler (SDK compatibility)
+  - Added 5 slate contract tests to `m1m4b_contract_test.rs` (roundtrip, slot validity, determinism, diversity, error)
+  - All 153 tests passing
 
 ## Blocked
 
@@ -39,3 +51,6 @@ _None._
 - ADR-016 GetSlateAssignment: wire up `SlateTestService` logic into real `BanditPolicyServiceHandler` on LMAX thread
 - ADR-022 Switchback assignment: M1 needs to assign users based on (current_time, block_duration, cluster_attribute)
 - ADR-013 META routing: M1 hashes user to variant; each variant uses different reward objective
+
+- ADR-022 Switchback assignment (depends on proto schema from Agent-Proto)
+- ADR-013 META routing integration

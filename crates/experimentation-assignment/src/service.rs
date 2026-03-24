@@ -7,14 +7,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 use experimentation_proto::experimentation::assignment::v1::{
     assignment_service_server::AssignmentService, ConfigUpdate, GetAssignmentRequest,
     GetAssignmentResponse, GetAssignmentsRequest, GetAssignmentsResponse,
-    GetSlateAssignmentRequest, GetSlateAssignmentResponse,
+    GetSlateAssignmentRequest, GetSlateAssignmentResponse, SlotProbability,
     GetInterleavedListRequest, GetInterleavedListResponse, RankedList, StreamConfigUpdatesRequest,
 };
 
@@ -418,6 +418,142 @@ impl AssignmentServiceImpl {
         })
     }
 
+    /// Slate assignment for SLATE_BANDIT experiments (ADR-016).
+    ///
+    /// Forwards candidate items and n_slots to M4b `SelectSlate` with a 10ms timeout.
+    /// On timeout or gRPC error, falls back to deterministic uniform random ordering.
+    /// If no bandit client is configured, always uses random ordering.
+    #[allow(clippy::result_large_err)]
+    pub async fn assign_slate(
+        &self,
+        experiment_id: &str,
+        user_id: &str,
+        candidate_item_ids: Vec<String>,
+        attributes: &HashMap<String, String>,
+    ) -> Result<GetSlateAssignmentResponse, Status> {
+        let config = self.config.snapshot();
+
+        // 1. Look up experiment.
+        let exp = config
+            .experiments_by_id
+            .get(experiment_id)
+            .ok_or_else(|| Status::not_found(format!("experiment not found: {experiment_id}")))?;
+
+        // 2. Check experiment state — only RUNNING serves slate assignments.
+        if exp.state != "RUNNING" {
+            return Ok(GetSlateAssignmentResponse {
+                experiment_id: experiment_id.to_string(),
+                ..Default::default()
+            });
+        }
+
+        // 3. Get n_slots from bandit_config.slate_config.
+        let n_slots = exp
+            .bandit_config
+            .as_ref()
+            .and_then(|bc| bc.slate_config.as_ref())
+            .map(|sc| sc.num_slots as usize)
+            .ok_or_else(|| {
+                Status::failed_precondition(format!(
+                    "experiment {experiment_id} missing slate_config.num_slots",
+                ))
+            })?;
+
+        if n_slots == 0 {
+            return Err(Status::failed_precondition(format!(
+                "experiment {experiment_id} has num_slots=0",
+            )));
+        }
+
+        if candidate_item_ids.len() < n_slots {
+            return Err(Status::invalid_argument(format!(
+                "candidate_item_ids count ({}) must be >= num_slots ({n_slots})",
+                candidate_item_ids.len(),
+            )));
+        }
+
+        // 4. Try M4b SelectSlate with 10ms timeout.
+        if let Some(ref client) = self.bandit_client {
+            let context_features = if let Some(ref bc) = exp.bandit_config {
+                bandit_client::extract_context_features(bc, attributes)
+            } else {
+                HashMap::new()
+            };
+
+            match client
+                .select_slate(
+                    experiment_id,
+                    user_id,
+                    candidate_item_ids.clone(),
+                    n_slots as i32,
+                    context_features,
+                )
+                .await
+            {
+                Ok(result) => {
+                    let slot_probabilities = result
+                        .slot_assignments
+                        .into_iter()
+                        .map(|a| SlotProbability {
+                            slot_index: a.slot_index,
+                            item_id: a.item_id,
+                            probability: a.probability,
+                        })
+                        .collect();
+                    return Ok(GetSlateAssignmentResponse {
+                        experiment_id: experiment_id.to_string(),
+                        slate_item_ids: result.slate_item_ids,
+                        slot_probabilities,
+                        is_uniform_random: result.is_uniform_random,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        experiment_id,
+                        error = %e,
+                        "M4b SelectSlate failed, falling back to random slate ordering",
+                    );
+                    // Fall through to random fallback below.
+                }
+            }
+        }
+
+        // 5. Fallback: deterministic uniform random slate ordering.
+        //    Same seeding strategy as bandit arm fallback: murmur3(user_id + experiment_id).
+        let seed_input = format!("{user_id}\x00{experiment_id}");
+        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 0) as u64;
+        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 1) as u64;
+        let seed = (hi << 32) | lo;
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        let mut candidates = candidate_item_ids.clone();
+        // Fisher-Yates shuffle for unbiased random ordering.
+        for i in (1..candidates.len()).rev() {
+            let j = rng.gen_range(0..=i);
+            candidates.swap(i, j);
+        }
+
+        let slate: Vec<String> = candidates.into_iter().take(n_slots).collect();
+        // Uniform probability: each candidate equally likely in any slot.
+        let uniform_prob = 1.0 / candidate_item_ids.len() as f64;
+        let slot_probabilities = slate
+            .iter()
+            .enumerate()
+            .map(|(i, item_id)| SlotProbability {
+                slot_index: i as i32,
+                item_id: item_id.clone(),
+                probability: uniform_prob,
+            })
+            .collect();
+
+        Ok(GetSlateAssignmentResponse {
+            experiment_id: experiment_id.to_string(),
+            slate_item_ids: slate,
+            slot_probabilities,
+            is_uniform_random: true,
+        })
+    }
+
     /// Validate and extract pairwise algorithm lists from a request.
     ///
     /// Enforces exactly 2 algorithm_ids in config and exactly 2 lists in request.
@@ -595,10 +731,17 @@ impl AssignmentService for AssignmentServiceImpl {
 
     async fn get_slate_assignment(
         &self,
-        _request: Request<GetSlateAssignmentRequest>,
+        request: Request<GetSlateAssignmentRequest>,
     ) -> Result<Response<GetSlateAssignmentResponse>, Status> {
-        Err(Status::unimplemented(
-            "GetSlateAssignment not yet implemented (ADR-016)",
-        ))
+        let req = request.into_inner();
+        let resp = self
+            .assign_slate(
+                &req.experiment_id,
+                &req.user_id,
+                req.candidate_item_ids,
+                &req.attributes,
+            )
+            .await?;
+        Ok(Response::new(resp))
     }
 }

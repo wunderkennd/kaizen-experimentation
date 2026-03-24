@@ -25,13 +25,13 @@ use experimentation_bandit::thompson::BetaArm;
 use experimentation_proto::experimentation::bandit::v1::{
     self as proto,
     bandit_policy_service_server::{BanditPolicyService, BanditPolicyServiceServer},
-    CreateColdStartBanditResponse, ExportAffinityScoresResponse, SlateAssignmentResponse,
+    CreateColdStartBanditResponse, ExportAffinityScoresResponse, SlateAssignmentResponse, SlotAssignment, SlateSelection,
 };
 use experimentation_proto::experimentation::common::v1::{
     ArmSelection as ProtoArmSelection, PolicySnapshot as ProtoPolicySnapshot,
 };
 use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use tonic::{Request, Response, Status};
 
 // ---------------------------------------------------------------------------
@@ -241,6 +241,55 @@ impl BanditPolicyService for RealBanditService {
             content_id: info.content_id.clone(),
             segment_affinity_scores: segment_scores,
             optimal_placements,
+        }))
+    }
+
+    async fn select_slate(
+        &self,
+        request: Request<proto::SelectSlateRequest>,
+    ) -> Result<Response<SlateSelection>, Status> {
+        let req = request.into_inner();
+        let n_slots = req.n_slots as usize;
+
+        if n_slots == 0 {
+            return Err(Status::invalid_argument("n_slots must be > 0"));
+        }
+        if req.candidate_item_ids.len() < n_slots {
+            return Err(Status::invalid_argument(format!(
+                "candidate_item_ids ({}) must be >= n_slots ({})",
+                req.candidate_item_ids.len(),
+                n_slots,
+            )));
+        }
+
+        // Slot-wise factorized TS: use deterministic ordering seeded by user_id hash.
+        // Each slot independently picks from remaining candidates (greedy for test simplicity).
+        let mut rng = StdRng::seed_from_u64(
+            experimentation_hash::murmur3::murmurhash3_x86_32(req.user_id.as_bytes(), 0) as u64,
+        );
+
+        let mut candidates = req.candidate_item_ids.clone();
+        for i in (1..candidates.len()).rev() {
+            let j = rng.gen_range(0..=i);
+            candidates.swap(i, j);
+        }
+
+        let slate_item_ids: Vec<String> = candidates.into_iter().take(n_slots).collect();
+        let uniform_prob = 1.0 / req.candidate_item_ids.len() as f64;
+        let slot_assignments: Vec<SlotAssignment> = slate_item_ids
+            .iter()
+            .enumerate()
+            .map(|(i, item_id)| SlotAssignment {
+                slot_index: i as i32,
+                item_id: item_id.clone(),
+                probability: uniform_prob,
+            })
+            .collect();
+
+        Ok(Response::new(SlateSelection {
+            slate_item_ids,
+            slot_assignments,
+            is_uniform_random: false,
         }))
     }
 
@@ -627,6 +676,167 @@ async fn contract_cold_start_default_window() {
 
     assert_eq!(created.experiment_id, "cold-start:show-defaults");
     assert_eq!(created.content_id, "show-defaults");
+
+    handle.abort();
+}
+
+// ---------------------------------------------------------------------------
+// Slate Contract Tests (ADR-016)
+// ---------------------------------------------------------------------------
+
+/// 11. SelectSlate roundtrip: response slate length == n_slots, items from candidates.
+#[tokio::test]
+async fn contract_select_slate_roundtrip() {
+    let (client, _, handle) = start_real_m4b().await;
+
+    let candidates: Vec<String> = (1..=10).map(|i| format!("item-{i:03}")).collect();
+    let n_slots = 3i32;
+
+    let result = client
+        .select_slate(
+            "test-slate-exp",
+            "user-slate-1",
+            candidates.clone(),
+            n_slots,
+            HashMap::new(),
+        )
+        .await
+        .expect("SelectSlate should succeed");
+
+    // Slate must have exactly n_slots items.
+    assert_eq!(
+        result.slate_item_ids.len(),
+        n_slots as usize,
+        "slate length must equal n_slots"
+    );
+
+    // All slate items must come from candidates.
+    for item_id in &result.slate_item_ids {
+        assert!(
+            candidates.contains(item_id),
+            "slate item '{item_id}' not in candidate pool"
+        );
+    }
+
+    // No duplicate items in the slate.
+    let unique: std::collections::HashSet<_> = result.slate_item_ids.iter().collect();
+    assert_eq!(unique.len(), result.slate_item_ids.len(), "slate must have no duplicate items");
+
+    handle.abort();
+}
+
+/// 12. SelectSlate slot_assignments: count == n_slots, probabilities are finite and positive.
+#[tokio::test]
+async fn contract_select_slate_slot_assignments_valid() {
+    let (client, _, handle) = start_real_m4b().await;
+
+    let candidates: Vec<String> = (1..=20).map(|i| format!("show-{i}")).collect();
+    let n_slots = 5i32;
+
+    let result = client
+        .select_slate("test-slate-exp", "user-slate-2", candidates.clone(), n_slots, HashMap::new())
+        .await
+        .expect("SelectSlate should succeed");
+
+    // slot_assignments must have exactly n_slots entries.
+    assert_eq!(result.slot_assignments.len(), n_slots as usize);
+
+    // Validate each slot assignment.
+    for (expected_idx, sa) in result.slot_assignments.iter().enumerate() {
+        assert_eq!(sa.slot_index, expected_idx as i32, "slot_index must be sequential");
+        assert!(
+            candidates.contains(&sa.item_id),
+            "slot item '{}' not in candidates",
+            sa.item_id,
+        );
+        assert!(sa.probability > 0.0, "slot probability must be positive");
+        assert!(sa.probability.is_finite(), "slot probability must be finite");
+    }
+
+    // item_ids in slot_assignments must match slate_item_ids order.
+    let slot_items: Vec<&str> = result.slot_assignments.iter().map(|sa| sa.item_id.as_str()).collect();
+    let slate_items: Vec<&str> = result.slate_item_ids.iter().map(String::as_str).collect();
+    assert_eq!(slot_items, slate_items, "slot_assignments items must match slate_item_ids");
+
+    handle.abort();
+}
+
+/// 13. SelectSlate is deterministic for the same user across calls.
+#[tokio::test]
+async fn contract_select_slate_deterministic_same_user() {
+    let (client, _, handle) = start_real_m4b().await;
+
+    let candidates: Vec<String> = (1..=15).map(|i| format!("content-{i}")).collect();
+
+    let r1 = client
+        .select_slate("test-slate-exp", "stable-slate-user", candidates.clone(), 4, HashMap::new())
+        .await
+        .unwrap();
+    let r2 = client
+        .select_slate("test-slate-exp", "stable-slate-user", candidates.clone(), 4, HashMap::new())
+        .await
+        .unwrap();
+
+    assert_eq!(r1.slate_item_ids, r2.slate_item_ids, "same user must get same slate");
+
+    handle.abort();
+}
+
+/// 14. SelectSlate different users get different slates (distribution check).
+#[tokio::test]
+async fn contract_select_slate_different_users_differ() {
+    let (client, _, handle) = start_real_m4b().await;
+
+    let candidates: Vec<String> = (1..=20).map(|i| format!("movie-{i}")).collect();
+    let mut first_items: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for i in 0..50u32 {
+        let result = client
+            .select_slate(
+                "test-slate-exp",
+                &format!("diversity-user-{i}"),
+                candidates.clone(),
+                3,
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
+        first_items.insert(result.slate_item_ids[0].clone());
+    }
+
+    // With 50 users and 20 candidates, the first slot should have seen more than 1 unique item.
+    assert!(
+        first_items.len() > 1,
+        "different users should get different first-slot items (got: {first_items:?})"
+    );
+
+    handle.abort();
+}
+
+/// 15. SelectSlate with fewer candidates than n_slots returns error.
+#[tokio::test]
+async fn contract_select_slate_too_few_candidates_error() {
+    let (client, _, handle) = start_real_m4b().await;
+
+    let candidates = vec!["item-a".to_string(), "item-b".to_string()];
+    let n_slots = 5i32; // more slots than candidates
+
+    let err = client
+        .select_slate("test-slate-exp", "user-err", candidates, n_slots, HashMap::new())
+        .await;
+
+    assert!(err.is_err(), "too few candidates should return error");
+    match err.unwrap_err() {
+        experimentation_assignment::bandit_client::BanditClientError::Grpc(status) => {
+            assert_eq!(
+                status.code(),
+                tonic::Code::InvalidArgument,
+                "expected INVALID_ARGUMENT, got {:?}",
+                status.code()
+            );
+        }
+        other => panic!("expected Grpc error, got: {other:?}"),
+    }
 
     handle.abort();
 }

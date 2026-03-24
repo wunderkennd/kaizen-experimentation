@@ -15,7 +15,7 @@ use crate::config::{BanditArmConfig, BanditConfig};
 use experimentation_core::error::assert_finite;
 use experimentation_proto::experimentation::bandit::v1::{
     bandit_policy_service_client::BanditPolicyServiceClient, CreateColdStartBanditRequest,
-    ExportAffinityScoresRequest, SelectArmRequest,
+    ExportAffinityScoresRequest, SelectArmRequest, SelectSlateRequest,
 };
 
 /// Default timeout for M4b SelectArm RPC (per onboarding pitfall #4).
@@ -103,6 +103,50 @@ impl GrpcBanditClient {
         })
     }
 
+    /// Select an ordered slate of items via M4b's SelectSlate RPC (ADR-016).
+    ///
+    /// Returns `Err` on timeout (>10ms) or gRPC failure — caller should fall back
+    /// to random slate ordering.
+    pub async fn select_slate(
+        &self,
+        experiment_id: &str,
+        user_id: &str,
+        candidate_item_ids: Vec<String>,
+        n_slots: i32,
+        context_features: HashMap<String, f64>,
+    ) -> Result<SlateSelectionResult, BanditClientError> {
+        let req = SelectSlateRequest {
+            experiment_id: experiment_id.to_string(),
+            user_id: user_id.to_string(),
+            candidate_item_ids,
+            n_slots,
+            context_features,
+        };
+
+        let mut client = self.client.clone();
+        let resp = tokio::time::timeout(self.timeout, client.select_slate(req))
+            .await
+            .map_err(|_| BanditClientError::Timeout)?
+            .map_err(BanditClientError::Grpc)?;
+
+        let s = resp.into_inner();
+        let slot_assignments = s
+            .slot_assignments
+            .into_iter()
+            .map(|a| SlateSlotAssignment {
+                slot_index: a.slot_index,
+                item_id: a.item_id,
+                probability: a.probability,
+            })
+            .collect();
+
+        Ok(SlateSelectionResult {
+            slate_item_ids: s.slate_item_ids,
+            slot_assignments,
+            is_uniform_random: s.is_uniform_random,
+        })
+    }
+
     /// Create a cold-start bandit for new content via M4b.
     ///
     /// Uses a 5s timeout (management operation, not hot-path).
@@ -162,6 +206,23 @@ impl GrpcBanditClient {
             optimal_placements: inner.optimal_placements,
         })
     }
+}
+
+/// Per-slot item assignment from M4b SelectSlate.
+#[derive(Debug)]
+pub struct SlateSlotAssignment {
+    pub slot_index: i32,
+    pub item_id: String,
+    /// Marginal probability of selecting this item in this slot under the policy.
+    pub probability: f64,
+}
+
+/// Result of selecting a slate from M4b SelectSlate RPC.
+#[derive(Debug)]
+pub struct SlateSelectionResult {
+    pub slate_item_ids: Vec<String>,
+    pub slot_assignments: Vec<SlateSlotAssignment>,
+    pub is_uniform_random: bool,
 }
 
 /// Result of creating a cold-start bandit for new content.
@@ -294,6 +355,7 @@ mod tests {
             warmup_observations: 1000,
             content_id: None,
             cold_start_window_days: None,
+            slate_config: None,
         }
     }
 
@@ -410,6 +472,7 @@ mod tests {
             warmup_observations: 1000,
             content_id: None,
             cold_start_window_days: None,
+            slate_config: None,
         };
         let mut attrs = HashMap::new();
         attrs.insert("age".to_string(), "25.0".to_string());
@@ -433,6 +496,7 @@ mod tests {
             warmup_observations: 1000,
             content_id: None,
             cold_start_window_days: None,
+            slate_config: None,
         };
         let mut attrs = HashMap::new();
         attrs.insert("age".to_string(), "25".to_string());
