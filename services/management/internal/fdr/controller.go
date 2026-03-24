@@ -37,6 +37,7 @@ package fdr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -103,6 +104,13 @@ func NewController(pool *pgxpool.Pool) *Controller {
 // If alpha_wealth is effectively zero (< 1e-15), the test is recorded with
 // Rejected=false and AlphaAllocated=0 to avoid division-by-zero.
 func (c *Controller) Test(ctx context.Context, experimentID string, eValue float64) (Decision, error) {
+	// E-values must be finite and non-negative. They are likelihood ratios and
+	// are undefined (or degenerate) outside [0, +∞). Reject NaN/Inf/-Inf early
+	// to avoid silent mis-classification or division anomalies inside the tx.
+	if math.IsNaN(eValue) || math.IsInf(eValue, -1) || eValue < 0 {
+		return Decision{}, fmt.Errorf("fdr: invalid e-value %v: must be finite and non-negative", eValue)
+	}
+
 	tx, err := c.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return Decision{}, fmt.Errorf("fdr: begin tx: %w", err)
@@ -118,6 +126,9 @@ func (c *Controller) Test(ctx context.Context, experimentID string, eValue float
 		FOR UPDATE
 	`).Scan(&s.Alpha, &s.GammaDecay, &s.NumTested, &s.NumRejected, &s.AlphaWealth)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Decision{}, fmt.Errorf("fdr: controller state row not found — has migration 009 been applied?")
+		}
 		return Decision{}, fmt.Errorf("fdr: load state: %w", err)
 	}
 
@@ -215,6 +226,9 @@ func (c *Controller) GetState(ctx context.Context) (State, error) {
 		WHERE id = 1
 	`).Scan(&s.Alpha, &s.GammaDecay, &s.NumTested, &s.NumRejected, &s.AlphaWealth)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return State{}, fmt.Errorf("fdr: controller state row not found — has migration 009 been applied?")
+		}
 		return State{}, fmt.Errorf("fdr: get state: %w", err)
 	}
 	return s, nil

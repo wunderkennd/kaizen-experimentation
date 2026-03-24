@@ -227,3 +227,41 @@ func TestELond_AllocateStepTwo_Manual(t *testing.T) {
 		t.Fatalf("gamma_decay=0.5 step 2: got %v want %v", got, want)
 	}
 }
+
+func TestELond_NegativeEValueDoesNotReject(t *testing.T) {
+	// E-values are non-negative by definition (they are likelihood ratios).
+	// A negative e-value must never trigger a rejection — the comparison
+	// eValue >= 1/alphaAllocated is false for any negative input when the
+	// threshold is positive (as it always is when alphaAllocated > 0).
+	e := elondStep{alpha: 0.05, gammaDecay: 0.9}
+	alloc := e.allocate(0, 0.05) // > 0
+	if e.reject(-1.0, alloc) {
+		t.Error("negative e-value must not trigger rejection")
+	}
+	if e.reject(-1e10, alloc) {
+		t.Error("large negative e-value must not trigger rejection")
+	}
+}
+
+func TestELond_NaNEValueDoesNotReject(t *testing.T) {
+	// NaN comparisons always return false in Go, so a NaN e-value never
+	// crosses the threshold. Controller.Test() now rejects NaN inputs with
+	// an error before reaching the DB, but the pure reject() logic is also
+	// safe (documents the invariant).
+	e := elondStep{alpha: 0.05, gammaDecay: 0.9}
+	alloc := e.allocate(0, 0.05)
+	if e.reject(math.NaN(), alloc) {
+		t.Error("NaN e-value must not trigger rejection")
+	}
+}
+
+func TestELond_PositiveInfEValueRejects(t *testing.T) {
+	// +Inf is a valid (extreme) e-value — an infinite likelihood ratio is a
+	// certain rejection. Controller.Test() permits +Inf because e-values in
+	// [0, +∞] are mathematically valid; the rejection rule correctly fires.
+	e := elondStep{alpha: 0.05, gammaDecay: 0.9}
+	alloc := e.allocate(0, 0.05) // threshold = 1/0.005 = 200
+	if !e.reject(math.Inf(1), alloc) {
+		t.Error("+Inf e-value should trigger rejection")
+	}
+}
