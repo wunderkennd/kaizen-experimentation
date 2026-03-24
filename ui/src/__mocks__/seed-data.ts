@@ -192,6 +192,16 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
       contextFeatureKeys: ['content_genre', 'user_tenure_days', 'device_type'],
       minExplorationFraction: 0.1,
       warmupObservations: 200,
+      rewardObjectives: [
+        { metricId: 'play_through_rate', weight: 0.6, floor: 0.0, isPrimary: true },
+        { metricId: 'provider_diversity_score', weight: 0.25, floor: 0.3, isPrimary: false },
+        { metricId: 'add_to_watchlist_rate', weight: 0.15, floor: 0.0, isPrimary: false },
+      ],
+      compositionMethod: 'WEIGHTED_SCALARIZATION',
+      globalConstraints: [
+        { label: 'max_single_provider_share', coefficients: { 'v4-arm1': 1.0, 'v4-arm2': 0.0, 'v4-arm3': 0.0, 'v4-arm4': 0.0 }, rhs: 0.5 },
+        { label: 'min_diversity_floor', coefficients: { 'v4-arm1': -0.25, 'v4-arm2': -0.25, 'v4-arm3': -0.25, 'v4-arm4': -0.25 }, rhs: -0.2 },
+      ],
     },
     createdAt: '2026-03-02T16:45:00Z',
   },
@@ -968,6 +978,32 @@ const INITIAL_BANDIT_RESULTS: Record<string, BanditDashboardResult> = {
       { timestamp: '2026-03-05T00:00:00Z', armId: 'genre_row', cumulativeReward: 196, cumulativeSelections: 980 },
       { timestamp: '2026-03-05T00:00:00Z', armId: 'trending_section', cumulativeReward: 224, cumulativeSelections: 860 },
       { timestamp: '2026-03-05T00:00:00Z', armId: 'personalized_row', cumulativeReward: 144, cumulativeSelections: 802 },
+    ],
+    objectiveBreakdowns: [
+      {
+        armId: 'v4-arm1', armName: 'top_carousel',
+        objectiveContributions: { play_through_rate: 0.156, provider_diversity_score: 0.112, add_to_watchlist_rate: 0.052 },
+        composedReward: 0.320,
+      },
+      {
+        armId: 'v4-arm2', armName: 'genre_row',
+        objectiveContributions: { play_through_rate: 0.120, provider_diversity_score: 0.178, add_to_watchlist_rate: 0.039 },
+        composedReward: 0.337,
+      },
+      {
+        armId: 'v4-arm3', armName: 'trending_section',
+        objectiveContributions: { play_through_rate: 0.149, provider_diversity_score: 0.095, add_to_watchlist_rate: 0.048 },
+        composedReward: 0.292,
+      },
+      {
+        armId: 'v4-arm4', armName: 'personalized_row',
+        objectiveContributions: { play_through_rate: 0.108, provider_diversity_score: 0.140, add_to_watchlist_rate: 0.031 },
+        composedReward: 0.279,
+      },
+    ],
+    constraintStatuses: [
+      { label: 'max_single_provider_share', currentValue: 0.3500, limit: 0.5000, isSatisfied: true },
+      { label: 'min_diversity_floor', currentValue: -0.2550, limit: -0.2000, isSatisfied: false },
     ],
   },
 };
