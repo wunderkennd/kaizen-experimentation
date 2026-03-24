@@ -13,6 +13,7 @@ import type {
   OnlineFdrState,
   PortfolioAllocationResult,
   SlateAssignmentResponse, SlateOpeResult,
+  SwitchbackResult, SyntheticControlResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -780,5 +781,21 @@ export async function getSlateAssignment(
 export async function getSlateOpe(experimentId: string): Promise<SlateOpeResult> {
   return callRpc<{ experimentId: string }, SlateOpeResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetSlateOpe', { experimentId },
+  );
+}
+
+// --- Switchback Experiments (ADR-022) ---
+
+export async function getSwitchbackResult(experimentId: string): Promise<SwitchbackResult> {
+  return callRpc<{ experimentId: string }, SwitchbackResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetSwitchbackResult', { experimentId },
+  );
+}
+
+// --- Synthetic Control / Quasi-Experiments (ADR-023) ---
+
+export async function getSyntheticControlResult(experimentId: string): Promise<SyntheticControlResult> {
+  return callRpc<{ experimentId: string }, SyntheticControlResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetSyntheticControlResult', { experimentId },
   );
 }

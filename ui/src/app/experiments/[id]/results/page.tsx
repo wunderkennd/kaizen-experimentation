@@ -68,6 +68,14 @@ const FeedbackLoopTab = dynamic(
   () => import('@/components/feedback-loop-tab').then(m => ({ default: m.FeedbackLoopTab })),
   { ssr: false },
 );
+const SwitchbackTab = dynamic(
+  () => import('@/components/switchback-tab').then(m => ({ default: m.SwitchbackTab })),
+  { ssr: false },
+);
+const QuasiExperimentTab = dynamic(
+  () => import('@/components/quasi-experiment-tab').then(m => ({ default: m.QuasiExperimentTab })),
+  { ssr: false },
+);
 const AvlmBoundaryPlot = dynamic(
   () => import('@/components/charts/avlm-boundary-plot').then(m => ({ default: m.AvlmBoundaryPlot })),
   { ssr: false },
@@ -93,9 +101,9 @@ const AdaptiveNZoneBadge = dynamic(
   { ssr: false },
 );
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback' | 'switchback' | 'quasi';
 
-const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session', 'feedback'];
+const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session', 'feedback', 'switchback', 'quasi'];
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -261,6 +269,12 @@ export default function ResultsPage() {
   // Feedback loop tab is always available for bandit/MAB experiments or any experiment with analysis
   if (experiment.type === 'MAB' || experiment.type === 'CONTEXTUAL_BANDIT' || experiment.type === 'AB') {
     tabs.push({ key: 'feedback', label: 'Feedback Loop' });
+  }
+  if (experiment.type === 'SWITCHBACK') {
+    tabs.push({ key: 'switchback', label: 'Switchback Blocks' });
+  }
+  if (experiment.type === 'QUASI_EXPERIMENT') {
+    tabs.push({ key: 'quasi', label: 'Synthetic Control' });
   }
 
   // Fall back to overview if activeTab isn't in the dynamic tab list for this experiment
@@ -494,6 +508,18 @@ export default function ResultsPage() {
       {effectiveTab === 'feedback' && (
         <div role="tabpanel" id="tabpanel-feedback" aria-labelledby="tab-feedback" tabIndex={0}>
           <FeedbackLoopTab experimentId={params.id} />
+        </div>
+      )}
+
+      {effectiveTab === 'switchback' && (
+        <div role="tabpanel" id="tabpanel-switchback" aria-labelledby="tab-switchback" tabIndex={0}>
+          <SwitchbackTab experimentId={params.id} />
+        </div>
+      )}
+
+      {effectiveTab === 'quasi' && (
+        <div role="tabpanel" id="tabpanel-quasi" aria-labelledby="tab-quasi" tabIndex={0}>
+          <QuasiExperimentTab experimentId={params.id} />
         </div>
       )}
     </div>

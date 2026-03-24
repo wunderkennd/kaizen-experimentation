@@ -51,7 +51,7 @@ describe('Monitoring Page', () => {
   it('shows summary cards with experiment counts by state', async () => {
     await renderAndWait();
 
-    // Seed data: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 2 CONCLUDED, 1 ARCHIVED
+    // Seed data: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 4 CONCLUDED, 1 ARCHIVED
     const runningCard = screen.getByTestId('summary-card-RUNNING');
     expect(within(runningCard).getByTestId('count-RUNNING')).toHaveTextContent('4');
 
@@ -65,7 +65,7 @@ describe('Monitoring Page', () => {
     expect(within(concludingCard).getByTestId('count-CONCLUDING')).toHaveTextContent('1');
 
     const concludedCard = screen.getByTestId('summary-card-CONCLUDED');
-    expect(within(concludedCard).getByTestId('count-CONCLUDED')).toHaveTextContent('2');
+    expect(within(concludedCard).getByTestId('count-CONCLUDED')).toHaveTextContent('4');
 
     const archivedCard = screen.getByTestId('summary-card-ARCHIVED');
     expect(within(archivedCard).getByTestId('count-ARCHIVED')).toHaveTextContent('1');
