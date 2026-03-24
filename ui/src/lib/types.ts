@@ -21,7 +21,8 @@ export type ExperimentType =
   | 'CUMULATIVE_HOLDOUT'
   | 'SLATE'
   | 'SWITCHBACK'
-  | 'QUASI_EXPERIMENT';
+  | 'QUASI_EXPERIMENT'
+  | 'META';
 
 export type GuardrailAction = 'AUTO_PAUSE' | 'ALERT_ONLY';
 
@@ -71,6 +72,7 @@ export interface Experiment {
   qoeConfig?: QoeConfig;
   /** ADR-018: present when online FDR control is enabled for this experiment's program. */
   onlineFdrConfig?: OnlineFdrConfig;
+  metaConfig?: MetaConfig;
   createdAt: string;
   startedAt?: string;
   concludedAt?: string;
@@ -99,6 +101,7 @@ export interface CreateExperimentRequest {
   sessionConfig?: SessionConfig;
   banditExperimentConfig?: BanditExperimentConfig;
   qoeConfig?: QoeConfig;
+  metaConfig?: MetaConfig;
 }
 
 export interface QueryLogEntry {
@@ -548,6 +551,18 @@ export interface BanditExperimentConfig {
 export interface QoeConfig {
   qoeMetrics: string[];
   deviceFilter: string;
+}
+
+// --- Meta Experiments (ADR-013) ---
+
+export interface VariantBanditConfig {
+  variantId: string;
+  banditType: BanditAlgorithm;
+  arms: string[];
+}
+
+export interface MetaConfig {
+  variantBanditConfigs: VariantBanditConfig[];
 }
 
 // --- Audit Log (M6 audit viewer) ---
