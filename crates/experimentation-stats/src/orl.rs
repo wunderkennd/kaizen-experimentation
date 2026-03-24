@@ -649,6 +649,13 @@ mod tests {
                 prop_assert!(result.p_value >= 0.0 && result.p_value <= 1.0);
                 prop_assert!(result.first_stage_f_stat >= 0.0);
                 prop_assert!(result.first_stage_r_squared >= -1e-10 && result.first_stage_r_squared <= 1.0 + 1e-10);
+                // KDD 2024 Table 2: JIVE coefficient bounded in (-1, 1) for normalised
+                // surrogate-to-outcome relationships (gamma in (0.1, 1.0) here, no confounding).
+                prop_assert!(
+                    result.iv_estimate > -1.0 && result.iv_estimate < 1.0,
+                    "jive_coefficient should be in (-1, 1) for normalised outcomes: got {}",
+                    result.iv_estimate
+                );
             }
 
             #[test]
@@ -667,6 +674,128 @@ mod tests {
                 if let Ok(result) = kfold_iv_calibrate(&obs, &config) {
                     prop_assert!(result.iv_estimate.is_finite());
                 }
+            }
+
+            /// Shrinkage property (KDD 2024 Table 2, rho_UY > 0 rows):
+            /// With positive confounding and a valid instrument (Cov(Z, η) = 0),
+            /// the JIVE (calibrated) estimate is <= the OLS (naive) estimate.
+            ///
+            /// Block design ensures Cov(Z, η) = 0: first half Z=0, second half Z=1,
+            /// with η symmetric (sum = 0) within each Z group.
+            #[test]
+            fn shrinkage_calibrated_le_naive_positive_confounding(
+                delta in 0.3f64..0.8,
+            ) {
+                // Fixed n=20 block design: first 10 Z=0, last 10 Z=1.
+                // eta alternates symmetrically within each block → Cov(Z, η) = 0.
+                let eta = [
+                    0.4_f64, -0.4, 0.3, -0.3, 0.2, -0.2, 0.1, -0.1, 0.5, -0.5,
+                    0.4_f64, -0.4, 0.3, -0.3, 0.2, -0.2, 0.1, -0.1, 0.5, -0.5,
+                ];
+                let z: Vec<f64> = (0..20).map(|i| if i < 10 { 0.0 } else { 1.0 }).collect();
+                let s: Vec<f64> = z.iter().zip(eta.iter())
+                    .map(|(&zi, &ei)| 0.5 + zi + 0.8 * ei).collect();
+                let y: Vec<f64> = s.iter().zip(eta.iter())
+                    .map(|(&si, &ei)| 0.3 * si + delta * ei).collect();
+                let obs = make_obs(&z, &s, &y);
+                let config = KFoldIvConfig { n_folds: 4, alpha: 0.05 };
+                let result = kfold_iv_calibrate(&obs, &config)
+                    .expect("calibration must succeed for valid block design");
+                // Shrinkage: JIVE corrects OLS upward bias → iv_estimate ≤ ols_estimate.
+                prop_assert!(
+                    result.iv_estimate <= result.ols_estimate,
+                    "shrinkage: JIVE ({:.4}) should be <= OLS ({:.4}) with delta={delta:.4}",
+                    result.iv_estimate,
+                    result.ols_estimate
+                );
+                prop_assert!(result.iv_estimate.is_finite());
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Golden test: tc_jive_vectors.json (Netflix KDD 2024 Table 2 values)
+    // -----------------------------------------------------------------------
+
+    #[cfg(test)]
+    mod tc_jive_golden {
+        use super::*;
+        use std::path::PathBuf;
+
+        #[derive(serde::Deserialize)]
+        struct TcJiveScenario {
+            name: String,
+            n_folds: usize,
+            alpha: f64,
+            observations: Vec<OrlObservation>,
+            expected: TcJiveExpected,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct TcJiveExpected {
+            jive_coefficient: f64,
+            ols_naive_estimate: f64,
+            treatment_effect_correlation: f64,
+            first_stage_r_squared: f64,
+            tolerance: f64,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct TcJiveVectors {
+            scenarios: Vec<TcJiveScenario>,
+        }
+
+        fn vectors_path() -> PathBuf {
+            // CARGO_MANIFEST_DIR = crates/experimentation-stats/
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../test-vectors/tc_jive_vectors.json")
+        }
+
+        #[test]
+        fn tc_jive_kdd2024_table2_vectors() {
+            let path = vectors_path();
+            let json = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+            let vectors: TcJiveVectors = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("cannot parse {}: {e}", path.display()));
+
+            for scenario in &vectors.scenarios {
+                let name = &scenario.name;
+                let config = KFoldIvConfig { n_folds: scenario.n_folds, alpha: scenario.alpha };
+                let result = kfold_iv_calibrate(&scenario.observations, &config)
+                    .unwrap_or_else(|e| panic!("[{name}] kfold_iv_calibrate failed: {e}"));
+
+                let tol = scenario.expected.tolerance;
+
+                let diff_iv = (result.iv_estimate - scenario.expected.jive_coefficient).abs();
+                assert!(
+                    diff_iv <= tol,
+                    "[{name}] jive_coefficient: expected {:.4}, got {:.4} (diff {:.2e} > tol {:.2e})",
+                    scenario.expected.jive_coefficient, result.iv_estimate, diff_iv, tol
+                );
+
+                let diff_ols = (result.ols_estimate - scenario.expected.ols_naive_estimate).abs();
+                assert!(
+                    diff_ols <= tol,
+                    "[{name}] ols_naive_estimate: expected {:.4}, got {:.4} (diff {:.2e} > tol {:.2e})",
+                    scenario.expected.ols_naive_estimate, result.ols_estimate, diff_ols, tol
+                );
+
+                let diff_r2 = (result.first_stage_r_squared - scenario.expected.first_stage_r_squared).abs();
+                assert!(
+                    diff_r2 <= tol,
+                    "[{name}] first_stage_r_squared: expected {:.4}, got {:.4} (diff {:.2e} > tol {:.2e})",
+                    scenario.expected.first_stage_r_squared, result.first_stage_r_squared, diff_r2, tol
+                );
+
+                // treatment_effect_correlation = sqrt(first_stage_r_squared)
+                let computed_corr = result.first_stage_r_squared.sqrt();
+                let diff_corr = (computed_corr - scenario.expected.treatment_effect_correlation).abs();
+                assert!(
+                    diff_corr <= tol,
+                    "[{name}] treatment_effect_correlation: expected {:.4}, got {:.4} (diff {:.2e} > tol {:.2e})",
+                    scenario.expected.treatment_effect_correlation, computed_corr, diff_corr, tol
+                );
             }
         }
     }
