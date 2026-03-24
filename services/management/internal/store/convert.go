@@ -30,25 +30,31 @@ var stringToState = map[string]commonv1.ExperimentState{
 // --- Type conversions ---
 
 var typeToString = map[commonv1.ExperimentType]string{
-	commonv1.ExperimentType_EXPERIMENT_TYPE_AB:                "AB",
-	commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE:      "MULTIVARIATE",
-	commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING:      "INTERLEAVING",
-	commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL:     "SESSION_LEVEL",
-	commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE:      "PLAYBACK_QOE",
-	commonv1.ExperimentType_EXPERIMENT_TYPE_MAB:               "MAB",
-	commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT: "CONTEXTUAL_BANDIT",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_AB:                 "AB",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE:       "MULTIVARIATE",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING:       "INTERLEAVING",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL:      "SESSION_LEVEL",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE:       "PLAYBACK_QOE",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_MAB:                "MAB",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT:  "CONTEXTUAL_BANDIT",
 	commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT: "CUMULATIVE_HOLDOUT",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_META:               "META",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_SWITCHBACK:         "SWITCHBACK",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_QUASI:              "QUASI",
 }
 
 var stringToType = map[string]commonv1.ExperimentType{
-	"AB":                commonv1.ExperimentType_EXPERIMENT_TYPE_AB,
-	"MULTIVARIATE":      commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE,
-	"INTERLEAVING":      commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING,
-	"SESSION_LEVEL":     commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL,
-	"PLAYBACK_QOE":      commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE,
-	"MAB":               commonv1.ExperimentType_EXPERIMENT_TYPE_MAB,
-	"CONTEXTUAL_BANDIT": commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT,
+	"AB":                 commonv1.ExperimentType_EXPERIMENT_TYPE_AB,
+	"MULTIVARIATE":       commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE,
+	"INTERLEAVING":       commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING,
+	"SESSION_LEVEL":      commonv1.ExperimentType_EXPERIMENT_TYPE_SESSION_LEVEL,
+	"PLAYBACK_QOE":       commonv1.ExperimentType_EXPERIMENT_TYPE_PLAYBACK_QOE,
+	"MAB":                commonv1.ExperimentType_EXPERIMENT_TYPE_MAB,
+	"CONTEXTUAL_BANDIT":  commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT,
 	"CUMULATIVE_HOLDOUT": commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT,
+	"META":               commonv1.ExperimentType_EXPERIMENT_TYPE_META,
+	"SWITCHBACK":         commonv1.ExperimentType_EXPERIMENT_TYPE_SWITCHBACK,
+	"QUASI":              commonv1.ExperimentType_EXPERIMENT_TYPE_QUASI,
 }
 
 // --- Guardrail action conversions ---
@@ -101,10 +107,13 @@ func StringToType(s string) commonv1.ExperimentType {
 
 // typeConfig bundles the type-specific config fields into a single JSONB blob.
 type typeConfig struct {
-	InterleavingConfig json.RawMessage `json:"interleaving_config,omitempty"`
-	SessionConfig      json.RawMessage `json:"session_config,omitempty"`
-	BanditConfig       json.RawMessage `json:"bandit_config,omitempty"`
-	LifecycleConfig    json.RawMessage `json:"lifecycle_config,omitempty"`
+	InterleavingConfig   json.RawMessage `json:"interleaving_config,omitempty"`
+	SessionConfig        json.RawMessage `json:"session_config,omitempty"`
+	BanditConfig         json.RawMessage `json:"bandit_config,omitempty"`
+	LifecycleConfig      json.RawMessage `json:"lifecycle_config,omitempty"`
+	MetaExperimentConfig json.RawMessage `json:"meta_experiment_config,omitempty"`
+	SwitchbackConfig     json.RawMessage `json:"switchback_config,omitempty"`
+	QuasiExperimentConfig json.RawMessage `json:"quasi_experiment_config,omitempty"`
 }
 
 // ExperimentToRow converts a proto Experiment to DB rows.
@@ -173,6 +182,18 @@ func ExperimentToRow(exp *commonv1.Experiment) (ExperimentRow, []VariantRow, []G
 	if exp.GetLifecycleConfig() != nil {
 		b, _ := json.Marshal(protoToMap(exp.GetLifecycleConfig()))
 		tc.LifecycleConfig = b
+	}
+	if exp.GetMetaExperimentConfig() != nil {
+		b, _ := json.Marshal(protoToMap(exp.GetMetaExperimentConfig()))
+		tc.MetaExperimentConfig = b
+	}
+	if exp.GetSwitchbackConfig() != nil {
+		b, _ := json.Marshal(protoToMap(exp.GetSwitchbackConfig()))
+		tc.SwitchbackConfig = b
+	}
+	if exp.GetQuasiExperimentConfig() != nil {
+		b, _ := json.Marshal(protoToMap(exp.GetQuasiExperimentConfig()))
+		tc.QuasiExperimentConfig = b
 	}
 	row.TypeConfig, _ = json.Marshal(tc)
 
@@ -274,6 +295,18 @@ func RowToExperiment(row ExperimentRow, variants []VariantRow, guardrails []Guar
 			if len(tc.LifecycleConfig) > 0 {
 				exp.LifecycleConfig = &commonv1.LifecycleStratificationConfig{}
 				mapToProto(tc.LifecycleConfig, exp.LifecycleConfig)
+			}
+			if len(tc.MetaExperimentConfig) > 0 {
+				exp.MetaExperimentConfig = &commonv1.MetaExperimentConfig{}
+				mapToProto(tc.MetaExperimentConfig, exp.MetaExperimentConfig)
+			}
+			if len(tc.SwitchbackConfig) > 0 {
+				exp.SwitchbackConfig = &commonv1.SwitchbackConfig{}
+				mapToProto(tc.SwitchbackConfig, exp.SwitchbackConfig)
+			}
+			if len(tc.QuasiExperimentConfig) > 0 {
+				exp.QuasiExperimentConfig = &commonv1.QuasiExperimentConfig{}
+				mapToProto(tc.QuasiExperimentConfig, exp.QuasiExperimentConfig)
 			}
 		}
 	}

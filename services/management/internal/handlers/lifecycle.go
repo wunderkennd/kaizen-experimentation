@@ -605,6 +605,29 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 		return nil
 	}
 
+	if expRow.Type == "META" || expRow.Type == "SWITCHBACK" || expRow.Type == "QUASI" {
+		expRow2, variants, _, err := s.store.GetByID(ctx, experimentID)
+		if err != nil {
+			return internalError("read experiment for phase5 type validation", err)
+		}
+		exp := store.RowToExperiment(expRow2, variants, nil)
+		switch expRow.Type {
+		case "META":
+			if verr := validation.ValidateMetaExperimentForStart(exp); verr != nil {
+				return verr
+			}
+		case "SWITCHBACK":
+			if verr := validation.ValidateSwitchbackForStart(exp); verr != nil {
+				return verr
+			}
+		case "QUASI":
+			if verr := validation.ValidateQuasiExperimentForStart(exp); verr != nil {
+				return verr
+			}
+		}
+		return nil
+	}
+
 	if expRow.Type != "MAB" && expRow.Type != "CONTEXTUAL_BANDIT" {
 		return nil
 	}
