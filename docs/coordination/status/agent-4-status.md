@@ -1,13 +1,13 @@
 # Agent-4 Status — Phase 5
 
 **Module**: M4a Analysis + M4b Bandit
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-bear
+Branch: work/eager-bear
 
 ## In Progress
 
@@ -151,12 +151,17 @@ Branch: work/bright-bear
   - PR #198 merged
 
 - [x] **Proto schema extensions** (PR #196 merged) — All Phase 5 proto additions, buf lint + breaking clean.
-- [x] ADR-018 Phase 1 — E-value computation (PR open 2026-03-23)
-  - `e_value_grow()`: Sequential GROW martingale (plug-in betting, valid e-process)
-  - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value
-  - SQL migration 006_evalue_columns.sql: `e_value` + `log_e_value` on metric_results
-  - 8 golden-file tests (GROW: 4 analytic; AVLM: 4 formula-validated to 6dp)
-  - All 144+ workspace tests green
+- [x] **ADR-018 Phase 1 — E-value computation** (2026-03-24, work/eager-bear)
+  - `crates/experimentation-stats/src/evalue.rs`:
+    - `e_value_grow()`: Sequential GROW martingale (causal plug-in λ_t = μ̂_{t-1}/σ², safe-start λ_1=0)
+    - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value (Ramdas & Wang §3.1)
+    - `EValueResult`: e_value, log_e_value, reject, log_wealth_trajectory
+  - `sql/migrations/006_evalue_columns.sql`: ALTER TABLE metric_results ADD COLUMN e_value, log_e_value
+  - `crates/experimentation-stats/tests/evalue_golden.rs`: 8 golden-file tests (6dp tolerance)
+  - 8 golden JSON files in tests/golden/: 4 GROW (analytic), 4 AVLM (formula-validated to 6dp)
+  - 4 proptest invariants: grow_outputs_always_finite, grow_reject_consistent, avlm_outputs_always_finite, avlm_reject_consistent
+  - 12 unit tests in evalue.rs
+  - All 144+ experimentation-stats tests green (0 failures)
 
 ### Proto changes landed:
 
