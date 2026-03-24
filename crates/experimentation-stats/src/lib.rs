@@ -19,6 +19,7 @@
 //! - `evalue` — GROW martingale and AVLM e-values (ADR-018)
 //! - `adaptive_n` — Adaptive sample size: promising-zone design, GST reallocation (ADR-020)
 //! - `multiple_comparison` — Holm-Bonferroni, Benjamini-Hochberg
+//! - `guardrail` — Bonferroni-corrected guardrail monitoring, metric stakeholder validation (ADR-014)
 //! - `novelty` — Exponential decay fitting for novelty effects
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
 //! - `feedback_loop` — Feedback loop detection: paired t-test, contamination correlation, bias correction (ADR-021)
@@ -38,6 +39,7 @@ pub mod feedback_loop;
 pub mod interference;
 pub mod interleaving;
 pub mod ipw;
+pub mod guardrail;
 pub mod multiple_comparison;
 pub mod novelty;
 pub mod orl;
