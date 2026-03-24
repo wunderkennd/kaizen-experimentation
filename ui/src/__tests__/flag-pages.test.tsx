@@ -8,6 +8,7 @@ import FlagDetailPage from '@/app/flags/[id]/page';
 import CreateFlagPage from '@/app/flags/new/page';
 import EditFlagPage from '@/app/flags/[id]/edit/page';
 import { AuthProvider } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 import type { AuthUser } from '@/lib/auth-context';
 
 const FLAGS_SVC = '*/experimentation.flags.v1.FeatureFlagService';
@@ -190,14 +191,22 @@ describe('Flag Detail Page', () => {
   });
 
   async function renderAndWait() {
-    render(<FlagDetailPage />);
+    render(
+      <ToastProvider>
+        <FlagDetailPage />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toBeInTheDocument();
     });
   }
 
   it('shows loading spinner initially', () => {
-    render(<FlagDetailPage />);
+    render(
+      <ToastProvider>
+        <FlagDetailPage />
+      </ToastProvider>,
+    );
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -225,7 +234,11 @@ describe('Flag Detail Page', () => {
 
   it('renders 404 error for nonexistent flag', async () => {
     mockFlagId = 'nonexistent-flag';
-    render(<FlagDetailPage />);
+    render(
+      <ToastProvider>
+        <FlagDetailPage />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
@@ -233,7 +246,11 @@ describe('Flag Detail Page', () => {
 
   it('renders variants table for multi-variant flag', async () => {
     mockFlagId = 'flag-string-ab';
-    render(<FlagDetailPage />);
+    render(
+      <ToastProvider>
+        <FlagDetailPage />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toHaveTextContent('checkout_flow_variant');
     });
