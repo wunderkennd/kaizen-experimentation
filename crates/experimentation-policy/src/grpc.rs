@@ -116,6 +116,18 @@ impl BanditPolicyService for BanditPolicyServiceHandler {
         }))
     }
 
+    async fn get_slate_assignment(
+        &self,
+        _request: Request<proto::SlateAssignmentRequest>,
+    ) -> Result<Response<proto::SlateAssignmentResponse>, Status> {
+        // ADR-016: Full slate bandit implementation is in-progress.
+        // The contract is defined; the PolicyCore integration is Phase 5 work.
+        Err(Status::unimplemented(
+            "GetSlateAssignment is not yet wired to PolicyCore; \
+             use the contract test service for wire-format validation",
+        ))
+    }
+
     async fn create_cold_start_bandit(
         &self,
         request: Request<proto::CreateColdStartBanditRequest>,

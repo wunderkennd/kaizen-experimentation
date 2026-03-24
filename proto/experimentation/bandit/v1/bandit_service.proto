@@ -13,6 +13,11 @@ service BanditPolicyService {
   // Select an arm for a user. Called by M1 Assignment Service.
   // p99 < 15ms at 10K rps.
   rpc SelectArm(SelectArmRequest) returns (experimentation.common.v1.ArmSelection);
+  // Get an ordered slate assignment for slate-level bandit experiments (ADR-016).
+  // Called by M1 for SLATE_FACTORIZED_TS and SLATE_GENERATIVE experiment types.
+  // Factorized Thompson Sampling: per-slot posterior sampling, O(L × K) for L slots, K candidates.
+  // p99 < 20ms at 5K rps.
+  rpc GetSlateAssignment(SlateAssignmentRequest) returns (SlateAssignmentResponse);
   // Create a cold-start bandit for new content.
   // Auto-creates experiment, arms, and begins exploration.
   rpc CreateColdStartBandit(CreateColdStartBanditRequest) returns (CreateColdStartBanditResponse);
@@ -52,6 +57,28 @@ message ExportAffinityScoresResponse {
   map<string, double> segment_affinity_scores = 2;
   // Optimal placement per segment (arm with highest reward).
   map<string, string> optimal_placements = 3;
+}
+
+message SlateAssignmentRequest {
+  string experiment_id = 1;
+  string user_id = 2;
+  // Context features for contextual slate bandits.
+  map<string, double> context_features = 3;
+  // Number of slots to fill. 0 = use SlateConfig.num_slots from experiment config.
+  int32 num_slots = 4;
+}
+
+message SlateAssignmentResponse {
+  // Ordered slate: arm_ids[0] is the top position (rank 1).
+  // Length equals the num_slots resolved for this request.
+  repeated string arm_ids = 1;
+  // Per-slot selection probabilities (for IPW computation in M4a).
+  // slot_probabilities[i] = marginal probability that arm_ids[i] was selected at slot i.
+  // Length equals arm_ids length.
+  repeated double slot_probabilities = 2;
+  // Joint slate selection probability under the factorized model.
+  // Used by M4a for slate-level IPW adjustment.
+  double joint_probability = 3;
 }
 
 message GetPolicySnapshotRequest { string experiment_id = 1; }
