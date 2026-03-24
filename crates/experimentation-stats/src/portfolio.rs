@@ -408,7 +408,7 @@ pub fn traffic_allocation_optimizer(
         return Err(Error::Validation("alpha must be strictly in (0, 1)".into()));
     }
 
-    let normal = Normal::new(0.0, 1.0).map_err(|e| Error::Numerical(e.to_string().into()))?;
+    let normal = Normal::new(0.0, 1.0).map_err(|e| Error::Numerical(e.to_string()))?;
 
     // z_{α/2} for two-sided test; z_β for power.
     let z_alpha_half = normal.inverse_cdf(1.0 - alpha / 2.0);
