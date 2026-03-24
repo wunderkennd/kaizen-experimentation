@@ -56,6 +56,7 @@ func validateVariants(exp *commonv1.Experiment) *connect.Error {
 	expType := exp.GetType()
 
 	// Bandits can have fewer than 2 variants (arms defined in BanditConfig).
+	// META experiments use variants to partition reward objectives; treated like regular variants.
 	isBandit := expType == commonv1.ExperimentType_EXPERIMENT_TYPE_MAB ||
 		expType == commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT
 
@@ -91,6 +92,8 @@ func validateVariants(exp *commonv1.Experiment) *connect.Error {
 	}
 
 	// Control variant requirement depends on type.
+	// META experiments do not require a control variant — every variant is a
+	// distinct reward objective parameterization (ADR-013).
 	requiresControl := expType == commonv1.ExperimentType_EXPERIMENT_TYPE_AB ||
 		expType == commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE ||
 		expType == commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING ||
@@ -141,9 +144,8 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 				fmt.Errorf("cumulative holdout experiments must use ALERT_ONLY guardrail action"))
 		}
 	case commonv1.ExperimentType_EXPERIMENT_TYPE_META:
-		if exp.GetMetaExperimentConfig() == nil {
-			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("meta_experiment_config is required for META type"))
+		if err := validateMetaExperimentConfig(exp); err != nil {
+			return err
 		}
 	case commonv1.ExperimentType_EXPERIMENT_TYPE_SWITCHBACK:
 		if exp.GetSwitchbackConfig() == nil {
@@ -159,37 +161,60 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 	return nil
 }
 
-// ValidateMetaExperimentForStart validates MetaExperimentConfig during STARTING phase (ADR-013).
-// Checks that variant_objectives is non-empty and all variant_ids reference known experiment variants.
-func ValidateMetaExperimentForStart(exp *commonv1.Experiment) *connect.Error {
+// validateMetaExperimentConfig validates MetaExperimentConfig for META experiment type (ADR-013).
+// Checks base_algorithm, variant_objectives, variant_id membership, and reward_weight sums.
+func validateMetaExperimentConfig(exp *commonv1.Experiment) *connect.Error {
 	cfg := exp.GetMetaExperimentConfig()
 	if cfg == nil {
 		return connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("meta_experiment_config is required for META type"))
 	}
-	if len(cfg.GetVariantObjectives()) == 0 {
+	if cfg.GetBaseAlgorithm() == commonv1.BanditAlgorithm_BANDIT_ALGORITHM_UNSPECIFIED {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config.base_algorithm must not be UNSPECIFIED"))
+	}
+	objectives := cfg.GetVariantObjectives()
+	if len(objectives) == 0 {
 		return connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("meta_experiment_config.variant_objectives must be non-empty"))
 	}
 
-	// Build set of known variant IDs.
-	knownIDs := make(map[string]struct{}, len(exp.GetVariants()))
+	// Build a set of declared variant IDs for fast lookup.
+	variantSet := make(map[string]struct{}, len(exp.GetVariants()))
 	for _, v := range exp.GetVariants() {
-		knownIDs[v.GetVariantId()] = struct{}{}
+		variantSet[v.GetVariantId()] = struct{}{}
 	}
 
-	for i, obj := range cfg.GetVariantObjectives() {
-		vid := obj.GetVariantId()
-		if vid == "" {
+	for i, obj := range objectives {
+		if obj.GetVariantId() == "" {
 			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id must not be empty", i))
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id must be non-empty", i))
 		}
-		if _, ok := knownIDs[vid]; !ok {
+		if _, ok := variantSet[obj.GetVariantId()]; !ok {
 			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id %q does not match any experiment variant", i, vid))
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id %q is not declared in variants",
+					i, obj.GetVariantId()))
+		}
+		if len(obj.GetRewardWeights()) == 0 {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d] must have at least one reward_weight", i))
+		}
+		var weightSum float64
+		for _, w := range obj.GetRewardWeights() {
+			weightSum += w
+		}
+		if math.Abs(weightSum-1.0) > 0.001 {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d] reward_weights must sum to 1.0, got %f",
+					i, weightSum))
 		}
 	}
 	return nil
+}
+
+// ValidateMetaExperimentForStart validates MetaExperimentConfig during STARTING phase (ADR-013).
+func ValidateMetaExperimentForStart(exp *commonv1.Experiment) *connect.Error {
+	return validateMetaExperimentConfig(exp)
 }
 
 // ValidateSwitchbackForStart validates SwitchbackConfig during STARTING phase (ADR-022).

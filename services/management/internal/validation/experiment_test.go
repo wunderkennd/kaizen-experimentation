@@ -307,6 +307,124 @@ func TestValidateCreateExperiment(t *testing.T) {
 			},
 			wantOK: true,
 		},
+
+		// META experiment type tests (ADR-013).
+		{
+			name: "META without meta_experiment_config",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META with unspecified base_algorithm",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{VariantId: "control", RewardWeights: map[string]float64{"watch_time": 1.0}},
+					},
+				}
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META with empty variant_objectives",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					BaseAlgorithm:     commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{},
+				}
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META with variant_id not in variants",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.Variants[0].VariantId = "control"
+				e.Variants[1].VariantId = "treatment"
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					BaseAlgorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{VariantId: "control", RewardWeights: map[string]float64{"watch_time": 1.0}},
+						{VariantId: "nonexistent", RewardWeights: map[string]float64{"watch_time": 1.0}},
+					},
+				}
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META with empty variant_id in objective",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.Variants[0].VariantId = "control"
+				e.Variants[1].VariantId = "treatment"
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					BaseAlgorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{VariantId: "", RewardWeights: map[string]float64{"watch_time": 1.0}},
+					},
+				}
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META with reward_weights not summing to 1.0",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.Variants[0].VariantId = "control"
+				e.Variants[1].VariantId = "treatment"
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					BaseAlgorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{VariantId: "control", RewardWeights: map[string]float64{"watch_time": 0.3, "engagement": 0.3}},
+					},
+				}
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META with empty reward_weights",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.Variants[0].VariantId = "control"
+				e.Variants[1].VariantId = "treatment"
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					BaseAlgorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{VariantId: "control", RewardWeights: map[string]float64{}},
+					},
+				}
+			},
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
+			name: "META valid — two variants with distinct reward objectives",
+			modify: func(e *commonv1.Experiment) {
+				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.Variants[0].VariantId = "obj_watch_time"
+				e.Variants[0].IsControl = false
+				e.Variants[1].VariantId = "obj_engagement"
+				e.Variants[1].IsControl = false
+				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
+					BaseAlgorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{
+							VariantId:     "obj_watch_time",
+							RewardWeights: map[string]float64{"watch_time": 1.0},
+						},
+						{
+							VariantId:     "obj_engagement",
+							RewardWeights: map[string]float64{"engagement": 0.6, "watch_time": 0.4},
+						},
+					},
+					OutcomeMetricIds: []string{"watch_time", "engagement", "retention_d30"},
+				}
+			},
+			wantOK: true,
+		},
 	}
 
 	for _, tt := range tests {

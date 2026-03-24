@@ -2040,3 +2040,161 @@ async fn holdout_deterministic() {
     assert_eq!(r1.is_active, r2.is_active);
     assert_eq!(r1.experiment_id, r2.experiment_id);
 }
+
+// ── META Experiment Tests (ADR-013) ──
+
+fn make_meta_config() -> Config {
+    // META experiment: two variants with different reward objectives.
+    // Arms ("arm_watch" and "arm_engage") are shared across both variants.
+    // Each variant's bandit policy is isolated in M4b under key "{exp}:{variant}".
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "meta_exp_001",
+            "state": "RUNNING",
+            "type": "META",
+            "hash_salt": "meta_salt_001",
+            "layer_id": "layer_meta",
+            "variants": [
+                {"variant_id": "obj_watch_time",  "traffic_fraction": 0.5, "is_control": false},
+                {"variant_id": "obj_engagement",  "traffic_fraction": 0.5, "is_control": false}
+            ],
+            "allocation": {"start_bucket": 0, "end_bucket": 9999},
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [
+                    {"arm_id": "arm_watch",   "payload_json": "{\"style\":\"watch\"}"},
+                    {"arm_id": "arm_engage",  "payload_json": "{\"style\":\"engage\"}"}
+                ],
+                "reward_metric_id": "watch_time",
+                "min_exploration_fraction": 0.1,
+                "warmup_observations": 100
+            },
+            "meta_experiment_config": {
+                "base_algorithm": "THOMPSON_SAMPLING",
+                "variant_objectives": [
+                    {"variant_id": "obj_watch_time",
+                     "reward_weights": {"watch_time": 1.0}},
+                    {"variant_id": "obj_engagement",
+                     "reward_weights": {"engagement": 0.6, "watch_time": 0.4}}
+                ],
+                "outcome_metric_ids": ["watch_time", "engagement", "retention_d30"]
+            }
+        }],
+        "layers": [{"layer_id": "layer_meta", "total_buckets": 10000}]
+    }"#;
+    Config::from_json(json).expect("meta config must parse")
+}
+
+#[tokio::test]
+async fn meta_returns_active_response() {
+    let svc = AssignmentServiceImpl::from_config(Arc::new(make_meta_config()));
+    let resp = svc
+        .assign("meta_exp_001", "user_meta_1", "", &no_attrs())
+        .await
+        .unwrap();
+    // No M4b client → falls back to uniform random arm selection.
+    assert!(resp.is_active);
+    assert_eq!(resp.experiment_id, "meta_exp_001");
+    // arm_id is the variant_id returned for META experiments.
+    assert!(resp.variant_id == "arm_watch" || resp.variant_id == "arm_engage",
+        "expected an arm_id, got: {}", resp.variant_id);
+}
+
+#[tokio::test]
+async fn meta_assignment_probability_is_two_level_ipw() {
+    let svc = AssignmentServiceImpl::from_config(Arc::new(make_meta_config()));
+    let resp = svc
+        .assign("meta_exp_001", "user_meta_ipw", "", &no_attrs())
+        .await
+        .unwrap();
+    // With uniform fallback: P(variant)=0.5, P(arm|variant)=0.5 → two-level IPW = 0.25.
+    assert!(
+        resp.assignment_probability > 0.0 && resp.assignment_probability <= 0.5,
+        "two-level IPW should be P(variant)*P(arm|variant)=0.25, got {}",
+        resp.assignment_probability
+    );
+}
+
+#[tokio::test]
+async fn meta_assignment_deterministic_same_user() {
+    let svc = AssignmentServiceImpl::from_config(Arc::new(make_meta_config()));
+    let r1 = svc
+        .assign("meta_exp_001", "meta_det_user_77", "", &no_attrs())
+        .await
+        .unwrap();
+    let r2 = svc
+        .assign("meta_exp_001", "meta_det_user_77", "", &no_attrs())
+        .await
+        .unwrap();
+    assert_eq!(r1.variant_id, r2.variant_id,
+        "META assignment must be deterministic for the same user");
+    assert!((r1.assignment_probability - r2.assignment_probability).abs() < f64::EPSILON);
+}
+
+#[tokio::test]
+async fn meta_no_bandit_config_returns_error() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "meta_no_bandit",
+            "state": "RUNNING",
+            "type": "META",
+            "hash_salt": "salt_nb",
+            "layer_id": "layer_nb",
+            "variants": [
+                {"variant_id": "v1", "traffic_fraction": 0.5, "is_control": false},
+                {"variant_id": "v2", "traffic_fraction": 0.5, "is_control": false}
+            ],
+            "allocation": {"start_bucket": 0, "end_bucket": 9999},
+            "meta_experiment_config": {
+                "base_algorithm": "THOMPSON_SAMPLING",
+                "variant_objectives": [
+                    {"variant_id": "v1", "reward_weights": {"watch_time": 1.0}},
+                    {"variant_id": "v2", "reward_weights": {"engagement": 1.0}}
+                ]
+            }
+        }],
+        "layers": [{"layer_id": "layer_nb", "total_buckets": 10000}]
+    }"#;
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+    let err = svc
+        .assign("meta_no_bandit", "user_1", "", &no_attrs())
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition,
+        "META without bandit_config must return FailedPrecondition");
+}
+
+#[tokio::test]
+async fn meta_inactive_returns_empty() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "meta_draft",
+            "state": "DRAFT",
+            "type": "META",
+            "hash_salt": "salt_draft",
+            "layer_id": "layer_md",
+            "variants": [
+                {"variant_id": "v1", "traffic_fraction": 0.5, "is_control": false},
+                {"variant_id": "v2", "traffic_fraction": 0.5, "is_control": false}
+            ],
+            "allocation": {"start_bucket": 0, "end_bucket": 9999},
+            "bandit_config": {
+                "algorithm": "THOMPSON_SAMPLING",
+                "arms": [{"arm_id": "a1"}],
+                "reward_metric_id": "watch_time",
+                "min_exploration_fraction": 0.1,
+                "warmup_observations": 100
+            }
+        }],
+        "layers": [{"layer_id": "layer_md", "total_buckets": 10000}]
+    }"#;
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+    let resp = svc
+        .assign("meta_draft", "user_1", "", &no_attrs())
+        .await
+        .unwrap();
+    assert!(!resp.is_active, "DRAFT META experiment must return is_active=false");
+    assert!(resp.variant_id.is_empty());
+}

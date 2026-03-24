@@ -16,7 +16,7 @@ PR: (pending)
 
 ## Completed (Phase 5)
 
-- [x] ADR-020 Phase 1 — Rust stats module + M5 scheduler (PR #227)
+- [x] ADR-020 Adaptive Sample Size (PR #227, merged)
   - `crates/experimentation-stats/src/adaptive_n.rs`: blinded_pooled_variance, conditional_power, zone_classify, gst_reallocate_spending, required_n_for_power, run_interim_analysis
   - `sql/migrations/008_adaptive_sample_size_audit.sql`
   - `services/management/internal/adaptive/`: Trigger, Processor, ConditionalPowerClient interface
@@ -30,7 +30,7 @@ PR: (pending)
 
 ## Blocked
 
-- **Agent-4 dependency**: `ConditionalPowerClient` interface at `services/management/internal/adaptive/processor.go:62` needs a gRPC wrapper around M4a's `ComputeConditionalPower` RPC. The contract is defined in the interface — Agent-4 implements the server side.
+None.
 
 ## Validation Rules Implemented
 
