@@ -182,7 +182,7 @@ impl BanditPolicyService for RealBanditService {
 
     async fn get_slate_assignment(
         &self,
-        _request: Request<proto::SlateAssignmentRequest>,
+        _request: Request<proto::GetSlateAssignmentRequest>,
     ) -> Result<Response<SlateAssignmentResponse>, Status> {
         // Slate assignment is covered by m1m4b_slate_contract_test.rs.
         Err(Status::unimplemented("use m1m4b_slate_contract_test for slate tests"))

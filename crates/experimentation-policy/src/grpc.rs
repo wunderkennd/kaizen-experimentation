@@ -118,7 +118,7 @@ impl BanditPolicyService for BanditPolicyServiceHandler {
 
     async fn get_slate_assignment(
         &self,
-        _request: Request<proto::SlateAssignmentRequest>,
+        _request: Request<proto::GetSlateAssignmentRequest>,
     ) -> Result<Response<proto::SlateAssignmentResponse>, Status> {
         // ADR-016: Full slate bandit implementation is in-progress.
         // The contract is defined; the PolicyCore integration is Phase 5 work.

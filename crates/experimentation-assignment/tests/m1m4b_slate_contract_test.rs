@@ -6,7 +6,7 @@
 //! rather than a single arm.
 //!
 //! Contract points verified:
-//! 1. SlateAssignmentRequest fields round-trip: experiment_id, user_id, context_features, num_slots
+//! 1. GetSlateAssignmentRequest fields round-trip: experiment_id, user_id, context_features, num_slots
 //! 2. SlateAssignmentResponse: arm_ids length equals num_slots, all unique, all valid candidates
 //! 3. slot_probabilities: length equals num_slots, all positive and finite
 //! 4. joint_probability: positive, finite, approximately product of slot_probabilities
@@ -145,7 +145,7 @@ impl BanditPolicyService for SlateTestService {
 
     async fn get_slate_assignment(
         &self,
-        request: Request<proto::SlateAssignmentRequest>,
+        request: Request<proto::GetSlateAssignmentRequest>,
     ) -> Result<Response<SlateAssignmentResponse>, Status> {
         let req = request.into_inner();
 
@@ -263,7 +263,7 @@ async fn contract_slate_arm_ids_length_and_uniqueness() {
     let (mut client, _, handle) = start_slate_server().await;
 
     let resp = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "slate-content-3slot".into(),
             user_id: "user-slate-1".into(),
             context_features: HashMap::new(),
@@ -309,7 +309,7 @@ async fn contract_slate_slot_probabilities_valid() {
     let (mut client, _, handle) = start_slate_server().await;
 
     let resp = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "slate-content-3slot".into(),
             user_id: "user-slate-prob".into(),
             context_features: HashMap::new(),
@@ -349,7 +349,7 @@ async fn contract_slate_joint_probability_valid() {
     let (mut client, _, handle) = start_slate_server().await;
 
     let resp = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "slate-content-3slot".into(),
             user_id: "user-joint-prob".into(),
             context_features: HashMap::new(),
@@ -389,7 +389,7 @@ async fn contract_slate_joint_probability_valid() {
 async fn contract_slate_deterministic_for_same_user() {
     let (mut client, _, handle) = start_slate_server().await;
 
-    let req = || proto::SlateAssignmentRequest {
+    let req = || proto::GetSlateAssignmentRequest {
         experiment_id: "slate-content-3slot".into(),
         user_id: "stable-slate-user-42".into(),
         context_features: HashMap::new(),
@@ -422,7 +422,7 @@ async fn contract_slate_distribution_across_users() {
     let mut top_arm_counts: HashMap<String, u32> = HashMap::new();
     for i in 0..200u32 {
         let resp = client
-            .get_slate_assignment(proto::SlateAssignmentRequest {
+            .get_slate_assignment(proto::GetSlateAssignmentRequest {
                 experiment_id: "slate-content-3slot".into(),
                 user_id: format!("dist-slate-user-{i}"),
                 context_features: HashMap::new(),
@@ -452,7 +452,7 @@ async fn contract_slate_unknown_experiment_not_found() {
     let (mut client, _, handle) = start_slate_server().await;
 
     let err = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "nonexistent-slate-exp".into(),
             user_id: "user-1".into(),
             context_features: HashMap::new(),
@@ -477,7 +477,7 @@ async fn contract_slate_num_slots_zero_uses_default() {
     let (mut client, _, handle) = start_slate_server().await;
 
     let resp = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "slate-hero-2slot".into(),
             user_id: "user-default-slots".into(),
             context_features: HashMap::new(),
@@ -505,7 +505,7 @@ async fn contract_slate_num_slots_capped_at_pool_size() {
     // "slate-small-pool" has 2 candidates but default_slots=5.
     // Requesting 10 slots should return only 2 (pool size).
     let resp = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "slate-small-pool".into(),
             user_id: "user-overflow-slots".into(),
             context_features: HashMap::new(),
@@ -544,7 +544,7 @@ async fn contract_slate_with_context_features_accepted() {
     .collect();
 
     let resp = client
-        .get_slate_assignment(proto::SlateAssignmentRequest {
+        .get_slate_assignment(proto::GetSlateAssignmentRequest {
             experiment_id: "slate-content-3slot".into(),
             user_id: "contextual-user-1".into(),
             context_features: context,
@@ -577,7 +577,7 @@ async fn contract_slate_concurrent_requests() {
         let mut c = client.clone();
         handles.push(tokio::spawn(async move {
             tokio::time::timeout(per_task_timeout, async move {
-                c.get_slate_assignment(proto::SlateAssignmentRequest {
+                c.get_slate_assignment(proto::GetSlateAssignmentRequest {
                     experiment_id: "slate-content-3slot".into(),
                     user_id: format!("concurrent-slate-{i}"),
                     context_features: HashMap::new(),
@@ -633,7 +633,7 @@ async fn contract_slate_all_probabilities_finite() {
 
     for i in 0..20u32 {
         let resp = client
-            .get_slate_assignment(proto::SlateAssignmentRequest {
+            .get_slate_assignment(proto::GetSlateAssignmentRequest {
                 experiment_id: "slate-content-3slot".into(),
                 user_id: format!("finite-check-slate-{i}"),
                 context_features: HashMap::new(),

@@ -14,7 +14,7 @@ use experimentation_proto::experimentation::bandit::v1::bandit_policy_service_se
 use experimentation_proto::experimentation::bandit::v1::{
     CreateColdStartBanditRequest, CreateColdStartBanditResponse, ExportAffinityScoresRequest,
     ExportAffinityScoresResponse, GetPolicySnapshotRequest, RollbackPolicyRequest,
-    SelectArmRequest, SlateAssignmentRequest, SlateAssignmentResponse,
+    GetSlateAssignmentRequest, SelectArmRequest, SlateAssignmentResponse,
 };
 use experimentation_proto::experimentation::common::v1::{ArmSelection, PolicySnapshot};
 
@@ -1375,7 +1375,7 @@ impl BanditPolicyService for MockBanditService {
 
     async fn get_slate_assignment(
         &self,
-        _request: tonic::Request<SlateAssignmentRequest>,
+        _request: tonic::Request<GetSlateAssignmentRequest>,
     ) -> Result<tonic::Response<SlateAssignmentResponse>, tonic::Status> {
         Err(tonic::Status::unimplemented("not needed for assignment_test mock"))
     }

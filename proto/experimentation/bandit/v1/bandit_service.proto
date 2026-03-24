@@ -17,7 +17,7 @@ service BanditPolicyService {
   // Called by M1 for SLATE_FACTORIZED_TS and SLATE_GENERATIVE experiment types.
   // Factorized Thompson Sampling: per-slot posterior sampling, O(L × K) for L slots, K candidates.
   // p99 < 20ms at 5K rps.
-  rpc GetSlateAssignment(SlateAssignmentRequest) returns (SlateAssignmentResponse);
+  rpc GetSlateAssignment(GetSlateAssignmentRequest) returns (SlateAssignmentResponse);
   // Create a cold-start bandit for new content.
   // Auto-creates experiment, arms, and begins exploration.
   rpc CreateColdStartBandit(CreateColdStartBanditRequest) returns (CreateColdStartBanditResponse);
@@ -59,7 +59,7 @@ message ExportAffinityScoresResponse {
   map<string, string> optimal_placements = 3;
 }
 
-message SlateAssignmentRequest {
+message GetSlateAssignmentRequest {
   string experiment_id = 1;
   string user_id = 2;
   // Context features for contextual slate bandits.
