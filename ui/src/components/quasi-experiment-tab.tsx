@@ -5,6 +5,7 @@ import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts';
+import type { ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import type { SyntheticControlResult, PlaceboResult } from '@/lib/types';
 import { getSyntheticControlResult, RpcError } from '@/lib/api';
 import { formatPValue } from '@/lib/utils';
@@ -54,8 +55,8 @@ const TreatedVsSyntheticChart = memo(function TreatedVsSyntheticChart({
             />
             <Tooltip
               labelFormatter={(label: string) => `Date: ${label}`}
-              formatter={(value: number | undefined, name: string) => [
-                value !== undefined ? value.toFixed(4) : '—',
+              formatter={(value: ValueType, name: string) => [
+                typeof value === 'number' ? value.toFixed(4) : '—',
                 name === 'treated' ? 'Treated' :
                 name === 'synthetic' ? 'Synthetic Control' :
                 name === 'ciUpper' ? 'CI Upper' : 'CI Lower',
@@ -248,8 +249,8 @@ const PlaceboMiniChart = memo(function PlaceboMiniChart({ placebo, treatedEffect
             <XAxis dataKey="date" hide />
             <YAxis hide />
             <Tooltip
-              formatter={(value: number | null, name: string) => [
-                value !== null ? value.toFixed(4) : '—',
+              formatter={(value: ValueType, name: string) => [
+                typeof value === 'number' ? value.toFixed(4) : '—',
                 name === 'treatedEffect' ? 'Treated' : 'Placebo',
               ]}
             />
