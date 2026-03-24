@@ -69,12 +69,14 @@ var seqMethodToString = map[commonv1.SequentialMethod]string{
 	commonv1.SequentialMethod_SEQUENTIAL_METHOD_MSPRT:      "MSPRT",
 	commonv1.SequentialMethod_SEQUENTIAL_METHOD_GST_OBF:    "GST_OBF",
 	commonv1.SequentialMethod_SEQUENTIAL_METHOD_GST_POCOCK: "GST_POCOCK",
+	commonv1.SequentialMethod_SEQUENTIAL_METHOD_AVLM:       "AVLM",
 }
 
 var stringToSeqMethod = map[string]commonv1.SequentialMethod{
 	"MSPRT":      commonv1.SequentialMethod_SEQUENTIAL_METHOD_MSPRT,
 	"GST_OBF":    commonv1.SequentialMethod_SEQUENTIAL_METHOD_GST_OBF,
 	"GST_POCOCK": commonv1.SequentialMethod_SEQUENTIAL_METHOD_GST_POCOCK,
+	"AVLM":       commonv1.SequentialMethod_SEQUENTIAL_METHOD_AVLM,
 }
 
 // StateToString converts a proto ExperimentState to a DB string.

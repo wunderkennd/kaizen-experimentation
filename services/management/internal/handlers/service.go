@@ -9,6 +9,7 @@ import (
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
 	"github.com/org/experimentation-platform/services/management/internal/fdr"
+	"github.com/org/experimentation-platform/services/management/internal/mlrate"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
 	"github.com/org/experimentation-platform/services/management/internal/surrogate"
@@ -39,6 +40,10 @@ type ExperimentService struct {
 	// fdrController is the platform-level e-LOND Online FDR controller
 	// (ADR-018 Phase 2). Nil when FDR control is not configured.
 	fdrController *fdr.Controller
+	analysisClient          analysisv1connect.AnalysisServiceClient
+	banditClient            banditv1connect.BanditPolicyServiceClient
+	surrogatePublisher      surrogate.Publisher
+	modelTrainingPublisher  mlrate.Publisher
 }
 
 // ServiceOption configures optional dependencies on ExperimentService.
@@ -70,6 +75,9 @@ func WithPool(pool *pgxpool.Pool) ServiceOption {
 // metric e-value to the controller and records the reject/don't-reject decision.
 func WithFdrController(c *fdr.Controller) ServiceOption {
 	return func(s *ExperimentService) { s.fdrController = c }
+// WithModelTrainingPublisher sets the Kafka publisher for MLRATE model training requests (ADR-015 Phase 2).
+func WithModelTrainingPublisher(p mlrate.Publisher) ServiceOption {
+	return func(s *ExperimentService) { s.modelTrainingPublisher = p }
 }
 
 // NewExperimentService creates a new handler with the given stores and notifier.
