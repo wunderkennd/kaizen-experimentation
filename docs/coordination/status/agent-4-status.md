@@ -9,6 +9,9 @@ Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints, ADR-022 Switchback
 Branch: work/eager-bear, work/happy-squirrel
 
+Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
+Branch: work/clever-deer
+
 ## In Progress
 
 - [ ] ADR-012 LP constraints
@@ -52,6 +55,17 @@ Branch: work/eager-bear, work/happy-squirrel
   - 20 unit tests + 4 proptest invariants (p_all_outputs_valid, p_effect_seed_independent, p_randomization_p_in_range, p_lag1_autocorr_in_range)
   - Registered in `crates/experimentation-stats/src/lib.rs` as `pub mod switchback`
   - All 243 experimentation-stats tests green; full workspace 0 failures
+
+- [x] **ADR-014 Phase 2 — GuardrailCorrector module** (2026-03-24, work/clever-deer)
+  - `crates/experimentation-stats/src/guardrail.rs` (new, 389 LOC)
+    - `GuardrailCorrector { new(alpha, k), corrected_alpha(), is_violated(p) }`:
+      Bonferroni correction — each of K guardrails at alpha/K so FWER ≤ alpha
+    - `MetricStakeholder` enum: Unspecified/User/Provider/Platform (mirrors proto)
+    - `MetricAggregationLevel` enum: Unspecified/User/Experiment/Provider (mirrors proto)
+    - `validate_bandit_reward_aggregation()`: enforces USER-only for bandit rewards
+    - `validate_guardrail_aggregation()`: enforces USER or EXPERIMENT for guardrails
+  - 13 unit tests + 10K FWER Monte Carlo (K=1,2,3,5,10,20) + 5 proptest invariants
+  - All 32 guardrail tests + full experimentation-stats suite green
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`
