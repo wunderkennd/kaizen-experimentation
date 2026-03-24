@@ -1,34 +1,55 @@
 # Agent-5 Status — Phase 5
 
 **Module**: M5 Management
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
-Sprint: 5.2
-Focus: ADR-020 Adaptive Sample Size
-Branch: work/proud-bear
-PR: https://github.com/wunderkennd/kaizen-experimentation/pull/227
+Sprint: 5.3
+Focus: ADR-025 Phase 3 — M5 Rust port statistical integration
+Branch: work/lively-penguin
+PR: pending
 
 ## In Progress
 
-- [x] ADR-020 Adaptive Sample Size (PR #227, pending merge)
-  - Blocked by: Agent-4 — `ComputeConditionalPower` M4a RPC needed for live wiring
-  - Statistical math complete; M5 scheduler complete; M4a delegation interface defined
+- [x] ADR-025 Phase 3 — `experimentation-management` Rust crate, Phase 5 statistical integration (this PR)
 
 ## Completed (Phase 5)
 
-- [x] ADR-020 Phase 1 — Rust stats module + M5 scheduler (PR #227)
+- [x] ADR-020 Adaptive Sample Size (PR #227, merged)
   - `crates/experimentation-stats/src/adaptive_n.rs`: blinded_pooled_variance, conditional_power, zone_classify, gst_reallocate_spending, required_n_for_power, run_interim_analysis
   - `sql/migrations/008_adaptive_sample_size_audit.sql`
-  - `services/management/internal/adaptive/`: Trigger, Processor, ConditionalPowerClient interface
+  - Go M5 scheduler in `services/management/internal/adaptive/`
+
+- [x] ADR-025 Phase 3 — M5 Rust port, Phase 5 statistical integration (this PR)
+  - **`crates/experimentation-stats/src/portfolio.rs`** (new): `optimal_alpha()` (Bonferroni), `annualized_impact()` — 12 unit tests
+  - **`crates/experimentation-management/`** (new crate):
+    - `src/fdr.rs`: `OnlineFdrController` — wraps `e_value_grow` + `e_value_avlm`, sqlx state persistence in `fdr_controller_state` + `fdr_controller_audit`
+    - `src/portfolio.rs`: `enrich_portfolio_allocation()` — wraps `optimal_alpha`, `annualized_impact`, `conditional_power`
+    - `src/adaptive_n.rs`: `run_adaptive_interim()` — wraps `conditional_power` + `zone_classify`, zone→extension decision
+    - `tests/phase3_integration.rs`: 16 cross-module integration tests, all pure (no DB)
+  - **`sql/migrations/009_fdr_controller.sql`** (new): FDR state + audit tables
+  - All 38 tests pass (22 unit + 16 integration, 3 DB tests `#[ignore]`)
+  - `cargo test -p experimentation-management`: **ok**
+  - Workspace Cargo.toml updated to include the new crate
+
+## Decision trigger (ADR-025)
+
+The threshold of ≥3 ADRs committed is met:
+- ADR-018 (E-Values / OnlineFdrController) — **committed**
+- ADR-019 (Portfolio Optimization) — **committed**
+- ADR-020 (Adaptive Sample Size) — **committed** (PR #227)
+
+This PR implements ADR-025 Phase 3 and unblocks the Agent-4 dependency: M5 no longer
+needs the `ConditionalPowerClient` gRPC interface. All statistical calls are direct
+function calls to `experimentation-stats`.
 
 ## Blocked
 
-- **Agent-4 dependency**: `ConditionalPowerClient` interface at `services/management/internal/adaptive/processor.go:62` needs a gRPC wrapper around M4a's `ComputeConditionalPower` RPC. The contract is defined in the interface — Agent-4 implements the server side.
+None — no M4a gRPC dependency for Phase 3 statistical calls.
 
 ## Next Up
 
-- ADR-013 META experiment type (M5 STARTING validation for MetaExperimentConfig)
-- ADR-018 Phase 2: e-LOND OnlineFdrController singleton + PostgreSQL persistence
-- ADR-019 Portfolio optimization: ExperimentLearning classification, traffic allocation optimizer
+- ADR-025 Phase 4: port contract tests (11 M5-M6 + 10 M1-M5 wire-format tests)
+- ADR-013 META experiment type validation in `experimentation-management::lifecycle`
+- ADR-022 Switchback config validation

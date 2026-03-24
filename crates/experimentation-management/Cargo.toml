@@ -1,0 +1,24 @@
+[package]
+name = "experimentation-management"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "experimentation_management"
+path = "src/lib.rs"
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+experimentation-stats = { path = "../experimentation-stats" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

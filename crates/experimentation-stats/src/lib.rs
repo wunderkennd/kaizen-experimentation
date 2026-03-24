@@ -26,6 +26,7 @@
 
 pub mod adaptive_n;
 pub mod avlm;
+pub mod portfolio;
 pub mod bayesian;
 pub mod bootstrap;
 pub mod cate;
