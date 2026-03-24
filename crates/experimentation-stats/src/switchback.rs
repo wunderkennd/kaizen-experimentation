@@ -430,55 +430,52 @@ fn effect_statistic(y: &[f64], d: &[f64]) -> f64 {
     sum_t / cnt_t as f64 - sum_c / cnt_c as f64
 }
 
+/// Context shared across recursive calls in the exact randomization test.
+struct EnumerateCtx<'a> {
+    y: &'a [f64],
+    k: usize,
+    observed: f64,
+    extreme: u64,
+    total: u64,
+}
+
 /// Exact randomization p-value: enumerate all C(T,k) permutations.
 fn exact_p_value(y: &[f64], k: usize, observed: f64) -> f64 {
     let t = y.len();
     let mut d = vec![0.0f64; t];
-    let mut extreme = 0u64;
-    let mut total = 0u64;
-    enumerate(&mut d, y, 0, 0, k, observed, &mut extreme, &mut total);
-    if total == 0 {
+    let mut ctx = EnumerateCtx { y, k, observed, extreme: 0, total: 0 };
+    enumerate(&mut d, &mut ctx, 0, 0);
+    if ctx.total == 0 {
         return 1.0;
     }
-    extreme as f64 / total as f64
+    ctx.extreme as f64 / ctx.total as f64
 }
 
 /// Recursive combination enumeration for exact test.
-fn enumerate(
-    d: &mut Vec<f64>,
-    y: &[f64],
-    pos: usize,
-    chosen: usize,
-    k: usize,
-    observed: f64,
-    extreme: &mut u64,
-    total: &mut u64,
-) {
-    if chosen == k {
+fn enumerate(d: &mut Vec<f64>, ctx: &mut EnumerateCtx<'_>, pos: usize, chosen: usize) {
+    if chosen == ctx.k {
         // Pad remaining as control.
-        for i in pos..y.len() {
-            d[i] = 0.0;
-        }
-        let eff = effect_statistic(y, d);
-        *total += 1;
-        if eff.abs() >= observed.abs() {
-            *extreme += 1;
+        d[pos..].fill(0.0);
+        let eff = effect_statistic(ctx.y, d);
+        ctx.total += 1;
+        if eff.abs() >= ctx.observed.abs() {
+            ctx.extreme += 1;
         }
         return;
     }
-    let remaining_slots = y.len() - pos;
-    let remaining_needed = k - chosen;
+    let remaining_slots = ctx.y.len() - pos;
+    let remaining_needed = ctx.k - chosen;
     if remaining_slots < remaining_needed {
         return;
     }
 
     // Include pos as treatment.
     d[pos] = 1.0;
-    enumerate(d, y, pos + 1, chosen + 1, k, observed, extreme, total);
+    enumerate(d, ctx, pos + 1, chosen + 1);
 
     // Skip pos (control).
     d[pos] = 0.0;
-    enumerate(d, y, pos + 1, chosen, k, observed, extreme, total);
+    enumerate(d, ctx, pos + 1, chosen);
 }
 
 /// Monte Carlo randomization p-value with `n_permutations` random assignments.
@@ -488,9 +485,7 @@ fn mc_p_value(y: &[f64], k: usize, observed: f64, n_permutations: u32, rng_seed:
 
     // Start with initial assignment: first k blocks = treatment.
     let mut d = vec![0.0f64; t];
-    for i in 0..k {
-        d[i] = 1.0;
-    }
+    d[..k].fill(1.0);
 
     let mut extreme = 0u32;
     for _ in 0..n_permutations {
