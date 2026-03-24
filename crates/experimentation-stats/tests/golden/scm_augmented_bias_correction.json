@@ -1,0 +1,19 @@
+{
+  "test_name": "scm_augmented_bias_correction",
+  "description": "Augmented SCM with imperfect pre-treatment fit. Treated has slight pre-treatment deviations; augmentation should produce finite ATT near 2.0. Validated analytically.",
+  "method": "Augmented",
+  "pre_periods": 5,
+  "alpha": 0.05,
+  "treated_series": [1.5, 2.9, 4.3, 5.8, 7.2, 10.4, 11.8, 13.2],
+  "donors": [
+    {"name": "D1", "series": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]},
+    {"name": "D2", "series": [2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0]}
+  ],
+  "expected": {
+    "att_min": 1.5,
+    "att_max": 2.5,
+    "weights_sum_to_one": true,
+    "ci_width_min": 0.0,
+    "placebo_p_max": 1.0
+  }
+}
