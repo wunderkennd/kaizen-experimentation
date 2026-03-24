@@ -655,6 +655,11 @@ pub async fn read_switchback_periods(
 // synthetic_control_panel reader (for GetSyntheticControlAnalysis — ADR-023)
 // ---------------------------------------------------------------------------
 
+type MetricTimeSeries = Vec<(i64, f64)>;
+type UnitData = (bool, MetricTimeSeries, MetricTimeSeries);
+type MetricMap = HashMap<String, UnitData>;
+type ByMetric = HashMap<String, MetricMap>;
+
 /// Read synthetic control panel data from Delta Lake.
 ///
 /// Table: `synthetic_control_panel`
@@ -676,8 +681,7 @@ pub async fn read_synthetic_control_panel(
     let batches = collect_batches(&table).await?;
 
     // metric_id → unit_id → (is_treated, pre: Vec<(period, value)>, post: Vec<(period, value)>)
-    let mut by_metric: HashMap<String, HashMap<String, (bool, Vec<(i64, f64)>, Vec<(i64, f64)>)>> =
-        HashMap::new();
+    let mut by_metric: ByMetric = HashMap::new();
 
     for batch in &batches {
         let exp_arr = downcast_string(batch, "experiment_id")?;
@@ -736,8 +740,7 @@ pub async fn read_synthetic_control_panel(
     let mut donor_ids: Vec<String> = Vec::new();
     let mut n_treated = 0usize;
 
-    let mut sorted_units: Vec<(String, (bool, Vec<(i64, f64)>, Vec<(i64, f64)>))> =
-        units.into_iter().collect();
+    let mut sorted_units: Vec<(String, UnitData)> = units.into_iter().collect();
     sorted_units.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (unit_id, (is_treated, mut pre, mut post)) in sorted_units {
