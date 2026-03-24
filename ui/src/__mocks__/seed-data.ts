@@ -4,7 +4,7 @@ import type {
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
   AuditLogEntry, Flag, ProviderHealthResult,
-  AvlmResult, AdaptiveNResult, FeedbackLoopResult,
+  AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -50,6 +50,11 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     },
     surrogateModelId: 'surrogate-homepage-ltv',
     isCumulativeHoldout: false,
+    onlineFdrConfig: {
+      targetAlpha: 0.05,
+      initialWealth: 0.05,
+      strategy: 'E_LOND',
+    },
     createdAt: '2026-02-15T10:00:00Z',
     startedAt: '2026-02-16T08:00:00Z',
   },
@@ -568,6 +573,14 @@ const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
         calibrationRSquared: 0.52,
       },
     ],
+    // ADR-018: e-value alongside p-value for primary metric comparison
+    eValueResult: {
+      eValue: 12.5,
+      logEValue: Math.log(12.5),
+      impliedLevel: 1 / 12.5,
+      reject: false,  // needs eValue >= 1/0.05 = 20 to reject at α=0.05
+      alpha: 0.05,
+    },
     computedAt: '2026-03-05T12:00:00Z',
   },
   {
@@ -1896,6 +1909,22 @@ const INITIAL_FEEDBACK_LOOP_RESULTS: FeedbackLoopResult[] = [
 
 export let SEED_FEEDBACK_LOOP_RESULTS: FeedbackLoopResult[] = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
 
+// --- Online FDR State (ADR-018) ---
+
+const INITIAL_ONLINE_FDR_STATES: OnlineFdrState[] = [
+  {
+    experimentId: '11111111-1111-1111-1111-111111111111',
+    alphaWealth: 0.032,
+    initialWealth: 0.05,
+    numTested: 15,
+    numRejected: 3,
+    currentFdr: 0.04,
+    computedAt: '2026-03-24T10:00:00Z',
+  },
+];
+
+export let SEED_ONLINE_FDR_STATES: OnlineFdrState[] = structuredClone(INITIAL_ONLINE_FDR_STATES);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -1919,4 +1948,5 @@ export function resetSeedData(): void {
   SEED_AVLM_RESULTS = structuredClone(INITIAL_AVLM_RESULTS);
   SEED_ADAPTIVE_N_RESULTS = structuredClone(INITIAL_ADAPTIVE_N_RESULTS);
   SEED_FEEDBACK_LOOP_RESULTS = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
+  SEED_ONLINE_FDR_STATES = structuredClone(INITIAL_ONLINE_FDR_STATES);
 }

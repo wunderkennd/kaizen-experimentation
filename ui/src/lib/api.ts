@@ -10,6 +10,7 @@ import type {
   AuditLogEntry, AuditAction, ListAuditLogResponse,
   ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
+  OnlineFdrState,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -224,6 +225,7 @@ function adaptExperiment(proto: Record<string, unknown>): Experiment {
     sessionConfig: proto.sessionConfig as SessionConfig | undefined,
     banditExperimentConfig: proto.banditExperimentConfig as BanditExperimentConfig | undefined,
     qoeConfig: proto.qoeConfig as QoeConfig | undefined,
+    onlineFdrConfig: proto.onlineFdrConfig as Experiment['onlineFdrConfig'],
     createdAt: (proto.createdAt as string) || '',
     startedAt: proto.startedAt as string | undefined,
     concludedAt: proto.concludedAt as string | undefined,
@@ -424,6 +426,7 @@ function adaptAnalysisResult(raw: Record<string, unknown>): AnalysisResult {
     srmResult: adaptSrmResult((raw.srmResult as Record<string, unknown>) || {}),
     surrogateProjections: (raw.surrogateProjections as Record<string, unknown>[])?.map(adaptSurrogateProjection),
     cochranQPValue: raw.cochranQPValue as number | undefined,
+    eValueResult: raw.eValueResult as AnalysisResult['eValueResult'],
     computedAt: (raw.computedAt as string) || '',
   };
 }
@@ -730,5 +733,13 @@ export async function getAdaptiveN(experimentId: string): Promise<AdaptiveNResul
 export async function getFeedbackLoopAnalysis(experimentId: string): Promise<FeedbackLoopResult> {
   return callRpc<{ experimentId: string }, FeedbackLoopResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetFeedbackLoopAnalysis', { experimentId },
+  );
+}
+
+// --- Online FDR State (ADR-018) ---
+
+export async function getOnlineFdrState(experimentId: string): Promise<OnlineFdrState> {
+  return callRpc<{ experimentId: string }, OnlineFdrState>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetOnlineFdrState', { experimentId },
   );
 }

@@ -76,6 +76,14 @@ const AdaptiveNTimeline = dynamic(
   () => import('@/components/adaptive-n-timeline').then(m => ({ default: m.AdaptiveNTimeline })),
   { ssr: false },
 );
+const EValueGauge = dynamic(
+  () => import('@/components/e-value-gauge').then(m => ({ default: m.EValueGauge })),
+  { ssr: false },
+);
+const FdrBudgetBar = dynamic(
+  () => import('@/components/fdr-budget-bar').then(m => ({ default: m.FdrBudgetBar })),
+  { ssr: false },
+);
 
 type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback';
 
@@ -266,6 +274,20 @@ export default function ResultsPage() {
 
       {/* Summary */}
       <ResultsSummary analysisResult={analysisResult} experiment={experiment} />
+
+      {/* ADR-018: E-value gauge + online FDR budget (shown when data is present) */}
+      {(analysisResult.eValueResult || experiment.onlineFdrConfig) && (
+        <div className="mb-6 flex flex-wrap gap-4">
+          {analysisResult.eValueResult && (
+            <EValueGauge eValueResult={analysisResult.eValueResult} />
+          )}
+          {experiment.onlineFdrConfig && (
+            <div className="flex-1 min-w-64">
+              <FdrBudgetBar experimentId={params.id} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tab navigation */}
       <div className="mb-6 border-b border-gray-200">

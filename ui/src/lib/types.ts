@@ -66,6 +66,8 @@ export interface Experiment {
   sessionConfig?: SessionConfig;
   banditExperimentConfig?: BanditExperimentConfig;
   qoeConfig?: QoeConfig;
+  /** ADR-018: present when online FDR control is enabled for this experiment's program. */
+  onlineFdrConfig?: OnlineFdrConfig;
   createdAt: string;
   startedAt?: string;
   concludedAt?: string;
@@ -204,6 +206,8 @@ export interface AnalysisResult {
   srmResult: SrmResult;
   surrogateProjections?: SurrogateProjection[];
   cochranQPValue?: number;
+  /** ADR-018: present when e-value framework is enabled for this experiment. */
+  eValueResult?: EValueResult;
   computedAt: string;
 }
 
@@ -615,6 +619,41 @@ export interface AdaptiveNResult {
   projectedConclusionDate?: string;
   extensionDays?: number;
   timelineProjection: AdaptiveNTimelinePoint[];
+  computedAt: string;
+}
+
+// --- E-Value Framework (ADR-018) ---
+
+export interface EValueResult {
+  /** The e-value. > 1 is evidence against null; >= 1/alpha rejects at level alpha. */
+  eValue: number;
+  /** Natural log of e-value (numerical stability for products). */
+  logEValue: number;
+  /** Implied significance level: 1/eValue. Comparable to a p-value, different semantics. */
+  impliedLevel: number;
+  /** Whether the null is rejected: eValue >= 1/alpha. */
+  reject: boolean;
+  /** Significance level used (e.g., 0.05). */
+  alpha: number;
+}
+
+export type OnlineFdrStrategy = 'E_LOND' | 'E_BH';
+
+/** Configuration stored on the experiment when online FDR control is enabled. */
+export interface OnlineFdrConfig {
+  targetAlpha: number;
+  initialWealth: number;
+  strategy: OnlineFdrStrategy;
+}
+
+/** Current state of the platform-level OnlineFdrController for this experiment's program. */
+export interface OnlineFdrState {
+  experimentId: string;
+  alphaWealth: number;
+  initialWealth: number;
+  numTested: number;
+  numRejected: number;
+  currentFdr: number;
   computedAt: string;
 }
 
