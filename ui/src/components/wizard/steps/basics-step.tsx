@@ -6,7 +6,7 @@ import type { ExperimentType } from '@/lib/types';
 
 const EXPERIMENT_TYPES: ExperimentType[] = [
   'AB', 'MULTIVARIATE', 'INTERLEAVING', 'SESSION_LEVEL',
-  'PLAYBACK_QOE', 'MAB', 'CONTEXTUAL_BANDIT', 'CUMULATIVE_HOLDOUT',
+  'PLAYBACK_QOE', 'MAB', 'CONTEXTUAL_BANDIT', 'CUMULATIVE_HOLDOUT', 'META',
 ];
 
 export function BasicsStep() {

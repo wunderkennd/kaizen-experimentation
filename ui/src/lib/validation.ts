@@ -1,7 +1,7 @@
 import type {
   ExperimentType, Variant,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
-  GuardrailConfig,
+  GuardrailConfig, MetaConfig,
 } from './types';
 
 const EPSILON = 1e-9;
@@ -122,11 +122,24 @@ export function validateQoeConfig(config: QoeConfig): StepValidation {
   return { valid: true };
 }
 
+export function validateMetaConfig(config: MetaConfig): StepValidation {
+  if (config.variantBanditConfigs.length === 0) {
+    return { valid: false, error: 'At least one variant bandit configuration is required' };
+  }
+  for (const vc of config.variantBanditConfigs) {
+    if (vc.arms.length === 0) {
+      return { valid: false, error: `Variant ${vc.variantId} must have at least one arm` };
+    }
+  }
+  return { valid: true };
+}
+
 export function validateTypeConfig(type: ExperimentType, configs: {
   interleavingConfig: InterleavingConfig;
   sessionConfig: SessionConfig;
   banditExperimentConfig: BanditExperimentConfig;
   qoeConfig: QoeConfig;
+  metaConfig?: MetaConfig;
 }): StepValidation {
   switch (type) {
     case 'INTERLEAVING':
@@ -139,6 +152,8 @@ export function validateTypeConfig(type: ExperimentType, configs: {
       return validateBanditConfig(configs.banditExperimentConfig, true);
     case 'PLAYBACK_QOE':
       return validateQoeConfig(configs.qoeConfig);
+    case 'META':
+      return validateMetaConfig(configs.metaConfig ?? { variantBanditConfigs: [] });
     default:
       return { valid: true };
   }

@@ -18,7 +18,8 @@ export type ExperimentType =
   | 'PLAYBACK_QOE'
   | 'MAB'
   | 'CONTEXTUAL_BANDIT'
-  | 'CUMULATIVE_HOLDOUT';
+  | 'CUMULATIVE_HOLDOUT'
+  | 'META';
 
 export type GuardrailAction = 'AUTO_PAUSE' | 'ALERT_ONLY';
 
@@ -66,6 +67,7 @@ export interface Experiment {
   sessionConfig?: SessionConfig;
   banditExperimentConfig?: BanditExperimentConfig;
   qoeConfig?: QoeConfig;
+  metaConfig?: MetaConfig;
   createdAt: string;
   startedAt?: string;
   concludedAt?: string;
@@ -94,6 +96,7 @@ export interface CreateExperimentRequest {
   sessionConfig?: SessionConfig;
   banditExperimentConfig?: BanditExperimentConfig;
   qoeConfig?: QoeConfig;
+  metaConfig?: MetaConfig;
 }
 
 export interface QueryLogEntry {
@@ -507,6 +510,18 @@ export interface BanditExperimentConfig {
 export interface QoeConfig {
   qoeMetrics: string[];
   deviceFilter: string;
+}
+
+// --- Meta Experiments (ADR-013) ---
+
+export interface VariantBanditConfig {
+  variantId: string;
+  banditType: BanditAlgorithm;
+  arms: string[];
+}
+
+export interface MetaConfig {
+  variantBanditConfigs: VariantBanditConfig[];
 }
 
 // --- Audit Log (M6 audit viewer) ---
