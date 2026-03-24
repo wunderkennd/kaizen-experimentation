@@ -21,6 +21,10 @@ criterion = { workspace = true }
 name = "bandit_bench"
 harness = false
 
+[[bench]]
+name = "lp_constraints"
+harness = false
+
 [features]
 default = []
 gpu = ["dep:candle-core", "dep:candle-nn", "dep:tempfile"]

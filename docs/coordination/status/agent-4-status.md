@@ -7,13 +7,37 @@
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-bear
+Branch: work/calm-badger
 
 ## In Progress
 
-- [ ] ADR-012 LP constraints
+_None._
 
 ## Completed (Phase 5) — latest first
+
+- [x] **ADR-012 — LP constraint solver benchmarks** (2026-03-24, work/calm-badger)
+  - `crates/experimentation-bandit/src/lp_constraints.rs` (new, ~310 LOC)
+    - `LinearConstraint`: general linear bound `lower ≤ ⟨a, q⟩ ≤ upper`
+    - `ConstraintSolver`: per-arm floors/ceilings + optional linear constraints; `solve()` entry point
+    - Fast path (box + simplex only): dual bisection in 32 steps, O(K × 32); K=20 → ~700 ns
+    - General path (linear constraints): alternating projections — correct each violated constraint, re-project onto box-constrained simplex; K=20 with 2 linear constraints → ~1.5 µs
+    - `simplex_projection()`: O(K log K) plain simplex projection (Duchi et al.)
+    - 9 unit tests: simplex correctness, floor/ceiling enforcement, linear constraint satisfaction, sum=1 preservation across all paths, K=20 timing guard
+    - Timing guard uses `#[cfg(not(debug_assertions))]` so it's only asserted in release builds
+  - `crates/experimentation-bandit/src/lib.rs`: registered `pub mod lp_constraints`
+  - `crates/experimentation-bandit/benches/lp_constraints.rs` (new)
+    - `solve_box_only`: K=5/10/20/50, fast bisection path
+    - `solve_linear`: K=5/10/20/50, 2 general linear constraints
+    - `solve_5_linear`: K=5/10/20/50, 5 linear constraints (stress test)
+    - `simplex_projection`: K=5/10/20/50, plain simplex baseline
+    - `project_box_simplex`: K=5/10/20/50, box-constrained bisection
+  - `crates/experimentation-bandit/Cargo.toml`: `[[bench]] name = "lp_constraints"` added
+  - **Performance results** (release, this machine):
+    - K=20 box-only: **~1.0 µs** (<<50 µs ADR-012 target)
+    - K=20 + 2 linear: **~1.5 µs** (<<50 µs)
+    - K=20 + 5 linear: **~1.4 µs** (<<50 µs)
+    - K=50 + 5 linear: **~11 µs**
+  - All 55+ bandit crate tests green; full workspace clean
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`
