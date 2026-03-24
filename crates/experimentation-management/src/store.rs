@@ -156,6 +156,28 @@ impl From<VariantRowSql> for VariantRow {
 // Store
 // ---------------------------------------------------------------------------
 
+/// Parameters for `ManagementStore::create_experiment`.
+///
+/// Groups the 16 creation parameters to avoid the `clippy::too_many_arguments` lint.
+pub struct CreateExperimentParams<'a> {
+    pub name: &'a str,
+    pub description: Option<&'a str>,
+    pub owner_email: &'a str,
+    pub experiment_type: &'a str,
+    pub layer_id: Uuid,
+    pub primary_metric_id: &'a str,
+    pub secondary_metric_ids: &'a [String],
+    pub guardrail_action: &'a str,
+    pub targeting_rule_id: Option<Uuid>,
+    pub is_cumulative_holdout: bool,
+    pub type_config: &'a serde_json::Value,
+    pub sequential_method: Option<&'a str>,
+    pub planned_looks: Option<i32>,
+    pub overall_alpha: Option<f64>,
+    pub surrogate_model_id: Option<Uuid>,
+    pub variants: &'a [(String, f64, bool, serde_json::Value)],
+}
+
 #[derive(Clone)]
 pub struct ManagementStore {
     pub pool: PgPool,
@@ -185,22 +207,7 @@ impl ManagementStore {
 
     pub async fn create_experiment(
         &self,
-        name: &str,
-        description: Option<&str>,
-        owner_email: &str,
-        experiment_type: &str,
-        layer_id: Uuid,
-        primary_metric_id: &str,
-        secondary_metric_ids: &[String],
-        guardrail_action: &str,
-        targeting_rule_id: Option<Uuid>,
-        is_cumulative_holdout: bool,
-        type_config: &serde_json::Value,
-        sequential_method: Option<&str>,
-        planned_looks: Option<i32>,
-        overall_alpha: Option<f64>,
-        surrogate_model_id: Option<Uuid>,
-        variants: &[(String, f64, bool, serde_json::Value)], // (name, fraction, is_control, payload)
+        params: CreateExperimentParams<'_>,
     ) -> Result<ExperimentRow, StoreError> {
         let mut tx = self.pool.begin().await.map_err(StoreError::Db)?;
 
@@ -222,27 +229,27 @@ impl ManagementStore {
                    NULL::TIMESTAMPTZ AS resumed_at,
                    NULL::TEXT AS pause_reason"#,
         )
-        .bind(name)
-        .bind(description)
-        .bind(owner_email)
-        .bind(experiment_type)
-        .bind(layer_id)
-        .bind(primary_metric_id)
-        .bind(secondary_metric_ids)
-        .bind(guardrail_action)
-        .bind(targeting_rule_id)
-        .bind(is_cumulative_holdout)
-        .bind(type_config)
-        .bind(sequential_method)
-        .bind(planned_looks)
-        .bind(overall_alpha)
-        .bind(surrogate_model_id)
+        .bind(params.name)
+        .bind(params.description)
+        .bind(params.owner_email)
+        .bind(params.experiment_type)
+        .bind(params.layer_id)
+        .bind(params.primary_metric_id)
+        .bind(params.secondary_metric_ids)
+        .bind(params.guardrail_action)
+        .bind(params.targeting_rule_id)
+        .bind(params.is_cumulative_holdout)
+        .bind(params.type_config)
+        .bind(params.sequential_method)
+        .bind(params.planned_looks)
+        .bind(params.overall_alpha)
+        .bind(params.surrogate_model_id)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             let msg = e.to_string();
             if msg.contains("unique") || msg.contains("duplicate") {
-                StoreError::AlreadyExists(name.to_string())
+                StoreError::AlreadyExists(params.name.to_string())
             } else {
                 StoreError::Db(e)
             }
@@ -250,7 +257,7 @@ impl ManagementStore {
 
         let experiment_id = row.experiment_id;
 
-        for (ordinal, (vname, fraction, is_control, payload)) in variants.iter().enumerate() {
+        for (ordinal, (vname, fraction, is_control, payload)) in params.variants.iter().enumerate() {
             sqlx::query(
                 r#"INSERT INTO variants (experiment_id, name, traffic_fraction, is_control, payload_json, ordinal)
                    VALUES ($1, $2, $3, $4, $5, $6)"#,

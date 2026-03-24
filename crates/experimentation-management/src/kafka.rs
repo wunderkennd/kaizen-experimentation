@@ -175,7 +175,7 @@ async fn consume_loop(
 
         // TOCTOU-safe RUNNING→PAUSED transition.
         match store.pause_transition(experiment_id, &reason).await {
-            Ok(rows) if rows == 1 => {
+            Ok(1) => {
                 info!(
                     %experiment_id,
                     metric_id = %alert.metric_id,

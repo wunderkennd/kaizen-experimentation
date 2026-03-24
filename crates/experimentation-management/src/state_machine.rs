@@ -47,7 +47,7 @@ pub enum ExperimentState {
 
 impl ExperimentState {
     /// Parse from the string stored in PostgreSQL.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_db_str(s: &str) -> Option<Self> {
         match s {
             "DRAFT" => Some(Self::Draft),
             "STARTING" => Some(Self::Starting),
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn round_trip_str_parse() {
         for s in &["DRAFT", "STARTING", "RUNNING", "PAUSED", "CONCLUDING", "CONCLUDED", "ARCHIVED"] {
-            let state = ExperimentState::from_str(s).unwrap();
+            let state = ExperimentState::from_db_str(s).unwrap();
             assert_eq!(state.as_str(), *s);
         }
     }

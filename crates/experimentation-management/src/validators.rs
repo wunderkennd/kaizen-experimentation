@@ -23,9 +23,9 @@ use experimentation_proto::experimentation::common::v1::{
 
 /// Validate type-specific STARTING preconditions.
 ///
-/// Returns `Ok(())` if validation passes, or `Status::failed_precondition`
+/// Returns `Ok(())` if validation passes, or `Box<Status::failed_precondition>`
 /// with a descriptive message on failure.
-pub fn validate_starting(exp: &Experiment) -> Result<(), Status> {
+pub fn validate_starting(exp: &Experiment) -> Result<(), Box<Status>> {
     let exp_type = ExperimentType::try_from(exp.r#type).unwrap_or(ExperimentType::Unspecified);
 
     match exp_type {
@@ -40,9 +40,11 @@ pub fn validate_starting(exp: &Experiment) -> Result<(), Status> {
 // META validator (ADR-013)
 // ---------------------------------------------------------------------------
 
-fn validate_meta(exp: &Experiment) -> Result<(), Status> {
+fn validate_meta(exp: &Experiment) -> Result<(), Box<Status>> {
     let cfg = exp.meta_experiment_config.as_ref().ok_or_else(|| {
-        Status::failed_precondition("META experiment requires meta_experiment_config")
+        Box::new(Status::failed_precondition(
+            "META experiment requires meta_experiment_config",
+        ))
     })?;
 
     validate_meta_config(cfg, &exp.variants.iter().map(|v| v.variant_id.as_str()).collect::<Vec<_>>())
@@ -51,45 +53,45 @@ fn validate_meta(exp: &Experiment) -> Result<(), Status> {
 fn validate_meta_config(
     cfg: &MetaExperimentConfig,
     variant_ids: &[&str],
-) -> Result<(), Status> {
+) -> Result<(), Box<Status>> {
     use experimentation_proto::experimentation::common::v1::BanditAlgorithm;
 
     let algo = BanditAlgorithm::try_from(cfg.base_algorithm).unwrap_or(BanditAlgorithm::Unspecified);
     if algo == BanditAlgorithm::Unspecified {
-        return Err(Status::failed_precondition(
+        return Err(Box::new(Status::failed_precondition(
             "META experiment requires a valid base_algorithm in meta_experiment_config",
-        ));
+        )));
     }
 
     if cfg.outcome_metric_ids.is_empty() {
-        return Err(Status::failed_precondition(
+        return Err(Box::new(Status::failed_precondition(
             "META experiment requires at least one outcome_metric_id",
-        ));
+        )));
     }
 
     if cfg.variant_objectives.len() != variant_ids.len() {
-        return Err(Status::failed_precondition(format!(
+        return Err(Box::new(Status::failed_precondition(format!(
             "META experiment: variant_objectives count ({}) must equal variant count ({})",
             cfg.variant_objectives.len(),
             variant_ids.len()
-        )));
+        ))));
     }
 
     for obj in &cfg.variant_objectives {
         // reward_weights must sum to 1.0 (within tolerance).
         let sum: f64 = obj.reward_weights.values().sum();
         if (sum - 1.0).abs() > 1e-6 {
-            return Err(Status::failed_precondition(format!(
+            return Err(Box::new(Status::failed_precondition(format!(
                 "META variant {} reward_weights sum to {:.6} (must be 1.0)",
                 obj.variant_id, sum
-            )));
+            ))));
         }
 
         if obj.reward_weights.is_empty() {
-            return Err(Status::failed_precondition(format!(
+            return Err(Box::new(Status::failed_precondition(format!(
                 "META variant {} has no reward_weights",
                 obj.variant_id
-            )));
+            ))));
         }
     }
 
@@ -100,20 +102,22 @@ fn validate_meta_config(
 // SWITCHBACK validator (ADR-022)
 // ---------------------------------------------------------------------------
 
-fn validate_switchback(exp: &Experiment) -> Result<(), Status> {
+fn validate_switchback(exp: &Experiment) -> Result<(), Box<Status>> {
     let cfg = exp.switchback_config.as_ref().ok_or_else(|| {
-        Status::failed_precondition("SWITCHBACK experiment requires switchback_config")
+        Box::new(Status::failed_precondition(
+            "SWITCHBACK experiment requires switchback_config",
+        ))
     })?;
 
     validate_switchback_config(cfg)
 }
 
-fn validate_switchback_config(cfg: &SwitchbackConfig) -> Result<(), Status> {
+fn validate_switchback_config(cfg: &SwitchbackConfig) -> Result<(), Box<Status>> {
     if cfg.planned_cycles < 4 {
-        return Err(Status::failed_precondition(format!(
+        return Err(Box::new(Status::failed_precondition(format!(
             "SWITCHBACK requires planned_cycles >= 4 (got {})",
             cfg.planned_cycles
-        )));
+        ))));
     }
 
     let block_secs = cfg
@@ -123,10 +127,10 @@ fn validate_switchback_config(cfg: &SwitchbackConfig) -> Result<(), Status> {
         .unwrap_or(0);
 
     if block_secs < 3600 {
-        return Err(Status::failed_precondition(format!(
+        return Err(Box::new(Status::failed_precondition(format!(
             "SWITCHBACK requires block_duration >= 1 hour (got {} seconds)",
             block_secs
-        )));
+        ))));
     }
 
     Ok(())
@@ -136,32 +140,34 @@ fn validate_switchback_config(cfg: &SwitchbackConfig) -> Result<(), Status> {
 // QUASI validator (ADR-023)
 // ---------------------------------------------------------------------------
 
-fn validate_quasi(exp: &Experiment) -> Result<(), Status> {
+fn validate_quasi(exp: &Experiment) -> Result<(), Box<Status>> {
     let cfg = exp.quasi_experiment_config.as_ref().ok_or_else(|| {
-        Status::failed_precondition("QUASI experiment requires quasi_experiment_config")
+        Box::new(Status::failed_precondition(
+            "QUASI experiment requires quasi_experiment_config",
+        ))
     })?;
 
     validate_quasi_config(cfg)
 }
 
-fn validate_quasi_config(cfg: &QuasiExperimentConfig) -> Result<(), Status> {
+fn validate_quasi_config(cfg: &QuasiExperimentConfig) -> Result<(), Box<Status>> {
     if cfg.treated_unit_id.trim().is_empty() {
-        return Err(Status::failed_precondition(
+        return Err(Box::new(Status::failed_precondition(
             "QUASI experiment requires a non-empty treated_unit_id",
-        ));
-    }
-
-    if cfg.donor_unit_ids.len() < 2 {
-        return Err(Status::failed_precondition(format!(
-            "QUASI experiment requires at least 2 donor_unit_ids (got {})",
-            cfg.donor_unit_ids.len()
         )));
     }
 
+    if cfg.donor_unit_ids.len() < 2 {
+        return Err(Box::new(Status::failed_precondition(format!(
+            "QUASI experiment requires at least 2 donor_unit_ids (got {})",
+            cfg.donor_unit_ids.len()
+        ))));
+    }
+
     if cfg.outcome_metric_id.trim().is_empty() {
-        return Err(Status::failed_precondition(
+        return Err(Box::new(Status::failed_precondition(
             "QUASI experiment requires outcome_metric_id",
-        ));
+        )));
     }
 
     // Validate temporal ordering.
@@ -173,20 +179,20 @@ fn validate_quasi_config(cfg: &QuasiExperimentConfig) -> Result<(), Status> {
             let pre_ts = pre.seconds * 1_000_000_000 + pre.nanos as i64;
             let treat_ts = treat.seconds * 1_000_000_000 + treat.nanos as i64;
             if pre_ts >= treat_ts {
-                return Err(Status::failed_precondition(
+                return Err(Box::new(Status::failed_precondition(
                     "QUASI experiment: pre_treatment_start must be before treatment_start",
-                ));
+                )));
             }
         }
         (None, _) => {
-            return Err(Status::failed_precondition(
+            return Err(Box::new(Status::failed_precondition(
                 "QUASI experiment requires pre_treatment_start",
-            ));
+            )));
         }
         (_, None) => {
-            return Err(Status::failed_precondition(
+            return Err(Box::new(Status::failed_precondition(
                 "QUASI experiment requires treatment_start",
-            ));
+            )));
         }
     }
 

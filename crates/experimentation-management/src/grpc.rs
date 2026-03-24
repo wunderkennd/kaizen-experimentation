@@ -200,6 +200,7 @@ impl IntoProto for chrono::DateTime<chrono::Utc> {
 // Helper: validate common experiment fields at creation
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::result_large_err)]
 fn validate_create(exp: &Experiment) -> Result<(), Status> {
     if exp.name.trim().is_empty() {
         return Err(Status::invalid_argument("name is required"));
@@ -329,32 +330,34 @@ impl ExperimentManagementService for ManagementServiceHandler {
 
         let type_config = build_type_config(&exp);
 
+        let guardrail_action_str = match GuardrailAction::try_from(exp.guardrail_action)
+            .unwrap_or(GuardrailAction::Unspecified)
+        {
+            GuardrailAction::AlertOnly => "ALERT_ONLY",
+            _ => "AUTO_PAUSE",
+        };
+
         let row = self
             .state
             .store
-            .create_experiment(
-                &exp.name,
-                if exp.description.is_empty() { None } else { Some(&exp.description) },
-                &exp.owner_email,
-                exp_type_str,
+            .create_experiment(crate::store::CreateExperimentParams {
+                name: &exp.name,
+                description: if exp.description.is_empty() { None } else { Some(&exp.description) },
+                owner_email: &exp.owner_email,
+                experiment_type: exp_type_str,
                 layer_id,
-                &exp.primary_metric_id,
-                &exp.secondary_metric_ids,
-                match GuardrailAction::try_from(exp.guardrail_action)
-                    .unwrap_or(GuardrailAction::Unspecified)
-                {
-                    GuardrailAction::AlertOnly => "ALERT_ONLY",
-                    _ => "AUTO_PAUSE",
-                },
+                primary_metric_id: &exp.primary_metric_id,
+                secondary_metric_ids: &exp.secondary_metric_ids,
+                guardrail_action: guardrail_action_str,
                 targeting_rule_id,
-                exp.is_cumulative_holdout,
-                &type_config,
-                seq_method,
-                planned_looks.and_then(|l| if l == 0 { None } else { Some(l) }),
-                overall_alpha.and_then(|a| if a == 0.0 { None } else { Some(a) }),
+                is_cumulative_holdout: exp.is_cumulative_holdout,
+                type_config: &type_config,
+                sequential_method: seq_method,
+                planned_looks: planned_looks.and_then(|l| if l == 0 { None } else { Some(l) }),
+                overall_alpha: overall_alpha.and_then(|a| if a == 0.0 { None } else { Some(a) }),
                 surrogate_model_id,
-                &variants,
-            )
+                variants: &variants,
+            })
             .await
             .map_err(store_err_to_status)?;
 
@@ -599,7 +602,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
                 )
                 .await
                 .ok();
-            return Err(e);
+            return Err(*e);
         }
 
         // Step 4: TOCTOU-safe STARTING→RUNNING.
