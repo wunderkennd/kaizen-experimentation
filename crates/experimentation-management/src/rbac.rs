@@ -153,6 +153,7 @@ pub fn procedure_min_role(path: &str) -> Role {
 ///
 /// Authorization (role vs. procedure minimum) is enforced per-handler via
 /// `require_role`. See module-level doc for rationale.
+#[allow(clippy::result_large_err)]
 pub fn rbac_interceptor(mut req: Request<()>) -> Result<Request<()>, Status> {
     let email = req
         .metadata()
@@ -189,22 +190,22 @@ pub fn rbac_interceptor(mut req: Request<()>) -> Result<Request<()>, Status> {
 ///
 /// Returns `UNAUTHENTICATED` if the interceptor did not inject an identity
 /// (should not happen in production; indicates interceptor bypass in tests).
-pub fn extract_identity(extensions: &Extensions) -> Result<&Identity, Status> {
+pub fn extract_identity(extensions: &Extensions) -> Result<&Identity, Box<Status>> {
     extensions
         .get::<Identity>()
-        .ok_or_else(|| Status::unauthenticated("no identity in request context"))
+        .ok_or_else(|| Box::new(Status::unauthenticated("no identity in request context")))
 }
 
 /// Verify that the injected `Identity` has at least `minimum` role.
 ///
 /// Returns `PERMISSION_DENIED` if the role is insufficient.
-pub fn require_role(extensions: &Extensions, minimum: Role) -> Result<&Identity, Status> {
+pub fn require_role(extensions: &Extensions, minimum: Role) -> Result<&Identity, Box<Status>> {
     let identity = extract_identity(extensions)?;
     if !identity.role.has_at_least(minimum) {
-        return Err(Status::permission_denied(format!(
+        return Err(Box::new(Status::permission_denied(format!(
             "role {:?} is insufficient (requires {:?})",
             identity.role, minimum
-        )));
+        ))));
     }
     Ok(identity)
 }

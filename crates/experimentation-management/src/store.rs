@@ -278,25 +278,25 @@ impl ManagementStore {
     ) -> Result<ExperimentRow, TransitionError> {
         // Build the SET clause: include the timestamp column matching the `to` state.
         let sql = match to {
-            ExperimentState::Running => format!(
+            ExperimentState::Running => {
                 "UPDATE experiments SET state = $1, started_at = NOW(), updated_at = NOW() \
                  WHERE experiment_id = $2 AND state = $3"
-            ),
-            ExperimentState::Concluded => format!(
+            }
+            ExperimentState::Concluded => {
                 "UPDATE experiments SET state = $1, concluded_at = NOW(), updated_at = NOW() \
                  WHERE experiment_id = $2 AND state = $3"
-            ),
-            ExperimentState::Archived => format!(
+            }
+            ExperimentState::Archived => {
                 "UPDATE experiments SET state = $1, archived_at = NOW(), updated_at = NOW() \
                  WHERE experiment_id = $2 AND state = $3"
-            ),
-            _ => format!(
+            }
+            _ => {
                 "UPDATE experiments SET state = $1, updated_at = NOW() \
                  WHERE experiment_id = $2 AND state = $3"
-            ),
+            }
         };
 
-        let result = sqlx::query(&sql)
+        let result = sqlx::query(sql)
             .bind(to.as_db_str())
             .bind(experiment_id)
             .bind(from.as_db_str())

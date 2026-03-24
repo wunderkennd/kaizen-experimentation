@@ -212,6 +212,7 @@ fn transition_err(e: TransitionError) -> Status {
 // Helpers
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::result_large_err)]
 fn parse_experiment_id(s: &str) -> Result<Uuid, Status> {
     Uuid::parse_str(s).map_err(|_| Status::invalid_argument("invalid experiment_id UUID"))
 }
@@ -230,7 +231,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<CreateExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        require_role(request.extensions(), Role::Experimenter)?;
+        require_role(request.extensions(), Role::Experimenter).map_err(|e| *e)?;
         // Phase 2: variant insertion, layer allocation, hash salt generation.
         Err(Status::unimplemented("CreateExperiment: Phase 2 implementation pending"))
     }
@@ -239,7 +240,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<GetExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         let experiment_id = parse_experiment_id(&request.into_inner().experiment_id)?;
 
         let with_variants = self.store.get_experiment(experiment_id).await.map_err(store_err)?;
@@ -250,7 +251,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<UpdateExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        require_role(request.extensions(), Role::Experimenter)?;
+        require_role(request.extensions(), Role::Experimenter).map_err(|e| *e)?;
         // Phase 2: update allowed only in DRAFT state.
         Err(Status::unimplemented("UpdateExperiment: Phase 2 implementation pending"))
     }
@@ -259,7 +260,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<ListExperimentsRequest>,
     ) -> Result<Response<ListExperimentsResponse>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         let req = request.into_inner();
         let page_size = if req.page_size <= 0 { 50 } else { req.page_size as i64 };
         let state_filter = if req.state_filter != 0 {
@@ -298,7 +299,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<StartExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        let identity = require_role(request.extensions(), Role::Experimenter)?;
+        let identity = require_role(request.extensions(), Role::Experimenter).map_err(|e| *e)?;
         let actor = identity.email.clone();
         let experiment_id = parse_experiment_id(&request.into_inner().experiment_id)?;
 
@@ -323,7 +324,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<ConcludeExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        let identity = require_role(request.extensions(), Role::Experimenter)?;
+        let identity = require_role(request.extensions(), Role::Experimenter).map_err(|e| *e)?;
         let actor = identity.email.clone();
         let experiment_id = parse_experiment_id(&request.into_inner().experiment_id)?;
 
@@ -348,7 +349,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<ArchiveExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        let identity = require_role(request.extensions(), Role::Admin)?;
+        let identity = require_role(request.extensions(), Role::Admin).map_err(|e| *e)?;
         let actor = identity.email.clone();
         let experiment_id = parse_experiment_id(&request.into_inner().experiment_id)?;
 
@@ -373,7 +374,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<PauseExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        let identity = require_role(request.extensions(), Role::Experimenter)?;
+        let identity = require_role(request.extensions(), Role::Experimenter).map_err(|e| *e)?;
         let actor = identity.email.clone();
         let inner = request.into_inner();
         let experiment_id = parse_experiment_id(&inner.experiment_id)?;
@@ -400,7 +401,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<ResumeExperimentRequest>,
     ) -> Result<Response<Experiment>, Status> {
-        let identity = require_role(request.extensions(), Role::Experimenter)?;
+        let identity = require_role(request.extensions(), Role::Experimenter).map_err(|e| *e)?;
         let actor = identity.email.clone();
         let experiment_id = parse_experiment_id(&request.into_inner().experiment_id)?;
 
@@ -429,7 +430,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<CreateMetricDefinitionRequest>,
     ) -> Result<Response<MetricDefinition>, Status> {
-        require_role(request.extensions(), Role::Analyst)?;
+        require_role(request.extensions(), Role::Analyst).map_err(|e| *e)?;
         Err(Status::unimplemented("CreateMetricDefinition: Phase 2 implementation pending"))
     }
 
@@ -437,7 +438,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<GetMetricDefinitionRequest>,
     ) -> Result<Response<MetricDefinition>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         Err(Status::unimplemented("GetMetricDefinition: Phase 2 implementation pending"))
     }
 
@@ -445,7 +446,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<ListMetricDefinitionsRequest>,
     ) -> Result<Response<ListMetricDefinitionsResponse>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         Err(Status::unimplemented("ListMetricDefinitions: Phase 2 implementation pending"))
     }
 
@@ -457,7 +458,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<CreateLayerRequest>,
     ) -> Result<Response<Layer>, Status> {
-        require_role(request.extensions(), Role::Admin)?;
+        require_role(request.extensions(), Role::Admin).map_err(|e| *e)?;
         Err(Status::unimplemented("CreateLayer: Phase 2 implementation pending"))
     }
 
@@ -465,7 +466,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<GetLayerRequest>,
     ) -> Result<Response<Layer>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         Err(Status::unimplemented("GetLayer: Phase 2 implementation pending"))
     }
 
@@ -473,7 +474,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<GetLayerAllocationsRequest>,
     ) -> Result<Response<GetLayerAllocationsResponse>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         Err(Status::unimplemented("GetLayerAllocations: Phase 2 implementation pending"))
     }
 
@@ -485,7 +486,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<CreateTargetingRuleRequest>,
     ) -> Result<Response<TargetingRule>, Status> {
-        require_role(request.extensions(), Role::Analyst)?;
+        require_role(request.extensions(), Role::Analyst).map_err(|e| *e)?;
         Err(Status::unimplemented("CreateTargetingRule: Phase 2 implementation pending"))
     }
 
@@ -497,7 +498,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<CreateSurrogateModelRequest>,
     ) -> Result<Response<SurrogateModelConfig>, Status> {
-        require_role(request.extensions(), Role::Analyst)?;
+        require_role(request.extensions(), Role::Analyst).map_err(|e| *e)?;
         Err(Status::unimplemented("CreateSurrogateModel: Phase 2 implementation pending"))
     }
 
@@ -505,7 +506,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<ListSurrogateModelsRequest>,
     ) -> Result<Response<ListSurrogateModelsResponse>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         Err(Status::unimplemented("ListSurrogateModels: Phase 2 implementation pending"))
     }
 
@@ -513,7 +514,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<GetSurrogateCalibrationRequest>,
     ) -> Result<Response<SurrogateModelConfig>, Status> {
-        require_role(request.extensions(), Role::Viewer)?;
+        require_role(request.extensions(), Role::Viewer).map_err(|e| *e)?;
         Err(Status::unimplemented("GetSurrogateCalibration: Phase 2 implementation pending"))
     }
 
@@ -521,7 +522,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<TriggerSurrogateRecalibrationRequest>,
     ) -> Result<Response<()>, Status> {
-        require_role(request.extensions(), Role::Analyst)?;
+        require_role(request.extensions(), Role::Analyst).map_err(|e| *e)?;
         Err(Status::unimplemented("TriggerSurrogateRecalibration: Phase 2 implementation pending"))
     }
 }
