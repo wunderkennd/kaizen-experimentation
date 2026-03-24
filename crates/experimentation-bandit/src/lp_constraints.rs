@@ -276,7 +276,7 @@ impl ConstraintSolver {
             let prob = raw_probs.get(arm_id).copied().unwrap_or(0.0);
             assert_finite(prob, &format!("raw_prob for arm '{arm_id}'"));
             // Clamp to [0, 1] for numerical safety.
-            p.push(prob.max(0.0).min(1.0));
+            p.push(prob.clamp(0.0, 1.0));
 
             let (l, h) = self.per_arm.get(arm_id).copied().unwrap_or((0.0, 1.0));
             lo.push(l);
