@@ -16,13 +16,19 @@ import (
 )
 
 // TestGetPortfolioAllocation_Empty verifies that the RPC returns a well-formed empty
-// response when no experiments are RUNNING.
+// response when no experiments are RUNNING in the scoped layer.
+// Uses a layer_id filter so the test is isolated from other experiments in the shared DB.
 func TestGetPortfolioAllocation_Empty(t *testing.T) {
 	env, cleanup := setupTestServer(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	resp, err := env.client.GetPortfolioAllocation(ctx, connect.NewRequest(&mgmtv1.GetPortfolioAllocationRequest{}))
+	// Create a fresh layer with no experiments to guarantee an empty portfolio within it.
+	layer := createTestLayer(t, env.client, "portfolio-empty-"+t.Name(), 0)
+
+	resp, err := env.client.GetPortfolioAllocation(ctx, connect.NewRequest(&mgmtv1.GetPortfolioAllocationRequest{
+		LayerId: layer.LayerId,
+	}))
 	require.NoError(t, err)
 	assert.Empty(t, resp.Msg.Allocations)
 	assert.Empty(t, resp.Msg.Conflicts)
