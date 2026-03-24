@@ -940,9 +940,9 @@ fn project_simplex(v: &[f64]) -> Vec<f64> {
 
     let mut rho = 0usize;
     let mut cumsum = 0.0_f64;
-    for j in 0..n {
-        cumsum += u[j];
-        if u[j] > (cumsum - 1.0) / (j + 1) as f64 {
+    for (j, &uj) in u.iter().enumerate().take(n) {
+        cumsum += uj;
+        if uj > (cumsum - 1.0) / (j + 1) as f64 {
             rho = j;
         }
     }
@@ -977,9 +977,9 @@ fn gaussian_solve(a_flat: &[f64], b: &[f64], n: usize) -> Result<Vec<f64>> {
         }
         for row in (col + 1)..n {
             let factor = a[row][col] / pivot;
-            for j in col..n {
-                let v = a[col][j] * factor;
-                a[row][j] -= v;
+            let (top_rows, bot_rows) = a.split_at_mut(row);
+            for (src, dst) in top_rows[col][col..].iter().zip(bot_rows[0][col..].iter_mut()) {
+                *dst -= src * factor;
             }
             b[row] -= b[col] * factor;
         }
