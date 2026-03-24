@@ -6,13 +6,12 @@
 ## Current Sprint
 
 Sprint: 5.3
-Focus: ADR-018 Phase 2 — e-LOND OnlineFdrController
-Branch: work/witty-badger
-PR: (pending)
+Focus: ADR-018 Phase 2 — e-LOND OnlineFdrController; Phase 5 docs pass
+Branch: work/witty-badger, work/bold-eagle
 
 ## In Progress
 
-- [x] ADR-018 Phase 2 — e-LOND OnlineFdrController (this PR)
+- [x] ADR-018 Phase 2 — e-LOND OnlineFdrController
   - `sql/migrations/009_online_fdr_controller_state.sql`
   - `services/management/internal/fdr/controller.go` — Controller singleton
   - `services/management/internal/fdr/controller_test.go` — 11 unit tests
@@ -20,6 +19,11 @@ PR: (pending)
   - `services/management/internal/handlers/conclude.go` — submitFdrDecision (best-effort)
   - `services/management/internal/handlers/lifecycle.go` — wire into concludeByID
   - `services/management/cmd/main.go` — ONLINE_FDR_ENABLED env var gate
+
+- [x] **Phase 5 CHANGELOG and implementation plan** (work/bold-eagle)
+  - Created `docs/coordination/CHANGELOG-phase5.md` — release notes for Phase 5 (all 15 ADRs, per-cluster breakdown, breaking changes, migration guide, performance characteristics)
+  - Created `docs/coordination/phase5-implementation-plan.md` — canonical status table for all 19 Phase 5 work items with PR references
+  - Updated `docs/coordination/status/agent-5-status.md` — this file
 
 ## Completed (Phase 5) — latest first
 
@@ -29,6 +33,10 @@ PR: (pending)
     `required_n_for_power`, `run_interim_analysis`
   - `sql/migrations/008_adaptive_sample_size_audit.sql` — audit trail for interim analysis events
   - `services/management/internal/adaptive/`: `Trigger`, `Processor`, `ConditionalPowerClient` interface
+  - M5 scheduler: triggers interim analysis at `interim_fraction x planned_duration`
+  - Promising zone: extends experiment duration, adjusts GST boundaries, notifies owner
+  - Futile zone: sends notification recommending early termination
+  - AVLM interaction: uses `variance_effective = variance_pooled x (1 - rho^2)` when AVLM configured
   - M6 UI: AVLM boundary plot, adaptive-N zone badge + timeline (PR #223, merged)
   - All workspace tests green
 
@@ -36,12 +44,12 @@ PR: (pending)
   - `guardrail_bonferroni()` in `crates/experimentation-stats/src/multiple_comparison.rs`
   - M5 validation: `ValidateCreateMetricDefinition` enforces `stakeholder` + `aggregation_level`;
     `ValidateBanditRewardMetricAggregation()`, `ValidateGuardrailMetricAggregation()` exported
-  - Store layer: `MetricDefinitionRow` gains `Stakeholder`, `AggregationLevel`; bidirectional proto↔row mapping
+  - Store layer: `MetricDefinitionRow` gains `Stakeholder`, `AggregationLevel`; bidirectional proto<->row mapping
   - DB migration: `sql/migrations/007_metric_stakeholder_aggregation.sql`
   - Handler: `validateMetricsForStart` + `validateTypeConfigForStart` enforce aggregation rules
   - Infrastructure: generated `gen/go/go.mod` + full buf codegen — unblocked all Go compilation
 
-- [x] ADR-018 Phase 2 — e-LOND OnlineFdrController (this PR)
+- [x] ADR-018 Phase 2 — e-LOND OnlineFdrController
   - Platform-level singleton persisted in PostgreSQL (migration 009)
   - e-LOND geometric-decay alpha wealth management
   - SELECT FOR UPDATE serializes concurrent conclude calls
@@ -57,6 +65,29 @@ PR: (pending)
 
 ## Next Up
 
-- ADR-013: META experiment type — M5 `STARTING` validation for `MetaExperimentConfig`
-- ADR-019: Portfolio optimization — `ExperimentLearning` classification, traffic allocation optimizer
-- ADR-025: M5 Rust port (conditional — awaiting go/no-go decision)
+1. **ADR-013 META Experiment Type** (Sprint 5.4)
+   - M5 STARTING validation for `MetaExperimentConfig` (variant objectives, reward composition)
+   - Validate cross-variant business outcome metric alignment
+
+2. **ADR-019 Portfolio Optimization** (Sprint 5.4)
+   - `ExperimentLearning` classification at CONCLUDED transition (mandatory for archive)
+   - Portfolio data endpoints (win rate, learning rate, annualized impact, traffic utilization)
+   - Optimal alpha recommendation (`RecommendAlpha` function, advisory only)
+   - Traffic allocation optimizer for underpowered concurrent experiments
+
+3. **ADR-025 M5 Rust port** (conditional — awaiting go/no-go decision)
+
+## ADR-025 Trigger Status
+
+Port M5 to Rust when >=3 of {ADR-015 P2, ADR-018 (full), ADR-019, ADR-020, ADR-021}:
+
+| ADR | Status |
+|-----|--------|
+| ADR-020 Adaptive N | Complete (PR #227) |
+| ADR-021 Feedback Loops | Complete (PR #222) |
+| ADR-018 Phase 1 | Complete (PR #200) |
+| ADR-018 Phase 2/3 | Planned (Sprint 5.3/5.5) |
+| ADR-019 Portfolio | Planned (Sprint 5.4) |
+| ADR-015 Phase 2 | Planned (Sprint 5.5) |
+
+**Current count**: 2/5 (need 3 to trigger). Evaluate at Sprint 5.5 end.
