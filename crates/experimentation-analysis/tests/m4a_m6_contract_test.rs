@@ -1240,6 +1240,8 @@ async fn test_avlm_narrower_ci_than_msprt_on_golden_data() {
             experiment_id: exp_id.into(),
             sequential_method: 4,
             tau_sq: 0.5,
+            cuped_covariate_metric_id: "pre_experiment".into(),
+            ..Default::default()
         }))
         .await
         .expect("AVLM RunAnalysis should succeed");
@@ -1249,6 +1251,7 @@ async fn test_avlm_narrower_ci_than_msprt_on_golden_data() {
             experiment_id: exp_id.into(),
             sequential_method: 4,
             tau_sq: 0.5,
+            ..Default::default()
         }))
         .await
         .expect("mSPRT (null covariates) RunAnalysis should succeed");

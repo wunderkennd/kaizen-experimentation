@@ -1,19 +1,40 @@
 # Agent-4 Status — Phase 5
 
 **Module**: M4a Analysis + M4b Bandit
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
-Sprint: 5.0
-Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-bear
+Sprint: 5.2
+Focus: ADR-015 Sprint 5.2 (AVLM cuped_covariate_metric_id integration), ADR-020 adaptive_n wiring
+Branch: work/eager-deer
 
 ## In Progress
 
-- [ ] ADR-012 LP constraints
+- (none)
 
 ## Completed (Phase 5) — latest first
+
+- [x] **ADR-015 Sprint 5.2 + ADR-020: cuped_covariate_metric_id integration & adaptive_n wiring** (2026-03-24, work/eager-deer)
+  - `proto/experimentation/analysis/v1/analysis_service.proto`:
+    - Added `cuped_covariate_metric_id = 4` to `RunAnalysisRequest` — gates AVLM covariate adjustment; empty string = mSPRT fallback
+    - Added `adaptive_sample_size_config = 5` to `RunAnalysisRequest` — passes `AdaptiveSampleSizeConfig` (from common proto)
+    - Added `AdaptiveNInterimResult` message (zone, conditional_power, recommended_n_per_arm, blinded_variance)
+    - Added `adaptive_n_result = 7` to `AnalysisResult`
+  - `crates/experimentation-analysis/src/grpc.rs`:
+    - Updated `compute_analysis` to accept `cuped_covariate_metric_id: &str` and `adaptive_config: Option<&AdaptiveSampleSizeConfig>`
+    - AVLM path: `use_covariate = !cuped_covariate_metric_id.is_empty()` — passes x=0 when empty (triggers unadjusted mSPRT CS via var_x_pool==0)
+    - Updated `compute_avlm_result` to accept `use_covariate: bool`
+    - Added `compute_adaptive_n_result()` — calls `adaptive_n::run_interim_analysis` on first metric alphabetically; infers n_max_per_arm from n_current / interim_fraction; maps AdaptiveSampleSizeConfig to ZoneThresholds; returns AdaptiveNInterimResult
+    - `run_analysis` passes `cuped_covariate_metric_id` and `adaptive_sample_size_config` through
+    - `get_analysis_result` passes `("", None)` — backward compatible
+    - Added 3 new integration tests:
+      - `test_run_analysis_avlm_narrower_ci_than_msprt`: golden-file (Y=2X+effect, ρ≈0.99); asserts AVLM half-width < mSPRT half-width, variance_reduction_pct > 50%
+      - `test_run_analysis_adaptive_n_zone_returned`: asserts adaptive_n_result is set with valid zone, CP ∈ [0,1], blinded_variance > 0
+      - `test_run_analysis_no_adaptive_n_when_config_absent`: asserts adaptive_n_result is None when no config
+  - `crates/experimentation-analysis/src/store.rs`: added `adaptive_n_result: None` to cached→proto converter (not persisted in cache)
+  - `crates/experimentation-analysis/tests/m4a_m6_contract_test.rs`: updated AVLM test to set `cuped_covariate_metric_id` for the covariate path; mSPRT path leaves it empty
+  - All 55 tests pass (42 unit + 13 contract), 0 failures
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`

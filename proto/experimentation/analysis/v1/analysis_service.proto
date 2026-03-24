@@ -37,6 +37,13 @@ message RunAnalysisRequest {
   experimentation.common.v1.SequentialMethod sequential_method = 2;
   // Mixing variance τ² for AVLM/mSPRT martingale. 0.0 = use service default (0.5).
   double tau_sq = 3;
+  // ADR-015: ID of the pre-experiment covariate metric stored in the cuped_covariate
+  // column by M3. When set with SEQUENTIAL_METHOD_AVLM, enables regression adjustment.
+  // When empty, AVLM falls back to mSPRT without covariate (x=0).
+  string cuped_covariate_metric_id = 4;
+  // ADR-020: Adaptive sample size configuration. When set, M4a runs an interim
+  // analysis and returns zone classification and recommended_n_per_arm.
+  experimentation.common.v1.AdaptiveSampleSizeConfig adaptive_sample_size_config = 5;
 }
 message GetAnalysisResultRequest { string experiment_id = 1; }
 message GetInterleavingAnalysisRequest { string experiment_id = 1; }
@@ -125,6 +132,20 @@ message IpwResult {
   double effective_sample_size = 7;
 }
 
+// AdaptiveNInterimResult from promising-zone interim analysis (ADR-020).
+// Populated in AnalysisResult when AdaptiveSampleSizeConfig is present in RunAnalysisRequest.
+message AdaptiveNInterimResult {
+  // Zone classification: "favorable", "promising", or "futile".
+  string zone = 1;
+  // Conditional power CP(δ̂, σ²_B, n_max, α) at the current look.
+  double conditional_power = 2;
+  // For "promising" zone only: recommended per-arm n_max to restore target power.
+  // 0.0 for other zones.
+  double recommended_n_per_arm = 3;
+  // Blinded pooled variance σ²_B (Gould-Shih estimator, conservative).
+  double blinded_variance = 4;
+}
+
 // AnalysisResult is the top-level result for an experiment.
 message AnalysisResult {
   string experiment_id = 1;
@@ -136,6 +157,9 @@ message AnalysisResult {
   // Cochran Q test for treatment effect heterogeneity across lifecycle segments.
   double cochran_q_p_value = 5;
   google.protobuf.Timestamp computed_at = 6;
+  // ADR-020: Adaptive sample size interim result. Only set when
+  // AdaptiveSampleSizeConfig was provided in RunAnalysisRequest.
+  AdaptiveNInterimResult adaptive_n_result = 7;
 }
 
 message SrmResult {

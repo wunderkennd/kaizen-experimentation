@@ -9,16 +9,19 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
     AnalysisService, AnalysisServiceServer,
 };
 use experimentation_proto::experimentation::analysis::v1::{
-    AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult, GetAnalysisResultRequest,
-    GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest,
-    GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
-    InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
-    PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
-    SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
-    SyntheticControlAnalysisResult, TitleSpillover,
+    AdaptiveNInterimResult, AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult,
+    GetAnalysisResultRequest, GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest,
+    GetNoveltyAnalysisRequest, GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest,
+    InterferenceAnalysisResult, InterleavingAnalysisResult, IpwResult as ProtoIpwResult,
+    MetricResult, NoveltyAnalysisResult, PositionAnalysis as ProtoPositionAnalysis,
+    RunAnalysisRequest, SegmentResult, SequentialResult, SessionLevelResult,
+    SrmResult as ProtoSrmResult, SwitchbackAnalysisResult, SyntheticControlAnalysisResult,
+    TitleSpillover,
 };
+use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
 use experimentation_stats::{
-    avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
+    adaptive_n, avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm,
+    ttest,
 };
 
 /// Proto enum value for SEQUENTIAL_METHOD_AVLM (ADR-015).
@@ -205,6 +208,8 @@ async fn compute_analysis(
     experiment_id: &str,
     sequential_method: i32,
     tau_sq: f64,
+    cuped_covariate_metric_id: &str,
+    adaptive_config: Option<&AdaptiveSampleSizeConfig>,
 ) -> Result<AnalysisResult, Status> {
     let data = delta_reader::read_metric_summaries(&config.delta_lake_path, experiment_id)
         .await
@@ -276,9 +281,11 @@ async fn compute_analysis(
             let (cuped_effect, cuped_ci_lower, cuped_ci_upper, variance_reduction_pct, avlm_sequential) =
                 if sequential_method == SEQUENTIAL_METHOD_AVLM {
                     // AVLM: anytime-valid regression-adjusted CI (ADR-015).
-                    // Passes x=0 when covariate is null → falls back to mSPRT CS.
+                    // Uses covariates when cuped_covariate_metric_id is set; falls back to
+                    // mSPRT (x=0) when empty (var_x_pool == 0 triggers unadjusted path).
                     let effective_tau_sq = if tau_sq > 0.0 { tau_sq } else { config.default_tau_sq };
-                    match compute_avlm_result(control_tuples, treatment_tuples, effective_tau_sq, alpha) {
+                    let use_covariate = !cuped_covariate_metric_id.is_empty();
+                    match compute_avlm_result(control_tuples, treatment_tuples, effective_tau_sq, alpha, use_covariate) {
                         Ok(Some(av)) => {
                             let seq = SequentialResult {
                                 boundary_crossed: av.is_significant,
@@ -366,6 +373,11 @@ async fn compute_analysis(
     // (most significant heterogeneity signal).
     let cochran_q_p_value = compute_experiment_cochran_q(&data, &control_variant, alpha);
 
+    // ADR-020: Adaptive sample size interim analysis.
+    // Uses the first metric (alphabetical) with data for both control and treatment.
+    let adaptive_n_result =
+        compute_adaptive_n_result(&data, &control_variant, &metric_results, alpha, adaptive_config);
+
     Ok(AnalysisResult {
         experiment_id: experiment_id.to_string(),
         metric_results,
@@ -373,6 +385,7 @@ async fn compute_analysis(
         surrogate_projections: vec![],
         cochran_q_p_value,
         computed_at: Some(now_timestamp()),
+        adaptive_n_result,
     })
 }
 
@@ -641,25 +654,125 @@ fn compute_experiment_cochran_q(
 
 /// Run AVLM sequential test by streaming all observations from both arms.
 ///
-/// When the covariate (`cov`) is `None` for any observation, passes `0.0` for `x`,
-/// which causes `AvlmSequentialTest` to fall back to the unadjusted mSPRT confidence
-/// sequence (since `var_x_pool == 0` triggers `unadjusted_confidence_sequence()`).
+/// When `use_covariate` is `false`, passes `x=0` for all observations, which causes
+/// `AvlmSequentialTest` to fall back to the unadjusted mSPRT confidence sequence
+/// (since `var_x_pool == 0` triggers `unadjusted_confidence_sequence()`).
+/// When `use_covariate` is `true`, uses the `cuped_covariate` column from the data;
+/// observations with `None` covariate still receive `x=0`.
 fn compute_avlm_result(
     control_tuples: &[(f64, Option<f64>)],
     treatment_tuples: &[(f64, Option<f64>)],
     tau_sq: f64,
     alpha: f64,
+    use_covariate: bool,
 ) -> Result<Option<avlm::AvlmResult>, String> {
     let mut test = avlm::AvlmSequentialTest::new(tau_sq, alpha).map_err(|e| e.to_string())?;
     for &(y, cov) in control_tuples {
-        test.update(y, cov.unwrap_or(0.0), false)
-            .map_err(|e| e.to_string())?;
+        let x = if use_covariate { cov.unwrap_or(0.0) } else { 0.0 };
+        test.update(y, x, false).map_err(|e| e.to_string())?;
     }
     for &(y, cov) in treatment_tuples {
-        test.update(y, cov.unwrap_or(0.0), true)
-            .map_err(|e| e.to_string())?;
+        let x = if use_covariate { cov.unwrap_or(0.0) } else { 0.0 };
+        test.update(y, x, true).map_err(|e| e.to_string())?;
     }
     test.confidence_sequence().map_err(|e| e.to_string())
+}
+
+/// Compute adaptive sample size interim result (ADR-020).
+///
+/// Uses the first metric (alphabetical) with sufficient data for both control and treatment.
+/// When `adaptive_config` is `None`, returns `None` (no adaptive design configured).
+fn compute_adaptive_n_result(
+    data: &delta_reader::ExperimentMetrics,
+    control_variant: &str,
+    metric_results: &[MetricResult],
+    alpha: f64,
+    adaptive_config: Option<&AdaptiveSampleSizeConfig>,
+) -> Option<AdaptiveNInterimResult> {
+    let cfg = adaptive_config?;
+
+    // Find the first metric alphabetically with both control and treatment data.
+    let mut sorted_metrics: Vec<&String> = data.metrics.keys().collect();
+    sorted_metrics.sort();
+
+    for metric_id in sorted_metrics {
+        let variant_data = &data.metrics[metric_id];
+
+        let control_vals = variant_data.get(control_variant)?;
+        let treatment_vals = variant_data
+            .iter()
+            .find(|(k, _)| *k != control_variant)
+            .map(|(_, v)| v)?;
+
+        if control_vals.len() < 2 || treatment_vals.len() < 2 {
+            continue;
+        }
+
+        // Gather all observations (both arms) for the blinded variance estimator.
+        let mut all_obs: Vec<f64> = control_vals.iter().map(|(y, _)| *y).collect();
+        all_obs.extend(treatment_vals.iter().map(|(y, _)| *y));
+
+        // Observed effect from the already-computed metric_results.
+        let observed_effect = metric_results
+            .iter()
+            .find(|mr| mr.metric_id == *metric_id)
+            .map(|mr| mr.absolute_effect)
+            .unwrap_or(0.0);
+
+        // Infer n_max_per_arm from current sample size and interim_fraction.
+        let n_current_per_arm = control_vals.len().min(treatment_vals.len()) as f64;
+        let interim_fraction = if cfg.interim_fraction > 0.0 {
+            cfg.interim_fraction
+        } else {
+            0.5
+        };
+        let n_max_per_arm = n_current_per_arm / interim_fraction;
+
+        // Zone thresholds from config (with Mehta & Pocock defaults).
+        let thresholds = adaptive_n::ZoneThresholds {
+            favorable: if cfg.favorable_zone_lower > 0.0 {
+                cfg.favorable_zone_lower
+            } else {
+                0.90
+            },
+            promising: if cfg.promising_zone_lower > 0.0 {
+                cfg.promising_zone_lower
+            } else {
+                0.30
+            },
+        };
+        let max_extension = if cfg.max_extension_factor > 0.0 {
+            cfg.max_extension_factor
+        } else {
+            2.0
+        };
+        let n_max_allowed = n_max_per_arm * max_extension;
+
+        match adaptive_n::run_interim_analysis(
+            &all_obs,
+            observed_effect,
+            n_max_per_arm,
+            alpha,
+            &thresholds,
+            0.80, // target power for Promising zone extension
+            n_max_allowed,
+        ) {
+            Ok(result) => {
+                return Some(AdaptiveNInterimResult {
+                    zone: result.zone.to_string(),
+                    conditional_power: result.conditional_power,
+                    recommended_n_per_arm: result.recommended_n_max.unwrap_or(0.0),
+                    blinded_variance: result.blinded_variance,
+                });
+            }
+            Err(e) => {
+                warn!(metric_id = metric_id.as_str(), error = %e, "adaptive_n interim analysis failed, skipping");
+                continue;
+            }
+        }
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -677,7 +790,15 @@ impl AnalysisService for AnalysisServiceHandler {
         if experiment_id.is_empty() {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
-        let result = compute_analysis(&self.config, &experiment_id, req.sequential_method, req.tau_sq).await?;
+        let result = compute_analysis(
+            &self.config,
+            &experiment_id,
+            req.sequential_method,
+            req.tau_sq,
+            &req.cuped_covariate_metric_id,
+            req.adaptive_sample_size_config.as_ref(),
+        )
+        .await?;
 
         // Fire-and-forget cache write.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -710,7 +831,7 @@ impl AnalysisService for AnalysisServiceHandler {
         }
 
         // Cache miss or no store: compute from Delta Lake (fixed-horizon, no sequential method).
-        let result = compute_analysis(&self.config, &experiment_id, 0, 0.0).await?;
+        let result = compute_analysis(&self.config, &experiment_id, 0, 0.0, "", None).await?;
 
         // Write through to cache.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -2059,6 +2180,242 @@ mod tests {
         assert!(
             mr.ipw_result.is_none(),
             "ipw_result should be None when assignment_probability is not available"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // ADR-015: AVLM produces narrower CIs than mSPRT on golden-file data
+    // -----------------------------------------------------------------------
+
+    /// Integration test: AVLM with a strong covariate produces a narrower confidence
+    /// sequence than AVLM without covariate (mSPRT fallback), matching ADR-015 claim.
+    ///
+    /// Golden-file data: control and treatment both have outcomes linearly correlated
+    /// with the covariate (ρ ≈ 0.99). Regression adjustment removes most variance,
+    /// shrinking the half-width of the confidence sequence.
+    #[tokio::test]
+    async fn test_run_analysis_avlm_narrower_ci_than_msprt() {
+        let tmp = TempDir::new().unwrap();
+        let n = 30;
+        let exp_ids: Vec<&str> = vec!["exp-avlm"; n];
+        let user_ids: Vec<String> = (0..n).map(|i| format!("u{i}")).collect();
+        let user_id_refs: Vec<&str> = user_ids.iter().map(|s| s.as_str()).collect();
+        let metric_ids: Vec<&str> = vec!["metric"; n];
+
+        // 15 control + 15 treatment. Outcome y = 2*x + noise + treatment_effect.
+        // Strong covariate (x = 0..14 for control, 0..14 for treatment) → ρ ≈ 0.99.
+        // True effect = 3.0. With 15 obs/arm this should be detectable by both, but
+        // AVLM half-width will be markedly narrower due to variance reduction.
+        let mut variant_ids: Vec<&str> = Vec::with_capacity(n);
+        let mut values: Vec<f64> = Vec::with_capacity(n);
+        let mut covariates: Vec<Option<f64>> = Vec::with_capacity(n);
+
+        for i in 0..15usize {
+            variant_ids.push("control");
+            let x = i as f64;
+            values.push(2.0 * x + 0.1); // near-deterministic
+            covariates.push(Some(x));
+        }
+        for i in 0..15usize {
+            variant_ids.push("treatment");
+            let x = i as f64;
+            values.push(2.0 * x + 3.0 + 0.1); // effect = 3.0
+            covariates.push(Some(x));
+        }
+
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_id_refs,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
+        write_table(tmp.path(), "metric_summaries", batch).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+
+        // Run 1: AVLM with covariate adjustment (cuped_covariate_metric_id set).
+        let resp_avlm = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-avlm".into(),
+                sequential_method: SEQUENTIAL_METHOD_AVLM,
+                tau_sq: 0.5,
+                cuped_covariate_metric_id: "pre_experiment_metric".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        // Run 2: AVLM without covariate (mSPRT fallback; cuped_covariate_metric_id empty).
+        let resp_msprt = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-avlm".into(),
+                sequential_method: SEQUENTIAL_METHOD_AVLM,
+                tau_sq: 0.5,
+                cuped_covariate_metric_id: "".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let mr_avlm = &resp_avlm.into_inner().metric_results[0];
+        let mr_msprt = &resp_msprt.into_inner().metric_results[0];
+
+        // Both should have sequential results.
+        assert!(
+            mr_avlm.sequential_result.is_some(),
+            "AVLM should produce a sequential_result"
+        );
+        assert!(
+            mr_msprt.sequential_result.is_some(),
+            "mSPRT (no covariate) should produce a sequential_result"
+        );
+
+        // AVLM CI half-width should be strictly narrower than mSPRT.
+        let avlm_half_width = mr_avlm.cuped_ci_upper - mr_avlm.cuped_ci_lower;
+        let msprt_half_width = mr_msprt.cuped_ci_upper - mr_msprt.cuped_ci_lower;
+        assert!(
+            avlm_half_width < msprt_half_width,
+            "AVLM half-width ({avlm_half_width:.4}) should be narrower than mSPRT ({msprt_half_width:.4})"
+        );
+
+        // AVLM variance reduction should be substantial (ρ ≈ 0.99 → ~98% reduction).
+        assert!(
+            mr_avlm.variance_reduction_pct > 50.0,
+            "Expected >50% variance reduction from strong covariate, got {}",
+            mr_avlm.variance_reduction_pct
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // ADR-020: adaptive_n wiring — zone classification returned in AnalysisResult
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_run_analysis_adaptive_n_zone_returned() {
+        use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
+
+        let tmp = TempDir::new().unwrap();
+        let n = 20;
+        let exp_ids: Vec<&str> = vec!["exp-adaptive"; n];
+        let user_ids: Vec<String> = (0..n).map(|i| format!("u{i}")).collect();
+        let user_id_refs: Vec<&str> = user_ids.iter().map(|s| s.as_str()).collect();
+        let metric_ids: Vec<&str> = vec!["metric"; n];
+
+        // 10 control + 10 treatment, moderate effect.
+        let mut variant_ids: Vec<&str> = Vec::with_capacity(n);
+        let mut values: Vec<f64> = Vec::with_capacity(n);
+        let covariates: Vec<Option<f64>> = vec![None; n];
+
+        for i in 0..10usize {
+            variant_ids.push("control");
+            values.push(1.0 + (i as f64) * 0.1);
+        }
+        for i in 0..10usize {
+            variant_ids.push("treatment");
+            values.push(1.5 + (i as f64) * 0.1);
+        }
+
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_id_refs,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
+        write_table(tmp.path(), "metric_summaries", batch).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-adaptive".into(),
+                adaptive_sample_size_config: Some(AdaptiveSampleSizeConfig {
+                    interim_fraction: 0.5,
+                    promising_zone_lower: 0.30,
+                    favorable_zone_lower: 0.90,
+                    max_extension_factor: 2.0,
+                }),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let result = resp.into_inner();
+
+        // adaptive_n_result must be populated when config is provided.
+        let adaptive = result
+            .adaptive_n_result
+            .expect("adaptive_n_result must be set when AdaptiveSampleSizeConfig provided");
+
+        // Zone must be one of the valid classifications.
+        assert!(
+            ["favorable", "promising", "futile"].contains(&adaptive.zone.as_str()),
+            "zone must be favorable, promising, or futile; got '{}'",
+            adaptive.zone
+        );
+
+        // Conditional power must be in [0, 1].
+        assert!(
+            (0.0..=1.0).contains(&adaptive.conditional_power),
+            "conditional_power must be in [0, 1], got {}",
+            adaptive.conditional_power
+        );
+
+        // Blinded variance must be positive.
+        assert!(
+            adaptive.blinded_variance > 0.0,
+            "blinded_variance must be positive, got {}",
+            adaptive.blinded_variance
+        );
+
+        // For promising zone, recommended_n_per_arm must be positive.
+        if adaptive.zone == "promising" {
+            assert!(
+                adaptive.recommended_n_per_arm > 0.0,
+                "recommended_n_per_arm must be >0 in promising zone"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_no_adaptive_n_when_config_absent() {
+        let tmp = TempDir::new().unwrap();
+        let n = 10;
+        let exp_ids: Vec<&str> = vec!["exp-1"; n];
+        let user_ids: Vec<&str> = vec!["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"];
+        let variant_ids: Vec<&str> = vec![
+            "control", "control", "control", "control", "control",
+            "treatment", "treatment", "treatment", "treatment", "treatment",
+        ];
+        let metric_ids: Vec<&str> = vec!["ctr"; n];
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
+        let covariates: Vec<Option<f64>> = vec![None; n];
+
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_ids,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
+        write_table(tmp.path(), "metric_summaries", batch).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let result = resp.into_inner();
+        assert!(
+            result.adaptive_n_result.is_none(),
+            "adaptive_n_result must be None when no AdaptiveSampleSizeConfig is provided"
         );
     }
 }
