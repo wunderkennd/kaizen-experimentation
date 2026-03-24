@@ -1,45 +1,68 @@
 # Agent-6 Status — Phase 5
 
 **Module**: M6 UI
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
-Sprint: 5.1
-Focus: AVLM confidence sequence (ADR-015), Adaptive N zone badge (ADR-020), Feedback Loop analysis tab
-Branch: work/proud-eagle
+Sprint: 5.2
+Focus: META experiment UI components (ADR-013)
+Branch: work/nice-tiger
 
 ## Completed (this PR)
 
-- [x] **AVLM confidence sequence boundary plot** (ADR-015)
-  - `ui/src/components/charts/avlm-boundary-plot.tsx`
-  - Recharts ComposedChart with Area (confidence sequence band) + dual Line (CUPED + raw estimate)
-  - ReferenceLine at H0=0; conclusive badge when CS excludes zero
-  - Dynamically imported; legacy alpha-spending chart preserved under details fold
-  - API: `getAvlmResult(experimentId, metricId)` → AnalysisService/GetAvlmResult
-  - Types: AvlmBoundaryPoint, AvlmResult
-  - Seed data: 2 metrics for 111... (CTR conclusive look 3, watch_time inconclusive)
+- [x] **MetaExperimentConfig panel** (ADR-013)
+  - `ui/src/components/meta/MetaExperimentConfig.tsx`
+  - React.memo, shows variant-to-bandit-config mapping table (variant_id, bandit_type, arms)
+  - Columns: Variant name, Variant ID, Bandit Type (badge), Arms (pill badges), Traffic %
+  - Handles unconfigured variants (shows dash placeholders)
 
-- [x] **Adaptive N zone indicator badge** (ADR-020)
-  - `ui/src/components/adaptive-n-badge.tsx`
-  - Zones: FAVORABLE (green), PROMISING (blue), FUTILE (red), INCONCLUSIVE (gray)
-  - Mounted in experiment detail page header for RUNNING/CONCLUDED experiments
-  - API: `getAdaptiveN(experimentId)` → AnalysisService/GetAdaptiveN
+- [x] **MetaVariantSelector** (ADR-013)
+  - `ui/src/components/meta/MetaVariantSelector.tsx`
+  - React.memo, dropdown showing variants with associated bandit policy annotations
+  - Format: `{name} [{algorithm abbreviation}, {n} arms]` or `[no policy]`
+  - Props: variants, metaConfig, selectedVariantId, onChange, id, label
 
-- [x] **Extended timeline visualization** (ADR-020 PROMISING zone)
-  - `ui/src/components/adaptive-n-timeline.tsx`
-  - AreaChart with planned N and recommended N reference lines
-  - Only rendered when zone === PROMISING in results page overview tab
+- [x] **TwoLevelIPWBadge** (ADR-013)
+  - `ui/src/components/meta/TwoLevelIPWBadge.tsx`
+  - React.memo, displays compound assignment probability P(variant) × P(arm|variant)
+  - Shows 4-decimal compound value; title attribute exposes full breakdown
+  - Wired into experiment detail page header for META experiments
 
-- [x] **Feedback loop analysis tab**
-  - `ui/src/components/feedback-loop-tab.tsx`
-  - Sections: retraining timeline, pre/post comparison chart, contamination bar chart,
-    bias-corrected estimate highlight, mitigation recommendation matrix (HIGH/MEDIUM/LOW)
-  - Visible for AB/MAB/CONTEXTUAL_BANDIT experiments
-  - API: `getFeedbackLoopAnalysis(experimentId)` → AnalysisService/GetFeedbackLoopAnalysis
+- [x] **MetaConfigForm** (ADR-013)
+  - `ui/src/components/meta/MetaConfigForm.tsx`
+  - Per-variant bandit algorithm dropdown + comma-separated arms input
+  - Uses WizardContext `metaConfig` field (keyed by variantId)
 
-- [x] Tests: 14 new tests all passing, 0 regressions (499 total, 6 pre-existing skips)
-- [x] Updated recharts mocks in analysis-tabs, results-dashboard, performance test files (Area/AreaChart)
+- [x] **Wiring: experiment creation form**
+  - `EXPERIMENT_TYPE_META` added to ExperimentType union in `lib/types.ts`
+  - `META: 'Meta Experiment'` added to `TYPE_LABELS` in `lib/utils.ts`
+  - `META` added to EXPERIMENT_TYPES list in `basics-step.tsx`
+  - `type-config-step.tsx`: META case renders `<MetaConfigForm>` via Next.js `dynamic()` (code-split)
+  - `experiment-form.tsx`: META submits `metaConfig` in CreateExperimentRequest
+  - `wizard-context.tsx`: `metaConfig: MetaConfig` added to WizardState with empty default
+
+- [x] **Wiring: experiment detail page**
+  - `MetaExperimentConfig` panel shown after Variants section when `type === 'META'`
+  - `TwoLevelIPWBadge` shown in header when `type === 'META'` and `metaConfig` present
+  - Both imports added to `experiments/[id]/page.tsx`
+
+- [x] **Types**
+  - `VariantBanditConfig` interface: `{ variantId, banditType: BanditAlgorithm, arms: string[] }`
+  - `MetaConfig` interface: `{ variantBanditConfigs: VariantBanditConfig[] }`
+  - `metaConfig?: MetaConfig` added to `Experiment` and `CreateExperimentRequest`
+
+- [x] **Validation**
+  - `validateMetaConfig()` in `lib/validation.ts`
+  - META case added to `validateTypeConfig()` dispatcher
+  - Validates: at least one config defined; each config has at least one arm
+
+- [x] Tests: 21 new tests all passing, 0 regressions (520 total, 6 pre-existing skips)
+  - MetaExperimentConfig: 6 tests
+  - MetaVariantSelector: 5 tests
+  - TwoLevelIPWBadge: 4 tests
+  - validateMetaConfig: 4 tests
+  - META wizard integration: 2 tests
 
 ## Blocked
 
@@ -56,7 +79,20 @@ None.
 - [x] /portfolio/provider-health page (ADR-014)
   - Time series charts, provider filter, MSW mock, 8 tests
 
+- [x] AVLM confidence sequence boundary plot (ADR-015)
+  - `ui/src/components/charts/avlm-boundary-plot.tsx`
+
+- [x] Adaptive N zone indicator badge (ADR-020)
+  - `ui/src/components/adaptive-n-badge.tsx`
+
+- [x] Extended timeline visualization (ADR-020 PROMISING zone)
+  - `ui/src/components/adaptive-n-timeline.tsx`
+
+- [x] Feedback loop analysis tab
+  - `ui/src/components/feedback-loop-tab.tsx`
+
 ## Dependencies (wire-ready, awaiting backend)
 
 - Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis
+- Agent-1/4: MetaExperiment assignment probability endpoint (for live TwoLevelIPWBadge data)
 - Agent-2: Feedback loop retraining event data flow

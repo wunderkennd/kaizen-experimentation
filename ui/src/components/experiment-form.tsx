@@ -95,7 +95,7 @@ function WizardOrchestrator({ onSubmit }: ExperimentFormProps) {
       : undefined;
 
     // Build type-specific config
-    const typeConfigs: Pick<CreateExperimentRequest, 'interleavingConfig' | 'sessionConfig' | 'banditExperimentConfig' | 'qoeConfig'> = {};
+    const typeConfigs: Pick<CreateExperimentRequest, 'interleavingConfig' | 'sessionConfig' | 'banditExperimentConfig' | 'qoeConfig' | 'metaConfig'> = {};
     switch (state.type) {
       case 'INTERLEAVING':
         typeConfigs.interleavingConfig = {
@@ -115,6 +115,9 @@ function WizardOrchestrator({ onSubmit }: ExperimentFormProps) {
         break;
       case 'PLAYBACK_QOE':
         typeConfigs.qoeConfig = state.qoeConfig;
+        break;
+      case 'META':
+        typeConfigs.metaConfig = state.metaConfig;
         break;
     }
 
