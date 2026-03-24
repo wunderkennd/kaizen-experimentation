@@ -1,19 +1,39 @@
 # Agent-4 Status — Phase 5
 
 **Module**: M4a Analysis + M4b Bandit
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-bear
+Branch: work/nice-elephant
 
 ## In Progress
 
-- [ ] ADR-012 LP constraints
+_None._
 
 ## Completed (Phase 5) — latest first
+
+- [x] **ADR-012 LP constraint post-processing layer** (2026-03-24, work/nice-elephant)
+  - `crates/experimentation-bandit/src/lp_constraints.rs` (new, ~600 LOC)
+  - `ConstraintSolver`: holds per-arm bounds, general linear constraints, EMA impression tracker
+  - **Per-arm only path**: O(K × 64) bisection on the KL Lagrange multiplier C where
+    `q_i = clip(r_i / C, lo_i, hi_i)` and C is found via log-space bisection (64 steps → machine precision)
+  - **General linear path**: Dual gradient ascent with `r_i = p_i × exp(−λᵀ a_i)`; inner
+    subproblem reduces to per-arm bisection; step = `1 / max|A_ij|` for stable convergence;
+    converges to 1e-7 in ≤250 iterations (<50μs for K≤20)
+  - `ConstraintResult`: `Feasible { adjusted }` / `Infeasible { raw }` — raw p fallback on
+    infeasible polytope or non-convergence
+  - `ImpressionTracker`: EMA-decayed impression counts per arm (alpha configurable);
+    `record(&mut self, arm_id)` updates on LMAX thread; `fractions()` for audit
+  - **IPW validity**: adjusted q in `Feasible` variant is the correct `assignment_probability`
+    for downstream IPW; `Infeasible` raw fallback also correctly logged
+  - Serializable via serde_json for RocksDB snapshot alongside policy posteriors
+  - 20 unit tests + 2 proptest invariants; all 68 bandit crate tests green
+  - Integration test: `integration_all_constraints_satisfied` — 5 arms, per-arm bounds on
+    2 arms, 2 general linear constraints (cap + floor); verifies Σq=1, all bounds, all
+    linear constraints satisfied simultaneously
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`

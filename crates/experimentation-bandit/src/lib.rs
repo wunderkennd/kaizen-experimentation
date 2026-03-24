@@ -10,6 +10,7 @@
 
 pub mod cold_start;
 pub mod linucb;
+pub mod lp_constraints;
 #[cfg(feature = "gpu")]
 pub mod neural;
 pub mod policy;
