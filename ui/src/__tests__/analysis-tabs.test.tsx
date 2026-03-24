@@ -40,6 +40,7 @@ vi.mock('recharts', async () => {
     ComposedChart: Passthrough,
     BarChart: Passthrough,
     AreaChart: Passthrough,
+    LineChart: Passthrough,
     Area: Noop,
     Bar: Noop,
     Line: Noop,
