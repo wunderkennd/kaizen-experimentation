@@ -140,7 +140,7 @@ fn regular_balanced(block_index: i64, cluster_value: &str, experiment_id: &str) 
 fn randomized(block_index: i64, cluster_value: &str, experiment_id: &str) -> bool {
     let seed = format!("{experiment_id}\x00{cluster_value}\x00{block_index}");
     let hash = experimentation_hash::murmur3::murmurhash3_x86_32(seed.as_bytes(), 0);
-    hash % 2 != 0
+    !hash.is_multiple_of(2)
 }
 
 /// Validate a [`SwitchbackConfig`] against the M5 STARTING-phase constraints.
