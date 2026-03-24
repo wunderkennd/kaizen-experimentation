@@ -267,13 +267,13 @@ impl SlatePolicy {
         reward: f64,
     ) {
         let n = slate.len().min(self.n_slots);
-        for pos in 0..n {
+        for (pos, arm_id) in slate.iter().enumerate().take(n) {
             let slot_reward = if clicked_position == Some(pos) {
                 (reward * position_weight(pos)).clamp(0.0, 1.0)
             } else {
                 0.0
             };
-            let arm_id = slate[pos].clone();
+            let arm_id = arm_id.clone();
             if let Some(arm) = self.slot_arms[pos].get_mut(&arm_id) {
                 arm.update(slot_reward);
             }
