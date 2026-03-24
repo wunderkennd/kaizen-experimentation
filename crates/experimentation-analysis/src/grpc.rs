@@ -12,15 +12,17 @@ use experimentation_proto::experimentation::analysis::v1::{
     AdaptiveNInterimResult, AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult,
     GetAnalysisResultRequest, GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest,
     GetNoveltyAnalysisRequest, GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
-    GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
-    InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
-    PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
-    SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
+    GetPortfolioPowerAnalysisRequest, GetSwitchbackAnalysisRequest,
+    GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult, InterleavingAnalysisResult,
+    IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
+    PositionAnalysis as ProtoPositionAnalysis, PortfolioImpactParams, PortfolioPowerAnalysisResult,
+    PortfolioTrafficAllocation, RunAnalysisRequest, SegmentResult, SequentialResult,
+    SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
     SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
 use experimentation_stats::{
-    adaptive_n, avlm, cate, clustering, cuped, evalue, interference, interleaving, ipw, novelty, srm,
+    adaptive_n, avlm, cate, clustering, cuped, evalue, interference, interleaving, ipw, novelty, portfolio, srm,
     switchback, synthetic_control, ttest,
 };
 
@@ -1050,6 +1052,82 @@ impl AnalysisService for AnalysisServiceHandler {
         Err(Status::unimplemented(
             "GetPortfolioAllocation not yet implemented (ADR-019)",
         ))
+    }
+
+    async fn get_portfolio_power_analysis(
+        &self,
+        request: Request<GetPortfolioPowerAnalysisRequest>,
+    ) -> Result<Response<PortfolioPowerAnalysisResult>, Status> {
+        let req = request.into_inner();
+
+        // Validate and map proto → stats types.
+        let portfolio_params = portfolio::PortfolioParams {
+            prior_win_rate: req.prior_win_rate,
+            fdr_target: req.fdr_target,
+            target_power: req.target_power,
+        };
+
+        let impact_proto = req.impact_params.unwrap_or(PortfolioImpactParams {
+            observed_lift_relative: 0.0,
+            annual_baseline_per_user: 0.0,
+            total_users: 1,
+            experiment_duration_days: 1.0,
+            treatment_fraction: 0.5,
+        });
+        let impact_params = portfolio::AnnualizedImpactParams {
+            observed_lift_relative: impact_proto.observed_lift_relative,
+            annual_baseline_per_user: impact_proto.annual_baseline_per_user,
+            total_users: impact_proto.total_users.max(1) as u64,
+            experiment_duration_days: impact_proto.experiment_duration_days,
+            treatment_fraction: impact_proto.treatment_fraction,
+        };
+
+        let experiments: Vec<portfolio::ExperimentSpec> = req
+            .experiments
+            .iter()
+            .map(|s| portfolio::ExperimentSpec {
+                experiment_id: s.experiment_id.clone(),
+                mde_relative: s.mde_relative,
+                baseline_mean: s.baseline_mean,
+                baseline_variance: s.baseline_variance,
+                n_variants: (s.n_variants as usize).max(2),
+            })
+            .collect();
+
+        if experiments.is_empty() {
+            return Err(Status::invalid_argument(
+                "at least one experiment spec is required for traffic allocation",
+            ));
+        }
+
+        let traffic_input = portfolio::TrafficAllocationInput {
+            experiments,
+            available_traffic_fraction: req.available_traffic_fraction,
+            min_power: req.target_power,
+            alpha: req.fdr_target, // overridden inside portfolio_power_analysis
+        };
+
+        let rec =
+            portfolio::portfolio_power_analysis(&portfolio_params, &impact_params, &traffic_input)
+                .map_err(map_stats_error)?;
+
+        let proto_allocs: Vec<PortfolioTrafficAllocation> = rec
+            .traffic_allocations
+            .iter()
+            .map(|a| PortfolioTrafficAllocation {
+                experiment_id: a.experiment_id.clone(),
+                recommended_traffic_fraction: a.recommended_traffic_fraction,
+                required_n_per_arm: a.required_n_per_arm as i64,
+            })
+            .collect();
+
+        Ok(Response::new(PortfolioPowerAnalysisResult {
+            optimal_alpha: rec.optimal_alpha,
+            annualized_impact: rec.annualized_impact,
+            traffic_allocations: proto_allocs,
+            expected_portfolio_fdr: rec.expected_portfolio_fdr,
+            computed_at: Some(now_timestamp()),
+        }))
     }
 }
 

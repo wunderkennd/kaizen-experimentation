@@ -31,6 +31,8 @@ service AnalysisService {
   // Called by M5 to maximize portfolio-level information gain within a traffic budget.
   // M4a uses power curves and accumulated effect estimates for portfolio optimization.
   rpc GetPortfolioAllocation(GetPortfolioAllocationRequest) returns (GetPortfolioAllocationResponse);
+  // Portfolio power analysis: optimal alpha, annualized impact, traffic allocation (ADR-019).
+  rpc GetPortfolioPowerAnalysis(GetPortfolioPowerAnalysisRequest) returns (PortfolioPowerAnalysisResult);
 }
 
 message RunAnalysisRequest {
@@ -318,4 +320,73 @@ message GetPortfolioAllocationResponse {
   // Sum of all allocated_fraction values. Will be <= total_traffic_budget.
   double total_allocated = 2;
   google.protobuf.Timestamp computed_at = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio power analysis (ADR-019)
+// ---------------------------------------------------------------------------
+
+// Request for portfolio-level power analysis.
+message GetPortfolioPowerAnalysisRequest {
+  // Historical win rate across the experiment program. Must be in (0, 1).
+  double prior_win_rate = 1;
+  // Target false discovery rate for the portfolio (e.g., 0.05).
+  double fdr_target = 2;
+  // Target statistical power per experiment (e.g., 0.80).
+  double target_power = 3;
+  // Parameters for annualised impact projection.
+  PortfolioImpactParams impact_params = 4;
+  // Per-experiment specifications for traffic allocation.
+  repeated PortfolioExperimentSpec experiments = 5;
+  // Fraction of total traffic available for all experiments combined.
+  double available_traffic_fraction = 6;
+}
+
+// Annualised impact projection parameters.
+message PortfolioImpactParams {
+  // Relative lift observed during the experiment (e.g., 0.02 = 2%).
+  double observed_lift_relative = 1;
+  // Baseline value of the primary metric per user per year.
+  double annual_baseline_per_user = 2;
+  // Total addressable user count.
+  int64 total_users = 3;
+  // Duration of the experiment in days.
+  double experiment_duration_days = 4;
+  // Fraction of total traffic assigned to the treatment arm(s).
+  double treatment_fraction = 5;
+}
+
+// Per-experiment specification for the traffic allocation optimiser.
+message PortfolioExperimentSpec {
+  string experiment_id = 1;
+  // Minimum detectable effect as a relative lift (e.g., 0.02 = 2%).
+  double mde_relative = 2;
+  // Expected mean of the primary metric in the control arm.
+  double baseline_mean = 3;
+  // Variance of the primary metric.
+  double baseline_variance = 4;
+  // Total number of variants including control (>= 2).
+  int32 n_variants = 5;
+}
+
+// Portfolio power analysis result (ADR-019).
+message PortfolioPowerAnalysisResult {
+  // Recommended per-experiment significance threshold. In (0, 1).
+  double optimal_alpha = 1;
+  // Projected annualised business impact (same unit as annual_baseline_per_user × total_users).
+  double annualized_impact = 2;
+  // Per-experiment traffic allocations.
+  repeated PortfolioTrafficAllocation traffic_allocations = 3;
+  // Expected portfolio-level FDR at the recommended alpha.
+  double expected_portfolio_fdr = 4;
+  google.protobuf.Timestamp computed_at = 5;
+}
+
+// Traffic allocation recommendation for one experiment.
+message PortfolioTrafficAllocation {
+  string experiment_id = 1;
+  // Fraction of total user traffic to assign (treatment + control combined).
+  double recommended_traffic_fraction = 2;
+  // Minimum users per arm to achieve min_power at optimal_alpha.
+  int64 required_n_per_arm = 3;
 }
