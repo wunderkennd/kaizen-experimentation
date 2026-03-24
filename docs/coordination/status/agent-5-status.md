@@ -1,34 +1,36 @@
 # Agent-5 Status — Phase 5
 
-**Module**: M5 Management
-**Last updated**: 2026-03-23
+**Module**: M5 Management + M1 Assignment (ADR-013)
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
-Sprint: 5.2
-Focus: ADR-020 Adaptive Sample Size
-Branch: work/proud-bear
-PR: https://github.com/wunderkennd/kaizen-experimentation/pull/227
+Sprint: 5.3
+Focus: ADR-013 META Experiment Type
+Branch: work/calm-eagle
+PR: pending
 
 ## In Progress
 
-- [x] ADR-020 Adaptive Sample Size (PR #227, pending merge)
-  - Blocked by: Agent-4 — `ComputeConditionalPower` M4a RPC needed for live wiring
-  - Statistical math complete; M5 scheduler complete; M4a delegation interface defined
+- [x] ADR-013 META experiment type — COMPLETE, PR being created
 
 ## Completed (Phase 5)
 
-- [x] ADR-020 Phase 1 — Rust stats module + M5 scheduler (PR #227)
+- [x] ADR-020 Adaptive Sample Size (PR #227, merged)
   - `crates/experimentation-stats/src/adaptive_n.rs`: blinded_pooled_variance, conditional_power, zone_classify, gst_reallocate_spending, required_n_for_power, run_interim_analysis
   - `sql/migrations/008_adaptive_sample_size_audit.sql`
   - `services/management/internal/adaptive/`: Trigger, Processor, ConditionalPowerClient interface
 
+- [x] ADR-013 META Experiment Type (PR #229)
+  - **M5 Management (Go)**: `"META"` type in convert maps; `validateMetaExperimentConfig` (base_algorithm, variant_objectives, reward_weights sum, variant_id membership); `validateMetaForStart` lifecycle gate; 8 test cases
+  - **M1 Assignment (Rust)**: `MetaExperimentConfig`/`MetaVariantObjective` structs in config; `assign_meta` method with compound policy key `{exp_id}:{variant_id}`, two-level IPW `P(variant)*P(arm|variant)`, M4b SelectArm delegation, uniform random fallback; 5 integration tests
+  - **Infrastructure**: Created missing `gen/go/go.mod`; fixed test file syntax (META cases were outside slice literal)
+
 ## Blocked
 
-- **Agent-4 dependency**: `ConditionalPowerClient` interface at `services/management/internal/adaptive/processor.go:62` needs a gRPC wrapper around M4a's `ComputeConditionalPower` RPC. The contract is defined in the interface — Agent-4 implements the server side.
+None.
 
 ## Next Up
 
-- ADR-013 META experiment type (M5 STARTING validation for MetaExperimentConfig)
 - ADR-018 Phase 2: e-LOND OnlineFdrController singleton + PostgreSQL persistence
 - ADR-019 Portfolio optimization: ExperimentLearning classification, traffic allocation optimizer

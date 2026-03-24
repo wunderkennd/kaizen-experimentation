@@ -55,6 +55,7 @@ func validateVariants(exp *commonv1.Experiment) *connect.Error {
 	expType := exp.GetType()
 
 	// Bandits can have fewer than 2 variants (arms defined in BanditConfig).
+	// META experiments use variants to partition reward objectives; treated like regular variants.
 	isBandit := expType == commonv1.ExperimentType_EXPERIMENT_TYPE_MAB ||
 		expType == commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT
 
@@ -90,6 +91,8 @@ func validateVariants(exp *commonv1.Experiment) *connect.Error {
 	}
 
 	// Control variant requirement depends on type.
+	// META experiments do not require a control variant — every variant is a
+	// distinct reward objective parameterization (ADR-013).
 	requiresControl := expType == commonv1.ExperimentType_EXPERIMENT_TYPE_AB ||
 		expType == commonv1.ExperimentType_EXPERIMENT_TYPE_MULTIVARIATE ||
 		expType == commonv1.ExperimentType_EXPERIMENT_TYPE_INTERLEAVING ||
@@ -138,6 +141,61 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 			ga != commonv1.GuardrailAction_GUARDRAIL_ACTION_ALERT_ONLY {
 			return connect.NewError(connect.CodeInvalidArgument,
 				fmt.Errorf("cumulative holdout experiments must use ALERT_ONLY guardrail action"))
+		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_META:
+		if err := validateMetaExperimentConfig(exp); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateMetaExperimentConfig validates MetaExperimentConfig for META experiment type (ADR-013).
+// Checks that variant_objectives is non-empty and all variant_ids reference declared variants.
+func validateMetaExperimentConfig(exp *commonv1.Experiment) *connect.Error {
+	cfg := exp.GetMetaExperimentConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config is required for META type"))
+	}
+	if cfg.GetBaseAlgorithm() == commonv1.BanditAlgorithm_BANDIT_ALGORITHM_UNSPECIFIED {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config.base_algorithm must not be UNSPECIFIED"))
+	}
+	objectives := cfg.GetVariantObjectives()
+	if len(objectives) == 0 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config.variant_objectives must be non-empty"))
+	}
+
+	// Build a set of declared variant IDs for fast lookup.
+	variantSet := make(map[string]struct{}, len(exp.GetVariants()))
+	for _, v := range exp.GetVariants() {
+		variantSet[v.GetVariantId()] = struct{}{}
+	}
+
+	for i, obj := range objectives {
+		if obj.GetVariantId() == "" {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id must be non-empty", i))
+		}
+		if _, ok := variantSet[obj.GetVariantId()]; !ok {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id %q is not declared in variants",
+					i, obj.GetVariantId()))
+		}
+		if len(obj.GetRewardWeights()) == 0 {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d] must have at least one reward_weight", i))
+		}
+		var weightSum float64
+		for _, w := range obj.GetRewardWeights() {
+			weightSum += w
+		}
+		if math.Abs(weightSum-1.0) > 0.001 {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d] reward_weights must sum to 1.0, got %f",
+					i, weightSum))
 		}
 	}
 	return nil

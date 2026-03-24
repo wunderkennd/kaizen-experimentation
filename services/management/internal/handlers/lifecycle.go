@@ -585,6 +585,10 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 		return s.validateQoeMetricsForStart(ctx, experimentID)
 	}
 
+	if expRow.Type == "META" {
+		return s.validateMetaForStart(ctx, experimentID)
+	}
+
 	if expRow.Type == "CUMULATIVE_HOLDOUT" {
 		trafficPct := extractTrafficPercentage(expRow.TypeConfig)
 		if trafficPct < 0.01 || trafficPct > 0.05 {
@@ -677,6 +681,66 @@ func extractTrafficPercentage(typeConfig json.RawMessage) float64 {
 		return 1.0
 	}
 	return pct
+}
+
+// validateMetaForStart validates MetaExperimentConfig during the STARTING phase (ADR-013).
+// Checks that variant_objectives is non-empty and all variant_ids reference declared variants.
+func (s *ExperimentService) validateMetaForStart(ctx context.Context, experimentID string) error {
+	expRow, variants, _, err := s.store.GetByID(ctx, experimentID)
+	if err != nil {
+		return internalError("read experiment for META validation", err)
+	}
+
+	objectives := extractMetaVariantObjectives(expRow.TypeConfig)
+	if len(objectives) == 0 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("META experiment %q: meta_experiment_config.variant_objectives must be non-empty", experimentID))
+	}
+
+	// Build a set of declared variant IDs.
+	variantSet := make(map[string]struct{}, len(variants))
+	for _, v := range variants {
+		variantSet[v.VariantID] = struct{}{}
+	}
+
+	for i, vid := range objectives {
+		if _, ok := variantSet[vid]; !ok {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("META experiment %q: variant_objectives[%d].variant_id %q not found in declared variants",
+					experimentID, i, vid))
+		}
+	}
+	return nil
+}
+
+// extractMetaVariantObjectives reads the ordered list of variant_ids from the
+// meta_experiment_config nested in the experiment's type_config JSONB.
+// Returns nil if the field is absent or malformed.
+func extractMetaVariantObjectives(typeConfig json.RawMessage) []string {
+	if len(typeConfig) == 0 {
+		return nil
+	}
+	var tc map[string]json.RawMessage
+	if err := json.Unmarshal(typeConfig, &tc); err != nil {
+		return nil
+	}
+	raw, ok := tc["meta_experiment_config"]
+	if !ok {
+		return nil
+	}
+	var mc struct {
+		VariantObjectives []struct {
+			VariantID string `json:"variant_id"`
+		} `json:"variant_objectives"`
+	}
+	if err := json.Unmarshal(raw, &mc); err != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(mc.VariantObjectives))
+	for _, obj := range mc.VariantObjectives {
+		ids = append(ids, obj.VariantID)
+	}
+	return ids
 }
 
 // validateQoeMetricsForStart checks that at least one metric in the experiment's
