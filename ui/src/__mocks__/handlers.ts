@@ -8,6 +8,7 @@ import {
   SEED_AVLM_RESULTS, SEED_ADAPTIVE_N_RESULTS, SEED_FEEDBACK_LOOP_RESULTS,
   SEED_ONLINE_FDR_STATES,
   SEED_PORTFOLIO_ALLOCATION,
+  SEED_SLATE_OPE_RESULTS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -17,6 +18,7 @@ const METRICS_SVC = '*/experimentation.metrics.v1.MetricComputationService';
 const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
 const BANDIT_SVC = '*/experimentation.bandit.v1.BanditPolicyService';
 const FLAGS_SVC = '*/experimentation.flags.v1.FeatureFlagService';
+const ASSIGNMENT_SVC = '*/experimentation.assignment.v1.AssignmentService';
 
 // --- Mock auth enforcement ---
 let _mockAuthEnabled = false;
@@ -839,8 +841,37 @@ export const handlers = [
     return HttpResponse.json(result);
   }),
 
+  // GetSlateOpe (ADR-016)
+  http.post(`${ANALYSIS_SVC}/GetSlateOpe`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_SLATE_OPE_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No slate OPE result found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
   // GetPortfolioAllocation (ADR-019)
   http.post(`${MGMT_SVC}/GetPortfolioAllocation`, () => {
     return HttpResponse.json(SEED_PORTFOLIO_ALLOCATION);
+  }),
+
+  // GetSlateAssignment (ADR-016) — on Assignment service
+  http.post(`${ASSIGNMENT_SVC}/GetSlateAssignment`, async ({ request }) => {
+    const body = await request.json() as {
+      experimentId: string;
+      userId: string;
+      candidateItemIds: string[];
+    };
+    const { candidateItemIds } = body;
+    const nSlots = Math.min(10, candidateItemIds.length);
+    // Deterministic mock: pick first nSlots items, assign geometric probabilities
+    const slateItemIds = candidateItemIds.slice(0, nSlots);
+    const slotProbabilities = slateItemIds.map((_, i) => parseFloat((0.9 ** i * 0.8).toFixed(4)));
+    const slateProbability = slotProbabilities.reduce((acc, p) => acc * p, 1);
+    return HttpResponse.json({ slateItemIds, slotProbabilities, slateProbability });
   }),
 ];

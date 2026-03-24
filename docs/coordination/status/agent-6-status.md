@@ -11,6 +11,9 @@ Branch: work/fancy-platypus
 Sprint: 5.2
 Focus: Portfolio optimization dashboard (ADR-019) + Provider Health dashboard (ADR-014)
 Branch: work/gentle-panda, work/gentle-penguin
+Sprint: 5.4
+Focus: Slate Bandit UI components (ADR-016)
+Branch: work/silly-deer
 
 Focus: ADR-011 multi-objective bandit reward visualization, ADR-012 LP constraint status table
 Branch: work/fancy-koala
@@ -67,6 +70,63 @@ None.
 - Portfolio index page /portfolio (ADR-019)
 - Enhanced bandit dashboard (ADR-016 slate bandit visualization)
 
+## Completed (this sprint)
+
+- [x] **SlateResultsPanel** (ADR-016)
+  - `ui/src/components/slate/SlateResultsPanel.tsx`
+  - Ranked ordered list with position badges (1..n) and per-slot probability badges
+  - Color-coded probability bands: green ≥80%, blue ≥60%, indigo ≥40%, purple ≥20%, gray <20%
+  - Shows overall slate probability in scientific notation (slateProbability)
+  - `React.memo` wrapped
+
+- [x] **SlatePositionBiasChart** (ADR-016)
+  - `ui/src/components/slate/SlatePositionBiasChart.tsx`
+  - Recharts BarChart showing per-position CTR from LIPS OPE estimate
+  - Fetches `getSlateOpe(experimentId)` from AnalysisService/GetSlateOpe
+  - Position opacity gradient (deeper positions appear fainter)
+  - Shows policy value estimate from LIPS
+  - `React.memo` wrapped, dynamically imported in experiment detail page
+
+- [x] **SlateAssignmentForm** (ADR-016)
+  - `ui/src/components/slate/SlateAssignmentForm.tsx`
+  - Candidate item picker (textarea, comma-separated)
+  - n_slots selector (1–20)
+  - User ID field
+  - Submit → calls AssignmentService/GetSlateAssignment
+  - Renders SlateResultsPanel on successful response
+  - Client-side validation: empty candidates, n_slots > candidate count
+  - `React.memo` wrapped
+
+- [x] **Slate tab on experiment detail page**
+  - `ui/src/app/experiments/[id]/page.tsx` — Slate section added
+  - Only visible when `experiment.type === 'SLATE'`
+  - Tab label "Slate" with tab-nav chrome
+  - Two-column layout: SlateAssignmentForm | SlatePositionBiasChart
+  - Both components code-split via `next/dynamic`
+
+- [x] **New types** (ADR-016)
+  - `SlateAssignmentResponse`, `SlatePositionBiasPoint`, `SlateOpeResult` in `types.ts`
+  - Added `SLATE` to `ExperimentType` union
+  - Added `SLATE: 'Slate Bandit'` to `TYPE_LABELS` in `utils.ts`
+
+- [x] **API functions** (ADR-016)
+  - `getSlateAssignment()` → AssignmentService/GetSlateAssignment
+  - `getSlateOpe()` → AnalysisService/GetSlateOpe
+  - New `ASSIGNMENT_URL` / `ASSIGNMENT_SVC` constants
+
+- [x] **Seed data and MSW handlers**
+  - Seed experiment `cccccccc-cccc-cccc-cccc-cccccccccccc` (homepage_slate_v1, RUNNING)
+  - `SEED_SLATE_OPE_RESULTS` with 10-position cascade bias data
+  - MSW handlers: `GetSlateOpe` (ANALYSIS_SVC), `GetSlateAssignment` (ASSIGNMENT_SVC)
+
+- [x] **Tests** (17 new tests, 0 regressions)
+  - `ui/src/__tests__/slate-bandit.test.tsx`
+  - SlateResultsPanel: 5 tests (items, positions, probability badges, overall prob, testid)
+  - SlatePositionBiasChart: 4 tests (loading, chart, policy value, no-data message)
+  - SlateAssignmentForm: 5 tests (form fields, testid, submit success, validation errors)
+  - ExperimentDetailPage integration: 3 tests (tab visible for SLATE, hidden for AB)
+  - Fixed 4 affected tests in proto-wire-format, experiment-list, monitoring
+
 ## Completed (Phase 5 — previous PRs)
 
 - [x] **AVLM confidence sequence boundary plot** (ADR-015)
@@ -76,7 +136,6 @@ None.
   - Dynamically imported; legacy alpha-spending chart preserved under details fold
   - API: `getAvlmResult(experimentId, metricId)` → AnalysisService/GetAvlmResult
   - Types: AvlmBoundaryPoint, AvlmResult
-## Completed (this sprint)
 
 - [x] **Portfolio optimization dashboard** (ADR-019)
   - `ui/src/app/portfolio/page.tsx` — `PortfolioDashboard` page with code-split, data fetch, error/loading states
@@ -108,7 +167,6 @@ None.
   - `ui/src/components/feedback-loop-tab.tsx`
   - Visible for AB/MAB/CONTEXTUAL_BANDIT experiments
   - API: `getFeedbackLoopAnalysis(experimentId)` → AnalysisService/GetFeedbackLoopAnalysis
-## Completed (previous PRs)
 
 - [x] **ADR-011 Multi-objective reward composition chart** (2026-03-24, work/fancy-koala)
   - `ui/src/components/RewardCompositionChart.tsx`
@@ -162,7 +220,6 @@ None.
 ## Next Up
 
 - E-value display (ADR-018) — pending Agent-4 GetEvalueResult endpoint
-- Enhanced bandit dashboard (ADR-016 slate bandit visualization)
 
 ## Completed (Phase 5 — prior sprints)
 
@@ -174,18 +231,14 @@ None.
   - `ui/src/components/feedback-loop-tab.tsx`
 - [x] /portfolio/provider-health page (ADR-014)
   - Time series charts, provider filter, MSW mock, 8 tests
-- [x] AVLM confidence sequence boundary plot (ADR-015)
-- [x] Adaptive N zone indicator badge + extended timeline (ADR-020)
-- [x] Feedback loop analysis tab (ADR-019 interference)
 
 ## Dependencies (wire-ready, awaiting backend)
 
-- Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis, GetOnlineFdrState
+- Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis, GetOnlineFdrState, GetSlateOpe
+- Agent-1: AssignmentService/GetSlateAssignment
 - Agent-2: Feedback loop retraining event data flow
 - Agent-5: `ExperimentManagementService/GetPortfolioAllocation` gRPC endpoint
   - Request: `{}` (empty)
   - Response: `{ experiments: PortfolioExperiment[], totalAllocatedPct: float, computedAt: timestamp }`
   - `PortfolioExperiment` fields: `experiment_id`, `name`, `effect_size`, `variance`, `allocated_traffic_pct`, `priority_score`, `user_segments`
-
 - Agent-4: BanditPolicyService objectiveBreakdowns and constraintStatuses in GetBanditDashboard response
-- Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis

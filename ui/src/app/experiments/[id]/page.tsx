@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import type { Experiment, Variant } from '@/lib/types';
 import { getExperiment, updateExperiment, startExperiment, concludeExperiment, archiveExperiment, isPermissionDenied } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -20,6 +21,15 @@ import { ConcludingProgress } from '@/components/concluding-progress';
 import { LayerAllocationChart } from '@/components/layer-allocation-chart';
 import { AdaptiveNBadge } from '@/components/adaptive-n-badge';
 import { CopyButton } from '@/components/copy-button';
+
+const SlateAssignmentForm = dynamic(
+  () => import('@/components/slate/SlateAssignmentForm').then((m) => ({ default: m.SlateAssignmentForm })),
+  { ssr: false },
+);
+const SlatePositionBiasChart = dynamic(
+  () => import('@/components/slate/SlatePositionBiasChart').then((m) => ({ default: m.SlatePositionBiasChart })),
+  { ssr: false },
+);
 
 export default function ExperimentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -252,6 +262,29 @@ export default function ExperimentDetailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+      )}
+
+      {/* Slate Tab — only shown for SLATE experiment type */}
+      {experiment.type === 'SLATE' && (
+        <section className="mb-6" data-testid="slate-tab">
+          <div className="mb-3 border-b border-gray-200">
+            <nav className="-mb-px flex">
+              <span className="border-b-2 border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-600">
+                Slate
+              </span>
+            </nav>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              <SlateAssignmentForm experimentId={experiment.experimentId} />
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              <SlatePositionBiasChart experimentId={experiment.experimentId} />
+            </div>
           </div>
         </section>
       )}

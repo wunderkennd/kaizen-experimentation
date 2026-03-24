@@ -52,9 +52,9 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     // State labels appear in both filter dropdown and table badges.
-    // Table badges: 3 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 2 CONCLUDED, 1 ARCHIVED
-    // Dropdown options add 1 of each. So Running = 3+1=4, Draft = 2+1=3, etc.
-    expect(screen.getAllByText('Running').length).toBe(4);
+    // Table badges: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 2 CONCLUDED, 1 ARCHIVED
+    // Dropdown options add 1 of each. So Running = 4+1=5, Draft = 2+1=3, etc.
+    expect(screen.getAllByText('Running').length).toBe(5);
     expect(screen.getAllByText('Draft').length).toBe(3);
     expect(screen.getAllByText('Starting').length).toBe(2);
     expect(screen.getAllByText('Concluding').length).toBe(2);
@@ -187,7 +187,7 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     const count = screen.getByTestId('filter-count');
-    expect(count).toHaveTextContent('Showing 10 of 10 experiments');
+    expect(count).toHaveTextContent('Showing 11 of 11 experiments');
   });
 
   it('no-match empty state displays with clear button', async () => {
@@ -225,11 +225,10 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     const rows = screen.getAllByRole('row');
-    // Most recent createdAt is onboarding_flow_v2 (2026-03-03) or cold_start_bandit (2026-03-02)
-    // Actually: adaptive_bitrate_v3 is 2026-03-01, cold_start_bandit is 2026-03-02, onboarding_flow_v2 is 2026-03-03
-    // So descending: onboarding_flow_v2 should be first
+    // Most recent createdAt is homepage_slate_v1 (2026-03-20), then onboarding_flow_v2 (2026-03-03)
+    // So descending: homepage_slate_v1 should be first
     const firstDataRow = rows[1];
-    expect(within(firstDataRow).getByText('onboarding_flow_v2')).toBeInTheDocument();
+    expect(within(firstDataRow).getByText('homepage_slate_v1')).toBeInTheDocument();
   });
 
   // --- Results link tests ---

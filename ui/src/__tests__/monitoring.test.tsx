@@ -51,9 +51,9 @@ describe('Monitoring Page', () => {
   it('shows summary cards with experiment counts by state', async () => {
     await renderAndWait();
 
-    // Seed data: 3 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 2 CONCLUDED, 1 ARCHIVED
+    // Seed data: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 2 CONCLUDED, 1 ARCHIVED
     const runningCard = screen.getByTestId('summary-card-RUNNING');
-    expect(within(runningCard).getByTestId('count-RUNNING')).toHaveTextContent('3');
+    expect(within(runningCard).getByTestId('count-RUNNING')).toHaveTextContent('4');
 
     const draftCard = screen.getByTestId('summary-card-DRAFT');
     expect(within(draftCard).getByTestId('count-DRAFT')).toHaveTextContent('2');
