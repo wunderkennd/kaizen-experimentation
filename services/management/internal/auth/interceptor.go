@@ -28,6 +28,7 @@ var procedurePermissions = map[string]Role{
 	managementv1connect.ExperimentManagementServiceGetLayerAllocationsProcedure:        RoleViewer,
 	managementv1connect.ExperimentManagementServiceListSurrogateModelsProcedure:        RoleViewer,
 	managementv1connect.ExperimentManagementServiceGetSurrogateCalibrationProcedure:    RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetPortfolioAllocationProcedure:     RoleViewer,
 
 	// Analyst operations
 	managementv1connect.ExperimentManagementServiceCreateMetricDefinitionProcedure:        RoleAnalyst,
