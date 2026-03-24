@@ -12,9 +12,27 @@ Branch: work/eager-bear, work/happy-squirrel
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
 Branch: work/clever-deer
 
+Focus: ADR-023 Synthetic Control Methods
+Branch: work/happy-rabbit
+
 ## In Progress
 
-- [ ] ADR-012 LP constraints
+_None._
+
+## Completed (this sprint)
+
+- [x] **ADR-023 — Synthetic Control Methods** (2026-03-24, work/happy-rabbit)
+  - `crates/experimentation-stats/src/synthetic_control.rs` (~800 LOC)
+  - `SyntheticControlResult { method, att, ci_lower, ci_upper, donor_weights, placebo_p_value }`
+  - `SyntheticControlInput` + `synthetic_control(input, method)` dispatch API
+  - **Classic SCM**: projected gradient descent on simplex (Duchi O(n log n) projection), adaptive lr
+  - **Augmented SCM**: classic weights + Ridge bias correction (auto-lambda), conformal CI from pre-treatment residual SE
+  - **Synthetic DiD**: time weights + unit weights (both via projected gradient), jackknife CI over post periods
+  - **CausalImpact**: Ridge regression + Kalman filter (local linear trend F=[[1,1],[0,1]]), open-loop post-period prediction, prediction-variance CI
+  - **Placebo permutation**: leave-one-out, p = (1+n_extreme)/(1+n_donors)
+  - 26 unit tests + 5 proptest invariants (weights sum to 1.0 +-1e-9 for Classic, Augmented, SDiD)
+  - 3 golden files + integration test (`synthetic_control_golden.rs`)
+  - All 335 experimentation-stats tests green (0 failures)
 
 ## Completed (this session)
 
