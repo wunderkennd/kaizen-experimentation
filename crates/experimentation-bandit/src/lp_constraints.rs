@@ -35,7 +35,7 @@ pub struct LinearConstraint {
 ///
 /// Minimises ‖q − p‖₂ (Euclidean projection) subject to simplex + per-arm bounds
 /// + optional linear constraints.  The adjusted probabilities q are logged as
-/// `assignment_probability` for IPW validity.
+///   `assignment_probability` for IPW validity.
 ///
 /// For the full KL(q‖p) objective use the fast-path (no linear constraints) where
 /// the unconstrained minimum q = p is projected onto the feasible set.
@@ -189,8 +189,8 @@ impl ConstraintSolver {
                     continue;
                 };
 
-                for i in 0..k {
-                    q[i] += lambda * lc.coefficients[i];
+                for (i, qi) in q.iter_mut().enumerate().take(k) {
+                    *qi += lambda * lc.coefficients[i];
                 }
             }
 
