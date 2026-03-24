@@ -15,6 +15,10 @@ Branch: work/clever-deer
 Focus: ADR-023 Synthetic Control Methods
 Branch: work/happy-rabbit
 
+Sprint: 5.1
+Focus: ADR-016 Slate bandit optimization
+Branch: work/silly-dolphin
+
 ## In Progress
 
 _None._
@@ -84,6 +88,35 @@ _None._
     - `validate_guardrail_aggregation()`: enforces USER or EXPERIMENT for guardrails
   - 13 unit tests + 10K FWER Monte Carlo (K=1,2,3,5,10,20) + 5 proptest invariants
   - All 32 guardrail tests + full experimentation-stats suite green
+
+- [x] **ADR-016 — Slot-wise factorized Thompson Sampling slate bandit** (2026-03-24, work/silly-dolphin)
+  - `crates/experimentation-bandit/src/slate.rs` (new, ~420 LOC)
+  - `SlatePolicy`: per-slot Beta posteriors, `Vec<HashMap<ArmId, BetaArm>>` (O(L×K) state)
+  - `select_slate(candidates, n_slots, rng)`: sequential slot-filling with context propagation
+    - O(L×K) inference: for each slot, argmax over remaining candidates' Beta draws
+    - Enforces item uniqueness across slots (remove-from-pool after selection)
+    - Graceful fallback to Beta(1,1) prior for arms added after policy creation
+  - Three reward attribution models:
+    - `AttributionModel::ClickedSlot`: full credit to clicked position only
+    - `AttributionModel::PositionWeighted`: reciprocal-rank discount (1/(pos+1)) across all slots
+    - `AttributionModel::Counterfactual`: IPS correction `(reward / propensity).clamp(0,1)` at clicked slot
+  - `lips_estimate(logged: &[SlateLog]) -> f64`: LIPS OPE estimator (IPS-weighted average reward)
+    - Skips zero-propensity observations; asserts finite outputs
+    - Reference: Kiyohara, Nomura, Saito (WWW 2024)
+  - `SlateLog` struct: slate, clicked, clicked_position, propensity, reward
+  - RocksDB snapshot: `to_bytes()` / `from_bytes()` using `bincode` (full state roundtrip)
+  - Added `bincode = "1.3"` to workspace `Cargo.toml` and `experimentation-bandit/Cargo.toml`
+  - Registered as `pub mod slate` in `lib.rs`
+  - **21 new tests** covering:
+    - Uniform prior creation, select_slate length/uniqueness/truncation
+    - Dominant arm preference, context propagation across 50 runs
+    - All three attribution models (click-only, position-weighted, counterfactual/IPS)
+    - bincode roundtrip for all 3 attribution models
+    - LIPS estimator: empty, full propensity, partial propensity, mixed, zero-propensity skip
+    - Convergence: arm-0 dominates slot-0 after 500 training rounds (>70% win rate)
+  - All 68 bandit crate tests green (21 new + 47 existing)
+
+## Completed (Phase 5) — latest first
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`
