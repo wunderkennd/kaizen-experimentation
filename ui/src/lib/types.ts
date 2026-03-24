@@ -650,6 +650,7 @@ export interface MitigationRecommendation {
 
 export interface FeedbackLoopResult {
   experimentId: string;
+  feedbackLoopDetected?: boolean;
   retrainingEvents: RetrainingEvent[];
   prePostComparison: FeedbackLoopPrePost[];
   contaminationTimeline: ContaminationPoint[];

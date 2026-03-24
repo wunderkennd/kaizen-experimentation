@@ -9,6 +9,7 @@ import type { AdaptiveNResult } from '@/lib/types';
 import { RetryableError } from '@/components/retryable-error';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { SrmBanner } from '@/components/srm-banner';
+import { FeedbackLoopAlert } from '@/components/feedback-loop-alert';
 import { ResultsSummary } from '@/components/results-summary';
 import { CupedToggle } from '@/components/cuped-toggle';
 import { IpwToggle } from '@/components/ipw-toggle';
@@ -263,6 +264,14 @@ export default function ResultsPage() {
 
       {/* SRM Banner */}
       <SrmBanner srmResult={analysisResult.srmResult} />
+
+      {/* Feedback Loop Interference Alert (ADR-021) */}
+      {(experiment.type === 'MAB' || experiment.type === 'CONTEXTUAL_BANDIT' || experiment.type === 'AB') && (
+        <FeedbackLoopAlert
+          experimentId={params.id}
+          primaryMetricId={experiment.primaryMetricId}
+        />
+      )}
 
       {/* Summary */}
       <ResultsSummary analysisResult={analysisResult} experiment={experiment} />

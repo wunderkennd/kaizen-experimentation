@@ -8,6 +8,7 @@ import {
 import type { FeedbackLoopResult, MitigationSeverity } from '@/lib/types';
 import { getFeedbackLoopAnalysis, RpcError } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
+import { InterferenceTimelineChart } from '@/components/interference-timeline-chart';
 import { formatDate } from '@/lib/utils';
 
 interface FeedbackLoopTabProps {
@@ -166,6 +167,9 @@ export function FeedbackLoopTab({ experimentId }: FeedbackLoopTabProps) {
           </table>
         </div>
       </div>
+
+      {/* Treatment effect timeline with retrain markers */}
+      <InterferenceTimelineChart result={result} />
 
       {/* Pre/post comparison chart */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
