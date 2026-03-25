@@ -662,6 +662,24 @@ export interface FeedbackLoopResult {
   computedAt: string;
 }
 
+// --- Portfolio Optimization (ADR-019) ---
+
+export interface PortfolioExperiment {
+  experimentId: string;
+  name: string;
+  effectSize: number;
+  variance: number;
+  allocatedTrafficPct: number;
+  priorityScore: number;
+  userSegments: string[];
+}
+
+export interface PortfolioAllocationResult {
+  experiments: PortfolioExperiment[];
+  totalAllocatedPct: number;
+  computedAt: string;
+}
+
 // --- Provider Health (ADR-014) ---
 
 export interface ProviderHealthPoint {

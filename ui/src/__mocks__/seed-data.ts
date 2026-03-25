@@ -5,6 +5,7 @@ import type {
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
   AuditLogEntry, Flag, ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
+  PortfolioAllocationResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -1896,6 +1897,53 @@ const INITIAL_FEEDBACK_LOOP_RESULTS: FeedbackLoopResult[] = [
 
 export let SEED_FEEDBACK_LOOP_RESULTS: FeedbackLoopResult[] = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
 
+// --- Portfolio Optimization (ADR-019) ---
+
+const INITIAL_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = {
+  experiments: [
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      name: 'homepage_recs_v2',
+      effectSize: 0.0312,
+      variance: 0.000487,
+      allocatedTrafficPct: 0.20,
+      priorityScore: 0.872,
+      userSegments: ['new', 'established'],
+    },
+    {
+      experimentId: '22222222-2222-2222-2222-222222222222',
+      name: 'search_ranking_v3',
+      effectSize: 0.0218,
+      variance: 0.000312,
+      allocatedTrafficPct: 0.15,
+      priorityScore: 0.741,
+      userSegments: ['established', 'mature'],
+    },
+    {
+      experimentId: '33333333-3333-3333-3333-333333333333',
+      name: 'playback_buffer_opt',
+      effectSize: -0.0045,
+      variance: 0.000198,
+      allocatedTrafficPct: 0.10,
+      priorityScore: 0.534,
+      userSegments: ['trial', 'new'],
+    },
+    {
+      experimentId: '44444444-4444-4444-4444-444444444444',
+      name: 'content_diversity_boost',
+      effectSize: 0.0089,
+      variance: 0.000654,
+      allocatedTrafficPct: 0.12,
+      priorityScore: 0.421,
+      userSegments: ['mature', 'at_risk'],
+    },
+  ],
+  totalAllocatedPct: 0.57,
+  computedAt: '2026-03-24T10:00:00Z',
+};
+
+export let SEED_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -1919,4 +1967,5 @@ export function resetSeedData(): void {
   SEED_AVLM_RESULTS = structuredClone(INITIAL_AVLM_RESULTS);
   SEED_ADAPTIVE_N_RESULTS = structuredClone(INITIAL_ADAPTIVE_N_RESULTS);
   SEED_FEEDBACK_LOOP_RESULTS = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
+  SEED_PORTFOLIO_ALLOCATION = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
 }
