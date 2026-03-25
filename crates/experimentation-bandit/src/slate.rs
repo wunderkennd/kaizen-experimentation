@@ -371,25 +371,20 @@ pub fn lips_estimate(logged: &[SlateLog]) -> f64 {
         return 0.0;
     }
 
-    let mut valid_count = 0u64;
+    let n = logged.len() as f64;
     let total: f64 = logged
         .iter()
         .filter_map(|log| {
             if log.propensity <= 0.0 {
                 return None; // skip zero-propensity observations
             }
-            valid_count += 1;
             let ips = log.reward / log.propensity;
             assert_finite(ips, "LIPS IPS reward");
             Some(ips)
         })
         .sum();
 
-    if valid_count == 0 {
-        return 0.0;
-    }
-
-    total / valid_count as f64
+    total / n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
