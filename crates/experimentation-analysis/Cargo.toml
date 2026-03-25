@@ -36,3 +36,5 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true }
 deltalake = { workspace = true }
+experimentation-bandit = { path = "../experimentation-bandit" }
+rand = { workspace = true }

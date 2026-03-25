@@ -116,6 +116,27 @@ _None._
     - Convergence: arm-0 dominates slot-0 after 500 training rounds (>70% win rate)
   - All 68 bandit crate tests green (21 new + 47 existing)
 
+## Completed This Session (2026-03-24)
+
+- [x] **Phase 5 E2E integration test suite** (2026-03-24, work/swift-elephant)
+  - `crates/experimentation-analysis/tests/phase5_e2e.rs` — 9 tests, all green
+  - `crates/experimentation-analysis/Cargo.toml` — added `experimentation-bandit` + `rand` to dev-dependencies
+  - **Switchback path** (ADR-022): `test_switchback_rpc_unimplemented_and_run_analysis_fallback`
+    - Asserts `GetSwitchbackAnalysis` → `Code::Unimplemented` (stub, pending ADR-022)
+    - Runs `RunAnalysis` on 100 switchback-period-structured observations (5 control × 5 treatment periods, 10 users each); verifies MetricResult fields, positive effect, CI contains estimate, no SRM
+    - ADR-018 e_value / log_e_value fields verified as finite on MetricResult
+  - **Quasi-experiment path** (ADR-023): `test_quasi_experiment_synthetic_control_rpc_unimplemented` + `test_quasi_experiment_run_analysis_with_donor_unit_data`
+    - `GetSyntheticControlAnalysis` → `Code::Unimplemented` (stub, pending ADR-023)
+    - `RunAnalysis` on 40-unit donor/treated data (mu_ctrl=5.0, mu_trt=6.0, ATT≈+1.0); p-value < 0.10 confirmed
+  - **E-value sequential test** (ADR-018): 3 unit tests on `e_value_grow`
+    - `test_evalue_grow_safe_start_and_trajectory_length`: λ₁=0 → log_wealth[0]=0.0; trajectory length = n; all entries finite
+    - `test_evalue_grow_accumulates_evidence_under_h1`: obs=2.0×30, e_value > 1/α=20, reject=true, log_wealth grows t5→t30
+    - `test_evalue_grow_no_rejection_under_null`: alternating ±0.1, reject=false, |log_wealth| < 2.0
+    - `test_run_analysis_metric_result_has_evalue_fields`: e_value and log_e_value on MetricResult are finite; exp(log_e_value)=e_value invariant checked
+  - **Slate bandit roundtrip** (ADR-016): 2 tests on `experimentation_bandit::thompson::select_arm`
+    - `test_slate_bandit_per_slot_selection_probabilities`: 8-candidate, 4-slot; item_00 (400/500 successes) wins slot 0 with prob > 0.70; all probabilities ≥ 0, sum to 1.0 (±1e-3), arm_id ∈ candidates
+    - `test_slate_bandit_posterior_update_shifts_selection`: 200 successes on arm_0; arm_0 selection prob > 0.80; probability sum invariant holds
+
 ## Completed (Phase 5) — latest first
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
