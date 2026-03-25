@@ -1,47 +1,41 @@
 # Agent-1 Status — Phase 5
 
 **Module**: M1 Assignment
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
 Sprint: 5.0
-Focus: ADR-022 Switchback assignment (complete), ADR-016 GetSlateAssignment (next), ADR-013 META routing
-Branch: work/calm-lion
+Focus: ADR-016 GetSlateAssignment contract tests, ADR-019 portfolio contract tests, ADR-021 M2→M3 Kafka contract tests
+Branch: work/nice-bear
 
 ## In Progress
 
-- [ ] ADR-016 GetSlateAssignment — slate bandit forwarding to M4b
-  - Blocked by: none (M4b SlatePolicy exists)
-  - ETA: next sprint
+_None._
 
 ## Completed (Phase 5)
 
-- [x] **ADR-022 Switchback assignment** — 2026-03-23
-  - Three designs: SIMPLE_ALTERNATING, REGULAR_BALANCED, RANDOMIZED
-  - Time-based assignment: block_index = floor(unix_secs / block_duration_secs)
-  - Washout period exclusion (leading edge of each block)
-  - Block index returned in `GetAssignmentResponse.block_index` for M2 exposure events
-  - `ExposureEvent.switchback_block_index` proto field added for M4a
-  - M5 STARTING validation in `switchback::validate_config`: planned_cycles >= 4, block_duration >= 1h
-  - 29 tests (19 unit + 10 integration), all green
-  - PR: feat(m1): ADR-022 switchback assignment
+- [x] Phase 5 cross-module contract tests (consumer-side) — PR pending
+  - M1→M4b: `GetSlateAssignment` contract test (11 tests) — `crates/experimentation-assignment/tests/m1m4b_slate_contract_test.rs`
+  - M5→M4a: `GetPortfolioAllocation` contract test (12 tests) — `crates/experimentation-analysis/tests/m5m4a_portfolio_contract_test.rs`
+  - M2→M3: `ModelRetrainingEvent` Kafka wire-format contract test (16 tests) — `crates/experimentation-ingest/tests/m2m3_kafka_contract_test.rs`
+  - Proto additions: `GetSlateAssignment` RPC + messages (ADR-016), `GetPortfolioAllocation` RPC + messages (ADR-019)
+  - Stubs added to `BanditPolicyServiceHandler` (policy/grpc.rs) and `AnalysisServiceHandler` (analysis/grpc.rs)
+  - `cargo test --workspace`: all 0 failures
 
 ## Blocked
 
 _None._
 
+## Dependencies for Other Agents
+
+- **Agent-4 (M4b)**: `GetSlateAssignment` proto RPC now defined — impl can begin using the contract test as the acceptance spec.
+- **Agent-4 (M4a)**: `GetPortfolioAllocation` proto RPC defined — stub returns `unimplemented`, real impl needed.
+- **Agent-5 (M5)**: `GetPortfolioAllocation` contract spec available; M5 Go client generation needed.
+- **Agent-2 (M2/M3)**: `ModelRetrainingEvent` Kafka wire format validated — M3 consume path can reference test for field expectations.
+
 ## Next Up
 
-- ADR-016 GetSlateAssignment — delegate to M4b SlatePolicy, return ordered slate with slot probabilities
-- ADR-013 META experiment routing — hash-based routing to variant-specific reward objectives
-
-## Notes for Other Agents
-
-- **M2 (Agent-2)**: `GetAssignmentResponse.block_index` (proto field 6) is now populated for SWITCHBACK
-  experiments. Include it in `ExposureEvent.switchback_block_index` (proto field 12) for M4a analysis.
-- **M4a (Agent-4)**: `ExposureEvent.switchback_block_index` is added. Use it to partition observations
-  by block for within-switchback analysis per ADR-022.
-- **M5 (Agent-5)**: `SwitchbackConfig` validation constraints are enforced in M1 at request time:
-  `planned_cycles >= 4`, `block_duration_secs >= 3600`, `washout_period_secs < block_duration_secs`.
-  M5 should enforce the same gates during the STARTING→RUNNING transition.
+- ADR-016 GetSlateAssignment: wire up `SlateTestService` logic into real `BanditPolicyServiceHandler` on LMAX thread
+- ADR-022 Switchback assignment: M1 needs to assign users based on (current_time, block_duration, cluster_attribute)
+- ADR-013 META routing: M1 hashes user to variant; each variant uses different reward objective

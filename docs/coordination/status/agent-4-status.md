@@ -1,19 +1,35 @@
 # Agent-4 Status — Phase 5
 
 **Module**: M4a Analysis + M4b Bandit
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
 Sprint: 5.0
 Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/bright-bear
+Branch: work/eager-bear
 
 ## In Progress
 
 - [ ] ADR-012 LP constraints
 
+## Completed (this session)
+
+- [x] **ADR-021 feedback loop API completion** (2026-03-24, work/eager-badger, PR #241)
+  - Added `InterferenceResult` struct with `From<FeedbackLoopResult>` conversion
+  - Added `contamination_flag(p_value, threshold) -> bool` standalone function
+  - Added `FeedbackLoopDetector::bias_corrected_effect(raw) -> f64` method (pre/post ratio)
+  - Added proptest `null_no_detection`: pre==post → detected=false, p=1.0 always
+  - All 27 feedback_loop tests + 192 experimentation-stats tests green
+
 ## Completed (Phase 5) — latest first
+
+- [x] **ADR-017 Phase 1 — TC/JIVE verification pass** (2026-03-24, work/clever-koala)
+  - Verified `kfold_iv_calibrate()` in `crates/experimentation-stats/src/orl.rs` is fully operational
+  - All 3 Netflix KDD 2024 Table 2 golden tests pass (`orl_golden.rs`): no-confounding, confounded, weak-instrument
+  - Proptest invariants `iv_result_all_finite` and `bias_correction_sign_with_positive_confounder` confirmed green
+  - Full `experimentation-stats` test suite: 0 failures
+  - No code changes required — implementation landed in PR #198
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`
@@ -79,6 +95,29 @@ Branch: work/bright-bear
 
 ## Completed (Phase 5)
 
+- [x] **ADR-011 — Multi-objective reward composition** (2026-03-23, work/happy-koala)
+  - `crates/experimentation-bandit/src/multi_objective.rs` (new)
+    - `MetricStats`: EMA running mean/variance (α=0.01), Welford-style update
+    - `MetricNormalizer`: keyed EMA normaliser over arbitrary metric names; serialize/deserialize for RocksDB
+    - `RewardObjective`: metric_name, weight, `constraint_slack: Option<f64>`, reference_value
+    - `CompositionMethod`: `WeightedSum`, `EpsilonConstraint` (Lagrangian), `Tchebycheff`
+    - `RewardComposer`: 3-phase compose (collect → normalise → scalarise); clamps to ±10σ; serialize/deserialize
+    - `sigmoid()`: maps composed real reward to (0, 1) for Beta-Bernoulli policies
+  - `crates/experimentation-bandit/src/lib.rs`: added `pub mod multi_objective`
+  - `crates/experimentation-policy/src/types.rs`: `RewardUpdate` gains `metric_values: Option<HashMap<String, f64>>`
+  - `crates/experimentation-policy/src/snapshot.rs`: `SnapshotEnvelope` gains `reward_composer_state: Option<Vec<u8>>` (serde default for backward compat); `make_envelope_with_composer()` factory
+  - `crates/experimentation-policy/src/core.rs`:
+    - `PolicyCore` gains `reward_composers: HashMap<String, RewardComposer>`
+    - `register_multi_objective_experiment()`: registers Thompson + composer atomically
+    - `handle_reward_update()`: composes metric_values → scalar, applies sigmoid for Thompson policies
+    - `write_snapshot()`: persists composer state alongside policy posteriors
+    - `restore_from_snapshots()`: restores composer state on startup
+  - Tests:
+    - 10 unit tests in `multi_objective.rs` (MetricStats convergence, normalisation direction, WeightedSum, EpsilonConstraint penalty, Tchebycheff balance, roundtrip)
+    - `test_weighted_sum_convergence`: 1000-round simulation — arm_a (E[eng]=0.8, E[qual]=0.6) beats arm_b (E[eng]=0.3, E[qual]=0.7) with w=(0.7, 0.3); arm_a selection rate >60% in final 200 rounds
+    - `test_multi_objective_composer_crash_recovery`: normaliser survives crash-and-restore via RocksDB; ≥45 obs restored after 50 reward events
+    - All 35 policy tests + 33 bandit tests green; workspace-wide 0 failures
+
 - [x] **ADR-014 Phase 1 — Guardrail Bonferroni beta-correction** (2026-03-23, work/nice-lion)
   - `guardrail_bonferroni()` in `crates/experimentation-stats/src/multiple_comparison.rs`
     - Per-guardrail threshold = alpha/K; `rejected[i]` = true when p_i ≤ alpha/K
@@ -128,12 +167,17 @@ Branch: work/bright-bear
   - PR #198 merged
 
 - [x] **Proto schema extensions** (PR #196 merged) — All Phase 5 proto additions, buf lint + breaking clean.
-- [x] ADR-018 Phase 1 — E-value computation (PR open 2026-03-23)
-  - `e_value_grow()`: Sequential GROW martingale (plug-in betting, valid e-process)
-  - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value
-  - SQL migration 006_evalue_columns.sql: `e_value` + `log_e_value` on metric_results
-  - 8 golden-file tests (GROW: 4 analytic; AVLM: 4 formula-validated to 6dp)
-  - All 144+ workspace tests green
+- [x] **ADR-018 Phase 1 — E-value computation** (2026-03-24, work/eager-bear)
+  - `crates/experimentation-stats/src/evalue.rs`:
+    - `e_value_grow()`: Sequential GROW martingale (causal plug-in λ_t = μ̂_{t-1}/σ², safe-start λ_1=0)
+    - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value (Ramdas & Wang §3.1)
+    - `EValueResult`: e_value, log_e_value, reject, log_wealth_trajectory
+  - `sql/migrations/006_evalue_columns.sql`: ALTER TABLE metric_results ADD COLUMN e_value, log_e_value
+  - `crates/experimentation-stats/tests/evalue_golden.rs`: 8 golden-file tests (6dp tolerance)
+  - 8 golden JSON files in tests/golden/: 4 GROW (analytic), 4 AVLM (formula-validated to 6dp)
+  - 4 proptest invariants: grow_outputs_always_finite, grow_reject_consistent, avlm_outputs_always_finite, avlm_reject_consistent
+  - 12 unit tests in evalue.rs
+  - All 144+ experimentation-stats tests green (0 failures)
 
 ### Proto changes landed:
 
@@ -203,7 +247,7 @@ the new types. Key dependencies:
 
 ## Notes
 
-- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) does not exist in repo yet — implementation based on design_doc_v7.0.md Section 7.3 and 17.1 plus Lindon et al. (2025) algorithm.
+- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) created 2026-03-24; documents algorithm, sufficient statistics, API contract, golden-file and proptest validation targets.
 - The `e_value_avlm` function implements the Gaussian mixture e-value from Ramdas & Wang
   (2024) §3.1, validated to 6 decimal places against analytically computable examples.
 - GROW martingale uses the causal plug-in strategy (safe start λ_1=0); valid as an

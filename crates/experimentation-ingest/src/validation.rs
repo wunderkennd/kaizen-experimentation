@@ -145,6 +145,22 @@ pub fn validate_model_retraining_event(event: &ModelRetrainingEvent) -> Result<(
     Ok(())
 }
 
+/// Build the Bloom filter dedup key for a ModelRetrainingEvent (ADR-021).
+///
+/// Key format: `"{model_id}:{training_data_start_seconds}"`
+///
+/// Uses a composite key rather than `event_id` because retraining events are
+/// semantically duplicate when the same model is retrained on the same data
+/// window, regardless of the caller-supplied event identifier.
+///
+/// Returns `None` if `training_data_start` is absent. Validation enforces this
+/// field as required and runs before the dedup check, so `None` is only
+/// reachable in tests or if callers bypass validation.
+pub fn model_retraining_dedup_key(event: &ModelRetrainingEvent) -> Option<String> {
+    let start_secs = event.training_data_start.as_ref()?.seconds;
+    Some(format!("{}:{}", event.model_id, start_secs))
+}
+
 /// Unwrap and parse a prost Timestamp for retraining event fields.
 /// Unlike require_timestamp, does NOT apply the ±24h window check because
 /// training data windows reference historical periods.
@@ -535,6 +551,90 @@ mod tests {
     #[test]
     fn test_valid_model_retraining_event_accepted() {
         assert!(validate_model_retraining_event(&valid_model_retraining_event()).is_ok());
+    }
+
+    // --- model_retraining_dedup_key tests ---
+
+    #[test]
+    fn test_model_retraining_dedup_key_returns_composite() {
+        let e = valid_model_retraining_event(); // training_data_start = now - 48h
+        let start_secs = e.training_data_start.as_ref().unwrap().seconds;
+        let key = model_retraining_dedup_key(&e).expect("key must be Some when start is present");
+        assert_eq!(key, format!("rec-model-v2:{start_secs}"));
+    }
+
+    #[test]
+    fn test_model_retraining_dedup_key_missing_start_returns_none() {
+        let mut e = valid_model_retraining_event();
+        e.training_data_start = None;
+        assert!(model_retraining_dedup_key(&e).is_none());
+    }
+
+    #[test]
+    fn test_model_retraining_dedup_key_different_windows_produce_different_keys() {
+        let e1 = ModelRetrainingEvent {
+            event_id: "mre-a".into(),
+            model_id: "rec-model".into(),
+            training_data_start: past_proto(48),
+            training_data_end: past_proto(24),
+            ..Default::default()
+        };
+        let e2 = ModelRetrainingEvent {
+            event_id: "mre-b".into(),
+            model_id: "rec-model".into(),
+            training_data_start: past_proto(72), // different window
+            training_data_end: past_proto(48),
+            ..Default::default()
+        };
+        let k1 = model_retraining_dedup_key(&e1).unwrap();
+        let k2 = model_retraining_dedup_key(&e2).unwrap();
+        assert_ne!(k1, k2, "different training windows must produce different dedup keys");
+    }
+
+    #[test]
+    fn test_model_retraining_dedup_key_same_window_same_key_regardless_of_event_id() {
+        let start = past_proto(48);
+        let end = past_proto(24);
+        let e1 = ModelRetrainingEvent {
+            event_id: "mre-first-attempt".into(),
+            model_id: "rec-model".into(),
+            training_data_start: start.clone(),
+            training_data_end: end.clone(),
+            ..Default::default()
+        };
+        let e2 = ModelRetrainingEvent {
+            event_id: "mre-second-attempt".into(), // different event_id
+            model_id: "rec-model".into(),
+            training_data_start: start,
+            training_data_end: end,
+            ..Default::default()
+        };
+        let k1 = model_retraining_dedup_key(&e1).unwrap();
+        let k2 = model_retraining_dedup_key(&e2).unwrap();
+        assert_eq!(k1, k2, "same model+window must produce same dedup key regardless of event_id");
+    }
+
+    #[test]
+    fn test_model_retraining_dedup_key_different_models_same_window_produce_different_keys() {
+        let start = past_proto(48);
+        let end = past_proto(24);
+        let e1 = ModelRetrainingEvent {
+            event_id: "mre-1".into(),
+            model_id: "model-A".into(),
+            training_data_start: start.clone(),
+            training_data_end: end.clone(),
+            ..Default::default()
+        };
+        let e2 = ModelRetrainingEvent {
+            event_id: "mre-2".into(),
+            model_id: "model-B".into(), // different model
+            training_data_start: start,
+            training_data_end: end,
+            ..Default::default()
+        };
+        let k1 = model_retraining_dedup_key(&e1).unwrap();
+        let k2 = model_retraining_dedup_key(&e2).unwrap();
+        assert_ne!(k1, k2, "different models must produce different dedup keys");
     }
 
     #[test]

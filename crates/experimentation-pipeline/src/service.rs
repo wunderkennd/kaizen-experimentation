@@ -478,9 +478,14 @@ impl EventIngestionService for IngestionServiceImpl {
             .event
             .ok_or_else(|| Status::invalid_argument("event is required"))?;
 
+        // ADR-021: Composite dedup key — same model retrained on the same data
+        // window is semantically duplicate regardless of caller-supplied event_id.
+        let dedup_key = validation::model_retraining_dedup_key(&event)
+            .unwrap_or_else(|| event.event_id.clone());
+
         let accepted = process_event(
             self,
-            &event.event_id,
+            &dedup_key,
             crate::metrics::EVENT_TYPE_MODEL_RETRAINING,
             TOPIC_MODEL_RETRAINING_EVENTS,
             &event.model_id,
@@ -1434,7 +1439,7 @@ mod tests {
             .unwrap();
         assert!(resp1.into_inner().accepted);
 
-        // Second call with same event_id: duplicate
+        // Second call with same model_id+training_data_start: duplicate (composite key).
         let resp2 = svc
             .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
                 event: Some(valid_model_retraining_event()),
@@ -1443,6 +1448,40 @@ mod tests {
             .unwrap();
         assert!(!resp2.into_inner().accepted);
         assert_eq!(handle.call_count(), 1);
+    }
+
+    /// Composite key dedup: a different event_id for the same model+window is still a duplicate.
+    #[tokio::test]
+    async fn test_ingest_model_retraining_composite_key_dedup() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = MockProducerHandle::new(MockBehavior::Ok);
+        let svc = build_service(&handle, dir.path());
+
+        let first = valid_model_retraining_event(); // event_id = "mre-1"
+        let mut second = valid_model_retraining_event();
+        second.event_id = "mre-different-id".into(); // Different event_id, same model+window
+
+        // First: accepted
+        let resp1 = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(first),
+            }))
+            .await
+            .unwrap();
+        assert!(resp1.into_inner().accepted);
+
+        // Second: same model_id + training_data_start → rejected even though event_id differs
+        let resp2 = svc
+            .ingest_model_retraining_event(Request::new(IngestModelRetrainingEventRequest {
+                event: Some(second),
+            }))
+            .await
+            .unwrap();
+        assert!(
+            !resp2.into_inner().accepted,
+            "same model+window with different event_id must be deduplicated (ADR-021 composite key)"
+        );
+        assert_eq!(handle.call_count(), 1, "only one event must reach Kafka");
     }
 
     /// Contract test: Kafka roundtrip serialization (M2 producer → M3 consumer wire format).

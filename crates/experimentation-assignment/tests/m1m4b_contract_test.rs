@@ -25,7 +25,7 @@ use experimentation_bandit::thompson::BetaArm;
 use experimentation_proto::experimentation::bandit::v1::{
     self as proto,
     bandit_policy_service_server::{BanditPolicyService, BanditPolicyServiceServer},
-    CreateColdStartBanditResponse, ExportAffinityScoresResponse,
+    CreateColdStartBanditResponse, ExportAffinityScoresResponse, SlateAssignmentResponse,
 };
 use experimentation_proto::experimentation::common::v1::{
     ArmSelection as ProtoArmSelection, PolicySnapshot as ProtoPolicySnapshot,
@@ -178,6 +178,14 @@ impl BanditPolicyService for RealBanditService {
         Err(Status::not_found(format!(
             "experiment '{experiment_id}' not found"
         )))
+    }
+
+    async fn get_slate_assignment(
+        &self,
+        _request: Request<proto::GetSlateAssignmentRequest>,
+    ) -> Result<Response<SlateAssignmentResponse>, Status> {
+        // Slate assignment is covered by m1m4b_slate_contract_test.rs.
+        Err(Status::unimplemented("use m1m4b_slate_contract_test for slate tests"))
     }
 
     async fn create_cold_start_bandit(

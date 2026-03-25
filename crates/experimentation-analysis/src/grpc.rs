@@ -11,6 +11,7 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
 use experimentation_proto::experimentation::analysis::v1::{
     AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult, GetAnalysisResultRequest,
     GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest,
+    GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
     GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
     InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
     PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
@@ -824,6 +825,18 @@ impl AnalysisService for AnalysisServiceHandler {
     ) -> Result<Response<SwitchbackAnalysisResult>, Status> {
         Err(Status::unimplemented(
             "GetSwitchbackAnalysis not yet implemented (ADR-022)",
+        ))
+    }
+
+    async fn get_portfolio_allocation(
+        &self,
+        _request: Request<GetPortfolioAllocationRequest>,
+    ) -> Result<Response<GetPortfolioAllocationResponse>, Status> {
+        // ADR-019: Full portfolio optimization requires power-curve analysis.
+        // Contract is defined; implementation is Phase 5 work.
+        // The contract test exercises a test-specific implementation for wire-format validation.
+        Err(Status::unimplemented(
+            "GetPortfolioAllocation not yet implemented (ADR-019)",
         ))
     }
 }
