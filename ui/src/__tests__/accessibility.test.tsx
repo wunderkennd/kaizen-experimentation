@@ -138,6 +138,25 @@ describe('Accessibility', () => {
       expect(document.getElementById(titleId)?.textContent).toBe('Delete Experiment');
       expect(document.getElementById(descId)?.textContent).toBe('This cannot be undone.');
     });
+
+    it('shows a loading spinner when loading is true', () => {
+      render(
+        <ConfirmDialog
+          open={true}
+          title="Loading Test"
+          message="Testing spinner"
+          confirmLabel="OK"
+          onConfirm={() => {}}
+          onCancel={() => {}}
+          loading={true}
+        />,
+      );
+
+      const spinner = screen.getByTestId('confirm-spinner');
+      expect(spinner).toBeInTheDocument();
+      expect(spinner).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByText('Processing...')).toBeInTheDocument();
+    });
   });
 
   // --- ExperimentForm ---
