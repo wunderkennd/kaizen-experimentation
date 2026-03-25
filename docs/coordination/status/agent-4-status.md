@@ -231,7 +231,7 @@ the new types. Key dependencies:
 
 ## Notes
 
-- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) does not exist in repo yet — implementation based on design_doc_v7.0.md Section 7.3 and 17.1 plus Lindon et al. (2025) algorithm.
+- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) created 2026-03-24; documents algorithm, sufficient statistics, API contract, golden-file and proptest validation targets.
 - The `e_value_avlm` function implements the Gaussian mixture e-value from Ramdas & Wang
   (2024) §3.1, validated to 6 decimal places against analytically computable examples.
 - GROW martingale uses the causal plug-in strategy (safe start λ_1=0); valid as an
