@@ -1,7 +1,7 @@
 # Agent-5 Status — Phase 5
 
 **Module**: M5 Management
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
@@ -21,12 +21,25 @@ PR: (pending)
   - `services/management/internal/handlers/lifecycle.go` — wire into concludeByID
   - `services/management/cmd/main.go` — ONLINE_FDR_ENABLED env var gate
 
-## Completed (Phase 5)
+## Completed (Phase 5) — latest first
 
-- [x] ADR-020 Phase 1 — Rust stats module + M5 scheduler (PR #227)
-  - `crates/experimentation-stats/src/adaptive_n.rs`: blinded_pooled_variance, conditional_power, zone_classify, gst_reallocate_spending, required_n_for_power, run_interim_analysis
-  - `sql/migrations/008_adaptive_sample_size_audit.sql`
-  - `services/management/internal/adaptive/`: Trigger, Processor, ConditionalPowerClient interface
+- [x] **ADR-020 Phase 1 — Adaptive sample size recalculation** (PR #227, merged 2026-03-24)
+  - `crates/experimentation-stats/src/adaptive_n.rs`: `blinded_pooled_variance`, `conditional_power`,
+    `zone_classify` (FAVORABLE/PROMISING/FUTILE/INCONCLUSIVE), `gst_reallocate_spending`,
+    `required_n_for_power`, `run_interim_analysis`
+  - `sql/migrations/008_adaptive_sample_size_audit.sql` — audit trail for interim analysis events
+  - `services/management/internal/adaptive/`: `Trigger`, `Processor`, `ConditionalPowerClient` interface
+  - M6 UI: AVLM boundary plot, adaptive-N zone badge + timeline (PR #223, merged)
+  - All workspace tests green
+
+- [x] **ADR-014 Phase 1 — Guardrail Bonferroni beta-correction + M5 metric validation** (PR #212, merged)
+  - `guardrail_bonferroni()` in `crates/experimentation-stats/src/multiple_comparison.rs`
+  - M5 validation: `ValidateCreateMetricDefinition` enforces `stakeholder` + `aggregation_level`;
+    `ValidateBanditRewardMetricAggregation()`, `ValidateGuardrailMetricAggregation()` exported
+  - Store layer: `MetricDefinitionRow` gains `Stakeholder`, `AggregationLevel`; bidirectional proto↔row mapping
+  - DB migration: `sql/migrations/007_metric_stakeholder_aggregation.sql`
+  - Handler: `validateMetricsForStart` + `validateTypeConfigForStart` enforce aggregation rules
+  - Infrastructure: generated `gen/go/go.mod` + full buf codegen — unblocked all Go compilation
 
 - [x] ADR-018 Phase 2 — e-LOND OnlineFdrController (this PR)
   - Platform-level singleton persisted in PostgreSQL (migration 009)
@@ -37,12 +50,13 @@ PR: (pending)
 
 ## Blocked
 
-- **Agent-4 dependency**: `ConditionalPowerClient` interface at
-  `services/management/internal/adaptive/processor.go:62` needs a gRPC
-  wrapper around M4a's `ComputeConditionalPower` RPC. The contract is
-  defined in the interface — Agent-4 implements the server side.
+- **Agent-4 dependency (partial)**: `ConditionalPowerClient` interface at
+  `services/management/internal/adaptive/processor.go:62` requires gRPC wrapper around M4a's
+  `ComputeConditionalPower` RPC. The interface contract is defined; Agent-4 implements server side.
+  Phase 1 statistical module is complete and unblocked.
 
 ## Next Up
 
-- ADR-013 META experiment type (M5 STARTING validation for MetaExperimentConfig)
-- ADR-019 Portfolio optimization: ExperimentLearning classification, traffic allocation optimizer
+- ADR-013: META experiment type — M5 `STARTING` validation for `MetaExperimentConfig`
+- ADR-019: Portfolio optimization — `ExperimentLearning` classification, traffic allocation optimizer
+- ADR-025: M5 Rust port (conditional — awaiting go/no-go decision)
