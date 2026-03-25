@@ -456,3 +456,7 @@ devin-golden-files:
 # Quick second opinion via Gemini
 gemini-review file:
     gemini -p "Review this Rust implementation for correctness, edge cases, and potential panics: $(cat {{file}})"
+
+# Triage open PRs (invokes pr-triage subagent)
+pr-triage:
+    claude -p "Use the pr-triage agent. There are open PRs that need triage after a system restart. Inventory all open PRs, categorize them, present the summary, and wait for my confirmation before acting."
