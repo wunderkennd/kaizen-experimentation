@@ -125,6 +125,8 @@ impl BanditPolicyService for BanditPolicyServiceHandler {
         Err(Status::unimplemented(
             "GetSlateAssignment is not yet wired to PolicyCore; \
              use the contract test service for wire-format validation",
+        ))
+    }
 
     /// Stub for ADR-016 slate bandit selection.
     ///
