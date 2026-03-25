@@ -128,6 +128,19 @@ impl BanditPolicyService for BanditPolicyServiceHandler {
         ))
     }
 
+    /// Stub for ADR-016 slate bandit selection.
+    ///
+    /// Returns `unimplemented` until `experimentation-bandit` ships a SlatePolicy.
+    /// M1 falls back to random slate ordering on gRPC error per the proto contract.
+    async fn select_slate(
+        &self,
+        _request: Request<proto::SelectSlateRequest>,
+    ) -> Result<Response<proto::SlateSelection>, Status> {
+        Err(Status::unimplemented(
+            "slate bandit selection (ADR-016) not yet implemented",
+        ))
+    }
+
     async fn create_cold_start_bandit(
         &self,
         request: Request<proto::CreateColdStartBanditRequest>,

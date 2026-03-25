@@ -15,9 +15,15 @@ service BanditPolicyService {
   rpc SelectArm(SelectArmRequest) returns (experimentation.common.v1.ArmSelection);
   // Get an ordered slate assignment for slate-level bandit experiments (ADR-016).
   // Called by M1 for SLATE_FACTORIZED_TS and SLATE_GENERATIVE experiment types.
-  // Factorized Thompson Sampling: per-slot posterior sampling, O(L × K) for L slots, K candidates.
+  // Factorized Thompson Sampling: per-slot posterior sampling, O(L x K) for L slots, K candidates.
   // p99 < 20ms at 5K rps.
   rpc GetSlateAssignment(GetSlateAssignmentRequest) returns (SlateAssignmentResponse);
+  // Select an ordered slate of items for a user in a slate bandit experiment (ADR-016).
+  // Called by M1 for SLATE_FACTORIZED_TS and SLATE_GENERATIVE experiments.
+  // Runs slot-wise factorized Thompson Sampling on the LMAX thread.
+  // p99 < 15ms at 10K rps (same SLA as SelectArm).
+  // M1 falls back to random slate ordering on timeout (>10ms) or gRPC error.
+  rpc SelectSlate(SelectSlateRequest) returns (SlateSelection);
   // Create a cold-start bandit for new content.
   // Auto-creates experiment, arms, and begins exploration.
   rpc CreateColdStartBandit(CreateColdStartBanditRequest) returns (CreateColdStartBanditResponse);
@@ -35,6 +41,38 @@ message SelectArmRequest {
   string user_id = 2;
   // Context features for contextual bandits. Keys must match BanditConfig.context_feature_keys.
   map<string, double> context_features = 3;
+}
+
+// SelectSlateRequest is sent by M1 to M4b for slate bandit experiments (ADR-016).
+message SelectSlateRequest {
+  string experiment_id = 1;
+  string user_id = 2;
+  // Candidate item IDs to rank. Length must be >= n_slots.
+  repeated string candidate_item_ids = 3;
+  // Number of slots in the output slate. Taken from SlateConfig.num_slots in M5 config.
+  int32 n_slots = 4;
+  // Context features for contextual slate bandits.
+  map<string, double> context_features = 5;
+}
+
+// SlotAssignment records the selected item and its assignment probability for one slate slot.
+// Used by M4a for IPW-adjusted slate analysis.
+message SlotAssignment {
+  int32 slot_index = 1;
+  string item_id = 2;
+  // Marginal probability of selecting this item in this slot under the current policy.
+  double probability = 3;
+}
+
+// SlateSelection is the response from M4b SelectSlate RPC.
+message SlateSelection {
+  // Ordered slate: item IDs in display order. Length == SelectSlateRequest.n_slots.
+  repeated string slate_item_ids = 1;
+  // Per-slot assignment probabilities for IPW computation in M4a.
+  repeated SlotAssignment slot_assignments = 2;
+  // Whether this observation was drawn from the uniform random component (MAD mixing).
+  // When true, this observation is valid for e-process computation in M4a.
+  bool is_uniform_random = 3;
 }
 
 message CreateColdStartBanditRequest {

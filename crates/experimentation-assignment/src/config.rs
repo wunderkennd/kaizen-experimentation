@@ -88,10 +88,22 @@ fn default_max_list_size() -> usize {
     50
 }
 
-/// Bandit experiment configuration (MAB / CONTEXTUAL_BANDIT types).
+/// Slate bandit configuration (ADR-016).
+/// Required when experiment type is "SLATE_BANDIT".
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SlateConfig {
+    /// Number of slots in the returned slate. Must be > 0.
+    #[serde(default)]
+    pub num_slots: i32,
+    /// Maximum number of candidate items per call. Must be >= num_slots.
+    #[serde(default)]
+    pub candidate_pool_size: i32,
+}
+
+/// Bandit experiment configuration (MAB / CONTEXTUAL_BANDIT / SLATE_BANDIT types).
 #[derive(Debug, Clone, Deserialize)]
 pub struct BanditConfig {
-    /// Algorithm identifier (e.g., "THOMPSON_SAMPLING", "LINEAR_UCB").
+    /// Algorithm identifier (e.g., "THOMPSON_SAMPLING", "LINEAR_UCB", "SLATE_FACTORIZED_TS").
     #[serde(default)]
     pub algorithm: String,
     /// Arm definitions — each arm maps to a variant or content placement.
@@ -115,6 +127,9 @@ pub struct BanditConfig {
     /// Cold-start exploration window in days.
     #[serde(default)]
     pub cold_start_window_days: Option<i32>,
+    /// Slate bandit configuration (ADR-016). Required for SLATE_BANDIT type.
+    #[serde(default)]
+    pub slate_config: Option<SlateConfig>,
 }
 
 /// Switchback (temporal alternation) experiment configuration — ADR-022.

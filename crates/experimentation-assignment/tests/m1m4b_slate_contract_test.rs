@@ -25,7 +25,7 @@ use experimentation_bandit::thompson::BetaArm;
 use experimentation_proto::experimentation::bandit::v1::{
     self as proto,
     bandit_policy_service_server::{BanditPolicyService, BanditPolicyServiceServer},
-    CreateColdStartBanditResponse, ExportAffinityScoresResponse, SlateAssignmentResponse,
+    CreateColdStartBanditResponse, ExportAffinityScoresResponse, SelectSlateRequest, SlateAssignmentResponse, SlateSelection,
 };
 use experimentation_proto::experimentation::common::v1::{
     ArmSelection as ProtoArmSelection, PolicySnapshot as ProtoPolicySnapshot,
@@ -214,6 +214,13 @@ impl BanditPolicyService for SlateTestService {
         &self,
         _request: Request<proto::RollbackPolicyRequest>,
     ) -> Result<Response<ProtoPolicySnapshot>, Status> {
+        Err(Status::unimplemented("not used in slate contract tests"))
+    }
+
+    async fn select_slate(
+        &self,
+        _request: Request<SelectSlateRequest>,
+    ) -> Result<Response<SlateSelection>, Status> {
         Err(Status::unimplemented("not used in slate contract tests"))
     }
 }
