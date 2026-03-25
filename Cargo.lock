@@ -1813,6 +1813,7 @@ dependencies = [
 name = "experimentation-bandit"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "candle-core",
  "candle-nn",
  "criterion",

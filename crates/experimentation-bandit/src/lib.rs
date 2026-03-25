@@ -14,6 +14,7 @@ pub mod linucb;
 pub mod neural;
 pub mod policy;
 pub mod reward_composer;
+pub mod slate;
 pub mod thompson;
 
 use std::collections::HashMap;
