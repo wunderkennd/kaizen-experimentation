@@ -113,7 +113,10 @@ fn row_to_proto(row: &ExperimentWithVariants) -> Experiment {
     use experimentation_proto::experimentation::common::v1::Variant;
 
     let exp = &row.experiment;
-    let state = ExperimentState::from_db_str(&exp.state).unwrap_or(ExperimentState::Draft);
+    let state = ExperimentState::from_db_str(&exp.state).unwrap_or_else(|| {
+        tracing::error!(state = %exp.state, experiment_id = %exp.experiment_id, "unknown experiment state in DB — returning as DRAFT");
+        ExperimentState::Draft
+    });
 
     let variants: Vec<Variant> = row
         .variants
