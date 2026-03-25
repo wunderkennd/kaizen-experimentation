@@ -22,6 +22,13 @@ Branch: work/eager-bear
   - Added proptest `null_no_detection`: pre==post → detected=false, p=1.0 always
   - All 27 feedback_loop tests + 192 experimentation-stats tests green
 
+- [x] **ADR-011 integration test — multi-objective weighted-sum convergence** (2026-03-24, work/witty-owl)
+  - Added `multi_objective_weighted_sum_converges_to_optimal_arm` to `crates/experimentation-bandit/tests/convergence.rs`
+  - Uses `ThompsonSamplingPolicy::new_multi_objective` + `update_multi_objective` API
+  - 2-arm bandit with 2-metric weighted-sum (engagement w=0.6, quality w=0.4); arm "high" (0.8, 0.7) vs arm "low" (0.3, 0.4)
+  - Verifies arm "high" selected >60% after 1000 rounds with Gaussian noise on ground-truth metrics
+  - All 51 bandit crate tests green (46 unit + 5 integration)
+
 ## Completed (Phase 5) — latest first
 
 - [x] **ADR-017 Phase 1 — TC/JIVE verification pass** (2026-03-24, work/clever-koala)
