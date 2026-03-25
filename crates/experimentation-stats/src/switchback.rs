@@ -524,7 +524,7 @@ fn lag1_autocorr(x: &[f64]) -> f64 {
         .zip(x[..n - 1].iter())
         .map(|(&xt, &xt1)| (xt - mean) * (xt1 - mean))
         .sum::<f64>()
-        / (n - 1) as f64;
+        / nf;
     (cov / variance).clamp(-1.0, 1.0)
 }
 
