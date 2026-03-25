@@ -3,15 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ExperimentDetailPage from '@/app/experiments/[id]/page';
 import { AuthProvider } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 import type { AuthUser } from '@/lib/auth-context';
 
 const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'admin' };
 
 function renderDetail(user: AuthUser = defaultUser) {
   return render(
-    <AuthProvider initialUser={user}>
-      <ExperimentDetailPage />
-    </AuthProvider>,
+    <ToastProvider>
+      <AuthProvider initialUser={user}>
+        <ExperimentDetailPage />
+      </AuthProvider>
+    </ToastProvider>,
   );
 }
 

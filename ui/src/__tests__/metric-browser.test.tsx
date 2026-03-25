@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
 import { describe, it, expect } from 'vitest';
 import MetricBrowserPage from '@/app/metrics/page';
+import { ToastProvider } from '@/lib/toast-context';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 
@@ -23,7 +24,11 @@ vi.mock('next/link', () => ({
 }));
 
 async function renderAndWait() {
-  render(<MetricBrowserPage />);
+  render(
+    <ToastProvider>
+      <MetricBrowserPage />
+    </ToastProvider>,
+  );
   await waitFor(() => {
     expect(screen.getByText('Stream Start Rate')).toBeInTheDocument();
   });
@@ -51,7 +56,11 @@ describe('Metric Browser Page', () => {
   });
 
   it('shows loading spinner initially', () => {
-    render(<MetricBrowserPage />);
+    render(
+      <ToastProvider>
+        <MetricBrowserPage />
+      </ToastProvider>,
+    );
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -62,7 +71,11 @@ describe('Metric Browser Page', () => {
       }),
     );
 
-    render(<MetricBrowserPage />);
+    render(
+      <ToastProvider>
+        <MetricBrowserPage />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
@@ -84,7 +97,11 @@ describe('Metric Browser Page', () => {
       }),
     );
 
-    render(<MetricBrowserPage />);
+    render(
+      <ToastProvider>
+        <MetricBrowserPage />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import type { MetricDefinition, MetricType } from '@/lib/types';
 import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
+import { CopyButton } from '@/components/copy-button';
 
 const SqlHighlighter = dynamic(
   () => import('@/components/sql-highlighter').then((m) => ({ default: m.SqlHighlighter })),
@@ -41,7 +42,10 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
           <span className="font-medium text-gray-900">{metric.name}</span>
         </td>
         <td className="px-4 py-3">
-          <code className="text-xs text-gray-500">{metric.metricId}</code>
+          <div className="flex items-center gap-2">
+            <code className="text-xs text-gray-500">{metric.metricId}</code>
+            <CopyButton text={metric.metricId} label="Copy metric ID" />
+          </div>
         </td>
         <td className="px-4 py-3">
           <span
@@ -120,13 +124,19 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
               {metric.cupedCovariateMetricId && (
                 <div>
                   <dt className="font-medium text-gray-500">CUPED Covariate</dt>
-                  <dd className="text-gray-900"><code className="text-xs">{metric.cupedCovariateMetricId}</code></dd>
+                  <dd className="flex items-center gap-2 text-gray-900">
+                    <code className="text-xs">{metric.cupedCovariateMetricId}</code>
+                    <CopyButton text={metric.cupedCovariateMetricId} label="Copy covariate metric ID" />
+                  </dd>
                 </div>
               )}
               {metric.surrogateTargetMetricId && (
                 <div>
                   <dt className="font-medium text-gray-500">Surrogate Target</dt>
-                  <dd className="text-gray-900"><code className="text-xs">{metric.surrogateTargetMetricId}</code></dd>
+                  <dd className="flex items-center gap-2 text-gray-900">
+                    <code className="text-xs">{metric.surrogateTargetMetricId}</code>
+                    <CopyButton text={metric.surrogateTargetMetricId} label="Copy target metric ID" />
+                  </dd>
                 </div>
               )}
             </dl>
