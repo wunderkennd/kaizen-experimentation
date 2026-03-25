@@ -46,8 +46,8 @@ crates/
 - **Proptest invariants**: Every public function in experimentation-stats gets proptest invariants. Nightly CI runs 10K cases.
 - **Contract tests**: Cross-module interfaces require wire-format contract tests. The consumer agent writes the test.
 - **Conventional commits**: `feat(crate):`, `fix(crate):`, `test(crate):`, `docs:`, `chore:`.
-- **Branch naming**: `agent-N/feat/adr-XXX-description`, `agent-N/fix/...`, `agent-N/port/...`.
-- **Status files**: Write only your own `docs/coordination/status/agent-N-status.md`. Read others for dependency tracking.
+- **Branch naming**: `agent-N/feat/adr-XXX-description`, `agent-N/fix/...`, `agent-N/port/...`. Never use auto-generated worker names as branch names.
+- **Status files**: Write only your own `docs/coordination/status/agent-N-status.md`. Read others for dependency tracking. Always take the incoming version on merge conflicts (status files are single-writer, append-only).
 
 ## Phase 5 Status
 
@@ -69,12 +69,24 @@ Phase 5 implements 15 ADRs across 6 clusters:
 - ADR-017 Phase 1 (TC/JIVE) — corrects theoretical error in surrogate calibration
 - ADR-024 (M7 Rust port) — eliminates FFI crate
 
-## Coordination Model
+## Orchestration Model
 
-- **Multiclaude** for sprint-level work. Each agent gets its own worktree and branch. Supervisor daemon health-checks workers, routes messages, refreshes worktrees every 2 minutes. CI-gated merge queue in multiplayer mode (human review required).
-- **Agent Teams** for ad-hoc cross-agent collaboration. Contract test debugging, proto schema design, interactive PR review. Ephemeral sessions — do not replace Multiclaude for sprint work.
-- **Per-agent status files** at `docs/coordination/status/agent-N-status.md`. Each agent writes only their own. Read others for dependency tracking. Update on every PR.
-- **Agent definitions** at `.multiclaude/agents/agent-N-*.md`. Persistent role definitions with ADR responsibilities, coding standards, dependencies, and contract test obligations.
+Phase 5 uses a multi-tool orchestration model. Each tool has a specific role — do not use the wrong tool for the job.
+
+| Tool | Role | When |
+| --- | --- | --- |
+| **Gas Town** | Interactive parallel work — Mayor coordinates polecats, you steer in real time | Daytime active sessions |
+| **Multiclaude** | Autonomous overnight grinding — daemon, CI-gated merge queue, self-healing workers | You're away (overnight, weekends) |
+| **Jules** | CI-triggered automation — scheduled maintenance, test generation, dependency bumps, security scans | Continuous / event-driven (GitHub Actions) |
+| **Devin** | Bounded autonomous tasks — test coverage, migrations, repetitive refactoring, golden-file generation | Batch dispatch for well-specified work |
+| **Gemini CLI** | Quick lookups, second-opinion code review, research during Gas Town sessions | Ad-hoc |
+| **Claude Code** (solo) | Single focused task in an isolated worktree | Quick one-off work |
+
+**Daily rhythm**: `just morning` (check overnight results) → `just interactive` (Gas Town) → `just evening <sprint>` (Multiclaude overnight). See `docs/guides/orchestration-workflow.md` for full details.
+
+**Per-agent status files** at `docs/coordination/status/agent-N-status.md`. Each agent writes only their own. Read others for dependency tracking. Update on every PR.
+
+**Agent definitions** at `.multiclaude/agents/agent-N-*.md`. Persistent role definitions with ADR responsibilities, coding standards, dependencies, and contract test obligations. Read by both Multiclaude workers and Gas Town polecats via CLAUDE.md context.
 
 ## Key File Locations
 
@@ -87,6 +99,7 @@ Phase 5 implements 15 ADRs across 6 clusters:
 | Agent definitions | `.multiclaude/agents/agent-N-*.md` |
 | Agent status | `docs/coordination/status/agent-N-status.md` |
 | Claude Code settings | `.claude/settings.json` |
+| PR triage subagent | `.claude/agents/pr-triage.md` |
 | Multiclaude config | `.multiclaude/config.json` |
 | Proto schema | `proto/experimentation/` |
 | SQL migrations | `sql/migrations/` |
@@ -95,6 +108,7 @@ Phase 5 implements 15 ADRs across 6 clusters:
 | Playbook | `docs/coordination/phase5-playbook.md` |
 | Sprint prompts | `docs/coordination/sprint-prompts.md` |
 | Contributing (Phase 5) | `docs/coordination/CONTRIBUTING-phase5.md` |
+| Developer guides | `docs/guides/` |
 
 ## Testing Commands
 
@@ -133,3 +147,13 @@ PROPTEST_CASES=10000 cargo test -p experimentation-stats
 | `synthetic_control.rs` (ADR-023) | R `augsynth` package | 4 decimal places |
 | `gst.rs` (existing) | R `gsDesign` + scipy | 4 decimal places |
 | `ttest.rs` (existing) | R `t.test()` | 6 decimal places |
+
+## Files That Must NOT Be Tracked in Git
+
+The following are build artifacts or agent runtime state — never commit them:
+- `ui/tsconfig.tsbuildinfo` (TypeScript incremental compilation cache)
+- `.Jules/` (Jules agent session state)
+- `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/teams/`, `.claude/tasks/`
+- `.multiclaude/state/`, `.multiclaude/messages/`, `.multiclaude/locks/`, `.multiclaude/worktrees/`
+
+See `.gitignore` and `docs/guides/git-hygiene.md` for the full list.
