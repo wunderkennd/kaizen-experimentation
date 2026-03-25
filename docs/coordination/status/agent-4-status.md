@@ -15,6 +15,13 @@ Branch: work/eager-bear
 
 ## Completed (Phase 5) — latest first
 
+- [x] **ADR-017 Phase 1 — TC/JIVE verification pass** (2026-03-24, work/clever-koala)
+  - Verified `kfold_iv_calibrate()` in `crates/experimentation-stats/src/orl.rs` is fully operational
+  - All 3 Netflix KDD 2024 Table 2 golden tests pass (`orl_golden.rs`): no-confounding, confounded, weak-instrument
+  - Proptest invariants `iv_result_all_finite` and `bias_correction_sign_with_positive_confounder` confirmed green
+  - Full `experimentation-stats` test suite: 0 failures
+  - No code changes required — implementation landed in PR #198
+
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`
     with `sequential_method` (field 2) and `tau_sq` (field 3) — AVLM now selectable per-call
