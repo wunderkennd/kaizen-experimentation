@@ -47,7 +47,7 @@ crates/
 - **Contract tests**: Cross-module interfaces require wire-format contract tests. The consumer agent writes the test.
 - **Conventional commits**: `feat(crate):`, `fix(crate):`, `test(crate):`, `docs:`, `chore:`.
 - **Branch naming**: `agent-N/feat/adr-XXX-description`, `agent-N/fix/...`, `agent-N/port/...`. Never use auto-generated worker names as branch names.
-- **Status files**: Write only your own `docs/coordination/status/agent-N-status.md`. Read others for dependency tracking. Always take the incoming version on merge conflicts (status files are single-writer, append-only).
+- **Work tracking**: All work tracked via GitHub Issues. PRs reference issues with `Closes #N`. Check your assigned issues with `gh issue list --assignee @me`.
 
 ## Phase 5 Status
 
@@ -62,31 +62,77 @@ Phase 5 implements 15 ADRs across 6 clusters:
 | E: Platform Operations | 019, 021 | Portfolio optimization, feedback loop interference |
 | F: Language Migration | 024, 025 | M7 Rust port (unconditional), M5 Rust port (conditional) |
 
-**Current sprint**: Check `docs/coordination/status/` for per-agent status.
+**Current sprint**: Check the active GitHub Milestone:
+```bash
+gh issue list --milestone "Sprint 5.0: Schema & Foundations" --state open
+```
 
 **P0 items** (highest priority):
 - ADR-015 (AVLM) — #1 ROI: unifies CUPED + mSPRT
 - ADR-017 Phase 1 (TC/JIVE) — corrects theoretical error in surrogate calibration
 - ADR-024 (M7 Rust port) — eliminates FFI crate
 
+## Work Tracking
+
+Work is tracked in **GitHub Issues**, not markdown status files.
+
+```
+Milestone    =  Sprint (e.g., "Sprint 5.0: Schema & Foundations")
+  └── Issue  =  ADR implementation unit (e.g., "ADR-015: AVLM Implementation")
+```
+
+### For agents: how to find your work
+```bash
+# What's assigned to me?
+gh issue list --assignee @me --state open
+
+# What's in the current sprint?
+gh issue list --milestone "Sprint 5.0: Schema & Foundations"
+
+# What's blocked?
+gh issue list --label "blocked"
+
+# Read a task spec
+gh issue view <number>
+```
+
+### For agents: how to update progress
+- Comment on the issue with progress updates
+- When creating a PR, include `Closes #<issue-number>` in the PR description
+- The issue auto-closes when the PR merges
+- If blocked, add the `blocked` label and comment explaining what you're waiting on
+
+### Labels
+- `agent-1` through `agent-7` — ownership
+- `P0` through `P4` — priority
+- `cluster-a` through `cluster-f` — capability cluster
+- `blocked` — waiting on another issue/agent
+- `contract-test` — cross-module contract test
+
 ## Orchestration Model
 
-Phase 5 uses a multi-tool orchestration model. Each tool has a specific role — do not use the wrong tool for the job.
+Phase 5 uses a multi-tool orchestration model. Each tool has a specific role.
 
 | Tool | Role | When |
 | --- | --- | --- |
 | **Gas Town** | Interactive parallel work — Mayor coordinates polecats, you steer in real time | Daytime active sessions |
 | **Multiclaude** | Autonomous overnight grinding — daemon, CI-gated merge queue, self-healing workers | You're away (overnight, weekends) |
-| **Jules** | CI-triggered automation — scheduled maintenance, test generation, dependency bumps, security scans | Continuous / event-driven (GitHub Actions) |
-| **Devin** | Bounded autonomous tasks — test coverage, migrations, repetitive refactoring, golden-file generation | Batch dispatch for well-specified work |
-| **Gemini CLI** | Quick lookups, second-opinion code review, research during Gas Town sessions | Ad-hoc |
+| **Jules** | CI-triggered automation — scheduled maintenance, test generation, dependency bumps | Continuous / event-driven (GitHub Actions) |
+| **Devin** | Bounded autonomous tasks — test coverage, migrations, repetitive refactoring | Batch dispatch for well-specified work |
+| **Gemini CLI** | Quick lookups, second-opinion code review, research | Ad-hoc |
 | **Claude Code** (solo) | Single focused task in an isolated worktree | Quick one-off work |
 
-**Daily rhythm**: `just morning` (check overnight results) → `just interactive` (Gas Town) → `just evening <sprint>` (Multiclaude overnight). See `docs/guides/orchestration-workflow.md` for full details.
+**Daily rhythm**: `just morning` (check overnight results) → `just interactive` (Gas Town) → `just evening <sprint>` (Multiclaude overnight).
 
-**Per-agent status files** at `docs/coordination/status/agent-N-status.md`. Each agent writes only their own. Read others for dependency tracking. Update on every PR.
+**Launching workers from Issues**: Workers read their task spec directly from the GitHub Issue:
+```bash
+# Multiclaude worker reads Issue #42
+gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 
-**Agent definitions** at `.multiclaude/agents/agent-N-*.md`. Persistent role definitions with ADR responsibilities, coding standards, dependencies, and contract test obligations. Read by both Multiclaude workers and Gas Town polecats via CLAUDE.md context.
+# Gas Town: tell the Mayor "Pick up Issue #42 for the kaizen rig"
+```
+
+**Agent definitions** at `.multiclaude/agents/agent-N-*.md` define *how* agents work (coding standards, contract test obligations). GitHub Issues define *what* they're working on.
 
 ## Key File Locations
 
@@ -97,17 +143,15 @@ Phase 5 uses a multi-tool orchestration model. Each tool has a specific role —
 | ADRs (001–025) | `docs/adrs/` |
 | ADR index | `docs/adrs/README.md` |
 | Agent definitions | `.multiclaude/agents/agent-N-*.md` |
-| Agent status | `docs/coordination/status/agent-N-status.md` |
+| Work tracking | GitHub Issues (Milestones = Sprints, Issues = Tasks) |
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |
 | Multiclaude config | `.multiclaude/config.json` |
 | Proto schema | `proto/experimentation/` |
 | SQL migrations | `sql/migrations/` |
 | Test vectors | `test-vectors/hash_vectors.json` |
-| Sprint plan | `docs/coordination/phase5-implementation-plan.md` |
+| Sprint plan (narrative) | `docs/coordination/phase5-implementation-plan.md` |
 | Playbook | `docs/coordination/phase5-playbook.md` |
-| Sprint prompts | `docs/coordination/sprint-prompts.md` |
-| Contributing (Phase 5) | `docs/coordination/CONTRIBUTING-phase5.md` |
 | Developer guides | `docs/guides/` |
 
 ## Testing Commands
@@ -150,10 +194,9 @@ PROPTEST_CASES=10000 cargo test -p experimentation-stats
 
 ## Files That Must NOT Be Tracked in Git
 
-The following are build artifacts or agent runtime state — never commit them:
-- `ui/tsconfig.tsbuildinfo` (TypeScript incremental compilation cache)
-- `.Jules/` (Jules agent session state)
+Build artifacts and agent runtime state — never commit:
+- `ui/tsconfig.tsbuildinfo`, `.Jules/`, `node_modules/`, `.next/`, `target/`, `dist/`
 - `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/teams/`, `.claude/tasks/`
-- `.multiclaude/state/`, `.multiclaude/messages/`, `.multiclaude/locks/`, `.multiclaude/worktrees/`
+- `.multiclaude/state/`, `.multiclaude/messages/`, `.multiclaude/worktrees/`, `*.pid`, `*.log`
 
-See `.gitignore` and `docs/guides/git-hygiene.md` for the full list.
+See `.gitignore` and `docs/guides/git-hygiene.md`.

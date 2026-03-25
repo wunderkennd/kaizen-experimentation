@@ -27,7 +27,14 @@ Service port: 50055 (ConnectRPC)
 - RBAC: all new RPCs must be wired into the auth interceptor with appropriate role levels.
 - Audit trail: all lifecycle transitions, configuration changes, and classification actions logged.
 - New PostgreSQL migrations go in `sql/migrations/` with sequential numbering.
-- Write status to `docs/coordination/status/agent-5-status.md`.
+## Work Tracking
+Find your assigned work via GitHub Issues:
+```bash
+gh issue list --label "agent-5" --state open
+gh issue view <number>
+```
+When starting work, comment on the Issue. When creating a PR, include `Closes #<number>`.
+If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Dependencies on Other Agents
 - Agent-Proto: New experiment types, `ExperimentLearning` enum, `AdaptiveSampleSizeConfig`, `AnnualizedImpact` must land first.
