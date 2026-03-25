@@ -5,20 +5,39 @@
 
 ## Current Sprint
 
-Sprint: 5.1
-Focus: ADR-024 M7 Rust port — **COMPLETE**
-Branch: work/kind-lion (merged), work/fancy-hawk (verification)
+Sprint: 5.2
+Focus: ADR-024 M7 Rust port — **VERIFIED COMPLETE** (this branch: work/happy-elephant)
+Branch: work/happy-elephant
 
 ## In Progress
 
-_None — ADR-024 fully delivered._
+_None — ADR-024 fully delivered and verified._
 
 ## Completed (Phase 5)
 
-- [x] **ADR-024 Phase 1** (previous sprint, PR: `work/lively-badger`): scaffold, CRUD, EvaluateFlag, wire-format contract tests
-- [x] **ADR-024 Phase 2**: PromoteToExperiment (M5 tonic client), multi-variant allocation, audit trail (`flag_audit_trail` inserts via `AuditStore`), stale flag detection (SQL view query), admin HTTP endpoints (axum 0.7, port 9090)
-- [x] **ADR-024 Phase 3**: Kafka lifecycle consumer (`rdkafka`, consumer group `flags-reconciler`, `experiment_lifecycle` JSON topic), polling reconciler (M5 `GetExperiment`, `ResolutionAction`: RolloutFull/Rollback/Keep), `kafka/topic_configs.sh` updated
-- [x] **ADR-024 Phase 4**: 13 chaos tests (MockFlagStore + ChaosStore per-operation fault injection), k6 load test (20K rps, p99 < 5ms target), `crates/experimentation-ffi/` deleted, `services/flags/` Go service deleted, Cargo workspace updated, justfile updated, Go SDK `hash_cgo.go` deleted / `hash_pure.go` promoted to primary
+- [x] **ADR-024 Phase 1** (PR: `work/lively-badger` → main, merged): scaffold `crates/experimentation-flags/`, `FlagStore` (sqlx+PgPool CRUD), tonic `FeatureFlagService` (CreateFlag, GetFlag, UpdateFlag, ListFlags, EvaluateFlag, EvaluateFlags), tonic-web enabled, 13 wire-format contract tests.
+- [x] **ADR-024 Phase 2** (PR: `work/kind-lion` → main, merged): `PromoteToExperiment` (M5 tonic client, `build_variants`, `apply_type_config` for AB/MAB/Bandit/Interleaving/Session), `AuditStore` (flag_audit_trail + stale flag detection), axum admin HTTP (`:9090` — `/internal/flags/{audit,stale,promoted,resolve}`).
+- [x] **ADR-024 Phase 3** (PR: `work/kind-lion` → main, merged): polling `Reconciler` (M5 `GetExperiment`, `ResolutionAction`: RolloutFull/Rollback/Keep), `FlagStore::resolve_flag()`, Kafka lifecycle consumer (rdkafka, `flags-reconciler` group, `experiment_lifecycle` topic), shared `PgPool` across all components.
+- [x] **ADR-024 Phase 4** (PR: `work/kind-lion` → main, merged): 13 chaos tests (`MockFlagStore` + `ChaosStore` per-op fault injection), `crates/experimentation-ffi/` deleted, `services/flags/` Go service deleted, Cargo workspace updated, Go SDK `hash_cgo.go` deleted / `hash_pure.go` promoted to primary.
+- [x] **ADR-024 doc** (PR: `work/happy-elephant` → main, this sprint): wrote `docs/adrs/024-m7-rust-port.md` (was referenced but missing).
+
+## Verification (this sprint)
+
+Verified `crates/experimentation-flags/` is fully operational:
+
+```
+cargo test -p experimentation-flags
+  tests/contract_test.rs: 13/13 pass
+  tests/chaos_test.rs:    13/13 pass
+  Total: 26/26 pass
+
+cargo build -p experimentation-flags: clean (no errors, no warnings)
+```
+
+- All 7 RPCs implemented: CreateFlag, GetFlag, UpdateFlag, ListFlags, EvaluateFlag, EvaluateFlags, PromoteToExperiment.
+- tonic-web enabled (`accept_http1(true)`, `tonic_web::enable(svc)`).
+- sqlx PostgreSQL with cursor-based pagination and transactional writes.
+- Bucketing via `experimentation_hash::bucket()` — no CGo, parity with M1 guaranteed by construction.
 
 ## Blocked
 
@@ -26,14 +45,14 @@ _None._
 
 ## Next Up
 
-ADR-024 is done. Ready for ADR-025 (M5 Rust port, conditional) if scheduled.
+ADR-024 is complete. Ready for ADR-025 (M5 Rust port, conditional) if scheduled.
 
 ## Dependencies
 
 - `experimentation-hash`: direct dep — EvaluateFlag uses `murmur3_x86_32()` natively (no FFI)
-- `experimentation-proto`: flags proto via `experimentation-proto` build.rs
-- `experimentation-ffi`: **DELETED** — CGo bridge eliminated by this PR
-- M5 Management (Agent-5): reconciler calls `GetExperiment`; falls back gracefully when M5_ADDR not set
+- `experimentation-proto`: flags proto compiled via `experimentation-proto` build.rs
+- `experimentation-ffi`: **DELETED** — CGo bridge eliminated by ADR-024 Phase 4
+- M5 Management (Agent-5): reconciler calls `GetExperiment`; falls back gracefully when `M5_ADDR` not set
 
 ## Verification (2026-03-24)
 
@@ -51,4 +70,5 @@ Re-verified by `work/fancy-hawk` agent:
 - Phase 1 PR: `work/lively-badger` → `main` (merged)
 - Phase 2-4 PR: `work/kind-lion` → `main` (merged)
 - ADR-024 doc PR: `work/happy-elephant` → `main` (PR #236, open)
-- Verification PR: `work/fancy-hawk` → `main` (this update)
+- Verification PR: `work/fancy-hawk` → `main` (merged)
+- ADR doc PR: `work/happy-elephant` → `main` (this sprint)
