@@ -461,74 +461,205 @@ gemini-review file:
 pr-triage:
     claude -p "Use the pr-triage agent. There are open PRs that need triage after a system restart. Inventory all open PRs, categorize them, present the summary, and wait for my confirmation before acting."
 
-# ==============================================================================
-# Orchestration — Daily Rhythm
-# ==============================================================================
-# See docs/guides/orchestration-workflow.md for full details.
-#   just morning              — Check overnight results, triage PRs, pull main
-#   just interactive          — Start Gas Town Mayor session
-#   just evening <sprint>     — Stop Gas Town, launch Multiclaude overnight
-#   just autonomous-sprint N  — Launch Multiclaude workers for sprint N
-#   just autonomous-stop      — Stop all Multiclaude workers
+# ============================================
+# Phase 5: Agent Orchestration
+# ============================================
+#
+# Three modes:
+#   just interactive    — Gas Town (you're steering, Mayor + polecats)
+#   just autonomous     — Multiclaude (you're away, daemon + merge queue)
+#   just solo           — Single Claude Code session (quick one-off task)
+#
+# Work tracked via GitHub Issues (not status files):
+#   just sprint-status  — Current sprint Issues
+#   just blocked        — Blocked Issues
+#   just work-on 42     — Launch a worker from Issue #42
+#
 
-# Morning check: review overnight Multiclaude results, triage PRs, pull main
+# --- Configuration ---
+
+kaizen_repo  := env("GT_HOME", "~/gt")
+mc_session   := "mc-kaizen"
+
+# --- Morning Handoff (Multiclaude → Gas Town) ---
+
 morning:
-    @echo "  === Morning Check ==="
-    @echo ""
-    @echo "  [1/4] Checking Multiclaude worker status..."
-    @multiclaude status 2>/dev/null || echo "    (Multiclaude not running)"
-    @echo ""
-    @echo "  [2/4] Listing open PRs..."
-    @gh pr list --limit 20 2>/dev/null || echo "    (gh CLI not available — check PRs manually)"
-    @echo ""
-    @echo "  [3/4] Agent status summaries:"
-    @for f in docs/coordination/status/agent-*-status.md; do \
-        if [ -f "$$f" ]; then \
-            echo "    --- $$(basename $$f) ---"; \
-            head -5 "$$f"; \
-            echo ""; \
-        fi; \
-    done
-    @echo "  [4/4] Pulling latest main..."
-    @git checkout main && git pull origin main
-    @echo ""
-    @echo "  Morning check complete. Review open PRs and merge green ones."
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Morning Handoff ==="
+    echo ""
+    echo "--- Multiclaude overnight results ---"
+    multiclaude status 2>/dev/null || echo "(Multiclaude not running)"
+    echo ""
+    echo "--- Open PRs ---"
+    gh pr list --limit 20 2>/dev/null || echo "(gh not configured)"
+    echo ""
+    echo "--- Sprint Status (GitHub Issues) ---"
+    MILESTONE=$(gh api repos/:owner/:repo/milestones --jq '[.[] | select(.state=="open")] | sort_by(.due_on) | .[0].title' 2>/dev/null || echo "")
+    if [ -n "$MILESTONE" ]; then
+      echo "Active milestone: $MILESTONE"
+      echo ""
+      echo "  Open:"
+      gh issue list --milestone "$MILESTONE" --state open --json number,title,assignees,labels \
+        --jq '.[] | "    #\(.number) [\(.assignees | map(.login) | join(",") // "unassigned")] \(.title)"' 2>/dev/null
+      echo ""
+      echo "  Closed (recently):"
+      gh issue list --milestone "$MILESTONE" --state closed --limit 5 --json number,title \
+        --jq '.[] | "    #\(.number) ✓ \(.title)"' 2>/dev/null
+      echo ""
+      echo "  Blocked:"
+      gh issue list --label "blocked" --state open --json number,title \
+        --jq '.[] | "    #\(.number) ⚠ \(.title)"' 2>/dev/null
+    else
+      echo "(No active milestone found)"
+    fi
+    echo ""
+    echo "--- Pulling latest main ---"
+    git checkout main 2>/dev/null && git pull origin main 2>/dev/null
+    echo ""
+    echo "Next steps:"
+    echo "  just autonomous-stop     # stop overnight workers"
+    echo "  just interactive         # start Gas Town for the day"
 
-# Start Gas Town Mayor session for interactive development
+# --- Evening Handoff (Gas Town → Multiclaude) ---
+
+evening sprint_num:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Evening Handoff ==="
+    cd "$(eval echo {{kaizen_repo}})" && gt down 2>/dev/null || true
+    git checkout main && git pull origin main
+    just autonomous-sprint {{sprint_num}}
+    echo ""
+    echo "Workers running. Detach with Ctrl-b d. Check tomorrow with 'just morning'."
+
+# --- Work Tracking (GitHub Issues) ---
+
+# Show current sprint Issues
+sprint-status milestone="":
+    #!/usr/bin/env bash
+    if [ -z "{{milestone}}" ]; then
+      MS=$(gh api repos/:owner/:repo/milestones --jq '[.[] | select(.state=="open")] | sort_by(.due_on) | .[0].title' 2>/dev/null)
+    else
+      MS="{{milestone}}"
+    fi
+    echo "=== $MS ==="
+    gh issue list --milestone "$MS" \
+      --json number,title,state,assignees,labels \
+      --jq '.[] | "\(.state)\t\(.assignees | map(.login) | join(",") // "unassigned")\t#\(.number)\t\(.title)"'
+
+# Show blocked Issues
+blocked:
+    gh issue list --label "blocked" --state open --json number,title,assignees \
+      --jq '.[] | "#\(.number)\t\(.assignees | map(.login) | join(",") // "unassigned")\t\(.title)"'
+
+# Show a specific agent's open work
+agent-work agent_label:
+    gh issue list --label "{{agent_label}}" --state open --json number,title,milestone \
+      --jq '.[] | "#\(.number)\t\(.milestone.title // "no milestone")\t\(.title)"'
+
+# Launch a Multiclaude worker from a GitHub Issue number
+work-on issue:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TASK=$(gh issue view {{issue}} --json title,body -q '"\(.title)\n\n\(.body)"')
+    echo "=== Launching worker for Issue #{{issue}} ==="
+    echo "$TASK" | head -3
+    echo "..."
+    multiclaude worker create "$TASK. Branch: use the agent-N/feat/adr-XXX naming convention. PR must include 'Closes #{{issue}}'."
+
+# --- Interactive Mode (Gas Town) ---
+
 interactive:
-    @echo "  Starting Gas Town interactive session..."
-    @command -v gt >/dev/null 2>&1 || { echo "  Error: 'gt' (Gas Town) not found. See docs/guides/gastown-setup.md"; exit 1; }
-    cd ~/gt && gt up && gt mayor attach
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Interactive Mode (Gas Town) ==="
+    cd "$(eval echo {{kaizen_repo}})"
+    gt up
+    gt mayor attach
 
-# Evening handoff: stop Gas Town, pull main, launch Multiclaude overnight workers
-evening sprint:
-    @echo "  === Evening Handoff (Sprint {{ sprint }}) ==="
-    @echo ""
-    @echo "  [1/3] Stopping Gas Town..."
-    @if command -v gt >/dev/null 2>&1; then cd ~/gt && gt down 2>/dev/null; echo "    Gas Town stopped."; else echo "    (Gas Town not installed — skipping)"; fi
-    @echo ""
-    @echo "  [2/3] Pulling latest main..."
-    @git checkout main && git pull origin main
-    @echo ""
-    @echo "  [3/3] Launching Multiclaude workers for sprint {{ sprint }}..."
-    @command -v multiclaude >/dev/null 2>&1 || { echo "  Error: 'multiclaude' not found. Install multiclaude first."; exit 1; }
-    multiclaude start --sprint {{ sprint }}
-    @echo ""
-    @echo "  Multiclaude workers running. Detach tmux with Ctrl-b d."
+interactive-stop:
+    cd "$(eval echo {{kaizen_repo}})" && gt down
 
-# Launch Multiclaude workers for a specific sprint (0-5)
-autonomous-sprint sprint:
-    @echo "  Launching Multiclaude workers for Sprint 5.{{ sprint }}..."
-    @command -v multiclaude >/dev/null 2>&1 || { echo "  Error: 'multiclaude' not found. Install multiclaude first."; exit 1; }
-    @git checkout main && git pull origin main
-    multiclaude start --sprint {{ sprint }}
-    @echo ""
-    @echo "  Workers launched. Monitor with: multiclaude status"
-    @echo "  Detach tmux with Ctrl-b d."
+# --- Autonomous Mode (Multiclaude) ---
 
-# Stop all Multiclaude workers gracefully
+autonomous:
+    #!/usr/bin/env bash
+    multiclaude start 2>/dev/null || true
+    echo "Daemon running. Commands:"
+    echo "  just work-on <issue-number>    # Launch worker from Issue"
+    echo "  just autonomous-sprint <N>     # Launch all sprint workers"
+    echo "  just autonomous-status"
+    echo "  just autonomous-attach"
+
+autonomous-status:
+    multiclaude status
+
+autonomous-attach:
+    tmux attach -t {{mc_session}} 2>/dev/null || echo "No active session."
+
 autonomous-stop:
-    @echo "  Stopping Multiclaude workers..."
-    @command -v multiclaude >/dev/null 2>&1 || { echo "  Error: 'multiclaude' not found."; exit 1; }
-    multiclaude stop
-    @echo "  All workers stopped."
+    multiclaude worker kill --all 2>/dev/null || true
+    echo "✓ Workers stopped."
+
+autonomous-shutdown:
+    multiclaude worker kill --all 2>/dev/null || true
+    multiclaude stop 2>/dev/null || true
+    echo "✓ Multiclaude fully stopped."
+
+# Sprint launchers read Issues from the milestone and create workers
+autonomous-sprint sprint_num:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    multiclaude start 2>/dev/null || true
+    case "{{sprint_num}}" in
+      0) MS="Sprint 5.0: Schema & Foundations" ;;
+      1) MS="Sprint 5.1: Measurement Foundations" ;;
+      2) MS="Sprint 5.2: Statistical Core" ;;
+      3) MS="Sprint 5.3: Constraints & New Experiment Types" ;;
+      4) MS="Sprint 5.4: Slate Bandits & Meta-Experiments" ;;
+      5) MS="Sprint 5.5: Advanced & Integration" ;;
+      *) echo "Unknown sprint: {{sprint_num}}"; exit 1 ;;
+    esac
+    echo "=== Launching workers for: $MS ==="
+    gh issue list --milestone "$MS" --state open --json number,title,body \
+      --jq '.[] | "\(.number)\t\(.title)\t\(.body)"' | \
+    while IFS=$'\t' read -r num title body; do
+      echo "  → Issue #$num: $title"
+      multiclaude worker create "$title. $body. Branch: use agent-N/feat/adr-XXX naming. PR must include 'Closes #$num'."
+    done
+    echo "✓ Workers launched for $MS"
+    echo "Monitor: just autonomous-status"
+
+# --- Solo Mode ---
+
+solo task_name="phase5-work":
+    claude --worktree "{{task_name}}"
+
+# --- Status & Diagnostics ---
+
+phase5-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Kaizen Phase 5 Status ==="
+    echo ""
+    echo "--- Gas Town ---"
+    cd "$(eval echo {{kaizen_repo}})" && gt status 2>/dev/null || echo "  Not running"
+    echo ""
+    echo "--- Multiclaude ---"
+    multiclaude status 2>/dev/null || echo "  Not running"
+    echo ""
+    echo "--- GitHub Issues ---"
+    just sprint-status
+    echo ""
+    echo "--- Open PRs ---"
+    gh pr list --limit 10 2>/dev/null || echo "  (gh not configured)"
+
+# --- PR Management ---
+
+stop-all:
+    #!/usr/bin/env bash
+    cd "$(eval echo {{kaizen_repo}})" && gt down 2>/dev/null || true
+    multiclaude worker kill --all 2>/dev/null || true
+    multiclaude stop 2>/dev/null || true
+    echo "✓ Everything stopped"

@@ -33,7 +33,14 @@ Service port: 3000
 - ConnectRPC client via `@connectrpc/connect-web` — all data from M4a/M5 endpoints.
 - Proto-to-UI type adapters: strip enum prefixes, handle int64-as-string, handle zero-value omission.
 - Responsive layout: all new pages must work at 1024px+ viewport.
-- Write status to `docs/coordination/status/agent-6-status.md`.
+## Work Tracking
+Find your assigned work via GitHub Issues:
+```bash
+gh issue list --label "agent-6" --state open
+gh issue view <number>
+```
+When starting work, comment on the Issue. When creating a PR, include `Closes #<number>`.
+If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Dependencies on Other Agents
 - Agent-4 (M4a): AVLM result format, e-value format, switchback result format, SCM result format.

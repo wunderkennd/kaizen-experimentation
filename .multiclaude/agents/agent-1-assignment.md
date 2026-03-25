@@ -22,7 +22,14 @@ Dependencies: experimentation-hash, experimentation-proto, experimentation-inter
 - Hash parity: any change to bucketing logic must pass all 10K test vectors.
 - p99 latency target: < 5ms for GetAssignment, < 15ms for GetSlateAssignment.
 - All new RPCs must have tonic-web JSON mode enabled for SDK compatibility.
-- Write status to `docs/coordination/status/agent-1-status.md`.
+## Work Tracking
+Find your assigned work via GitHub Issues:
+```bash
+gh issue list --label "agent-1" --state open
+gh issue view <number>
+```
+When starting work, comment on the Issue. When creating a PR, include `Closes #<number>`.
+If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Dependencies on Other Agents
 - Agent-4 (M4b): `SelectArm` and `GetSlateAssignment` responses — coordinate on proto contract.

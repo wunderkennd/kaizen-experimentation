@@ -24,7 +24,14 @@ Service port: 50056
 - Every SQL query must be logged to `query_log` for "View SQL" and "Export to Notebook" support.
 - Delta Lake table schemas documented in `delta/` directory with CREATE TABLE DDL.
 - Prometheus metrics: add counters/histograms for new computation pipelines on `:50059`.
-- Write status to `docs/coordination/status/agent-3-status.md`.
+## Work Tracking
+Find your assigned work via GitHub Issues:
+```bash
+gh issue list --label "agent-3" --state open
+gh issue view <number>
+```
+When starting work, comment on the Issue. When creating a PR, include `Closes #<number>`.
+If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Dependencies on Other Agents
 - Agent-Proto: `MetricStakeholder`, `MetricAggregationLevel` proto enums must land first.
