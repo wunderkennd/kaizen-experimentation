@@ -13,6 +13,15 @@ Branch: work/eager-bear
 
 - [ ] ADR-012 LP constraints
 
+## Completed (this session)
+
+- [x] **ADR-021 feedback loop API completion** (2026-03-24, work/eager-badger, PR #241)
+  - Added `InterferenceResult` struct with `From<FeedbackLoopResult>` conversion
+  - Added `contamination_flag(p_value, threshold) -> bool` standalone function
+  - Added `FeedbackLoopDetector::bias_corrected_effect(raw) -> f64` method (pre/post ratio)
+  - Added proptest `null_no_detection`: pre==post → detected=false, p=1.0 always
+  - All 27 feedback_loop tests + 192 experimentation-stats tests green
+
 ## Completed (Phase 5) — latest first
 
 - [x] **ADR-017 Phase 1 — TC/JIVE verification pass** (2026-03-24, work/clever-koala)

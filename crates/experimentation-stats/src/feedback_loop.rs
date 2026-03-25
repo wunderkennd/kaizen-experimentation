@@ -72,6 +72,49 @@ pub struct FeedbackLoopResult {
     pub n_retraining_events: usize,
 }
 
+/// Simplified interference result for downstream consumers that need only
+/// the key detection outputs without the full `FeedbackLoopResult` payload.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct InterferenceResult {
+    /// True if feedback loop contamination was detected.
+    pub detected: bool,
+    /// Two-sided p-value from the paired t-test on (post − pre) differences.
+    pub p_value: f64,
+    /// Multiplicative factor by which the detected feedback loop inflates
+    /// treatment effect estimates: `mean_post / mean_pre` when `mean_pre ≠ 0`,
+    /// otherwise 1.0. Apply to raw effects via `bias_corrected_effect()`.
+    pub bias_correction_factor: f64,
+    /// Bias-corrected treatment effect from OLS extrapolation to zero
+    /// contamination fraction.
+    pub corrected_effect: f64,
+}
+
+impl From<FeedbackLoopResult> for InterferenceResult {
+    fn from(r: FeedbackLoopResult) -> Self {
+        let bias_correction_factor = if r.mean_pre_retrain_effect.abs() > 1e-15 {
+            r.mean_post_retrain_effect / r.mean_pre_retrain_effect
+        } else {
+            1.0
+        };
+        InterferenceResult {
+            detected: r.feedback_loop_detected,
+            p_value: r.paired_ttest_p_value,
+            bias_correction_factor,
+            corrected_effect: r.bias_corrected_effect,
+        }
+    }
+}
+
+/// Returns `true` when `p_value` is below `threshold`, indicating statistically
+/// significant contamination at the given significance level.
+///
+/// # Panics
+/// Panics in debug mode if `threshold` is not in (0, 1).
+pub fn contamination_flag(p_value: f64, threshold: f64) -> bool {
+    debug_assert!(threshold > 0.0 && threshold < 1.0, "threshold must be in (0, 1)");
+    p_value < threshold
+}
+
 /// Detects feedback loop contamination across a sequence of retraining events.
 ///
 /// # Minimum data requirements
@@ -105,6 +148,26 @@ impl FeedbackLoopDetector {
             assert_finite(obs.post_retrain_effect, &format!("observation[{i}].post_retrain_effect"));
         }
         Ok(Self { observations })
+    }
+
+    /// Apply bias correction to a raw treatment effect using the pre/post ratio.
+    ///
+    /// Uses the ratio `mean_pre / mean_post` across all observations to scale
+    /// `raw` back toward the uncontaminated estimate. When `mean_post ≈ 0` the
+    /// ratio is undefined and `raw` is returned unchanged.
+    ///
+    /// # Note
+    /// For the full OLS-based bias correction (recommended), use
+    /// `detect().bias_corrected_effect` instead, which extrapolates to zero
+    /// contamination fraction via regression.
+    pub fn bias_corrected_effect(&self, raw: f64) -> f64 {
+        let n = self.observations.len() as f64;
+        let mean_pre = self.observations.iter().map(|o| o.pre_retrain_effect).sum::<f64>() / n;
+        let mean_post = self.observations.iter().map(|o| o.post_retrain_effect).sum::<f64>() / n;
+        if mean_post.abs() < 1e-15 {
+            return raw;
+        }
+        raw * (mean_pre / mean_post)
     }
 
     /// Run full feedback loop detection analysis.
@@ -395,6 +458,74 @@ mod tests {
         );
     }
 
+    // ── contamination_flag ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_contamination_flag_below_threshold() {
+        assert!(contamination_flag(0.01, 0.05));
+        assert!(contamination_flag(0.049, 0.05));
+    }
+
+    #[test]
+    fn test_contamination_flag_at_or_above_threshold() {
+        assert!(!contamination_flag(0.05, 0.05));
+        assert!(!contamination_flag(0.99, 0.05));
+    }
+
+    // ── InterferenceResult conversion ─────────────────────────────────────────
+
+    #[test]
+    fn test_interference_result_from_feedback_loop_result() {
+        let observations = vec![
+            obs(0.10, 0.05, 0.25),
+            obs(0.20, 0.05, 0.45),
+            obs(0.30, 0.05, 0.65),
+            obs(0.40, 0.05, 0.85),
+            obs(0.50, 0.05, 1.05),
+        ];
+        let det = FeedbackLoopDetector::new(observations).unwrap();
+        let full = det.detect(0.05).unwrap();
+        let ir: InterferenceResult = full.clone().into();
+        assert_eq!(ir.detected, full.feedback_loop_detected);
+        assert_eq!(ir.p_value, full.paired_ttest_p_value);
+        assert_eq!(ir.corrected_effect, full.bias_corrected_effect);
+    }
+
+    // ── bias_corrected_effect method ──────────────────────────────────────────
+
+    #[test]
+    fn test_bias_corrected_effect_method_ratio() {
+        // mean_pre = 0.05, mean_post = 0.65 → ratio = 0.05/0.65
+        let observations = vec![
+            obs(0.10, 0.05, 0.25),
+            obs(0.20, 0.05, 0.45),
+            obs(0.30, 0.05, 0.65),
+            obs(0.40, 0.05, 0.85),
+            obs(0.50, 0.05, 1.05),
+        ];
+        let det = FeedbackLoopDetector::new(observations).unwrap();
+        let mean_pre = 0.05f64;
+        let mean_post = (0.25 + 0.45 + 0.65 + 0.85 + 1.05) / 5.0;
+        let raw = 0.5;
+        let expected = raw * (mean_pre / mean_post);
+        let got = det.bias_corrected_effect(raw);
+        assert!((got - expected).abs() < 1e-10, "got {got}, expected {expected}");
+    }
+
+    #[test]
+    fn test_bias_corrected_effect_zero_mean_post() {
+        // When mean_post ≈ 0, return raw unchanged.
+        let observations = vec![
+            obs(0.10, 0.5, 0.0),
+            obs(0.20, 0.5, 0.0),
+            obs(0.30, 0.5, 0.0),
+        ];
+        let det = FeedbackLoopDetector::new(observations).unwrap();
+        let raw = 0.3;
+        let got = det.bias_corrected_effect(raw);
+        assert!((got - raw).abs() < 1e-10, "expected passthrough, got {got}");
+    }
+
     // ── Proptest invariants ───────────────────────────────────────────────────
 
     mod proptest_feedback {
@@ -402,6 +533,41 @@ mod tests {
         use proptest::prelude::*;
 
         proptest! {
+            /// Under the null hypothesis (pre == post for all observations),
+            /// the paired differences are identically zero. The detector must
+            /// never flag feedback loop contamination regardless of alpha,
+            /// because variance is zero and the test returns p = 1.0.
+            #[test]
+            fn null_no_detection(
+                effects in proptest::collection::vec(-1.0f64..1.0, 3..10),
+                contams in proptest::collection::vec(0.01f64..0.99, 3..10),
+            ) {
+                let n = effects.len().min(contams.len());
+                if n < 3 { return Ok(()); }
+                // pre == post for every observation → null is exactly true.
+                let observations: Vec<RetrainingEffectObservation> = (0..n)
+                    .map(|i| RetrainingEffectObservation {
+                        contamination_fraction: contams[i],
+                        pre_retrain_effect: effects[i],
+                        post_retrain_effect: effects[i],
+                    })
+                    .collect();
+                if let Ok(det) = FeedbackLoopDetector::new(observations) {
+                    let result = det.detect(0.05).unwrap();
+                    prop_assert!(
+                        !result.feedback_loop_detected,
+                        "under null (pre==post), detection must not fire; p={}",
+                        result.paired_ttest_p_value
+                    );
+                    // p-value must be 1.0 when all diffs are zero.
+                    prop_assert!(
+                        (result.paired_ttest_p_value - 1.0).abs() < 1e-9,
+                        "expected p=1.0 under null, got {}",
+                        result.paired_ttest_p_value
+                    );
+                }
+            }
+
             #[test]
             fn p_value_in_range(
                 effects in proptest::collection::vec((-1.0f64..1.0, -1.0f64..1.0), 3..10),
