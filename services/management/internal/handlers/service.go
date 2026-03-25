@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/org/experimentation/gen/go/experimentation/analysis/v1/analysisv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/bandit/v1/banditv1connect"
@@ -24,6 +25,9 @@ type ExperimentService struct {
 	targeting  *store.TargetingStore
 	surrogates *store.SurrogateStore
 	notifier   *streaming.Notifier
+
+	// Monotonically increasing version counter for StreamConfigUpdates.
+	streamVersion atomic.Int64
 
 	// Optional external service clients (nil = graceful degradation).
 	analysisClient     analysisv1connect.AnalysisServiceClient
