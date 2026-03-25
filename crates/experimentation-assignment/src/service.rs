@@ -494,10 +494,16 @@ impl AssignmentServiceImpl {
                     let slot_probabilities = result
                         .slot_assignments
                         .into_iter()
-                        .map(|a| SlotProbability {
-                            slot_index: a.slot_index,
-                            item_id: a.item_id,
-                            probability: a.probability,
+                        .map(|a| {
+                            experimentation_core::error::assert_finite(
+                                a.probability,
+                                &format!("slot {} probability for item '{}'", a.slot_index, a.item_id),
+                            );
+                            SlotProbability {
+                                slot_index: a.slot_index,
+                                item_id: a.item_id,
+                                probability: a.probability,
+                            }
                         })
                         .collect();
                     return Ok(GetSlateAssignmentResponse {
