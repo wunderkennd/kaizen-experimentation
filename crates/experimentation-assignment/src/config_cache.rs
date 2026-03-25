@@ -202,7 +202,7 @@ pub fn experiment_from_proto(
         interleaving_config,
         bandit_config,
         is_cumulative_holdout: proto.is_cumulative_holdout,
-        switchback_config: None,
+        switchback_config: existing.and_then(|e| e.switchback_config.clone()),
     }
 }
 
