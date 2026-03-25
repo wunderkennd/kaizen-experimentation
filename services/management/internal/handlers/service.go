@@ -40,9 +40,8 @@ type ExperimentService struct {
 	// fdrController is the platform-level e-LOND Online FDR controller
 	// (ADR-018 Phase 2). Nil when FDR control is not configured.
 	fdrController *fdr.Controller
-	analysisClient          analysisv1connect.AnalysisServiceClient
-	banditClient            banditv1connect.BanditPolicyServiceClient
-	surrogatePublisher      surrogate.Publisher
+
+	// modelTrainingPublisher publishes MLRATE model training requests (ADR-015 Phase 2).
 	modelTrainingPublisher  mlrate.Publisher
 }
 
@@ -75,6 +74,8 @@ func WithPool(pool *pgxpool.Pool) ServiceOption {
 // metric e-value to the controller and records the reject/don't-reject decision.
 func WithFdrController(c *fdr.Controller) ServiceOption {
 	return func(s *ExperimentService) { s.fdrController = c }
+}
+
 // WithModelTrainingPublisher sets the Kafka publisher for MLRATE model training requests (ADR-015 Phase 2).
 func WithModelTrainingPublisher(p mlrate.Publisher) ServiceOption {
 	return func(s *ExperimentService) { s.modelTrainingPublisher = p }
