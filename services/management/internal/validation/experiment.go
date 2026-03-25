@@ -146,10 +146,6 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 		if err := validateMetaExperimentConfig(exp); err != nil {
 			return err
 		}
-		if exp.GetBanditConfig() == nil {
-			return connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("bandit_config is required for META type (defines shared arm set)"))
-		}
 
 	}
 	return nil
