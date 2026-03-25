@@ -136,8 +136,8 @@ export default function ExperimentDetailPage() {
             {experiment.type === 'META' && experiment.metaConfig && experiment.variants.length > 0 && (() => {
               const firstConfig = experiment.metaConfig.variantBanditConfigs[0];
               if (!firstConfig) return null;
-              const variantProb = experiment.variants[0]?.trafficFraction ?? 0;
-              const armProb = firstConfig.arms.length > 0 ? 1 / firstConfig.arms.length : 0;
+              const matchingVariant = experiment.variants.find(v => v.variantId === firstConfig.variantId);
+              const variantProb = matchingVariant?.trafficFraction ?? 0;
               return <TwoLevelIPWBadge variantProbability={variantProb} armProbability={armProb} />;
             })()}
           </div>
