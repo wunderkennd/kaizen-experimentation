@@ -6,8 +6,8 @@
 ## Current Sprint
 
 Sprint: 5.0
-Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints
-Branch: work/eager-bear
+Focus: ADR-015 AVLM, ADR-017 TC/JIVE, ADR-018 E-values, ADR-014 Guardrail beta-correction, ADR-011 Multi-objective, ADR-012 LP constraints, ADR-022 Switchback
+Branch: work/eager-bear, work/happy-squirrel
 
 ## In Progress
 
@@ -37,6 +37,21 @@ Branch: work/eager-bear
   - Proptest invariants `iv_result_all_finite` and `bias_correction_sign_with_positive_confounder` confirmed green
   - Full `experimentation-stats` test suite: 0 failures
   - No code changes required — implementation landed in PR #198
+
+- [x] **ADR-022 — Switchback Experiment Analysis** (2026-03-23, work/happy-squirrel)
+  - `crates/experimentation-stats/src/switchback.rs`: `SwitchbackAnalyzer` (~450 LOC)
+  - **`BlockOutcome`**: block_index, cluster_id, is_treatment, metric_value, user_count, in_washout
+  - **`SwitchbackResult`**: effect, hac_se, ci_lower/upper, randomization_p_value, effective_blocks, lag1_autocorrelation, carryover_test_p_value, hac_bandwidth
+  - **`SwitchbackAnalyzer::new()`**: validates ≥4 non-washout blocks, filters washout, sorts by block_index
+  - **`SwitchbackAnalyzer::analyze(alpha, n_permutations, rng_seed)`**: OLS + HAC SE + randomization inference + carryover diagnostic
+  - **`SwitchbackAnalyzer::randomization_test(n_permutations)`**: standalone randomization inference
+  - **`SwitchbackAnalyzer::carryover_test(alpha)`**: standalone lag-1 autocorrelation test
+  - **HAC SE**: Newey-West Bartlett-kernel estimator; Andrews (1991) AR(1) automatic bandwidth ĥ = ⌈1.1447·(2ρ̂²/(1−ρ̂²))^{1/3}·T^{1/3}⌉
+  - **Randomization inference**: exact enumeration when C(T,k) ≤ n_permutations; Fisher-Yates MC otherwise
+  - **Carryover diagnostic**: t-test on lag-1 autocorrelation of OLS residuals, approx t(T−2)
+  - 20 unit tests + 4 proptest invariants (p_all_outputs_valid, p_effect_seed_independent, p_randomization_p_in_range, p_lag1_autocorr_in_range)
+  - Registered in `crates/experimentation-stats/src/lib.rs` as `pub mod switchback`
+  - All 243 experimentation-stats tests green; full workspace 0 failures
 
 - [x] **ADR-015 M4a integration — AVLM wired into RunAnalysis** (2026-03-23, work/bright-bear)
   - `proto/experimentation/analysis/v1/analysis_service.proto`: extended `RunAnalysisRequest`

@@ -23,8 +23,10 @@
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
 //! - `feedback_loop` — Feedback loop detection: paired t-test, contamination correlation, bias correction (ADR-021)
 //! - `clustering` — Clustered standard errors for session-level experiments
+//! - `switchback` — Switchback experiment analysis: HAC SE, randomization inference, carryover diagnostic (ADR-022)
 
 pub mod adaptive_n;
+pub mod switchback;
 pub mod avlm;
 pub mod bayesian;
 pub mod bootstrap;
