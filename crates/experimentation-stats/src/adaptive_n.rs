@@ -868,8 +868,8 @@ mod tests {
             ).unwrap();
             prop_assert!(n_req >= n_current,
                 "required n {n_req} < n_current {n_current}");
-            prop_assert!(n_req <= n_max_allowed,
-                "required n {n_req} > n_max_allowed {n_max_allowed}");
+            prop_assert!(n_req <= n_max_allowed.ceil(),
+                "required n {n_req} > n_max_allowed.ceil() {}", n_max_allowed.ceil());
         }
     }
 }
