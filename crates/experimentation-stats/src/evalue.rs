@@ -358,6 +358,8 @@ pub fn e_value_avlm(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    use proptest::prelude::*;
 
     // --- e_value_grow -------------------------------------------------------
 
@@ -529,5 +531,93 @@ mod tests {
         let x2 = vec![0.0; 2];
         assert!(e_value_avlm(&y3, &y3, &x2, &x3, 1.0, 0.05).is_err(), "ctrl_x mismatch");
         assert!(e_value_avlm(&y3, &y3, &x3, &x2, 1.0, 0.05).is_err(), "trt_x mismatch");
+    }
+
+    // --- proptest invariants -------------------------------------------------
+
+    proptest! {
+        /// e_value_grow always returns a finite, nonnegative e-value and a
+        /// trajectory whose length matches the observation count.
+        #[test]
+        fn grow_outputs_always_finite(
+            obs in proptest::collection::vec(-5.0f64..5.0, 1..20),
+            sigma_sq in 0.1f64..10.0,
+        ) {
+            let result = e_value_grow(&obs, sigma_sq, 0.05).unwrap();
+            prop_assert!(result.e_value.is_finite(), "e_value not finite: {}", result.e_value);
+            prop_assert!(result.e_value >= 0.0, "e_value negative: {}", result.e_value);
+            prop_assert!(result.log_e_value.is_finite(), "log_e_value not finite");
+            prop_assert_eq!(result.log_wealth_trajectory.len(), obs.len());
+            for &w in &result.log_wealth_trajectory {
+                prop_assert!(w.is_finite(), "trajectory entry not finite: {w}");
+            }
+        }
+
+        /// reject is consistent: reject iff e_value > 1/alpha.
+        #[test]
+        fn grow_reject_consistent_with_threshold(
+            obs in proptest::collection::vec(-3.0f64..3.0, 1..15),
+            sigma_sq in 0.5f64..5.0,
+            alpha in 0.01f64..0.5,
+        ) {
+            let result = e_value_grow(&obs, sigma_sq, alpha).unwrap();
+            let threshold = 1.0 / alpha;
+            if result.reject {
+                prop_assert!(result.e_value > threshold,
+                    "reject=true but e_value={} <= threshold={}", result.e_value, threshold);
+            } else {
+                prop_assert!(result.e_value <= threshold,
+                    "reject=false but e_value={} > threshold={}", result.e_value, threshold);
+            }
+        }
+
+        /// e_value_avlm always returns a finite, positive e-value and an empty
+        /// trajectory (batch method).
+        #[test]
+        fn avlm_outputs_always_finite(
+            ctrl in proptest::collection::vec(-5.0f64..5.0, 2..10),
+            trt in proptest::collection::vec(-5.0f64..5.0, 2..10),
+            tau_sq in 0.01f64..5.0,
+        ) {
+            let n_c = ctrl.len();
+            let n_t = trt.len();
+            let ctrl_x = vec![0.0f64; n_c];
+            let trt_x = vec![0.0f64; n_t];
+            match e_value_avlm(&ctrl, &trt, &ctrl_x, &trt_x, tau_sq, 0.05) {
+                Ok(result) => {
+                    prop_assert!(result.e_value.is_finite(), "e_value not finite");
+                    prop_assert!(result.e_value >= 0.0, "e_value negative: {}", result.e_value);
+                    prop_assert!(result.log_e_value.is_finite(), "log_e_value not finite");
+                    prop_assert!(result.log_wealth_trajectory.is_empty(), "batch: trajectory must be empty");
+                }
+                Err(_) => {
+                    // Degenerate (zero-variance) data may yield an error; that is valid.
+                }
+            }
+        }
+
+        /// AVLM reject is consistent: reject iff e_value > 1/alpha.
+        #[test]
+        fn avlm_reject_consistent_with_threshold(
+            ctrl in proptest::collection::vec(-3.0f64..3.0, 2..8),
+            trt in proptest::collection::vec(-3.0f64..3.0, 2..8),
+            tau_sq in 0.1f64..3.0,
+            alpha in 0.01f64..0.5,
+        ) {
+            let n_c = ctrl.len();
+            let n_t = trt.len();
+            let cx = vec![0.0f64; n_c];
+            let tx = vec![0.0f64; n_t];
+            if let Ok(result) = e_value_avlm(&ctrl, &trt, &cx, &tx, tau_sq, alpha) {
+                let threshold = 1.0 / alpha;
+                if result.reject {
+                    prop_assert!(result.e_value > threshold,
+                        "reject=true but e_value={} <= threshold={}", result.e_value, threshold);
+                } else {
+                    prop_assert!(result.e_value <= threshold,
+                        "reject=false but e_value={} > threshold={}", result.e_value, threshold);
+                }
+            }
+        }
     }
 }

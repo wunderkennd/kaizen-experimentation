@@ -10,6 +10,7 @@ import type {
   AuditLogEntry, AuditAction, ListAuditLogResponse,
   ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
+  PortfolioAllocationResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -730,5 +731,13 @@ export async function getAdaptiveN(experimentId: string): Promise<AdaptiveNResul
 export async function getFeedbackLoopAnalysis(experimentId: string): Promise<FeedbackLoopResult> {
   return callRpc<{ experimentId: string }, FeedbackLoopResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetFeedbackLoopAnalysis', { experimentId },
+  );
+}
+
+// --- Portfolio Optimization (ADR-019) ---
+
+export async function getPortfolioAllocation(): Promise<PortfolioAllocationResult> {
+  return callRpc<Record<string, never>, PortfolioAllocationResult>(
+    MGMT_URL, MGMT_SVC, 'GetPortfolioAllocation', {},
   );
 }
