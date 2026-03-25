@@ -202,6 +202,7 @@ pub fn experiment_from_proto(
         interleaving_config,
         bandit_config,
         is_cumulative_holdout: proto.is_cumulative_holdout,
+        switchback_config: existing.and_then(|e| e.switchback_config.clone()),
     }
 }
 
@@ -289,6 +290,7 @@ mod tests {
             interleaving_config: None,
             bandit_config: None,
             is_cumulative_holdout: false,
+            switchback_config: None,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

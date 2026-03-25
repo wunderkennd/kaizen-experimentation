@@ -61,6 +61,7 @@ fn make_exposure(
         interleaving_provenance: provenance,
         bandit_context_json: r#"{"feature_a": 1.5}"#.into(),
         lifecycle_segment: LifecycleSegment::Established as i32,
+        switchback_block_index: 0,
     }
 }
 
@@ -177,6 +178,7 @@ fn test_exposure_roundtrip_minimal() {
         interleaving_provenance: HashMap::new(),
         bandit_context_json: String::new(),
         lifecycle_segment: 0,
+        switchback_block_index: 0,
     };
     let bytes = event.encode_to_vec();
     let decoded = ExposureEvent::decode(bytes.as_slice()).unwrap();
