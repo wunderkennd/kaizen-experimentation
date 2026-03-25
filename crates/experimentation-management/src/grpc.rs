@@ -264,7 +264,8 @@ impl ExperimentManagementService for ManagementServiceHandler {
         let req = request.into_inner();
         let page_size = if req.page_size <= 0 { 50 } else { req.page_size as i64 };
         let state_filter = if req.state_filter != 0 {
-            experiment_state_from_proto(req.state_filter)
+            Some(experiment_state_from_proto(req.state_filter)
+                .ok_or_else(|| Status::invalid_argument(format!("invalid state_filter value: {}", req.state_filter)))?)
         } else {
             None
         };
