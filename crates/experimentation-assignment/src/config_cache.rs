@@ -188,6 +188,9 @@ pub fn experiment_from_proto(
     // Preserve bandit_config from existing config.
     let bandit_config = existing.and_then(|e| e.bandit_config.clone());
 
+    // Preserve meta_experiment_config from existing config (ADR-013).
+    let meta_experiment_config = existing.and_then(|e| e.meta_experiment_config.clone());
+
     ExperimentConfig {
         experiment_id: proto.experiment_id.clone(),
         name: proto.name.clone(),
@@ -202,6 +205,7 @@ pub fn experiment_from_proto(
         interleaving_config,
         bandit_config,
         is_cumulative_holdout: proto.is_cumulative_holdout,
+        meta_experiment_config,
     }
 }
 
@@ -289,6 +293,7 @@ mod tests {
             interleaving_config: None,
             bandit_config: None,
             is_cumulative_holdout: false,
+            meta_experiment_config: None,
         };
 
         let config = experiment_from_proto(&proto, Some(&existing));

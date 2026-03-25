@@ -8,6 +8,7 @@ use std::path::Path;
 use experimentation_core::error::assert_finite;
 use serde::Deserialize;
 
+
 /// Top-level configuration containing experiments and layers.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -43,6 +44,9 @@ pub struct ExperimentConfig {
     pub bandit_config: Option<BanditConfig>,
     #[serde(default)]
     pub is_cumulative_holdout: bool,
+    /// Meta-experiment config (ADR-013). Present when type == "META".
+    #[serde(default)]
+    pub meta_experiment_config: Option<MetaExperimentConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -130,6 +134,35 @@ pub struct BanditArmConfig {
     pub name: String,
     #[serde(default)]
     pub payload_json: String,
+}
+
+/// Meta-experiment config (ADR-013).
+///
+/// Each variant runs the same bandit arm set but with a different reward objective
+/// parameterisation. M1 hashes the user to a variant, then calls M4b SelectArm
+/// with key `{experiment_id}:{variant_id}` to maintain isolated per-variant policy
+/// state in RocksDB.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct MetaExperimentConfig {
+    /// Base bandit algorithm shared across all variants.
+    #[serde(default)]
+    pub base_algorithm: String,
+    /// Per-variant reward objective parameterisations.
+    #[serde(default)]
+    pub variant_objectives: Vec<MetaVariantObjective>,
+    /// Metric IDs tracked for cross-variant business outcome analysis in M4a.
+    #[serde(default)]
+    pub outcome_metric_ids: Vec<String>,
+}
+
+/// Maps a variant to its reward objective weights.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MetaVariantObjective {
+    /// Variant this objective applies to.
+    pub variant_id: String,
+    /// Metric weights summing to 1.0. Key: metric_id, Value: weight.
+    #[serde(default)]
+    pub reward_weights: HashMap<String, f64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

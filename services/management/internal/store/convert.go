@@ -38,6 +38,7 @@ var typeToString = map[commonv1.ExperimentType]string{
 	commonv1.ExperimentType_EXPERIMENT_TYPE_MAB:               "MAB",
 	commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT: "CONTEXTUAL_BANDIT",
 	commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT: "CUMULATIVE_HOLDOUT",
+	commonv1.ExperimentType_EXPERIMENT_TYPE_META:              "META",
 }
 
 var stringToType = map[string]commonv1.ExperimentType{
@@ -49,6 +50,7 @@ var stringToType = map[string]commonv1.ExperimentType{
 	"MAB":               commonv1.ExperimentType_EXPERIMENT_TYPE_MAB,
 	"CONTEXTUAL_BANDIT": commonv1.ExperimentType_EXPERIMENT_TYPE_CONTEXTUAL_BANDIT,
 	"CUMULATIVE_HOLDOUT": commonv1.ExperimentType_EXPERIMENT_TYPE_CUMULATIVE_HOLDOUT,
+	"META":              commonv1.ExperimentType_EXPERIMENT_TYPE_META,
 }
 
 // --- Guardrail action conversions ---
