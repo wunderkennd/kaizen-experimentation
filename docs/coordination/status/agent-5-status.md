@@ -20,6 +20,21 @@ Branch: work/witty-badger, work/bold-eagle
   - `services/management/internal/handlers/lifecycle.go` — wire into concludeByID
   - `services/management/cmd/main.go` — ONLINE_FDR_ENABLED env var gate
 
+Focus: ADR-015 Phase 2 MLRATE Model Training Trigger
+Branch: work/silly-badger
+PR: (pending)
+
+## In Progress
+
+- [x] ADR-015 Phase 2 — MLRATE model training trigger (this PR)
+  - New `services/management/internal/mlrate/` package: `ModelTrainingRequest`, `Publisher` interface, `KafkaPublisher`, `MemPublisher`, `ShouldTrigger`, `Emit`
+  - `StartExperiment` in `handlers/lifecycle.go` calls `maybeEmitModelTrainingRequest` after DRAFT→STARTING transition
+  - Trigger condition: `sequential_method == "AVLM"` AND `surrogate_model_id != ""`
+  - Event fields: `experiment_id`, `metric_id` (primary), `covariate_metric_id` (surrogate target), `training_data_start` (now - 30d), `training_data_end` (now)
+  - Kafka topic `model_training_requests` added to docker-compose.yml
+  - AVLM added to `seqMethodToString`/`stringToSeqMethod` maps in `store/convert.go`
+  - 9 unit tests in `mlrate/publisher_test.go`; all pass
+
 - [x] **Phase 5 CHANGELOG and implementation plan** (work/bold-eagle)
   - Created `docs/coordination/CHANGELOG-phase5.md` — release notes for Phase 5 (all 15 ADRs, per-cluster breakdown, breaking changes, migration guide, performance characteristics)
   - Created `docs/coordination/phase5-implementation-plan.md` — canonical status table for all 19 Phase 5 work items with PR references
@@ -56,12 +71,17 @@ Branch: work/witty-badger, work/bold-eagle
   - Best-effort integration at CONCLUDED transition; never blocks conclusion
   - Opt-in via ONLINE_FDR_ENABLED=true environment variable
 
+- [x] ADR-015 Phase 2 — MLRATE trigger in M5 (this PR)
+
 ## Blocked
 
 - **Agent-4 dependency (partial)**: `ConditionalPowerClient` interface at
   `services/management/internal/adaptive/processor.go:62` requires gRPC wrapper around M4a's
   `ComputeConditionalPower` RPC. The interface contract is defined; Agent-4 implements server side.
   Phase 1 statistical module is complete and unblocked.
+
+- **Agent-4 dependency**: `ConditionalPowerClient` interface at `services/management/internal/adaptive/processor.go:62` needs a gRPC wrapper around M4a's `ComputeConditionalPower` RPC. The contract is defined in the interface — Agent-4 implements the server side.
+- **gen/go infrastructure**: `gen/go/go.mod` missing; packages that depend on `github.com/org/experimentation/gen/go` (handlers, store, sequential, validation) cannot compile in the workspace. Pre-existing issue. The `mlrate` package was structured to be testable without gen/go (same pattern as `adaptive`).
 
 ## Next Up
 
