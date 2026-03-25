@@ -9,6 +9,9 @@ Sprint: 5.2
 Focus: Portfolio optimization dashboard (ADR-019) + Provider Health dashboard (ADR-014)
 Branch: work/gentle-panda, work/gentle-penguin
 
+Focus: ADR-011 multi-objective bandit reward visualization, ADR-012 LP constraint status table
+Branch: work/fancy-koala
+
 ## Completed (this sprint)
 
 - [x] **Portfolio optimization dashboard** (ADR-019)
@@ -36,35 +39,50 @@ Branch: work/gentle-panda, work/gentle-penguin
 
 ## Completed (previous PRs)
 
-- [x] **AVLM confidence sequence boundary plot** (ADR-015)
-  - `ui/src/components/charts/avlm-boundary-plot.tsx`
-  - Recharts ComposedChart with Area (confidence sequence band) + dual Line (CUPED + raw estimate)
-  - ReferenceLine at H0=0; conclusive badge when CS excludes zero
-  - Dynamically imported; legacy alpha-spending chart preserved under details fold
-  - API: `getAvlmResult(experimentId, metricId)` → AnalysisService/GetAvlmResult
-  - Types: AvlmBoundaryPoint, AvlmResult
-  - Seed data: 2 metrics for 111... (CTR conclusive look 3, watch_time inconclusive)
+- [x] **ADR-011 Multi-objective reward composition chart** (2026-03-24, work/fancy-koala)
+  - `ui/src/components/RewardCompositionChart.tsx`
+  - Stacked BarChart (recharts) showing each objective's weighted contribution per arm
+  - Color-coded segments: one per RewardObjective metricId
+  - Footer shows primary objective and all weights
+  - Empty state when no breakdowns or objectives provided
+  - `React.memo` wrapped, strict TypeScript
 
-- [x] **Adaptive N zone indicator badge** (ADR-020)
-  - `ui/src/components/adaptive-n-badge.tsx`
-  - Zones: FAVORABLE (green), PROMISING (blue), FUTILE (red), INCONCLUSIVE (gray)
-  - Mounted in experiment detail page header for RUNNING/CONCLUDED experiments
-  - API: `getAdaptiveN(experimentId)` → AnalysisService/GetAdaptiveN
+- [x] **ADR-012 LP constraint status table** (2026-03-24, work/fancy-koala)
+  - `ui/src/components/ConstraintStatusTable.tsx`
+  - Table: constraint name, current value, limit, SATISFIED/VIOLATED badge
+  - Red row highlight (`bg-red-50`) on VIOLATED rows
+  - Red badge and bold current value for violated constraints
+  - Empty state when no constraints configured
+  - `React.memo` wrapped, strict TypeScript
 
-- [x] **Extended timeline visualization** (ADR-020 PROMISING zone)
-  - `ui/src/components/adaptive-n-timeline.tsx`
-  - AreaChart with planned N and recommended N reference lines
-  - Only rendered when zone === PROMISING in results page overview tab
+- [x] **Wired into bandit dashboard page**
+  - `ui/src/app/experiments/[id]/bandit/page.tsx` updated
+  - `RewardCompositionChart` and `ConstraintStatusTable` sections rendered
+  - Conditional: only shown when `banditExperimentConfig.rewardObjectives?.length > 0`
+  - `ConstraintStatusTable` additionally guarded by `constraintStatuses?.length > 0`
 
-- [x] **Feedback loop analysis tab**
-  - `ui/src/components/feedback-loop-tab.tsx`
-  - Sections: retraining timeline, pre/post comparison chart, contamination bar chart,
-    bias-corrected estimate highlight, mitigation recommendation matrix (HIGH/MEDIUM/LOW)
-  - Visible for AB/MAB/CONTEXTUAL_BANDIT experiments
-  - API: `getFeedbackLoopAnalysis(experimentId)` → AnalysisService/GetFeedbackLoopAnalysis
+- [x] **Types extended** (`ui/src/lib/types.ts`)
+  - `RewardCompositionMethod` (WEIGHTED_SCALARIZATION | EPSILON_CONSTRAINT | TCHEBYCHEFF)
+  - `RewardObjective` (metricId, weight, floor, isPrimary)
+  - `BanditArmConstraint` (armId, minFraction, maxFraction)
+  - `BanditGlobalConstraint` (label, coefficients, rhs)
+  - `ArmObjectiveBreakdown` (armId, armName, objectiveContributions, composedReward)
+  - `ConstraintStatus` (label, currentValue, limit, isSatisfied)
+  - `BanditExperimentConfig` extended with optional: rewardObjectives, compositionMethod, armConstraints, globalConstraints
+  - `BanditDashboardResult` extended with optional: objectiveBreakdowns, constraintStatuses
 
-- [x] Tests: 14 new tests all passing, 0 regressions (499 total, 6 pre-existing skips)
-- [x] Updated recharts mocks in analysis-tabs, results-dashboard, performance test files (Area/AreaChart)
+- [x] **Seed data updated** (`ui/src/__mocks__/seed-data.ts`)
+  - cold_start_bandit (444...) banditExperimentConfig: 3 rewardObjectives, WEIGHTED_SCALARIZATION, 2 globalConstraints
+  - BanditDashboardResult: objectiveBreakdowns for all 4 arms, 2 constraintStatuses (1 satisfied, 1 violated)
+
+- [x] **Tests: 15 new tests, all passing** (26 total in bandit-dashboard.test.tsx)
+  - 5 integration tests on bandit dashboard page (multi-objective sections, constraint badges)
+  - 4 unit tests for RewardCompositionChart (empty states, aria label, footer)
+  - 6 unit tests for ConstraintStatusTable (badges, red highlight, empty state, columns)
+  - Pre-existing test isolation failures (performance, chaos-resilience, MSW state bleed) unchanged
+
+- [x] `npm run build` passes
+- [x] 26 / 26 bandit dashboard tests pass
 
 ## Blocked
 
@@ -77,6 +95,12 @@ None.
 
 ## Completed (Phase 5 — prior sprints)
 
+- [x] AVLM confidence sequence boundary plot (ADR-015)
+  - `ui/src/components/charts/avlm-boundary-plot.tsx`
+- [x] Adaptive N zone indicator badge + timeline (ADR-020)
+  - `ui/src/components/adaptive-n-badge.tsx`, `adaptive-n-timeline.tsx`
+- [x] Feedback loop analysis tab (ADR-021)
+  - `ui/src/components/feedback-loop-tab.tsx`
 - [x] /portfolio/provider-health page (ADR-014)
   - Time series charts, provider filter, MSW mock, 8 tests
 - [x] AVLM confidence sequence boundary plot (ADR-015)
@@ -89,5 +113,6 @@ None.
   - Request: `{}` (empty)
   - Response: `{ experiments: PortfolioExperiment[], totalAllocatedPct: float, computedAt: timestamp }`
   - `PortfolioExperiment` fields: `experiment_id`, `name`, `effect_size`, `variance`, `allocated_traffic_pct`, `priority_score`, `user_segments`
+
+- Agent-4: BanditPolicyService objectiveBreakdowns and constraintStatuses in GetBanditDashboard response
 - Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis
-- Agent-2: Feedback loop retraining event data flow

@@ -496,12 +496,46 @@ export interface SessionConfig {
   minSessionsPerUser: number;
 }
 
+export type RewardCompositionMethod =
+  | 'WEIGHTED_SCALARIZATION'
+  | 'EPSILON_CONSTRAINT'
+  | 'TCHEBYCHEFF';
+
+export interface RewardObjective {
+  metricId: string;
+  weight: number;
+  /** Floor constraint for EPSILON_CONSTRAINT (minimum normalized value). */
+  floor: number;
+  isPrimary: boolean;
+}
+
+export interface BanditArmConstraint {
+  armId: string;
+  minFraction: number;
+  maxFraction: number;
+}
+
+export interface BanditGlobalConstraint {
+  label: string;
+  /** Coefficient for each arm keyed by armId. */
+  coefficients: Record<string, number>;
+  /** Right-hand side: Σ(coeff_i × p_i) <= rhs. */
+  rhs: number;
+}
+
 export interface BanditExperimentConfig {
   algorithm: BanditAlgorithm;
   rewardMetricId: string;
   contextFeatureKeys: string[];
   minExplorationFraction: number;
   warmupObservations: number;
+  /** Multi-objective reward objectives (ADR-011). When non-empty, rewardMetricId is ignored. */
+  rewardObjectives?: RewardObjective[];
+  compositionMethod?: RewardCompositionMethod;
+  /** Per-arm traffic bounds for LP post-processing layer (ADR-012). */
+  armConstraints?: BanditArmConstraint[];
+  /** General linear constraints across arms (ADR-012). */
+  globalConstraints?: BanditGlobalConstraint[];
 }
 
 export interface QoeConfig {
@@ -560,6 +594,23 @@ export interface RewardHistoryPoint {
   cumulativeSelections: number;
 }
 
+/** Per-arm per-objective weighted contribution for stacked bar chart (ADR-011). */
+export interface ArmObjectiveBreakdown {
+  armId: string;
+  armName: string;
+  /** metricId → weighted normalized contribution (weight × normalized_reward). */
+  objectiveContributions: Record<string, number>;
+  composedReward: number;
+}
+
+/** LP constraint current status row for ConstraintStatusTable (ADR-012). */
+export interface ConstraintStatus {
+  label: string;
+  currentValue: number;
+  limit: number;
+  isSatisfied: boolean;
+}
+
 export interface BanditDashboardResult {
   experimentId: string;
   algorithm: BanditAlgorithm;
@@ -570,6 +621,10 @@ export interface BanditDashboardResult {
   warmupObservations: number;
   minExplorationFraction: number;
   rewardHistory: RewardHistoryPoint[];
+  /** Multi-objective reward breakdown per arm (ADR-011). Present when reward_objectives non-empty. */
+  objectiveBreakdowns?: ArmObjectiveBreakdown[];
+  /** LP constraint current statuses (ADR-012). Present when global_constraints non-empty. */
+  constraintStatuses?: ConstraintStatus[];
 }
 
 // --- AVLM Confidence Sequence (ADR-015) ---
