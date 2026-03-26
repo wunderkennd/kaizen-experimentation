@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { Flag, FlagType, ExperimentType } from '@/lib/types';
 import { getFlag, promoteToExperiment } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
+import { CopyButton } from '@/components/copy-button';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { NavHeader } from '@/components/nav-header';
 
@@ -105,7 +106,10 @@ function FlagDetailContent() {
         <dl className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
           <div>
             <dt className="font-medium text-gray-500">Flag ID</dt>
-            <dd className="text-gray-900"><code className="text-xs">{flag.flagId}</code></dd>
+            <dd className="flex items-center gap-2 text-gray-900">
+              <code className="text-xs">{flag.flagId}</code>
+              <CopyButton text={flag.flagId} label="Copy flag ID" className="h-5 w-5" />
+            </dd>
           </div>
           <div>
             <dt className="font-medium text-gray-500">Description</dt>

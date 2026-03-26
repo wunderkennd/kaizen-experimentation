@@ -8,6 +8,7 @@ import { NavHeader } from '@/components/nav-header';
 import { QueryLogTable } from '@/components/query-log-table';
 import ExperimentListPage from '@/app/page';
 import ResultsPage from '@/app/experiments/[id]/results/page';
+import { ToastProvider } from '@/lib/toast-context';
 import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
 import type { QueryLogEntry } from '@/lib/types';
@@ -241,7 +242,11 @@ describe('Accessibility', () => {
 
   describe('Charts', () => {
     it('forest plot has role="img" with aria-label', async () => {
-      render(<ResultsPage />);
+      render(
+        <ToastProvider>
+          <ResultsPage />
+        </ToastProvider>,
+      );
 
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: 'Results Dashboard' })).toBeInTheDocument();
@@ -256,7 +261,11 @@ describe('Accessibility', () => {
 
   describe('Tab panels', () => {
     it('has role="tablist" on nav and role="tabpanel" on content', async () => {
-      render(<ResultsPage />);
+      render(
+        <ToastProvider>
+          <ResultsPage />
+        </ToastProvider>,
+      );
 
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: 'Results Dashboard' })).toBeInTheDocument();
@@ -288,7 +297,11 @@ describe('Accessibility', () => {
 
     it('SQL preview button has aria-expanded that toggles on click', async () => {
       const user = userEvent.setup();
-      render(<QueryLogTable entries={entries} onExport={() => {}} exporting={false} />);
+      render(
+        <ToastProvider>
+          <QueryLogTable entries={entries} onExport={() => {}} exporting={false} />
+        </ToastProvider>,
+      );
 
       const toggleButton = screen.getByRole('button', { name: /Toggle SQL preview/ });
       expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
