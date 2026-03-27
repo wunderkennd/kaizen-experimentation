@@ -14,3 +14,6 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2025-05-15 - [Distribute Evenly UX Win]
 **Learning:** Automating repetitive calculations (like equal traffic distribution) significantly reduces friction and errors in experiment setup. Users appreciate tools that handle precision and edge cases (like remainder distribution) for them.
 **Action:** Look for other manual calculation tasks in the UI, such as target sample size or duration estimation, and provide one-click solutions.
+## 2026-03-24 - Standardizing Clipboard Interactions
+**Learning:** A reusable `CopyButton` component provides a consistent and accessible way for users to copy technical identifiers. Standardizing this pattern across Experiment IDs, Flag IDs, and SQL blocks improves the overall discoverability and reliability of the feature.
+**Action:** Use the `CopyButton` component for all technical identifiers. Ensure it includes an `aria-label` for screen readers and provides both visual (icon change) and toast feedback. Wrap tests for pages using this component in `ToastProvider` to avoid context errors.
