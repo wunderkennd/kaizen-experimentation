@@ -763,6 +763,12 @@ pub async fn read_synthetic_control_panel(
             experiment_id
         );
     }
+    if n_treated > 1 {
+        bail!(
+            "experiment '{}': found {} treated units in synthetic_control_panel, expected exactly 1",
+            experiment_id, n_treated
+        );
+    }
     if donor_ids.is_empty() {
         bail!(
             "experiment '{}': no donor units found in synthetic_control_panel",
