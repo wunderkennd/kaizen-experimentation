@@ -1,11 +1,13 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-03-22 by Agent-3 (PR #171 query log lifecycle merge)
+> **Last updated**: 2026-03-24 by Agent-5 (calm-otter) — Phase 5 ADR tracker added
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
 
 ## Active Phase
+
+**Phase 5: Advanced Capabilities** — in progress. 15 ADRs across 6 clusters. See [Phase 5 ADR Tracker](#phase-5-adr-tracker) below.
 
 **Phase 1: Foundation (Weeks 2–7)** — **complete**. All 30 milestones merged.
 
@@ -25,6 +27,84 @@
 | Agent-7 | M7 Flags | 🟢 All Phases Complete | [agent-7.md](status/agent-7.md) |
 
 **Legend**: 🟢 Complete | 🔵 In Progress | 🟡 Not Started (unblocked) | ⚪ Waiting (blocked) | 🔴 Blocked (critical path)
+
+---
+
+## Phase 5 ADR Tracker
+
+> Updated: 2026-03-24. 15 ADRs across 6 clusters. PRs counted: **16 submitted, 16 merged, 0 pending, 0 red**.
+> Several ADRs have Phase 2 work and implementation work still in progress (no PR yet).
+
+### ADR Implementation Status
+
+| ADR | Title | Cluster | Agent(s) | PRs | CI | Status |
+|-----|-------|---------|----------|-----|----|--------|
+| ADR-011 | Multi-objective reward composition | A | Agent-4 | #221, #228 | Green | MERGED |
+| ADR-012 | LP constraints (bandit arm/global) | A | Agent-4 | — | — | IN PROGRESS |
+| ADR-013 | Meta-experiments | A | Agent-1, Agent-5 | #196 (proto) | Green (proto) | IN PROGRESS |
+| ADR-014 | Provider-side metrics | A | Agent-3, Agent-4, Agent-5, Agent-6 | #208, #211, #212 | Green | MERGED |
+| ADR-015 | AVLM (sequential CUPED) | B | Agent-4, Agent-6 | #199, #223, #226 | Green | MERGED |
+| ADR-016 | Slate bandits | C | Agent-1, Agent-4 | #196 (proto) | Green (proto) | IN PROGRESS |
+| ADR-017 | Offline RL / TC+JIVE surrogate calibration | C | Agent-4 | #198 | Green | Ph 1 MERGED / Ph 2 pending |
+| ADR-018 | E-values + online FDR (e-LOND) | B | Agent-4, Agent-5 | #200 | Green | Ph 1 MERGED / Ph 2 pending |
+| ADR-019 | Portfolio optimization | E | Agent-5, Agent-6 | — | — | NOT STARTED |
+| ADR-020 | Adaptive sample size recalculation | B | Agent-4, Agent-5, Agent-6 | #223, #227, #228 | Green | MERGED |
+| ADR-021 | Feedback loop interference detection | E | Agent-2, Agent-3, Agent-4, Agent-6 | #209, #222, #223 | Green | MERGED |
+| ADR-022 | Switchback experiments | D | Agent-1, Agent-4 | #196 (proto) | Green (proto) | IN PROGRESS |
+| ADR-023 | Synthetic control methods | D | Agent-4 | #196 (proto) | Green (proto) | IN PROGRESS |
+| ADR-024 | M7 Rust port (unconditional) | F | Agent-7 | #197, #215, #220 | Green | MERGED (all 4 phases) |
+| ADR-025 | M5 Rust port (conditional) | F | Agent-5 | — | — | NOT STARTED |
+
+### Cluster Summary
+
+| Cluster | ADRs | Fully Merged | In Progress | Not Started |
+|---------|------|-------------|-------------|-------------|
+| A: Multi-Stakeholder | 011, 012, 013, 014 | 011, 014 | 012, 013 | — |
+| B: Statistical Methods | 015, 018, 020 | 015, 020 | 018 (Ph 2) | — |
+| C: Bandit & RL | 016, 017 | — | 016, 017 (Ph 2) | — |
+| D: Quasi-Experimental | 022, 023 | — | 022, 023 | — |
+| E: Platform Operations | 019, 021 | 021 | — | 019 |
+| F: Language Migration | 024, 025 | 024 | — | 025 |
+
+### Phase 5 PR Index
+
+| PR | ADR(s) | Description | Status |
+|----|--------|-------------|--------|
+| #196 | 011–023 | Proto schema extensions (Phase 5 unblock) | Merged |
+| #197 | 024 | ADR-024 Phase 1 — M7 Rust scaffold, CRUD, EvaluateFlag | Merged |
+| #198 | 017 | ADR-017 Ph 1 — TC/JIVE K-fold IV surrogate calibration | Merged |
+| #199 | 015 | ADR-015 Ph 1 — AVLM sequential test (experimentation-stats) | Merged |
+| #200 | 018 | ADR-018 Ph 1 — E-value computation (GROW + AVLM) | Merged |
+| #208 | 014 | ADR-014 — /portfolio/provider-health M6 UI page | Merged |
+| #209 | 021 | ADR-021 — ModelRetrainingEvent ingestion (M2) | Merged |
+| #211 | 014 | ADR-014 — Provider-side SQL metrics (M3) | Merged |
+| #212 | 014 | ADR-014 — Guardrail Bonferroni + M5 metric validation | Merged |
+| #215 | 024 | ADR-024 Phases 2–4 — M7 Rust port complete, FFI crate deleted | Merged |
+| #220 | 024 | Fix — remove duplicate experimentation-flags workspace entry | Merged |
+| #221 | 011 | ADR-011 — Multi-objective reward composition (M4b) | Merged |
+| #222 | 021 | ADR-021 — Feedback loop interference detection (stats) | Merged |
+| #223 | 015, 020, 021 | ADR-015/020/021 — AVLM plot, adaptive-N badge, feedback loop tab (M6) | Merged |
+| #226 | 015 | ADR-015 — Wire AVLM into M4a RunAnalysis | Merged |
+| #227 | 020 | ADR-020 — Adaptive sample size stats + M5 scheduler | Merged |
+| #228 | 011, 020 | Fix — ADR-011 reconcile + ADR-020 clippy/test fixes | Merged |
+
+**Totals**: 17 PRs submitted · 17 merged · 0 open · 0 red
+
+### Pending Work (no PR yet)
+
+| ADR | Gap | Owner | Depends On |
+|-----|-----|-------|------------|
+| ADR-012 | LP constraint solver (bandit arm + global constraints) | Agent-4 | — |
+| ADR-013 | M1 `GetSlateAssignment` with META routing; M5 STARTING validation for `MetaExperimentConfig` | Agent-1, Agent-5 | Proto (#196) |
+| ADR-016 | M1 `GetSlateAssignment` implementation; M4b slate posterior | Agent-1, Agent-4 | Proto (#196) |
+| ADR-017 Ph 2 | Doubly-robust offline RL policy evaluation | Agent-4 | — |
+| ADR-018 Ph 2 | e-LOND `OnlineFdrController` singleton + PostgreSQL persistence (M5) | Agent-5 | — |
+| ADR-019 | Portfolio opt: `ExperimentLearning` classification, traffic optimizer, M6 /portfolio page | Agent-5, Agent-6 | — |
+| ADR-022 | Switchback assignment logic (M1), sandwich estimator stats, M4a analysis | Agent-1, Agent-4 | Proto (#196) |
+| ADR-023 | `augsynth`-validated synthetic control stats, M4a `GetSyntheticControlAnalysis` | Agent-4 | Proto (#196) |
+| ADR-025 | M5 Rust port (conditional — awaiting go/no-go) | Agent-5 | ADR-024 |
+
+---
 
 ## Milestone Tracker
 

@@ -1,0 +1,22 @@
+# .github/workflows/jules-weekly-maintenance.yml
+name: Weekly Maintenance (Jules)
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Monday 3 AM
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            You are a maintenance agent for the Kaizen experimentation platform.
+            Read CLAUDE.md for project context.
+            
+            1. Run `cargo outdated` and update patch-level dependencies.
+            2. Run `buf breaking proto/ --against origin/main` and report any issues.
+            3. Run `cargo clippy --workspace` and fix any new warnings.
+            4. Run `go vet ./...` and fix any new issues.
+            5. Update AGENTS.md if any module structure changed.
+            6. Only open a PR if all tests pass.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

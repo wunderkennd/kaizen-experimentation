@@ -14,7 +14,7 @@ use experimentation_proto::experimentation::bandit::v1::bandit_policy_service_se
 use experimentation_proto::experimentation::bandit::v1::{
     CreateColdStartBanditRequest, CreateColdStartBanditResponse, ExportAffinityScoresRequest,
     ExportAffinityScoresResponse, GetPolicySnapshotRequest, RollbackPolicyRequest,
-    SelectArmRequest,
+    GetSlateAssignmentRequest, SelectArmRequest, SelectSlateRequest, SlateAssignmentResponse, SlateSelection,
 };
 use experimentation_proto::experimentation::common::v1::{ArmSelection, PolicySnapshot};
 
@@ -1373,6 +1373,13 @@ impl BanditPolicyService for MockBanditService {
         }))
     }
 
+    async fn get_slate_assignment(
+        &self,
+        _request: tonic::Request<GetSlateAssignmentRequest>,
+    ) -> Result<tonic::Response<SlateAssignmentResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented("not needed for assignment_test mock"))
+    }
+
     async fn create_cold_start_bandit(
         &self,
         request: tonic::Request<CreateColdStartBanditRequest>,
@@ -1413,6 +1420,13 @@ impl BanditPolicyService for MockBanditService {
         _request: tonic::Request<GetPolicySnapshotRequest>,
     ) -> Result<tonic::Response<PolicySnapshot>, tonic::Status> {
         Err(tonic::Status::unimplemented("not needed for test"))
+    }
+
+    async fn select_slate(
+        &self,
+        _request: tonic::Request<SelectSlateRequest>,
+    ) -> Result<tonic::Response<SlateSelection>, tonic::Status> {
+        Err(tonic::Status::unimplemented("select_slate not used in assignment_test"))
     }
 
     async fn rollback_policy(

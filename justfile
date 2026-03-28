@@ -441,3 +441,22 @@ smoke-test: infra seed
         -c "SELECT experiment_id, name, state FROM experiments LIMIT 5" --quiet
     @echo "  ✓ Seed data present"
     @echo "  Smoke test passed."
+
+# Dispatch a test coverage task to Jules
+jules-tests crate:
+    jules remote new --repo your-org/kaizen \
+      --session "Write unit tests for crates/{{crate}}/. Target 80% coverage. Tests only."
+
+# Dispatch a golden-file task to Devin
+devin-golden-files:
+    @echo "Submit via Devin web UI or Slack with this prompt:"
+    @echo "Generate golden-file tests for crates/experimentation-stats/tests/"
+    @echo "using reference outputs from R packages. See docs/adrs/ for target precision."
+
+# Quick second opinion via Gemini
+gemini-review file:
+    gemini -p "Review this Rust implementation for correctness, edge cases, and potential panics: $(cat {{file}})"
+
+# Triage open PRs (invokes pr-triage subagent)
+pr-triage:
+    claude -p "Use the pr-triage agent. There are open PRs that need triage after a system restart. Inventory all open PRs, categorize them, present the summary, and wait for my confirmation before acting."

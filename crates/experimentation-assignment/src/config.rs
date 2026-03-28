@@ -43,6 +43,8 @@ pub struct ExperimentConfig {
     pub bandit_config: Option<BanditConfig>,
     #[serde(default)]
     pub is_cumulative_holdout: bool,
+    #[serde(default)]
+    pub switchback_config: Option<SwitchbackConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -86,10 +88,22 @@ fn default_max_list_size() -> usize {
     50
 }
 
-/// Bandit experiment configuration (MAB / CONTEXTUAL_BANDIT types).
+/// Slate bandit configuration (ADR-016).
+/// Required when experiment type is "SLATE_BANDIT".
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SlateConfig {
+    /// Number of slots in the returned slate. Must be > 0.
+    #[serde(default)]
+    pub num_slots: i32,
+    /// Maximum number of candidate items per call. Must be >= num_slots.
+    #[serde(default)]
+    pub candidate_pool_size: i32,
+}
+
+/// Bandit experiment configuration (MAB / CONTEXTUAL_BANDIT / SLATE_BANDIT types).
 #[derive(Debug, Clone, Deserialize)]
 pub struct BanditConfig {
-    /// Algorithm identifier (e.g., "THOMPSON_SAMPLING", "LINEAR_UCB").
+    /// Algorithm identifier (e.g., "THOMPSON_SAMPLING", "LINEAR_UCB", "SLATE_FACTORIZED_TS").
     #[serde(default)]
     pub algorithm: String,
     /// Arm definitions — each arm maps to a variant or content placement.
@@ -113,6 +127,34 @@ pub struct BanditConfig {
     /// Cold-start exploration window in days.
     #[serde(default)]
     pub cold_start_window_days: Option<i32>,
+    /// Slate bandit configuration (ADR-016). Required for SLATE_BANDIT type.
+    #[serde(default)]
+    pub slate_config: Option<SlateConfig>,
+}
+
+/// Switchback (temporal alternation) experiment configuration — ADR-022.
+///
+/// Assignment is time-based: block_index = current_unix_secs / block_duration_secs.
+/// The design field controls how block parity maps to control/treatment.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SwitchbackConfig {
+    /// Duration of each block in seconds. Must be >= 3600 (1 hour) per M5 STARTING validation.
+    pub block_duration_secs: i64,
+    /// Number of planned alternation cycles. Must be >= 4 per M5 STARTING validation.
+    pub planned_cycles: i32,
+    /// Attribute key for cluster-level assignment (e.g., "market_id").
+    /// If empty, the entire population switches simultaneously.
+    #[serde(default)]
+    pub cluster_attribute: String,
+    /// Washout period in seconds at the leading edge of each block.
+    /// Users seen during washout are excluded (empty variant_id returned).
+    /// Must be < block_duration_secs.
+    #[serde(default)]
+    pub washout_period_secs: i64,
+    /// Assignment design: "SIMPLE_ALTERNATING", "REGULAR_BALANCED", "RANDOMIZED".
+    /// Defaults to "SIMPLE_ALTERNATING" if empty.
+    #[serde(default)]
+    pub design: String,
 }
 
 fn default_min_exploration() -> f64 {

@@ -191,6 +191,46 @@
         { "variant_id": "holdout", "traffic_fraction": 1.0, "is_control": true, "payload_json": "{\"baseline\": true}" }
       ],
       "allocation": { "start_bucket": 0, "end_bucket": 499 }
+    },
+    {
+      "experiment_id": "exp_dev_switchback_001",
+      "name": "Dev Switchback — Simple Alternating",
+      "state": "RUNNING",
+      "type": "SWITCHBACK",
+      "hash_salt": "dev_salt_sb_001",
+      "layer_id": "layer_switchback",
+      "variants": [
+        { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"new_rec_model\": true}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "switchback_config": {
+        "block_duration_secs": 3600,
+        "planned_cycles": 8,
+        "cluster_attribute": "",
+        "washout_period_secs": 300,
+        "design": "SIMPLE_ALTERNATING"
+      }
+    },
+    {
+      "experiment_id": "exp_dev_switchback_002",
+      "name": "Dev Switchback — Regular Balanced (market clusters)",
+      "state": "RUNNING",
+      "type": "SWITCHBACK",
+      "hash_salt": "dev_salt_sb_002",
+      "layer_id": "layer_switchback",
+      "variants": [
+        { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+        { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{\"cache_policy\": \"v2\"}" }
+      ],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "switchback_config": {
+        "block_duration_secs": 7200,
+        "planned_cycles": 6,
+        "cluster_attribute": "market_id",
+        "washout_period_secs": 600,
+        "design": "REGULAR_BALANCED"
+      }
     }
   ],
   "layers": [
@@ -201,6 +241,7 @@
     { "layer_id": "layer_interleave_opt", "total_buckets": 10000 },
     { "layer_id": "layer_interleave_multi", "total_buckets": 10000 },
     { "layer_id": "layer_session_locked", "total_buckets": 10000 },
-    { "layer_id": "layer_cold_start", "total_buckets": 10000 }
+    { "layer_id": "layer_cold_start", "total_buckets": 10000 },
+    { "layer_id": "layer_switchback", "total_buckets": 10000 }
   ]
 }

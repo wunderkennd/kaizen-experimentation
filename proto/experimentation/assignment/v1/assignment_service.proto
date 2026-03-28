@@ -55,6 +55,10 @@ message GetAssignmentResponse {
   // Whether this experiment is in a state where assignments are being served.
   // False during STARTING, CONCLUDING, CONCLUDED, ARCHIVED.
   bool is_active = 5;
+  // For switchback experiments (ADR-022): the block index at assignment time.
+  // Block 0 starts at Unix epoch; increments every block_duration.
+  // M2 includes this in ExposureEvent.switchback_block_index for M4a analysis.
+  int64 block_index = 6;
 }
 
 message GetAssignmentsRequest {

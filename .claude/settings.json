@@ -34,5 +34,9 @@
       "Bash(curl * | bash)",
       "Bash(wget * | bash)"
     ]
+  },
+  "enabledPlugins": {
+    "everything-claude-code@everything-claude-code": true,
+    "context7@claude-plugins-official": true
   }
 }
