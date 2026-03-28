@@ -422,6 +422,10 @@ func TestValidateCreateExperiment(t *testing.T) {
 					},
 					OutcomeMetricIds: []string{"watch_time", "engagement", "retention_d30"},
 				}
+				e.BanditConfig = &commonv1.BanditConfig{
+					Algorithm:      commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					RewardMetricId: "watch_time",
+				}
 			},
 			wantOK: true,
 		},
