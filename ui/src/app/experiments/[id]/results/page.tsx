@@ -85,11 +85,11 @@ const FdrBudgetBar = dynamic(
   { ssr: false },
 );
 const AvlmSequencePlot = dynamic(
-  () => import('@/components/AvlmSequencePlot').then(m => ({ default: m.AvlmSequencePlot })),
+  () => import('@/components/avlm-sequence-plot').then(m => ({ default: m.AvlmSequencePlot })),
   { ssr: false },
 );
 const AdaptiveNZoneBadge = dynamic(
-  () => import('@/components/AdaptiveNZoneBadge').then(m => ({ default: m.AdaptiveNZoneBadge })),
+  () => import('@/components/adaptive-n-zone-badge').then(m => ({ default: m.AdaptiveNZoneBadge })),
   { ssr: false },
 );
 
@@ -374,11 +374,13 @@ export default function ResultsPage() {
               <h2 className="mb-3 text-lg font-semibold text-gray-900">
                 Sequential Analysis{experiment.sequentialTestConfig.method === 'AVLM' ? ' (AVLM)' : ''}
               </h2>
-              <p className="mb-3 text-sm text-gray-500">
-                Anytime-Valid Linear Models unify CUPED variance reduction with sequential
-                testing in a single confidence sequence. The shaded band is the 95% confidence
-                sequence; when it excludes zero the experiment is conclusive.
-              </p>
+              {experiment.sequentialTestConfig.method === 'AVLM' && (
+                <p className="mb-3 text-sm text-gray-500">
+                  Anytime-Valid Linear Models unify CUPED variance reduction with sequential
+                  testing in a single confidence sequence. The shaded band is the 95% confidence
+                  sequence; when it excludes zero the experiment is conclusive.
+                </p>
+              )}
 
               {/* AvlmSequencePlot: shown for AVLM sequential method (ADR-015) */}
               {experiment.sequentialTestConfig.method === 'AVLM' &&
