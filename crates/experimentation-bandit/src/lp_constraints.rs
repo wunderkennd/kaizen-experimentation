@@ -486,7 +486,13 @@ fn solve_kl_general(
 
     // Quick path: if p satisfies all general constraints, per-arm solve suffices.
     if check_feasible(p) <= 1e-9 {
-        return bisect_kl_projection(p, lo, hi).filter(|q| check_feasible(q) <= 1e-6);
+        if let Some(q) = bisect_kl_projection(p, lo, hi) {
+            if check_feasible(&q) <= 1e-6 {
+                return Some(q);
+            }
+        }
+        // Per-arm projection violated general constraints; fall through to dual ascent.
+    }
     }
 
     // Dual variables for general constraints; all initialised to 0.
