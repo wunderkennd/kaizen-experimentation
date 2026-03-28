@@ -26,6 +26,7 @@ type MetricEvent = experimentation_proto::common::MetricEvent;
 type QoEEvent = experimentation_proto::common::QoEEvent;
 type PlaybackMetrics = experimentation_proto::common::PlaybackMetrics;
 type LifecycleSegment = experimentation_proto::common::LifecycleSegment;
+type ModelRetrainingEvent = experimentation_proto::common::ModelRetrainingEvent;
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Section 1 — Helpers
@@ -60,6 +61,7 @@ fn make_exposure(
         interleaving_provenance: provenance,
         bandit_context_json: r#"{"feature_a": 1.5}"#.into(),
         lifecycle_segment: LifecycleSegment::Established as i32,
+        switchback_block_index: 0,
     }
 }
 
@@ -176,6 +178,7 @@ fn test_exposure_roundtrip_minimal() {
         interleaving_provenance: HashMap::new(),
         bandit_context_json: String::new(),
         lifecycle_segment: 0,
+        switchback_block_index: 0,
     };
     let bytes = event.encode_to_vec();
     let decoded = ExposureEvent::decode(bytes.as_slice()).unwrap();
@@ -1222,4 +1225,213 @@ async fn test_kafka_cross_topic_user_correlation() {
         "user_id mismatch between exposure and metric event — M3 JOIN would fail"
     );
     assert_eq!(decoded_exp.user_id, shared_user_id);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Section 6 — ModelRetrainingEvent Contract Tests (ADR-021)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Validates that ModelRetrainingEvent serialization, field survival, and Kafka
+// key strategy (model_id) match what M3's feedback loop contamination pipeline
+// expects per ADR-021.
+//
+// Section 6a (non-Docker): Protobuf encode/decode contract tests.
+// Section 6b (requires Docker): Kafka roundtrip test.
+
+/// Build a ModelRetrainingEvent with all meaningful fields populated.
+fn make_model_retraining_event(
+    event_id: &str,
+    model_id: &str,
+    start_offset_hours: i64,
+    end_offset_hours: i64,
+) -> ModelRetrainingEvent {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    ModelRetrainingEvent {
+        event_id: event_id.into(),
+        model_id: model_id.into(),
+        training_data_start: Some(prost_types::Timestamp {
+            seconds: now - start_offset_hours * 3600,
+            nanos: 0,
+        }),
+        training_data_end: Some(prost_types::Timestamp {
+            seconds: now - end_offset_hours * 3600,
+            nanos: 0,
+        }),
+        retrained_at: Some(prost_types::Timestamp {
+            seconds: now,
+            nanos: 0,
+        }),
+        active_experiment_ids: vec!["exp-001".into(), "exp-002".into(), "exp-003".into()],
+        treatment_contamination_fraction: 0.0, // computed post-hoc by M3
+    }
+}
+
+// ── Section 6a: Non-Docker roundtrip tests ────────────────────────────────
+
+#[test]
+fn test_model_retraining_event_roundtrip_all_fields() {
+    let event = make_model_retraining_event("mre-roundtrip-1", "rec-model-v3", 48, 24);
+    let bytes = event.encode_to_vec();
+    let decoded = ModelRetrainingEvent::decode(bytes.as_slice()).unwrap();
+
+    assert_eq!(decoded.event_id, "mre-roundtrip-1");
+    assert_eq!(decoded.model_id, "rec-model-v3");
+    assert!(decoded.training_data_start.is_some(), "training_data_start must survive roundtrip");
+    assert!(decoded.training_data_end.is_some(), "training_data_end must survive roundtrip");
+    assert!(decoded.retrained_at.is_some(), "retrained_at must survive roundtrip");
+    assert_eq!(decoded.active_experiment_ids.len(), 3);
+    assert_eq!(decoded.active_experiment_ids[0], "exp-001");
+}
+
+#[test]
+fn test_model_retraining_event_roundtrip_required_fields_only() {
+    // Minimal event: only fields required by M2 validation.
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let event = ModelRetrainingEvent {
+        event_id: "mre-min".into(),
+        model_id: "rec-model".into(),
+        training_data_start: Some(prost_types::Timestamp { seconds: now - 48 * 3600, nanos: 0 }),
+        training_data_end: Some(prost_types::Timestamp { seconds: now - 24 * 3600, nanos: 0 }),
+        ..Default::default()
+    };
+    let bytes = event.encode_to_vec();
+    let decoded = ModelRetrainingEvent::decode(bytes.as_slice()).unwrap();
+
+    assert_eq!(decoded.model_id, "rec-model");
+    assert!(decoded.training_data_start.is_some());
+    assert!(decoded.training_data_end.is_some());
+    assert!(decoded.retrained_at.is_none()); // optional — absent when not supplied
+    assert!(decoded.active_experiment_ids.is_empty());
+    assert_eq!(decoded.treatment_contamination_fraction, 0.0);
+}
+
+#[test]
+fn test_model_retraining_event_training_window_seconds_preserved() {
+    // M3 contamination SQL: WHERE e.timestamp BETWEEN start AND end.
+    // Verifies that epoch seconds survive encode/decode exactly.
+    let start_secs: i64 = 1_700_000_000;
+    let end_secs: i64 = 1_700_086_400; // +24h
+
+    let event = ModelRetrainingEvent {
+        event_id: "mre-window".into(),
+        model_id: "model-window".into(),
+        training_data_start: Some(prost_types::Timestamp { seconds: start_secs, nanos: 0 }),
+        training_data_end: Some(prost_types::Timestamp { seconds: end_secs, nanos: 0 }),
+        ..Default::default()
+    };
+    let bytes = event.encode_to_vec();
+    let decoded = ModelRetrainingEvent::decode(bytes.as_slice()).unwrap();
+
+    assert_eq!(decoded.training_data_start.unwrap().seconds, start_secs);
+    assert_eq!(decoded.training_data_end.unwrap().seconds, end_secs);
+}
+
+#[test]
+fn test_model_retraining_event_active_experiment_ids_repeated_field() {
+    // M3 cross-reference: JOIN active_experiment_ids with experiments table.
+    let ids: Vec<String> = (0..10).map(|i| format!("exp-{i:03}")).collect();
+    let event = ModelRetrainingEvent {
+        event_id: "mre-ids".into(),
+        model_id: "model-ids".into(),
+        active_experiment_ids: ids.clone(),
+        ..Default::default()
+    };
+    let bytes = event.encode_to_vec();
+    let decoded = ModelRetrainingEvent::decode(bytes.as_slice()).unwrap();
+
+    assert_eq!(decoded.active_experiment_ids.len(), 10);
+    assert_eq!(decoded.active_experiment_ids, ids);
+}
+
+#[test]
+fn test_model_retraining_event_dedup_key_format() {
+    // Verify the composite dedup key format that M2 uses (ADR-021).
+    // Key: "{model_id}:{training_data_start_seconds}"
+    // M3 does NOT consume this key, but it must be stable for dedup to work.
+    let start_secs: i64 = 1_700_000_000;
+    let event = ModelRetrainingEvent {
+        event_id: "mre-key".into(),
+        model_id: "rec-model-v4".into(),
+        training_data_start: Some(prost_types::Timestamp { seconds: start_secs, nanos: 0 }),
+        training_data_end: Some(prost_types::Timestamp { seconds: start_secs + 86400, nanos: 0 }),
+        ..Default::default()
+    };
+
+    let expected_key = format!("rec-model-v4:{start_secs}");
+    // Reconstruct the key the same way M2 does in the pipeline service.
+    let computed_key = format!(
+        "{}:{}",
+        event.model_id,
+        event.training_data_start.as_ref().unwrap().seconds,
+    );
+    assert_eq!(computed_key, expected_key);
+}
+
+#[test]
+fn test_model_retraining_event_decode_garbage_fails() {
+    let garbage = vec![0xFF, 0xFE, 0xFD, 0xFC, 0xFB, 0xFA, 0x00, 0x01];
+    // ModelRetrainingEvent has no required proto fields at the wire level
+    // so garbage that happens to parse is OK — we just check it doesn't panic.
+    let _ = ModelRetrainingEvent::decode(garbage.as_slice());
+}
+
+// ── Section 6b: Kafka roundtrip (requires Docker) ─────────────────────────
+
+#[tokio::test]
+#[ignore] // Requires `just infra`
+async fn test_kafka_model_retraining_event_roundtrip() {
+    use kafka_helpers::*;
+
+    let producer = test_producer();
+    let group_id = unique_group_id("mre-roundtrip");
+    let consumer = test_consumer("model_retraining_events", &group_id);
+
+    let event = make_model_retraining_event(
+        &unique_event_id("mre-kafka"),
+        "rec-model-kafka-v1",
+        48,
+        24,
+    );
+    let payload = prost::Message::encode_to_vec(&event);
+    // M2 key strategy: model_id (collocates all retraining events per model)
+    produce_event(&producer, "model_retraining_events", &event.model_id, &payload, "model_retraining", None).await;
+
+    let msg = consume_one(&consumer, 10).await;
+    let raw_payload = msg.payload().expect("no payload");
+    let decoded = ModelRetrainingEvent::decode(raw_payload)
+        .expect("M3 consumer must decode ModelRetrainingEvent from Kafka payload");
+
+    assert_eq!(decoded.event_id, event.event_id);
+    assert_eq!(decoded.model_id, event.model_id);
+    assert_eq!(
+        decoded.training_data_start.unwrap().seconds,
+        event.training_data_start.unwrap().seconds,
+        "training_data_start must survive Kafka roundtrip — M3 uses it for window JOIN"
+    );
+    assert_eq!(
+        decoded.training_data_end.unwrap().seconds,
+        event.training_data_end.unwrap().seconds,
+        "training_data_end must survive Kafka roundtrip"
+    );
+    assert_eq!(
+        decoded.active_experiment_ids,
+        event.active_experiment_ids,
+        "active_experiment_ids must survive Kafka roundtrip — M3 uses for experiment cross-reference"
+    );
+
+    // Key contract: M2 partitions by model_id
+    let key = msg.key().expect("Kafka message must have a key");
+    assert_eq!(
+        std::str::from_utf8(key).unwrap(),
+        event.model_id,
+        "Kafka key must be model_id (ADR-021 partitioning strategy)"
+    );
 }

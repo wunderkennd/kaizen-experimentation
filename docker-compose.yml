@@ -65,6 +65,7 @@ services:
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic qoe_events        --partitions 4 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic guardrail_alerts            --partitions 2 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic model_retraining_events    --partitions 8 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic model_training_requests    --partitions 2 --replication-factor 1
         echo 'Done.'
 
   schema-registry:

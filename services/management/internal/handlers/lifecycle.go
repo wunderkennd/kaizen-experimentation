@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -13,6 +14,7 @@ import (
 	mgmtv1 "github.com/org/experimentation/gen/go/experimentation/management/v1"
 
 	"github.com/org/experimentation-platform/services/management/internal/allocation"
+	"github.com/org/experimentation-platform/services/management/internal/mlrate"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/validation"
 )
@@ -83,6 +85,11 @@ func (s *ExperimentService) StartExperiment(
 	if err := tx1.Commit(ctx); err != nil {
 		return nil, internalError("commit tx1", err)
 	}
+
+	// ADR-015 Phase 2: emit MLRATE model training request when the experiment
+	// uses SEQUENTIAL_METHOD_AVLM with a configured surrogate model. Best-effort:
+	// failure to publish does not block the STARTING → RUNNING transition.
+	s.maybeEmitModelTrainingRequest(ctx, id)
 
 	// Validate that all referenced metrics exist before allocating buckets.
 	if err := s.validateMetricsForStart(ctx, id); err != nil {
@@ -289,6 +296,10 @@ func (s *ExperimentService) concludeByID(ctx context.Context, id, actor string, 
 		for k, v := range concludeDetails {
 			extraDetails[k] = v
 		}
+
+		// Submit primary metric e-value to the e-LOND Online FDR controller
+		// (ADR-018 Phase 2). Best-effort — never blocks conclusion.
+		s.submitFdrDecision(ctx, expForConclude.ExperimentID, expForConclude.PrimaryMetricID)
 	}
 	slog.Info("concluding experiment: type-specific conclude complete", "id", id)
 
@@ -703,4 +714,62 @@ func (s *ExperimentService) validateQoeMetricsForStart(ctx context.Context, expe
 			fmt.Errorf("PLAYBACK_QOE experiments require at least one metric with is_qoe_metric = true"))
 	}
 	return nil
+}
+
+// maybeEmitModelTrainingRequest publishes a ModelTrainingRequest to Kafka when
+// an experiment with SEQUENTIAL_METHOD_AVLM and a configured surrogate model
+// transitions to STARTING. The publish is best-effort: failures are logged but
+// do not abort the start flow.
+//
+// ADR-015 Phase 2 (MLRATE): M3 uses this event to train an ML-predicted
+// control variate model over the 30-day pre-experiment window.
+func (s *ExperimentService) maybeEmitModelTrainingRequest(ctx context.Context, experimentID string) {
+	if s.modelTrainingPublisher == nil {
+		return
+	}
+
+	expRow, _, _, err := s.store.GetByID(ctx, experimentID)
+	if err != nil {
+		slog.Warn("mlrate: failed to read experiment for training trigger",
+			"experiment_id", experimentID, "error", err)
+		return
+	}
+
+	seqMethod := ""
+	if expRow.SequentialMethod != nil {
+		seqMethod = *expRow.SequentialMethod
+	}
+	surrogateID := ""
+	if expRow.SurrogateModelID != nil {
+		surrogateID = *expRow.SurrogateModelID
+	}
+
+	if !mlrate.ShouldTrigger(seqMethod, surrogateID) {
+		return
+	}
+
+	// Fetch the surrogate model to get the covariate metric ID (the metric
+	// the surrogate predicts, used as the AVLM control variate).
+	covariateMetricID := ""
+	surModel, surErr := s.surrogates.GetByID(ctx, surrogateID)
+	if surErr != nil {
+		slog.Warn("mlrate: failed to read surrogate model; covariate_metric_id will be empty",
+			"experiment_id", experimentID, "surrogate_model_id", surrogateID, "error", surErr)
+	} else {
+		covariateMetricID = surModel.TargetMetricID
+	}
+
+	published := mlrate.Emit(
+		ctx, s.modelTrainingPublisher,
+		experimentID, seqMethod, surrogateID,
+		expRow.PrimaryMetricID, covariateMetricID,
+		time.Now(),
+	)
+
+	slog.Info("mlrate: model training request",
+		"experiment_id", experimentID,
+		"metric_id", expRow.PrimaryMetricID,
+		"covariate_metric_id", covariateMetricID,
+		"surrogate_model_id", surrogateID,
+		"kafka_published", published)
 }

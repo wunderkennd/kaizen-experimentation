@@ -11,7 +11,122 @@ Branch: work/eager-deer
 
 ## In Progress
 
-- (none)
+_None._
+
+## Completed (this sprint)
+
+- [x] **ADR-023 — Synthetic Control Methods** (2026-03-24, work/happy-rabbit)
+  - `crates/experimentation-stats/src/synthetic_control.rs` (~800 LOC)
+  - `SyntheticControlResult { method, att, ci_lower, ci_upper, donor_weights, placebo_p_value }`
+  - `SyntheticControlInput` + `synthetic_control(input, method)` dispatch API
+  - **Classic SCM**: projected gradient descent on simplex (Duchi O(n log n) projection), adaptive lr
+  - **Augmented SCM**: classic weights + Ridge bias correction (auto-lambda), conformal CI from pre-treatment residual SE
+  - **Synthetic DiD**: time weights + unit weights (both via projected gradient), jackknife CI over post periods
+  - **CausalImpact**: Ridge regression + Kalman filter (local linear trend F=[[1,1],[0,1]]), open-loop post-period prediction, prediction-variance CI
+  - **Placebo permutation**: leave-one-out, p = (1+n_extreme)/(1+n_donors)
+  - 26 unit tests + 5 proptest invariants (weights sum to 1.0 +-1e-9 for Classic, Augmented, SDiD)
+  - 3 golden files + integration test (`synthetic_control_golden.rs`)
+  - All 335 experimentation-stats tests green (0 failures)
+
+## Completed (this session)
+
+- [x] **ADR-021 feedback loop API completion** (2026-03-24, work/eager-badger, PR #241)
+  - Added `InterferenceResult` struct with `From<FeedbackLoopResult>` conversion
+  - Added `contamination_flag(p_value, threshold) -> bool` standalone function
+  - Added `FeedbackLoopDetector::bias_corrected_effect(raw) -> f64` method (pre/post ratio)
+  - Added proptest `null_no_detection`: pre==post → detected=false, p=1.0 always
+  - All 27 feedback_loop tests + 192 experimentation-stats tests green
+
+- [x] **ADR-011 integration test — multi-objective weighted-sum convergence** (2026-03-24, work/witty-owl)
+  - Added `multi_objective_weighted_sum_converges_to_optimal_arm` to `crates/experimentation-bandit/tests/convergence.rs`
+  - Uses `ThompsonSamplingPolicy::new_multi_objective` + `update_multi_objective` API
+  - 2-arm bandit with 2-metric weighted-sum (engagement w=0.6, quality w=0.4); arm "high" (0.8, 0.7) vs arm "low" (0.3, 0.4)
+  - Verifies arm "high" selected >60% after 1000 rounds with Gaussian noise on ground-truth metrics
+  - All 51 bandit crate tests green (46 unit + 5 integration)
+
+## Completed (Phase 5) — latest first
+
+- [x] **ADR-017 Phase 1 — TC/JIVE verification pass** (2026-03-24, work/clever-koala)
+  - Verified `kfold_iv_calibrate()` in `crates/experimentation-stats/src/orl.rs` is fully operational
+  - All 3 Netflix KDD 2024 Table 2 golden tests pass (`orl_golden.rs`): no-confounding, confounded, weak-instrument
+  - Proptest invariants `iv_result_all_finite` and `bias_correction_sign_with_positive_confounder` confirmed green
+  - Full `experimentation-stats` test suite: 0 failures
+  - No code changes required — implementation landed in PR #198
+
+- [x] **ADR-022 — Switchback Experiment Analysis** (2026-03-23, work/happy-squirrel)
+  - `crates/experimentation-stats/src/switchback.rs`: `SwitchbackAnalyzer` (~450 LOC)
+  - **`BlockOutcome`**: block_index, cluster_id, is_treatment, metric_value, user_count, in_washout
+  - **`SwitchbackResult`**: effect, hac_se, ci_lower/upper, randomization_p_value, effective_blocks, lag1_autocorrelation, carryover_test_p_value, hac_bandwidth
+  - **`SwitchbackAnalyzer::new()`**: validates ≥4 non-washout blocks, filters washout, sorts by block_index
+  - **`SwitchbackAnalyzer::analyze(alpha, n_permutations, rng_seed)`**: OLS + HAC SE + randomization inference + carryover diagnostic
+  - **`SwitchbackAnalyzer::randomization_test(n_permutations)`**: standalone randomization inference
+  - **`SwitchbackAnalyzer::carryover_test(alpha)`**: standalone lag-1 autocorrelation test
+  - **HAC SE**: Newey-West Bartlett-kernel estimator; Andrews (1991) AR(1) automatic bandwidth ĥ = ⌈1.1447·(2ρ̂²/(1−ρ̂²))^{1/3}·T^{1/3}⌉
+  - **Randomization inference**: exact enumeration when C(T,k) ≤ n_permutations; Fisher-Yates MC otherwise
+  - **Carryover diagnostic**: t-test on lag-1 autocorrelation of OLS residuals, approx t(T−2)
+  - 20 unit tests + 4 proptest invariants (p_all_outputs_valid, p_effect_seed_independent, p_randomization_p_in_range, p_lag1_autocorr_in_range)
+  - Registered in `crates/experimentation-stats/src/lib.rs` as `pub mod switchback`
+  - All 243 experimentation-stats tests green; full workspace 0 failures
+
+- [x] **ADR-014 Phase 2 — GuardrailCorrector module** (2026-03-24, work/clever-deer)
+  - `crates/experimentation-stats/src/guardrail.rs` (new, 389 LOC)
+    - `GuardrailCorrector { new(alpha, k), corrected_alpha(), is_violated(p) }`:
+      Bonferroni correction — each of K guardrails at alpha/K so FWER ≤ alpha
+    - `MetricStakeholder` enum: Unspecified/User/Provider/Platform (mirrors proto)
+    - `MetricAggregationLevel` enum: Unspecified/User/Experiment/Provider (mirrors proto)
+    - `validate_bandit_reward_aggregation()`: enforces USER-only for bandit rewards
+    - `validate_guardrail_aggregation()`: enforces USER or EXPERIMENT for guardrails
+  - 13 unit tests + 10K FWER Monte Carlo (K=1,2,3,5,10,20) + 5 proptest invariants
+  - All 32 guardrail tests + full experimentation-stats suite green
+
+- [x] **ADR-016 — Slot-wise factorized Thompson Sampling slate bandit** (2026-03-24, work/silly-dolphin)
+  - `crates/experimentation-bandit/src/slate.rs` (new, ~420 LOC)
+  - `SlatePolicy`: per-slot Beta posteriors, `Vec<HashMap<ArmId, BetaArm>>` (O(L×K) state)
+  - `select_slate(candidates, n_slots, rng)`: sequential slot-filling with context propagation
+    - O(L×K) inference: for each slot, argmax over remaining candidates' Beta draws
+    - Enforces item uniqueness across slots (remove-from-pool after selection)
+    - Graceful fallback to Beta(1,1) prior for arms added after policy creation
+  - Three reward attribution models:
+    - `AttributionModel::ClickedSlot`: full credit to clicked position only
+    - `AttributionModel::PositionWeighted`: reciprocal-rank discount (1/(pos+1)) across all slots
+    - `AttributionModel::Counterfactual`: IPS correction `(reward / propensity).clamp(0,1)` at clicked slot
+  - `lips_estimate(logged: &[SlateLog]) -> f64`: LIPS OPE estimator (IPS-weighted average reward)
+    - Skips zero-propensity observations; asserts finite outputs
+    - Reference: Kiyohara, Nomura, Saito (WWW 2024)
+  - `SlateLog` struct: slate, clicked, clicked_position, propensity, reward
+  - RocksDB snapshot: `to_bytes()` / `from_bytes()` using `bincode` (full state roundtrip)
+  - Added `bincode = "1.3"` to workspace `Cargo.toml` and `experimentation-bandit/Cargo.toml`
+  - Registered as `pub mod slate` in `lib.rs`
+  - **21 new tests** covering:
+    - Uniform prior creation, select_slate length/uniqueness/truncation
+    - Dominant arm preference, context propagation across 50 runs
+    - All three attribution models (click-only, position-weighted, counterfactual/IPS)
+    - bincode roundtrip for all 3 attribution models
+    - LIPS estimator: empty, full propensity, partial propensity, mixed, zero-propensity skip
+    - Convergence: arm-0 dominates slot-0 after 500 training rounds (>70% win rate)
+  - All 68 bandit crate tests green (21 new + 47 existing)
+
+## Completed This Session (2026-03-24)
+
+- [x] **Phase 5 E2E integration test suite** (2026-03-24, work/swift-elephant)
+  - `crates/experimentation-analysis/tests/phase5_e2e.rs` — 9 tests, all green
+  - `crates/experimentation-analysis/Cargo.toml` — added `experimentation-bandit` + `rand` to dev-dependencies
+  - **Switchback path** (ADR-022): `test_switchback_rpc_unimplemented_and_run_analysis_fallback`
+    - Asserts `GetSwitchbackAnalysis` → `Code::Unimplemented` (stub, pending ADR-022)
+    - Runs `RunAnalysis` on 100 switchback-period-structured observations (5 control × 5 treatment periods, 10 users each); verifies MetricResult fields, positive effect, CI contains estimate, no SRM
+    - ADR-018 e_value / log_e_value fields verified as finite on MetricResult
+  - **Quasi-experiment path** (ADR-023): `test_quasi_experiment_synthetic_control_rpc_unimplemented` + `test_quasi_experiment_run_analysis_with_donor_unit_data`
+    - `GetSyntheticControlAnalysis` → `Code::Unimplemented` (stub, pending ADR-023)
+    - `RunAnalysis` on 40-unit donor/treated data (mu_ctrl=5.0, mu_trt=6.0, ATT≈+1.0); p-value < 0.10 confirmed
+  - **E-value sequential test** (ADR-018): 3 unit tests on `e_value_grow`
+    - `test_evalue_grow_safe_start_and_trajectory_length`: λ₁=0 → log_wealth[0]=0.0; trajectory length = n; all entries finite
+    - `test_evalue_grow_accumulates_evidence_under_h1`: obs=2.0×30, e_value > 1/α=20, reject=true, log_wealth grows t5→t30
+    - `test_evalue_grow_no_rejection_under_null`: alternating ±0.1, reject=false, |log_wealth| < 2.0
+    - `test_run_analysis_metric_result_has_evalue_fields`: e_value and log_e_value on MetricResult are finite; exp(log_e_value)=e_value invariant checked
+  - **Slate bandit roundtrip** (ADR-016): 2 tests on `experimentation_bandit::thompson::select_arm`
+    - `test_slate_bandit_per_slot_selection_probabilities`: 8-candidate, 4-slot; item_00 (400/500 successes) wins slot 0 with prob > 0.70; all probabilities ≥ 0, sum to 1.0 (±1e-3), arm_id ∈ candidates
+    - `test_slate_bandit_posterior_update_shifts_selection`: 200 successes on arm_0; arm_0 selection prob > 0.80; probability sum invariant holds
+>>>>>>> origin/main
 
 ## Completed (Phase 5) — latest first
 
@@ -172,12 +287,17 @@ Branch: work/eager-deer
   - PR #198 merged
 
 - [x] **Proto schema extensions** (PR #196 merged) — All Phase 5 proto additions, buf lint + breaking clean.
-- [x] ADR-018 Phase 1 — E-value computation (PR open 2026-03-23)
-  - `e_value_grow()`: Sequential GROW martingale (plug-in betting, valid e-process)
-  - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value
-  - SQL migration 006_evalue_columns.sql: `e_value` + `log_e_value` on metric_results
-  - 8 golden-file tests (GROW: 4 analytic; AVLM: 4 formula-validated to 6dp)
-  - All 144+ workspace tests green
+- [x] **ADR-018 Phase 1 — E-value computation** (2026-03-24, work/eager-bear)
+  - `crates/experimentation-stats/src/evalue.rs`:
+    - `e_value_grow()`: Sequential GROW martingale (causal plug-in λ_t = μ̂_{t-1}/σ², safe-start λ_1=0)
+    - `e_value_avlm()`: CUPED-adjusted Gaussian mixture e-value (Ramdas & Wang §3.1)
+    - `EValueResult`: e_value, log_e_value, reject, log_wealth_trajectory
+  - `sql/migrations/006_evalue_columns.sql`: ALTER TABLE metric_results ADD COLUMN e_value, log_e_value
+  - `crates/experimentation-stats/tests/evalue_golden.rs`: 8 golden-file tests (6dp tolerance)
+  - 8 golden JSON files in tests/golden/: 4 GROW (analytic), 4 AVLM (formula-validated to 6dp)
+  - 4 proptest invariants: grow_outputs_always_finite, grow_reject_consistent, avlm_outputs_always_finite, avlm_reject_consistent
+  - 12 unit tests in evalue.rs
+  - All 144+ experimentation-stats tests green (0 failures)
 
 ### Proto changes landed:
 
@@ -247,7 +367,7 @@ the new types. Key dependencies:
 
 ## Notes
 
-- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) does not exist in repo yet — implementation based on design_doc_v7.0.md Section 7.3 and 17.1 plus Lindon et al. (2025) algorithm.
+- ADR-015 ADR file (`docs/adrs/015-anytime-valid-regression-adjustment.md`) created 2026-03-24; documents algorithm, sufficient statistics, API contract, golden-file and proptest validation targets.
 - The `e_value_avlm` function implements the Gaussian mixture e-value from Ramdas & Wang
   (2024) §3.1, validated to 6 decimal places against analytically computable examples.
 - GROW martingale uses the causal plug-in strategy (safe start λ_1=0); valid as an

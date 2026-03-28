@@ -3,10 +3,13 @@ package handlers
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/org/experimentation/gen/go/experimentation/analysis/v1/analysisv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/bandit/v1/banditv1connect"
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
+	"github.com/org/experimentation-platform/services/management/internal/fdr"
+	"github.com/org/experimentation-platform/services/management/internal/mlrate"
 	"github.com/org/experimentation-platform/services/management/internal/store"
 	"github.com/org/experimentation-platform/services/management/internal/streaming"
 	"github.com/org/experimentation-platform/services/management/internal/surrogate"
@@ -25,10 +28,21 @@ type ExperimentService struct {
 	surrogates *store.SurrogateStore
 	notifier   *streaming.Notifier
 
+	// pool is used for direct queries not covered by the store layer
+	// (e.g. reading metric_results.e_value after M4a analysis completes).
+	pool *pgxpool.Pool
+
 	// Optional external service clients (nil = graceful degradation).
 	analysisClient     analysisv1connect.AnalysisServiceClient
 	banditClient       banditv1connect.BanditPolicyServiceClient
 	surrogatePublisher surrogate.Publisher
+
+	// fdrController is the platform-level e-LOND Online FDR controller
+	// (ADR-018 Phase 2). Nil when FDR control is not configured.
+	fdrController *fdr.Controller
+
+	// modelTrainingPublisher publishes MLRATE model training requests (ADR-015 Phase 2).
+	modelTrainingPublisher  mlrate.Publisher
 }
 
 // ServiceOption configures optional dependencies on ExperimentService.
@@ -49,6 +63,24 @@ func WithSurrogatePublisher(p surrogate.Publisher) ServiceOption {
 	return func(s *ExperimentService) { s.surrogatePublisher = p }
 }
 
+// WithPool sets the direct database pool used for queries outside the store
+// layer (e.g. reading metric_results.e_value for FDR submission).
+func WithPool(pool *pgxpool.Pool) ServiceOption {
+	return func(s *ExperimentService) { s.pool = pool }
+}
+
+// WithFdrController sets the platform-level e-LOND Online FDR controller
+// (ADR-018 Phase 2). When set, M5 submits each concluded experiment's primary
+// metric e-value to the controller and records the reject/don't-reject decision.
+func WithFdrController(c *fdr.Controller) ServiceOption {
+	return func(s *ExperimentService) { s.fdrController = c }
+}
+
+// WithModelTrainingPublisher sets the Kafka publisher for MLRATE model training requests (ADR-015 Phase 2).
+func WithModelTrainingPublisher(p mlrate.Publisher) ServiceOption {
+	return func(s *ExperimentService) { s.modelTrainingPublisher = p }
+}
+
 // NewExperimentService creates a new handler with the given stores and notifier.
 func NewExperimentService(es *store.ExperimentStore, as *store.AuditStore, ls *store.LayerStore, ms *store.MetricStore, ts *store.TargetingStore, ss *store.SurrogateStore, n *streaming.Notifier, opts ...ServiceOption) *ExperimentService {
 	svc := &ExperimentService{store: es, audit: as, layers: ls, metrics: ms, targeting: ts, surrogates: ss, notifier: n}
@@ -64,4 +96,3 @@ func (s *ExperimentService) ConcludeByID(ctx context.Context, id, actor string, 
 	_, err := s.concludeByID(ctx, id, actor, extraDetails)
 	return err
 }
-

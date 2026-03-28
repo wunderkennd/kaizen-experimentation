@@ -344,8 +344,10 @@ pub fn required_n_for_power(
         }
     }
 
-    // Round up to next integer sample size
-    Ok(hi.ceil())
+    // Round up to next integer sample size, but never exceed the allowed bound.
+    // hi.ceil() can overshoot n_max_allowed when n_max_allowed is non-integer
+    // (e.g. n_max_allowed = 963.6 → hi.ceil() = 964 > 963.6).
+    Ok(hi.ceil().min(n_max_allowed))
 }
 
 // ---------------------------------------------------------------------------
@@ -867,7 +869,7 @@ mod tests {
             prop_assert!(n_req >= n_current,
                 "required n {n_req} < n_current {n_current}");
             prop_assert!(n_req <= n_max_allowed.ceil(),
-                "required n {n_req} > n_max_allowed {n_max_allowed}");
+                "required n {n_req} > n_max_allowed.ceil() {}", n_max_allowed.ceil());
         }
     }
 }

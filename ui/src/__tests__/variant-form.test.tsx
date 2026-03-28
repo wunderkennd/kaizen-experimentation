@@ -172,4 +172,31 @@ describe('VariantForm', () => {
     expect(radios[0]).not.toBeChecked();
     expect(radios[1]).toBeChecked();
   });
+
+  it('distributes traffic evenly when "Distribute Evenly" is clicked', async () => {
+    const user = userEvent.setup();
+    const threeVariants = [
+      ...baseVariants,
+      {
+        variantId: 'v-3',
+        name: 'v3',
+        trafficFraction: 0,
+        isControl: false,
+        payloadJson: '{}',
+      },
+    ];
+    render(<VariantForm variants={threeVariants} experimentType="AB" onSave={vi.fn()} />);
+
+    // Initially: 0.5, 0.5, 0 -> 1.0
+    expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Distribute Evenly'));
+
+    // Should be 0.333, 0.333, 0.334
+    const trafficInputs = screen.getAllByRole('spinbutton', { name: /traffic/i });
+    expect(trafficInputs[0]).toHaveValue(0.333);
+    expect(trafficInputs[1]).toHaveValue(0.333);
+    expect(trafficInputs[2]).toHaveValue(0.334);
+    expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();
+  });
 });

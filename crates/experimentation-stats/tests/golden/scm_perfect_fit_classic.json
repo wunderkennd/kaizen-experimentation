@@ -1,0 +1,20 @@
+{
+  "test_name": "scm_perfect_fit_classic",
+  "description": "2-donor perfect pre-treatment fit: treated = 0.6*D1 + 0.4*D2 pre-treatment + ATT=2.0 post. Classic SCM should recover weights [0.6, 0.4] and ATT=2.0 to 4 decimal places.",
+  "method": "Classic",
+  "pre_periods": 5,
+  "alpha": 0.05,
+  "treated_series": [1.4, 2.8, 4.2, 5.6, 7.0, 10.4, 11.8, 13.2],
+  "donors": [
+    {"name": "D1", "series": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]},
+    {"name": "D2", "series": [2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0]}
+  ],
+  "expected": {
+    "att": 2.0,
+    "att_tolerance": 1e-3,
+    "weights": {"D1": 0.6, "D2": 0.4},
+    "weight_tolerance": 1e-3,
+    "weights_sum_to_one": true,
+    "placebo_p_max": 1.0
+  }
+}

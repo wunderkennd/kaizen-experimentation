@@ -19,12 +19,16 @@
 //! - `evalue` — GROW martingale and AVLM e-values (ADR-018)
 //! - `adaptive_n` — Adaptive sample size: promising-zone design, GST reallocation (ADR-020)
 //! - `multiple_comparison` — Holm-Bonferroni, Benjamini-Hochberg
+//! - `guardrail` — Bonferroni-corrected guardrail monitoring, metric stakeholder validation (ADR-014)
 //! - `novelty` — Exponential decay fitting for novelty effects
 //! - `interference` — Jensen-Shannon divergence, Jaccard, Gini
 //! - `feedback_loop` — Feedback loop detection: paired t-test, contamination correlation, bias correction (ADR-021)
+//! - `synthetic_control` — Synthetic control methods: Classic, Augmented, SDiD, CausalImpact (ADR-023)
 //! - `clustering` — Clustered standard errors for session-level experiments
+//! - `switchback` — Switchback experiment analysis: HAC SE, randomization inference, carryover diagnostic (ADR-022)
 
 pub mod adaptive_n;
+pub mod switchback;
 pub mod avlm;
 pub mod bayesian;
 pub mod bootstrap;
@@ -36,12 +40,14 @@ pub mod feedback_loop;
 pub mod interference;
 pub mod interleaving;
 pub mod ipw;
+pub mod guardrail;
 pub mod multiple_comparison;
 pub mod novelty;
 pub mod orl;
 pub mod sequential;
 pub mod srm;
 pub mod surrogate;
+pub mod synthetic_control;
 pub mod ttest;
 // Stubs — implement in Phase 3:
 // pub mod delta_method;

@@ -18,6 +18,8 @@ import { getExperiment, getBanditDashboard } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { RetryableError } from '@/components/retryable-error';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { RewardCompositionChart } from '@/components/RewardCompositionChart';
+import { ConstraintStatusTable } from '@/components/ConstraintStatusTable';
 
 const ARM_COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed'];
 
@@ -207,6 +209,28 @@ export default function BanditDashboardPage() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Multi-objective reward composition (ADR-011) — only when reward_objectives non-empty */}
+      {(experiment.banditExperimentConfig?.rewardObjectives?.length ?? 0) > 0 && (
+        <>
+          <section className="mb-6">
+            <h2 className="mb-3 text-lg font-semibold text-gray-900">Reward Composition per Arm</h2>
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              <RewardCompositionChart
+                breakdowns={dashboard.objectiveBreakdowns ?? []}
+                objectives={experiment.banditExperimentConfig!.rewardObjectives!}
+              />
+            </div>
+          </section>
+
+          {(dashboard.constraintStatuses?.length ?? 0) > 0 && (
+            <section className="mb-6">
+              <h2 className="mb-3 text-lg font-semibold text-gray-900">LP Constraint Status</h2>
+              <ConstraintStatusTable constraints={dashboard.constraintStatuses!} />
+            </section>
+          )}
+        </>
       )}
 
       {/* Arm stats table */}

@@ -88,6 +88,23 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
     setDirty(true);
   }, []);
 
+  const distributeTraffic = useCallback(() => {
+    setVariants((prev) => {
+      const count = prev.length;
+      if (count === 0) return prev;
+      const equalTraffic = Math.floor((1.0 / count) * 1000) / 1000;
+      const remainder = Math.round((1.0 - equalTraffic * count) * 1000) / 1000;
+
+      return prev.map((v, i) => ({
+        ...v,
+        trafficFraction: i === count - 1 ? Math.round((equalTraffic + remainder) * 1000) / 1000 : equalTraffic,
+      }));
+    });
+    setDirty(true);
+    setBannerError((prev) => prev === 'Traffic fractions must sum to 100%' ? undefined : prev);
+    setFieldErrors((prev) => prev.filter((e) => e.field !== 'trafficFraction'));
+  }, []);
+
   const handleSave = async () => {
     const result = validateVariants(variants, experimentType);
     setFieldErrors(result.errors);
@@ -216,7 +233,11 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
       </div>
 
       {/* Traffic sum indicator */}
-      <div className={`mt-2 text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}>
+      <div
+        role="status"
+        aria-live="polite"
+        className={`mt-2 text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}
+      >
         Total traffic: {formatPercent(trafficSum)}
       </div>
 
@@ -228,6 +249,14 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
           className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Add Variant
+        </button>
+        <button
+          type="button"
+          onClick={distributeTraffic}
+          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          aria-label="Distribute traffic evenly across all variants"
+        >
+          Distribute Evenly
         </button>
         <button
           type="button"

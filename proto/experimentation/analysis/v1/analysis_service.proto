@@ -27,6 +27,10 @@ service AnalysisService {
   rpc GetSyntheticControlAnalysis(GetSyntheticControlAnalysisRequest) returns (SyntheticControlAnalysisResult);
   // Get switchback temporal analysis for SWITCHBACK experiments (ADR-022).
   rpc GetSwitchbackAnalysis(GetSwitchbackAnalysisRequest) returns (SwitchbackAnalysisResult);
+  // Get optimal traffic allocation across a portfolio of running experiments (ADR-019).
+  // Called by M5 to maximize portfolio-level information gain within a traffic budget.
+  // M4a uses power curves and accumulated effect estimates for portfolio optimization.
+  rpc GetPortfolioAllocation(GetPortfolioAllocationRequest) returns (GetPortfolioAllocationResponse);
 }
 
 message RunAnalysisRequest {
@@ -282,4 +286,36 @@ message SwitchbackAnalysisResult {
   double carryover_p_value = 8;
   bool carryover_detected = 9;
   google.protobuf.Timestamp computed_at = 10;
+}
+
+// GetPortfolioAllocationRequest — sent by M5 to M4a (ADR-019).
+// M5 submits the set of running experiments; M4a returns optimal traffic splits.
+message GetPortfolioAllocationRequest {
+  // Experiment IDs to optimize allocation across. Must be non-empty.
+  repeated string experiment_ids = 1;
+  // Total traffic budget as a fraction [0.0, 1.0].
+  // Sum of returned allocated_fraction values will be <= total_traffic_budget.
+  double total_traffic_budget = 2;
+}
+
+// ExperimentAllocation is one entry in GetPortfolioAllocationResponse.
+message ExperimentAllocation {
+  string experiment_id = 1;
+  // Optimal traffic allocation fraction for this experiment. In [0.0, 1.0].
+  double allocated_fraction = 2;
+  // Whether M4a estimates sufficient evidence has accumulated to conclude this experiment.
+  // M5 uses this signal to trigger the CONCLUDING lifecycle transition.
+  bool can_conclude = 3;
+  // Estimated statistical power at the allocated traffic level and current sample size.
+  // In [0.0, 1.0]. M6 UI displays this per experiment.
+  double estimated_power = 4;
+}
+
+// GetPortfolioAllocationResponse — returned by M4a to M5 (ADR-019).
+message GetPortfolioAllocationResponse {
+  // One ExperimentAllocation per experiment_id in the request, in request order.
+  repeated ExperimentAllocation allocations = 1;
+  // Sum of all allocated_fraction values. Will be <= total_traffic_budget.
+  double total_allocated = 2;
+  google.protobuf.Timestamp computed_at = 3;
 }

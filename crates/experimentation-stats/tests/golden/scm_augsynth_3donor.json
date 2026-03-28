@@ -1,0 +1,19 @@
+{
+  "test_name": "scm_augsynth_3donor",
+  "description": "3-donor panel validated against R augsynth. Treated = 0.5*D1 + 0.5*D2 (pre) + ATT=1.5 (post). D3 is offset (D3=D1+2), donor pool is overdetermined. Synthetic post with w=[0.5,0.5,0]: [8.5,9.5,10.5]. Treated post = [10.0,11.0,12.0] → ATT=1.5. augsynth::augsynth(Ridge) gives ATT≈1.5 on noise-free data.",
+  "method": "Augmented",
+  "pre_periods": 7,
+  "alpha": 0.05,
+  "treated_series": [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 10.0, 11.0, 12.0],
+  "donors": [
+    {"name": "D1", "series": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]},
+    {"name": "D2", "series": [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0]},
+    {"name": "D3", "series": [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]}
+  ],
+  "expected": {
+    "att_min": 1.0,
+    "att_max": 2.0,
+    "weights_sum_to_one": true,
+    "placebo_p_max": 1.0
+  }
+}

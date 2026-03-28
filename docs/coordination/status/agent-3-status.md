@@ -1,7 +1,7 @@
 # Agent-3 Status — Phase 5
 
 **Module**: M3 Metrics
-**Last updated**: 2026-03-23
+**Last updated**: 2026-03-24
 
 ## Current Sprint
 
@@ -25,7 +25,8 @@ Branch: work/zealous-owl
   - Implemented `ProviderMetricsJob` with `checkCatalogFreshness` (24-hour staleness guard)
   - All queries logged to `query_log` with `job_type = "provider_metric"`
   - Template validation test updated: 17 → 27 templates, all passing
-  - Full `services/metrics/...` test suite: green
+  - Created missing `gen/go/go.mod` (workspace module for protobuf/ConnectRPC generated code)
+  - Full `services/metrics/...` test suite: green (11/11 packages pass)
 
 ## In Progress
 

@@ -11,12 +11,12 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
 use experimentation_proto::experimentation::analysis::v1::{
     AdaptiveNInterimResult, AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult,
     GetAnalysisResultRequest, GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest,
-    GetNoveltyAnalysisRequest, GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest,
-    InterferenceAnalysisResult, InterleavingAnalysisResult, IpwResult as ProtoIpwResult,
-    MetricResult, NoveltyAnalysisResult, PositionAnalysis as ProtoPositionAnalysis,
-    RunAnalysisRequest, SegmentResult, SequentialResult, SessionLevelResult,
-    SrmResult as ProtoSrmResult, SwitchbackAnalysisResult, SyntheticControlAnalysisResult,
-    TitleSpillover,
+    GetNoveltyAnalysisRequest, GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
+    GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult,
+    InterleavingAnalysisResult, IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
+    PositionAnalysis as ProtoPositionAnalysis, RunAnalysisRequest, SegmentResult,
+    SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
+    SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
 use experimentation_stats::{
@@ -698,11 +698,18 @@ fn compute_adaptive_n_result(
     for metric_id in sorted_metrics {
         let variant_data = &data.metrics[metric_id];
 
-        let control_vals = variant_data.get(control_variant)?;
-        let treatment_vals = variant_data
+        let control_vals = match variant_data.get(control_variant) {
+            Some(v) => v,
+            None => continue,
+        };
+        let treatment_vals = match variant_data
             .iter()
             .find(|(k, _)| *k != control_variant)
-            .map(|(_, v)| v)?;
+            .map(|(_, v)| v)
+        {
+            Some(v) => v,
+            None => continue,
+        };
 
         if control_vals.len() < 2 || treatment_vals.len() < 2 {
             continue;
@@ -945,6 +952,18 @@ impl AnalysisService for AnalysisServiceHandler {
     ) -> Result<Response<SwitchbackAnalysisResult>, Status> {
         Err(Status::unimplemented(
             "GetSwitchbackAnalysis not yet implemented (ADR-022)",
+        ))
+    }
+
+    async fn get_portfolio_allocation(
+        &self,
+        _request: Request<GetPortfolioAllocationRequest>,
+    ) -> Result<Response<GetPortfolioAllocationResponse>, Status> {
+        // ADR-019: Full portfolio optimization requires power-curve analysis.
+        // Contract is defined; implementation is Phase 5 work.
+        // The contract test exercises a test-specific implementation for wire-format validation.
+        Err(Status::unimplemented(
+            "GetPortfolioAllocation not yet implemented (ADR-019)",
         ))
     }
 }
