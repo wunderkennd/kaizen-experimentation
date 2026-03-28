@@ -748,7 +748,7 @@ mod tests {
         fn vectors_path() -> PathBuf {
             // CARGO_MANIFEST_DIR = crates/experimentation-stats/
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../test-vectors/tc_jive_vectors.json")
+                .join("tests/golden/tc_jive_vectors.json")
         }
 
         #[test]

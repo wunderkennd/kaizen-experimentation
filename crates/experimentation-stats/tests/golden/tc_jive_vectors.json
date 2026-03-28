@@ -1,5 +1,5 @@
 {
-  "description": "TC/JIVE golden test vectors derived from Netflix KDD 2024 Table 2 structure. Validates kfold_iv_calibrate() against three confounding scenarios (rho_UY in {0, ~0.5, weak-instrument}). All scenarios are deterministic (no noise) so values are exact to machine precision.",
+  "description": "TC/JIVE golden test vectors derived from Netflix KDD 2024 Table 2 structure. Validates kfold_iv_calibrate() against three confounding scenarios: (A) no confounding (rho_UY=0), (B) positive confounding (rho_UY~0.5), (C) weak instrument (first-stage F < 5). Scenarios A and B are deterministic; Scenario C uses sinusoidal variation to create a weak but non-degenerate first stage.",
   "reference": "Causal Surrogate Metrics for Measuring Long-Term Effects in Streaming Services (Netflix, KDD 2024), Table 2.",
   "scenarios": [
     {
@@ -74,6 +74,43 @@
         "first_stage_r_squared": 0.7803,
         "tolerance": 1e-4,
         "comment": "OLS biased up to 0.4373 (vs true 0.3); JIVE corrects to 0.2974. rho_ZS=sqrt(0.7803)=0.8834 (strong instrument). Matches Table 2 bias-correction direction for rho_UY>0."
+      }
+    },
+    {
+      "name": "weak_instrument_low_first_stage_f",
+      "description": "Weak instrument scenario: S = 0.5 + 0.05*Z + 0.4*sin(0.7*i), Y = 0.3*S. Z barely predicts S (first-stage F < 5). JIVE/OLS both recover gamma=0.3 (no confounding), but first_stage_r_squared is very low. n=20, K=4.",
+      "rho_uy": 0.0,
+      "n_folds": 4,
+      "alpha": 0.05,
+      "observations": [
+        {"treatment": 0.0, "surrogate": 0.5, "outcome": 0.15},
+        {"treatment": 1.0, "surrogate": 0.807687, "outcome": 0.242306},
+        {"treatment": 0.0, "surrogate": 0.89418, "outcome": 0.268254},
+        {"treatment": 1.0, "surrogate": 0.895284, "outcome": 0.268585},
+        {"treatment": 0.0, "surrogate": 0.633995, "outcome": 0.190199},
+        {"treatment": 1.0, "surrogate": 0.409687, "outcome": 0.122906},
+        {"treatment": 0.0, "surrogate": 0.15137, "outcome": 0.045411},
+        {"treatment": 1.0, "surrogate": 0.157019, "outcome": 0.047106},
+        {"treatment": 0.0, "surrogate": 0.247493, "outcome": 0.074248},
+        {"treatment": 1.0, "surrogate": 0.556726, "outcome": 0.167018},
+        {"treatment": 0.0, "surrogate": 0.762795, "outcome": 0.228838},
+        {"treatment": 1.0, "surrogate": 0.945267, "outcome": 0.28358},
+        {"treatment": 0.0, "surrogate": 0.84184, "outcome": 0.252552},
+        {"treatment": 1.0, "surrogate": 0.677639, "outcome": 0.203292},
+        {"treatment": 0.0, "surrogate": 0.353408, "outcome": 0.106023},
+        {"treatment": 1.0, "surrogate": 0.198122, "outcome": 0.059437},
+        {"treatment": 0.0, "surrogate": 0.108329, "outcome": 0.032499},
+        {"treatment": 1.0, "surrogate": 0.302745, "outcome": 0.090824},
+        {"treatment": 0.0, "surrogate": 0.513449, "outcome": 0.154035},
+        {"treatment": 1.0, "surrogate": 0.817828, "outcome": 0.245348}
+      ],
+      "expected": {
+        "jive_coefficient": 0.3,
+        "ols_naive_estimate": 0.3,
+        "treatment_effect_correlation": 0.1376,
+        "first_stage_r_squared": 0.0189,
+        "tolerance": 1e-2,
+        "comment": "Weak instrument (F=0.35 < 5). Z barely predicts S so first_stage_r_squared is near zero. JIVE and OLS both recover true gamma=0.3 since there is no confounding, but the instrument is too weak for reliable IV estimation in practice."
       }
     }
   ]

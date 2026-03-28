@@ -19,7 +19,7 @@ Sprint: 5.1
 Focus: ADR-016 Slate bandit optimization
 Branch: work/silly-dolphin
 
-Branch: work/gentle-owl
+Branch: agent-4/test/adr-017-tc-jive-golden-vectors
 
 ## In Progress
 
