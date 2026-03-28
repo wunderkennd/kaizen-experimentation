@@ -5,6 +5,8 @@ import type {
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
   AuditLogEntry, Flag, ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState,
+  AvlmResult, AdaptiveNResult, FeedbackLoopResult,
+  PortfolioAllocationResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -196,6 +198,16 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
       contextFeatureKeys: ['content_genre', 'user_tenure_days', 'device_type'],
       minExplorationFraction: 0.1,
       warmupObservations: 200,
+      rewardObjectives: [
+        { metricId: 'play_through_rate', weight: 0.6, floor: 0.0, isPrimary: true },
+        { metricId: 'provider_diversity_score', weight: 0.25, floor: 0.3, isPrimary: false },
+        { metricId: 'add_to_watchlist_rate', weight: 0.15, floor: 0.0, isPrimary: false },
+      ],
+      compositionMethod: 'WEIGHTED_SCALARIZATION',
+      globalConstraints: [
+        { label: 'max_single_provider_share', coefficients: { 'v4-arm1': 1.0, 'v4-arm2': 0.0, 'v4-arm3': 0.0, 'v4-arm4': 0.0 }, rhs: 0.5 },
+        { label: 'min_diversity_floor', coefficients: { 'v4-arm1': -0.25, 'v4-arm2': -0.25, 'v4-arm3': -0.25, 'v4-arm4': -0.25 }, rhs: -0.2 },
+      ],
     },
     createdAt: '2026-03-02T16:45:00Z',
   },
@@ -980,6 +992,32 @@ const INITIAL_BANDIT_RESULTS: Record<string, BanditDashboardResult> = {
       { timestamp: '2026-03-05T00:00:00Z', armId: 'genre_row', cumulativeReward: 196, cumulativeSelections: 980 },
       { timestamp: '2026-03-05T00:00:00Z', armId: 'trending_section', cumulativeReward: 224, cumulativeSelections: 860 },
       { timestamp: '2026-03-05T00:00:00Z', armId: 'personalized_row', cumulativeReward: 144, cumulativeSelections: 802 },
+    ],
+    objectiveBreakdowns: [
+      {
+        armId: 'v4-arm1', armName: 'top_carousel',
+        objectiveContributions: { play_through_rate: 0.156, provider_diversity_score: 0.112, add_to_watchlist_rate: 0.052 },
+        composedReward: 0.320,
+      },
+      {
+        armId: 'v4-arm2', armName: 'genre_row',
+        objectiveContributions: { play_through_rate: 0.120, provider_diversity_score: 0.178, add_to_watchlist_rate: 0.039 },
+        composedReward: 0.337,
+      },
+      {
+        armId: 'v4-arm3', armName: 'trending_section',
+        objectiveContributions: { play_through_rate: 0.149, provider_diversity_score: 0.095, add_to_watchlist_rate: 0.048 },
+        composedReward: 0.292,
+      },
+      {
+        armId: 'v4-arm4', armName: 'personalized_row',
+        objectiveContributions: { play_through_rate: 0.108, provider_diversity_score: 0.140, add_to_watchlist_rate: 0.031 },
+        composedReward: 0.279,
+      },
+    ],
+    constraintStatuses: [
+      { label: 'max_single_provider_share', currentValue: 0.3500, limit: 0.5000, isSatisfied: true },
+      { label: 'min_diversity_floor', currentValue: -0.2550, limit: -0.2000, isSatisfied: false },
     ],
   },
 };
@@ -1924,7 +1962,52 @@ const INITIAL_ONLINE_FDR_STATES: OnlineFdrState[] = [
 ];
 
 export let SEED_ONLINE_FDR_STATES: OnlineFdrState[] = structuredClone(INITIAL_ONLINE_FDR_STATES);
+// --- Portfolio Optimization (ADR-019) ---
 
+const INITIAL_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = {
+  experiments: [
+    {
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      name: 'homepage_recs_v2',
+      effectSize: 0.0312,
+      variance: 0.000487,
+      allocatedTrafficPct: 0.20,
+      priorityScore: 0.872,
+      userSegments: ['new', 'established'],
+    },
+    {
+      experimentId: '22222222-2222-2222-2222-222222222222',
+      name: 'search_ranking_v3',
+      effectSize: 0.0218,
+      variance: 0.000312,
+      allocatedTrafficPct: 0.15,
+      priorityScore: 0.741,
+      userSegments: ['established', 'mature'],
+    },
+    {
+      experimentId: '33333333-3333-3333-3333-333333333333',
+      name: 'playback_buffer_opt',
+      effectSize: -0.0045,
+      variance: 0.000198,
+      allocatedTrafficPct: 0.10,
+      priorityScore: 0.534,
+      userSegments: ['trial', 'new'],
+    },
+    {
+      experimentId: '44444444-4444-4444-4444-444444444444',
+      name: 'content_diversity_boost',
+      effectSize: 0.0089,
+      variance: 0.000654,
+      allocatedTrafficPct: 0.12,
+      priorityScore: 0.421,
+      userSegments: ['mature', 'at_risk'],
+    },
+  ],
+  totalAllocatedPct: 0.57,
+  computedAt: '2026-03-24T10:00:00Z',
+};
+
+export let SEED_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -1949,4 +2032,5 @@ export function resetSeedData(): void {
   SEED_ADAPTIVE_N_RESULTS = structuredClone(INITIAL_ADAPTIVE_N_RESULTS);
   SEED_FEEDBACK_LOOP_RESULTS = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
   SEED_ONLINE_FDR_STATES = structuredClone(INITIAL_ONLINE_FDR_STATES);
+  SEED_PORTFOLIO_ALLOCATION = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
 }

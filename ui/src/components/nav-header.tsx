@@ -60,7 +60,7 @@ export function NavHeader() {
             Monitoring
           </Link>
           <Link
-            href="/portfolio/provider-health"
+            href="/portfolio"
             className={`text-sm font-medium transition-colors hover:text-gray-900 ${pathname.startsWith('/portfolio') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/portfolio') ? 'page' : undefined}
             data-testid="nav-portfolio"

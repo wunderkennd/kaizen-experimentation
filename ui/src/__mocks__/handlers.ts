@@ -7,6 +7,7 @@ import {
   SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS, SEED_PROVIDER_HEALTH,
   SEED_AVLM_RESULTS, SEED_ADAPTIVE_N_RESULTS, SEED_FEEDBACK_LOOP_RESULTS,
   SEED_ONLINE_FDR_STATES,
+  SEED_PORTFOLIO_ALLOCATION,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -836,5 +837,10 @@ export const handlers = [
       );
     }
     return HttpResponse.json(result);
+  }),
+
+  // GetPortfolioAllocation (ADR-019)
+  http.post(`${MGMT_SVC}/GetPortfolioAllocation`, () => {
+    return HttpResponse.json(SEED_PORTFOLIO_ALLOCATION);
   }),
 ];

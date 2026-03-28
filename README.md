@@ -27,7 +27,7 @@ A full-stack experimentation system purpose-built for streaming platforms. Suppo
 │  :50052 (Rust)           │    │  :50053 (Rust)               │
 │  :50058 (Go orch)        │    │  Frequentist, Bayesian,      │
 │  Validation, dedup,      │    │  sequential, CUPED, CATE,    │
-│  Kafka publish            │    │  IPW, interference, novelty  │
+│  Kafka publish           │    │  IPW, interference, novelty  │
 └──────────┬───────────────┘    └──────────────────────────────┘
            │ Kafka                          ▲
            ▼                                │
@@ -86,7 +86,7 @@ A full-stack experimentation system purpose-built for streaming platforms. Suppo
 - Docker and Docker Compose
 - `buf` CLI v2 (proto toolchain)
 - PostgreSQL 16
-- `tmux` (for Multiclaude agent orchestration)
+- `tmux` (for multi-agent orchestration)
 
 ### Development Setup
 
@@ -142,108 +142,79 @@ Phase 5 implements 15 proposed ADRs driven by a 2024–2026 experimentation rese
 
 ### Development Orchestration
 
-Phase 5 uses a hybrid multi-agent orchestration model:
+Phase 5 uses a multi-tool orchestration model where each tool has a distinct role:
 
-- **Multiclaude** for persistent sprint-level work — each agent gets its own git worktree and tmux window, CI-gated merge queue, supervisor health-checks.
-- **Agent Teams** for ephemeral ad-hoc collaboration — contract test debugging, proto schema design, interactive PR review.
-- Per-agent status files at `docs/coordination/status/agent-N-status.md`.
-- Agent definitions at `.multiclaude/agents/`.
+| Tool | Role | When |
+| --- | --- | --- |
+| Gas Town | Interactive parallel work — Mayor coordinates polecats, you steer | Daytime active sessions |
+| Multiclaude | Autonomous overnight grinding — daemon, CI-gated merge queue | You're away |
+| Jules | CI-triggered automation — maintenance, tests, dependency bumps | Continuous (GitHub Actions) |
+| Devin | Bounded autonomous tasks — migrations, test coverage, golden files | Batch dispatch |
+| Gemini CLI | Quick lookups, second-opinion review, research | Ad-hoc |
 
 ```bash
-# Setup (one-time)
-go install github.com/dlorenc/multiclaude/cmd/multiclaude@latest
-multiclaude start
-multiclaude repo init https://github.com/your-org/kaizen
+# Daily workflow (justfile commands)
+just morning              # Check overnight Multiclaude results, pull main
+just interactive          # Start Gas Town Mayor session for the day
+just evening 0            # Stop Gas Town, launch Sprint 5.0 Multiclaude workers
 
-# Launch a sprint (example: Sprint 5.0)
-# See docs/coordination/sprint-prompts.md for pre-written commands
-multiclaude worker create "Implement AVLM (ADR-015)..." --agent agent-4-analysis-bandit
-multiclaude worker create "Port M7 to Rust (ADR-024)..." --agent agent-7-flags
-
-# Monitor
-multiclaude status
-tmux attach -t mc-kaizen
+# Other modes
+just solo adr-015-debug   # Single Claude Code session in isolated worktree
+just autonomous-sprint 2  # Launch Sprint 5.2 Multiclaude workers
+just status               # Unified view across all tools
+just pr-triage            # AI-assisted PR cleanup
 ```
+
+See `docs/guides/orchestration-workflow.md` for the full multi-tool guide and `docs/guides/gastown-setup.md` for Gas Town configuration.
 
 ## Project Structure
 
 ```
 kaizen/
-├── CLAUDE.md                          # Agent context (read by all Claude Code sessions)
+├── CLAUDE.md                          # Agent context (read by all sessions)
+├── AGENTS.md                          # Jules agent context
 ├── README.md                          # This file
-├── CONTRIBUTING.md                    # General contribution guide
+├── CONTRIBUTING.md                    # Contribution guide
 ├── Cargo.toml                         # Workspace root
-├── justfile                           # Task runner
+├── justfile                           # Task runner (includes orchestration recipes)
 │
 ├── .claude/
-│   └── settings.json                  # Project-level Claude Code settings
+│   ├── settings.json                  # Project-level Claude Code settings
+│   └── agents/
+│       └── pr-triage.md               # PR triage subagent
 │
 ├── .multiclaude/
 │   ├── config.json                    # Multiclaude repo config
 │   └── agents/                        # 7 agent definitions (committed)
 │
 ├── crates/                            # Rust workspace (13 crates)
-│   ├── experimentation-core/
-│   ├── experimentation-hash/
-│   ├── experimentation-proto/
-│   ├── experimentation-stats/         # All statistical computation
-│   ├── experimentation-bandit/        # All bandit algorithms
-│   ├── experimentation-interleaving/
-│   ├── experimentation-ingest/
-│   ├── experimentation-assignment/    # M1 service binary
-│   ├── experimentation-analysis/      # M4a service binary
-│   ├── experimentation-pipeline/      # M2 service binary
-│   ├── experimentation-policy/        # M4b service binary
-│   └── experimentation-flags/         # M7 service binary (ADR-024)
-│
-├── services/                          # Go services
-│   ├── management/                    # M5
-│   ├── metrics/                       # M3
-│   ├── pipeline-orch/                 # M2 orchestration
-│   └── flags/                         # M7 (legacy Go — replaced by crates/experimentation-flags/)
-│
+├── services/                          # Go services (M3, M5, M2-orch, M7-legacy)
 ├── ui/                                # M6 (Next.js 14)
-│
 ├── proto/experimentation/             # Protobuf schema (17 files, 8 packages)
-│   ├── common/v1/                     # Shared types
-│   ├── assignment/v1/
-│   ├── pipeline/v1/
-│   ├── metrics/v1/
-│   ├── analysis/v1/
-│   ├── bandit/v1/
-│   ├── management/v1/
-│   └── flags/v1/
-│
 ├── sdks/                              # Client SDKs (5 platforms)
-│   ├── web/                           # TypeScript
-│   ├── ios/                           # Swift
-│   ├── android/                       # Kotlin
-│   ├── server-go/                     # Go
-│   └── server-python/                 # Python
-│
 ├── sql/migrations/                    # PostgreSQL DDL
 ├── delta/                             # Delta Lake table schemas
 ├── test-vectors/                      # Hash parity vectors (10K)
 │
 ├── docs/
 │   ├── design/
-│   │   └── design_doc_v7.0.md         # System design document
-│   ├── adrs/
-│   │   ├── README.md                  # ADR index (001–025)
-│   │   ├── 001-language-selection.md  # through 025-m5-conditional-rust-port.md
-│   │   └── ...
-│   └── coordination/
-│       ├── phase5-implementation-plan.md
-│       ├── phase5-playbook.md
-│       ├── sprint-prompts.md
-│       ├── CONTRIBUTING-phase5.md
-│       └── status/                    # Per-agent status files
-│           ├── agent-1-status.md
-│           └── ...
+│   │   └── design_doc_v7.0.md
+│   ├── adrs/                          # 25 ADRs (001–025)
+│   ├── coordination/                  # Sprint plans, playbook, status files
+│   └── guides/                        # Developer guides
+│       ├── orchestration-workflow.md
+│       ├── gastown-setup.md
+│       ├── pr-triage-and-cleanup.md
+│       ├── merge-conflict-resolution.md
+│       └── git-hygiene.md
 │
-├── docker-compose.yml                 # Infrastructure (Kafka, PG, Redis)
-├── docker-compose.monitoring.yml      # Prometheus, Grafana, Jaeger
-└── .github/workflows/                 # CI/CD
+├── .github/workflows/                 # CI/CD + Jules automation
+│   ├── ci.yml
+│   ├── jules-weekly-maintenance.yml
+│   └── jules-test-coverage.yml
+│
+├── docker-compose.yml
+└── docker-compose.monitoring.yml
 ```
 
 ## Documentation
@@ -253,10 +224,13 @@ kaizen/
 | [Design Document v7.0](docs/design/design_doc_v7.0.md) | Complete system reference + Phase 5 architecture plan |
 | [ADR Index](docs/adrs/README.md) | 25 architecture decision records (10 accepted, 15 proposed) |
 | [Phase 5 Implementation Plan](docs/coordination/phase5-implementation-plan.md) | 6 sprints, agent assignments, milestones |
-| [Phase 5 Playbook](docs/coordination/phase5-playbook.md) | Multiclaude + Agent Teams operational guide |
-| [Sprint Prompts](docs/coordination/sprint-prompts.md) | Pre-written `multiclaude worker create` commands |
-| [Contributing (Phase 5)](docs/coordination/CONTRIBUTING-phase5.md) | Branching, PR, merge, status file conventions |
-| [Agent Teams vs. Multiclaude](docs/coordination/agent-teams-vs-multiclaude-evaluation.md) | Evaluation and hybrid model rationale |
+| [Phase 5 Playbook](docs/coordination/phase5-playbook.md) | Gas Town + Multiclaude operational guide |
+| [Sprint Prompts](docs/coordination/sprint-prompts.md) | Pre-written worker/task commands per sprint |
+| [Orchestration Workflow](docs/guides/orchestration-workflow.md) | Multi-tool daily workflow (Gas Town + Multiclaude + Jules + Devin + Gemini) |
+| [Gas Town Setup](docs/guides/gastown-setup.md) | Gas Town installation and Kaizen rig configuration |
+| [PR Triage & Cleanup](docs/guides/pr-triage-and-cleanup.md) | Handling PR accumulation, crash recovery, batch cleanup |
+| [Merge Conflict Resolution](docs/guides/merge-conflict-resolution.md) | Strategies for status files, generated files, multi-branch rebases |
+| [Git Hygiene](docs/guides/git-hygiene.md) | What to track, what to gitignore, .gitattributes rules |
 
 ## Verified Performance
 

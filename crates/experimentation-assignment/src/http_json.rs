@@ -62,6 +62,34 @@ struct GetAssignmentsJsonResponse {
     assignments: Vec<GetAssignmentJsonResponse>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetSlateAssignmentJsonRequest {
+    user_id: String,
+    experiment_id: String,
+    #[serde(default)]
+    candidate_item_ids: Vec<String>,
+    #[serde(default)]
+    attributes: HashMap<String, String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SlotProbabilityJson {
+    slot_index: i32,
+    item_id: String,
+    probability: f64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GetSlateAssignmentJsonResponse {
+    experiment_id: String,
+    slate_item_ids: Vec<String>,
+    slot_probabilities: Vec<SlotProbabilityJson>,
+    is_uniform_random: bool,
+}
+
 // ---------------------------------------------------------------------------
 // HTTP handler
 // ---------------------------------------------------------------------------
@@ -70,6 +98,8 @@ const GET_ASSIGNMENT_PATH: &str =
     "/experimentation.assignment.v1.AssignmentService/GetAssignment";
 const GET_ASSIGNMENTS_PATH: &str =
     "/experimentation.assignment.v1.AssignmentService/GetAssignments";
+const GET_SLATE_ASSIGNMENT_PATH: &str =
+    "/experimentation.assignment.v1.AssignmentService/GetSlateAssignment";
 
 type BoxBody = Full<Bytes>;
 
@@ -113,6 +143,7 @@ pub async fn __test_handle_request(
     match path.as_str() {
         GET_ASSIGNMENT_PATH => handle_get_assignment(&svc, &body_bytes).await,
         GET_ASSIGNMENTS_PATH => handle_get_assignments(&svc, &body_bytes).await,
+        GET_SLATE_ASSIGNMENT_PATH => handle_get_slate_assignment(&svc, &body_bytes).await,
         _ => Ok(error_json(StatusCode::NOT_FOUND, "unknown method")),
     }
 }
@@ -186,6 +217,55 @@ async fn handle_get_assignments(
     let json_resp = GetAssignmentsJsonResponse { assignments };
     let body = serde_json::to_vec(&json_resp).expect("serialize should not fail");
     Ok(json_response(StatusCode::OK, &body))
+}
+
+async fn handle_get_slate_assignment(
+    svc: &AssignmentServiceImpl,
+    body: &[u8],
+) -> Result<Response<BoxBody>, hyper::Error> {
+    let req: GetSlateAssignmentJsonRequest = match serde_json::from_slice(body) {
+        Ok(r) => r,
+        Err(e) => return Ok(error_json(StatusCode::BAD_REQUEST, &e.to_string())),
+    };
+
+    match svc
+        .assign_slate(
+            &req.experiment_id,
+            &req.user_id,
+            req.candidate_item_ids,
+            &req.attributes,
+        )
+        .await
+    {
+        Ok(resp) => {
+            let slot_probabilities = resp
+                .slot_probabilities
+                .into_iter()
+                .map(|sp| SlotProbabilityJson {
+                    slot_index: sp.slot_index,
+                    item_id: sp.item_id,
+                    probability: sp.probability,
+                })
+                .collect();
+            let json_resp = GetSlateAssignmentJsonResponse {
+                experiment_id: resp.experiment_id,
+                slate_item_ids: resp.slate_item_ids,
+                slot_probabilities,
+                is_uniform_random: resp.is_uniform_random,
+            };
+            let body = serde_json::to_vec(&json_resp).expect("serialize should not fail");
+            Ok(json_response(StatusCode::OK, &body))
+        }
+        Err(status) => {
+            let http_status = match status.code() {
+                tonic::Code::NotFound => StatusCode::NOT_FOUND,
+                tonic::Code::InvalidArgument => StatusCode::BAD_REQUEST,
+                tonic::Code::FailedPrecondition => StatusCode::BAD_REQUEST,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            Ok(error_json(http_status, status.message()))
+        }
+    }
 }
 
 /// Start the JSON HTTP server on the given address.

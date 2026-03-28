@@ -11,6 +11,7 @@ import type {
   ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
   OnlineFdrState,
+  PortfolioAllocationResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -741,5 +742,13 @@ export async function getFeedbackLoopAnalysis(experimentId: string): Promise<Fee
 export async function getOnlineFdrState(experimentId: string): Promise<OnlineFdrState> {
   return callRpc<{ experimentId: string }, OnlineFdrState>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetOnlineFdrState', { experimentId },
+  );
+}
+
+// --- Portfolio Optimization (ADR-019) ---
+
+export async function getPortfolioAllocation(): Promise<PortfolioAllocationResult> {
+  return callRpc<Record<string, never>, PortfolioAllocationResult>(
+    MGMT_URL, MGMT_SVC, 'GetPortfolioAllocation', {},
   );
 }

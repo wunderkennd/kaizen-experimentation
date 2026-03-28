@@ -20,6 +20,7 @@ import (
 	"github.com/org/experimentation/gen/go/experimentation/management/v1/managementv1connect"
 
 	"github.com/org/experimentation-platform/services/management/internal/auth"
+	"github.com/org/experimentation-platform/services/management/internal/fdr"
 	"github.com/org/experimentation-platform/services/management/internal/guardrail"
 	"github.com/org/experimentation-platform/services/management/internal/handlers"
 	"github.com/org/experimentation-platform/services/management/internal/metrics"
@@ -98,6 +99,15 @@ func main() {
 		slog.Info("surrogate recalibration publisher configured", "topic", surrogate.Topic)
 	}
 	defer surrogatePub.Close()
+
+	// e-LOND Online FDR controller (ADR-018 Phase 2).
+	// Enabled when ONLINE_FDR_ENABLED=true. The migration 009 must be applied.
+	if os.Getenv("ONLINE_FDR_ENABLED") == "true" {
+		fdrController := fdr.NewController(pool)
+		serviceOpts = append(serviceOpts, handlers.WithFdrController(fdrController))
+		serviceOpts = append(serviceOpts, handlers.WithPool(pool))
+		slog.Info("e-LOND Online FDR controller enabled (ADR-018 Phase 2)")
+	}
 
 	// Service handlers (created before consumers because sequential consumer uses expSvc as Concluder).
 	expSvc := handlers.NewExperimentService(experimentStore, auditStore, layerStore, metricStore, targetingStore, surrogateStore, notifier, serviceOpts...)

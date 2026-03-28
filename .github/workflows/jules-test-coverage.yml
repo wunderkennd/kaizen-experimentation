@@ -1,0 +1,21 @@
+# .github/workflows/jules-test-coverage.yml
+name: Test Coverage Boost (Jules)
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: 'Target crate'
+        required: true
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            Write additional unit tests for crates/${{ inputs.crate }}/.
+            Focus on untested public functions and edge cases.
+            Achieve >= 80% line coverage.
+            Run cargo test -p ${{ inputs.crate }} before opening PR.
+            Do not modify existing source code — tests only.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
