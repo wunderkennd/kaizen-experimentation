@@ -14,3 +14,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2025-05-15 - [Distribute Evenly UX Win]
 **Learning:** Automating repetitive calculations (like equal traffic distribution) significantly reduces friction and errors in experiment setup. Users appreciate tools that handle precision and edge cases (like remainder distribution) for them.
 **Action:** Look for other manual calculation tasks in the UI, such as target sample size or duration estimation, and provide one-click solutions.
+
+## 2026-03-28 - Reusable Copy Components and Toast Testing
+**Learning:** Standardizing technical identifier copy interactions into a reusable `CopyButton` prevents logic duplication and ensures consistent visual feedback (e.g., checkmark transition). Unit testing components that use `useToast` requires explicit wrapping in `ToastProvider` because RTL `render` does not include the root layout's context.
+**Action:** Always wrap identifier copy targets with the `CopyButton`. Ensure tests for these components include `ToastProvider`.
