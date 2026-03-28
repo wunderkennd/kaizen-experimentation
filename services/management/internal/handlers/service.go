@@ -43,6 +43,11 @@ type ExperimentService struct {
 
 	// modelTrainingPublisher publishes MLRATE model training requests (ADR-015 Phase 2).
 	modelTrainingPublisher  mlrate.Publisher
+
+	// streamVersion is a monotonically increasing counter attached to each
+	// ConfigUpdateEvent sent via StreamConfigUpdates (ADR-025 Phase 2).
+	// Clients use it to detect gaps after reconnection.
+	streamVersion atomic.Int64
 }
 
 // ServiceOption configures optional dependencies on ExperimentService.
