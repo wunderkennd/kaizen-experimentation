@@ -1090,7 +1090,7 @@ impl AnalysisService for AnalysisServiceHandler {
                 mde_relative: s.mde_relative,
                 baseline_mean: s.baseline_mean,
                 baseline_variance: s.baseline_variance,
-                n_variants: (s.n_variants as usize).max(2),
+                n_variants: (s.n_variants.max(2)) as usize,
             })
             .collect();
 

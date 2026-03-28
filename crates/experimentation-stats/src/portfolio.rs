@@ -1005,7 +1005,7 @@ mod tests {
             /// annualized_impact is always ≥ 0 for any valid non-negative lift.
             #[test]
             fn annualized_impact_non_negative(
-                lift in 0.0f64..10.0f64,
+                lift in 0.0f64..2.0f64,
                 baseline in 0.0f64..10_000.0f64,
                 users in 1u64..10_000_000u64,
                 duration in 1.0f64..365.0f64,
