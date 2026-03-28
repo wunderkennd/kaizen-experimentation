@@ -226,6 +226,16 @@ fn validate_create(exp: &Experiment) -> Result<(), Status> {
         ));
     }
 
+    // Reject NaN/Infinity traffic fractions (IEEE 754 NaN comparisons silently pass).
+    for v in &exp.variants {
+        if !v.traffic_fraction.is_finite() {
+            return Err(Status::invalid_argument(format!(
+                "variant '{}' has non-finite traffic_fraction",
+                v.name
+            )));
+        }
+    }
+
     // Traffic fractions must sum to 1.0 (within tolerance).
     let sum: f64 = exp.variants.iter().map(|v| v.traffic_fraction).sum();
     if (sum - 1.0).abs() > 1e-6 {

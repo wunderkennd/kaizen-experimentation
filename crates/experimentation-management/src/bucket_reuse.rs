@@ -177,7 +177,7 @@ pub async fn release(
     sqlx::query(
         r#"UPDATE layer_allocations
            SET released_at = NOW(),
-               reusable_after = NOW() + ($1 || ' seconds')::INTERVAL
+               reusable_after = NOW() + make_interval(secs => $1)
            WHERE layer_id = $2 AND experiment_id = $3 AND released_at IS NULL"#,
     )
     .bind(cooldown_secs)

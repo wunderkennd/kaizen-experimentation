@@ -78,19 +78,29 @@ fn validate_meta_config(
     }
 
     for obj in &cfg.variant_objectives {
+        if obj.reward_weights.is_empty() {
+            return Err(Box::new(Status::failed_precondition(format!(
+                "META variant {} has no reward_weights",
+                obj.variant_id
+            ))));
+        }
+
+        // Reject NaN/Infinity reward weights (IEEE 754 NaN comparisons silently pass).
+        for (key, &w) in &obj.reward_weights {
+            if !w.is_finite() {
+                return Err(Box::new(Status::failed_precondition(format!(
+                    "META variant {} reward_weight '{}' is non-finite",
+                    obj.variant_id, key
+                ))));
+            }
+        }
+
         // reward_weights must sum to 1.0 (within tolerance).
         let sum: f64 = obj.reward_weights.values().sum();
         if (sum - 1.0).abs() > 1e-6 {
             return Err(Box::new(Status::failed_precondition(format!(
                 "META variant {} reward_weights sum to {:.6} (must be 1.0)",
                 obj.variant_id, sum
-            ))));
-        }
-
-        if obj.reward_weights.is_empty() {
-            return Err(Box::new(Status::failed_precondition(format!(
-                "META variant {} has no reward_weights",
-                obj.variant_id
             ))));
         }
     }
