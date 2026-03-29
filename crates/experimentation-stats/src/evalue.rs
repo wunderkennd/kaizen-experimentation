@@ -131,8 +131,15 @@ pub fn e_value_grow(observations: &[f64], sigma_sq: f64, alpha: f64) -> Result<E
         running_sum += x_t;
     }
 
-    let e_value = log_wealth.exp();
-    assert_finite(e_value, "e_value");
+    // Saturate e_value at f64::MAX when log_wealth overflows f64 (log_wealth > ~709.78).
+    // This is valid: a huge e_value still means "reject with certainty" and E[E_n] ≤ 1 under H0.
+    let e_value = if log_wealth > 709.78 {
+        f64::MAX
+    } else {
+        let ev = log_wealth.exp();
+        assert_finite(ev, "e_value");
+        ev
+    };
 
     Ok(EValueResult {
         e_value,

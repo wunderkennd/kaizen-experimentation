@@ -182,25 +182,20 @@ async fn test_switchback_rpc_unimplemented_and_run_analysis_fallback() {
     let dir = TempDir::new().unwrap();
     let handler = test_handler(dir.path().to_str().unwrap());
 
-    // ── Part 1: RPC stub returns UNIMPLEMENTED ────────────────────────────
+    // ── Part 1: RPC returns NOT_FOUND for missing experiment data ──────────
     let stub_resp = handler
         .get_switchback_analysis(Request::new(GetSwitchbackAnalysisRequest {
             experiment_id: "exp-switchback-001".to_string(),
         }))
         .await;
 
-    assert!(stub_resp.is_err(), "expected Err from unimplemented RPC");
+    assert!(stub_resp.is_err(), "expected Err for missing experiment data");
     let status = stub_resp.unwrap_err();
     assert_eq!(
         status.code(),
-        Code::Unimplemented,
-        "GetSwitchbackAnalysis should return UNIMPLEMENTED (ADR-022 pending); got: {:?}",
+        Code::NotFound,
+        "GetSwitchbackAnalysis should return NOT_FOUND for missing data; got: {:?}",
         status.code()
-    );
-    assert!(
-        status.message().contains("ADR-022") || status.message().contains("not yet implemented"),
-        "status message should reference ADR-022 or state 'not yet implemented'; got: {:?}",
-        status.message()
     );
 
     // ── Part 2: RunAnalysis fallback still works on switchback-formatted data ─
@@ -335,18 +330,13 @@ async fn test_quasi_experiment_synthetic_control_rpc_unimplemented() {
         }))
         .await;
 
-    assert!(resp.is_err(), "expected Err from unimplemented RPC");
+    assert!(resp.is_err(), "expected Err for missing experiment data");
     let status = resp.unwrap_err();
     assert_eq!(
         status.code(),
-        Code::Unimplemented,
-        "GetSyntheticControlAnalysis should return UNIMPLEMENTED (ADR-023 pending); got: {:?}",
+        Code::NotFound,
+        "GetSyntheticControlAnalysis should return NOT_FOUND for missing data; got: {:?}",
         status.code()
-    );
-    assert!(
-        status.message().contains("ADR-023") || status.message().contains("not yet implemented"),
-        "status message should reference ADR-023 or 'not yet implemented'; got: {:?}",
-        status.message()
     );
 }
 

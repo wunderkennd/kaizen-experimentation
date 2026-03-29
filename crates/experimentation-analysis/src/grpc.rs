@@ -20,12 +20,14 @@ use experimentation_proto::experimentation::analysis::v1::{
 };
 use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
 use experimentation_stats::{
-    adaptive_n, avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm,
-    ttest,
+    adaptive_n, avlm, cate, clustering, cuped, evalue, interference, interleaving, ipw, novelty, srm,
+    switchback, synthetic_control, ttest,
 };
 
 /// Proto enum value for SEQUENTIAL_METHOD_AVLM (ADR-015).
 const SEQUENTIAL_METHOD_AVLM: i32 = 4;
+/// Proto enum value for SEQUENTIAL_METHOD_MSPRT (ADR-018 e-value companion).
+const SEQUENTIAL_METHOD_MSPRT: i32 = 1;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -331,6 +333,28 @@ async fn compute_analysis(
             let segment_results =
                 compute_segment_results(&data, metric_id, &control_variant, variant_id, alpha);
 
+            // ADR-018 e-value: compute GROW martingale alongside mSPRT.
+            // When sequential_method == MSPRT, we observe treatment outcomes centred
+            // on the control mean. σ² is estimated from the treatment sample.
+            let (ev, log_ev) = if sequential_method == SEQUENTIAL_METHOD_MSPRT
+                && treatment_values.len() >= 2
+            {
+                let control_mean = ttest_result.control_mean;
+                let obs: Vec<f64> = treatment_values.iter().map(|&v| v - control_mean).collect();
+                let var_t = treatment_values.iter().map(|&v| (v - ttest_result.treatment_mean).powi(2)).sum::<f64>()
+                    / (treatment_values.len() as f64 - 1.0);
+                let sigma_sq = if var_t > f64::EPSILON { var_t } else { 1.0 };
+                match evalue::e_value_grow(&obs, sigma_sq, alpha) {
+                    Ok(r) => (r.e_value, r.log_e_value),
+                    Err(e) => {
+                        warn!(metric_id, error = %e, "GROW e-value failed, returning 0");
+                        (0.0, 0.0)
+                    }
+                }
+            } else {
+                (0.0, 0.0)
+            };
+
             metric_results.push(MetricResult {
                 metric_id: metric_id.clone(),
                 variant_id: variant_id.clone(),
@@ -362,9 +386,8 @@ async fn compute_analysis(
                     variant_id,
                     alpha,
                 ),
-                // ADR-018 e-value fields — populated when sequential e-value test is run
-                e_value: 0.0,
-                log_e_value: 0.0,
+                e_value: ev,
+                log_e_value: log_ev,
             });
         }
     }
@@ -941,20 +964,80 @@ impl AnalysisService for AnalysisServiceHandler {
 
     async fn get_synthetic_control_analysis(
         &self,
-        _request: Request<GetSyntheticControlAnalysisRequest>,
+        request: Request<GetSyntheticControlAnalysisRequest>,
     ) -> Result<Response<SyntheticControlAnalysisResult>, Status> {
-        Err(Status::unimplemented(
-            "GetSyntheticControlAnalysis not yet implemented (ADR-023)",
-        ))
+        let experiment_id = request.into_inner().experiment_id;
+        if experiment_id.is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+
+        let mut sc_input = delta_reader::read_synthetic_control_panel(
+            &self.config.delta_lake_path,
+            &experiment_id,
+        )
+        .await
+        .map_err(map_reader_error)?;
+
+        // Override alpha from service config.
+        sc_input.alpha = self.config.default_alpha;
+
+        let result = synthetic_control::synthetic_control(&sc_input, synthetic_control::Method::Classic)
+            .map_err(|e| Status::internal(format!("synthetic control failed: {e}")))?;
+
+        let proto_result = SyntheticControlAnalysisResult {
+            experiment_id: experiment_id.clone(),
+            // Classic SCM = enum value 1.
+            method: 1,
+            treatment_effect: result.att,
+            ci_lower: result.ci_lower,
+            ci_upper: result.ci_upper,
+            permutation_p_value: result.placebo_p_value,
+            donor_weights: result.donor_weights,
+            // pre_treatment_rmspe not yet computed by stats crate; defaults to 0.0.
+            pre_treatment_rmspe: 0.0,
+            computed_at: Some(now_timestamp()),
+        };
+
+        Ok(Response::new(proto_result))
     }
 
     async fn get_switchback_analysis(
         &self,
-        _request: Request<GetSwitchbackAnalysisRequest>,
+        request: Request<GetSwitchbackAnalysisRequest>,
     ) -> Result<Response<SwitchbackAnalysisResult>, Status> {
-        Err(Status::unimplemented(
-            "GetSwitchbackAnalysis not yet implemented (ADR-022)",
-        ))
+        let experiment_id = request.into_inner().experiment_id;
+        if experiment_id.is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+
+        let periods = delta_reader::read_switchback_periods(
+            &self.config.delta_lake_path,
+            &experiment_id,
+        )
+        .await
+        .map_err(map_reader_error)?;
+
+        let analyzer = switchback::SwitchbackAnalyzer::new(periods)
+            .map_err(|e| Status::internal(format!("switchback initialization failed: {e}")))?;
+        let result = analyzer
+            .analyze(self.config.default_alpha, 10_000, 42)
+            .map_err(|e| Status::internal(format!("switchback analysis failed: {e}")))?;
+
+        let proto_result = SwitchbackAnalysisResult {
+            experiment_id: experiment_id.clone(),
+            treatment_effect: result.effect,
+            hac_se: result.hac_se,
+            ci_lower: result.ci_lower,
+            ci_upper: result.ci_upper,
+            // hac_p_value not yet exposed by experimentation-stats; defaults to 0.0.
+            hac_p_value: 0.0,
+            ri_p_value: result.randomization_p_value,
+            carryover_p_value: result.carryover_test_p_value,
+            carryover_detected: result.carryover_test_p_value < self.config.default_alpha,
+            computed_at: Some(now_timestamp()),
+        };
+
+        Ok(Response::new(proto_result))
     }
 
     async fn get_portfolio_allocation(

@@ -578,6 +578,239 @@ fn downcast_i64<'a>(batch: &'a RecordBatch, name: &str) -> anyhow::Result<&'a In
         .context(format!("{name} is not i64"))
 }
 
+// ---------------------------------------------------------------------------
+// switchback_periods reader (for GetSwitchbackAnalysis — ADR-022)
+// ---------------------------------------------------------------------------
+
+/// Read switchback period observations from Delta Lake.
+///
+/// Table: `switchback_periods`
+/// Columns: experiment_id (str), metric_id (str), period_id (i64),
+///          value (f64), is_treatment (i64: 1=treatment, 0=control).
+///
+/// Returns the first metric (sorted alphabetically) with data for this experiment.
+pub async fn read_switchback_periods(
+    delta_path: &str,
+    experiment_id: &str,
+) -> anyhow::Result<Vec<experimentation_stats::switchback::BlockOutcome>> {
+    let table_path = format!("{}/switchback_periods", delta_path);
+    let table = deltalake::open_table(&table_path)
+        .await
+        .context("switchback_periods table not found")?;
+
+    let batches = collect_batches(&table).await?;
+
+    // metric_id → Vec<(period_id, value, is_treatment)>
+    let mut by_metric: HashMap<String, Vec<(i64, f64, bool)>> = HashMap::new();
+
+    for batch in &batches {
+        let exp_arr = downcast_string(batch, "experiment_id")?;
+        let metric_arr = downcast_string(batch, "metric_id")?;
+        let period_arr = downcast_i64(batch, "period_id")?;
+        let value_arr = downcast_f64(batch, "value")?;
+        let treatment_arr = downcast_i64(batch, "is_treatment")?;
+
+        for i in 0..batch.num_rows() {
+            if exp_arr.is_null(i) || exp_arr.value(i) != experiment_id {
+                continue;
+            }
+            let metric = metric_arr.value(i).to_string();
+            by_metric.entry(metric).or_default().push((
+                period_arr.value(i),
+                value_arr.value(i),
+                treatment_arr.value(i) != 0,
+            ));
+        }
+    }
+
+    if by_metric.is_empty() {
+        bail!(
+            "no switchback_periods data found for experiment '{}'",
+            experiment_id
+        );
+    }
+
+    // Pick metric alphabetically first for determinism.
+    let first_metric = {
+        let mut metric_keys: Vec<&String> = by_metric.keys().collect();
+        metric_keys.sort();
+        metric_keys[0].clone()
+    };
+    let mut rows = by_metric.remove(&first_metric).unwrap();
+    rows.sort_by_key(|(period, _, _)| *period);
+
+    Ok(rows
+        .into_iter()
+        .enumerate()
+        .map(|(idx, (_period, value, is_treatment))| {
+            experimentation_stats::switchback::BlockOutcome {
+                block_index: idx as u64,
+                cluster_id: "global".to_string(),
+                is_treatment,
+                metric_value: value,
+                user_count: 0,
+                in_washout: false,
+            }
+        })
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// synthetic_control_panel reader (for GetSyntheticControlAnalysis — ADR-023)
+// ---------------------------------------------------------------------------
+
+type MetricTimeSeries = Vec<(i64, f64)>;
+type UnitData = (bool, MetricTimeSeries, MetricTimeSeries);
+type MetricMap = HashMap<String, UnitData>;
+type ByMetric = HashMap<String, MetricMap>;
+
+/// Read synthetic control panel data from Delta Lake.
+///
+/// Table: `synthetic_control_panel`
+/// Columns: experiment_id (str), metric_id (str), unit_id (str),
+///          period (i64, sequential), value (f64),
+///          is_treated_unit (i64: 1=treated, 0=donor),
+///          is_post_treatment (i64: 1=post, 0=pre).
+///
+/// Returns `SyntheticControlInput` for the first metric (sorted alphabetically).
+pub async fn read_synthetic_control_panel(
+    delta_path: &str,
+    experiment_id: &str,
+) -> anyhow::Result<experimentation_stats::synthetic_control::SyntheticControlInput> {
+    let table_path = format!("{}/synthetic_control_panel", delta_path);
+    let table = deltalake::open_table(&table_path)
+        .await
+        .context("synthetic_control_panel table not found")?;
+
+    let batches = collect_batches(&table).await?;
+
+    // metric_id → unit_id → (is_treated, pre: Vec<(period, value)>, post: Vec<(period, value)>)
+    let mut by_metric: ByMetric = HashMap::new();
+
+    for batch in &batches {
+        let exp_arr = downcast_string(batch, "experiment_id")?;
+        let metric_arr = downcast_string(batch, "metric_id")?;
+        let unit_arr = downcast_string(batch, "unit_id")?;
+        let period_arr = downcast_i64(batch, "period")?;
+        let value_arr = downcast_f64(batch, "value")?;
+        let treated_arr = downcast_i64(batch, "is_treated_unit")?;
+        let post_arr = downcast_i64(batch, "is_post_treatment")?;
+
+        for i in 0..batch.num_rows() {
+            if exp_arr.is_null(i) || exp_arr.value(i) != experiment_id {
+                continue;
+            }
+            let metric = metric_arr.value(i).to_string();
+            let unit = unit_arr.value(i).to_string();
+            let period = period_arr.value(i);
+            let value = value_arr.value(i);
+            let is_treated = treated_arr.value(i) != 0;
+            let is_post = post_arr.value(i) != 0;
+
+            let entry = by_metric
+                .entry(metric)
+                .or_default()
+                .entry(unit)
+                .or_insert_with(|| (is_treated, Vec::new(), Vec::new()));
+            entry.0 = is_treated;
+            if is_post {
+                entry.2.push((period, value));
+            } else {
+                entry.1.push((period, value));
+            }
+        }
+    }
+
+    if by_metric.is_empty() {
+        bail!(
+            "no synthetic_control_panel data found for experiment '{}'",
+            experiment_id
+        );
+    }
+
+    // Pick metric alphabetically first.
+    let first_metric = {
+        let mut metric_keys: Vec<&String> = by_metric.keys().collect();
+        metric_keys.sort();
+        metric_keys[0].clone()
+    };
+    let units = by_metric.remove(&first_metric).unwrap();
+
+    // Split into treated and donor units.
+    let mut treated_pre_map: Vec<(i64, f64)> = Vec::new();
+    let mut treated_post_map: Vec<(i64, f64)> = Vec::new();
+    let mut donor_pre: Vec<Vec<f64>> = Vec::new();
+    let mut donor_post: Vec<Vec<f64>> = Vec::new();
+    let mut donor_ids: Vec<String> = Vec::new();
+    let mut n_treated = 0usize;
+
+    let mut sorted_units: Vec<(String, UnitData)> = units.into_iter().collect();
+    sorted_units.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (unit_id, (is_treated, mut pre, mut post)) in sorted_units {
+        pre.sort_by_key(|(p, _)| *p);
+        post.sort_by_key(|(p, _)| *p);
+        if is_treated {
+            treated_pre_map = pre;
+            treated_post_map = post;
+            n_treated += 1;
+        } else {
+            donor_ids.push(unit_id);
+            donor_pre.push(pre.into_iter().map(|(_, v)| v).collect());
+            donor_post.push(post.into_iter().map(|(_, v)| v).collect());
+        }
+    }
+
+    if n_treated == 0 {
+        bail!(
+            "experiment '{}': no treated unit found in synthetic_control_panel",
+            experiment_id
+        );
+    }
+    if n_treated > 1 {
+        bail!(
+            "experiment '{}': found {} treated units in synthetic_control_panel, expected exactly 1",
+            experiment_id, n_treated
+        );
+    }
+    if donor_ids.is_empty() {
+        bail!(
+            "experiment '{}': no donor units found in synthetic_control_panel",
+            experiment_id
+        );
+    }
+
+    let treated_pre: Vec<f64> = treated_pre_map.into_iter().map(|(_, v)| v).collect();
+    let treated_post: Vec<f64> = treated_post_map.into_iter().map(|(_, v)| v).collect();
+    let pre_periods = treated_pre.len();
+
+    // Concatenate pre + post into a single series (stats crate uses pre_periods to split).
+    let mut treated_series = treated_pre;
+    treated_series.extend(treated_post);
+
+    // Build donor series: concatenate each donor's pre + post, paired with its ID.
+    let donors: Vec<(String, Vec<f64>)> = donor_ids
+        .into_iter()
+        .zip(donor_pre.into_iter().zip(donor_post.into_iter()))
+        .map(|(id, (mut pre, post))| {
+            pre.extend(post);
+            (id, pre)
+        })
+        .collect();
+
+    // Find the treated unit ID — it was the one with is_treated=true in the panel.
+    // We don't store its name in the current reader, so use a placeholder.
+    let treated_unit = "treated".to_string();
+
+    Ok(experimentation_stats::synthetic_control::SyntheticControlInput {
+        treated_unit,
+        treated_series,
+        donors,
+        pre_periods,
+        alpha: 0.05, // default; overridden by config in the handler
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

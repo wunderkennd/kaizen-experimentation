@@ -36,7 +36,8 @@ use tempfile::TempDir;
 use experimentation_proto::experimentation::analysis::v1::analysis_service_server::AnalysisService;
 use experimentation_proto::experimentation::analysis::v1::{
     GetAnalysisResultRequest, GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest,
-    GetNoveltyAnalysisRequest, RunAnalysisRequest,
+    GetNoveltyAnalysisRequest, GetSwitchbackAnalysisRequest, GetSyntheticControlAnalysisRequest,
+    RunAnalysisRequest,
 };
 use tonic::Request;
 
@@ -1308,4 +1309,397 @@ async fn test_avlm_narrower_ci_than_msprt_on_golden_data() {
         seq.boundary_crossed,
         "AVLM: confidence sequence should exclude 0 (treatment effect = 1.0 is large)"
     );
+}
+
+// ---------------------------------------------------------------------------
+// ADR-022 — Switchback analysis integration test
+// ---------------------------------------------------------------------------
+
+/// Build a `switchback_periods` Delta table from golden-file data.
+///
+/// 12 alternating periods: treatment base=3.0 + noise, control base=1.0 + noise → true effect≈2.0.
+/// Noise prevents zero residuals and ensures HAC SE > 0.
+fn make_switchback_batch(exp_id: &str) -> RecordBatch {
+    let schema = Arc::new(ArrowSchema::new(vec![
+        Field::new("experiment_id", DataType::Utf8, false),
+        Field::new("metric_id", DataType::Utf8, false),
+        Field::new("period_id", DataType::Int64, false),
+        Field::new("value", DataType::Float64, false),
+        Field::new("is_treatment", DataType::Int64, false),
+    ]));
+
+    let n_periods = 12usize;
+    let exp_ids: Vec<&str> = vec![exp_id; n_periods];
+    let metric_ids: Vec<&str> = vec!["watch_time"; n_periods];
+    let period_ids: Vec<i64> = (0..n_periods as i64).collect();
+    // Alternate treatment/control with zero-mean noise within each group.
+    // Treatment periods (0,2,4,6,8,10): noise sums to 0 → mean treatment = 3.0.
+    // Control periods (1,3,5,7,9,11): noise sums to 0 → mean control = 1.0.
+    // True OLS treatment effect = 2.0; HAC SE > 0 due to within-group variance.
+    let treatment_noise = [-0.2_f64, 0.1, 0.2, -0.1, -0.3, 0.3]; // sum = 0
+    let control_noise   = [0.15_f64, -0.1, -0.15, 0.1, 0.2, -0.2]; // sum = 0
+    let mut t_idx = 0usize;
+    let mut c_idx = 0usize;
+    let values: Vec<f64> = (0..n_periods)
+        .map(|i| if i % 2 == 0 {
+            let v = 3.0 + treatment_noise[t_idx]; t_idx += 1; v
+        } else {
+            let v = 1.0 + control_noise[c_idx]; c_idx += 1; v
+        })
+        .collect();
+    let is_treatment: Vec<i64> = (0..n_periods).map(|i| if i % 2 == 0 { 1 } else { 0 }).collect();
+
+    RecordBatch::try_new(
+        schema,
+        vec![
+            Arc::new(StringArray::from(exp_ids)),
+            Arc::new(StringArray::from(metric_ids)),
+            Arc::new(Int64Array::from(period_ids)),
+            Arc::new(Float64Array::from(values)),
+            Arc::new(Int64Array::from(is_treatment)),
+        ],
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn test_switchback_analysis_golden_effect() {
+    // Golden data: 12 alternating periods, treatment adds +2.0 to every treatment period.
+    // Expected: treatment_effect ≈ 2.0, hac_se > 0, hac_p_value < 0.05, RI p-value ≤ 0.5.
+    let tmp = TempDir::new().unwrap();
+    let exp_id = "switchback-golden-001";
+
+    write_table(tmp.path(), "switchback_periods", make_switchback_batch(exp_id)).await;
+    let handler = test_handler(tmp.path().to_str().unwrap());
+
+    let resp = handler
+        .get_switchback_analysis(Request::new(GetSwitchbackAnalysisRequest {
+            experiment_id: exp_id.to_string(),
+        }))
+        .await
+        .expect("GetSwitchbackAnalysis should succeed");
+
+    let r = resp.into_inner();
+
+    assert_eq!(r.experiment_id, exp_id);
+
+    // Treatment effect should be ≈ 2.0 (treatment mean 3.0 − control mean 1.0).
+    assert!(
+        (r.treatment_effect - 2.0).abs() < 1e-10,
+        "expected treatment_effect ≈ 2.0, got {}",
+        r.treatment_effect
+    );
+
+    // HAC SE must be positive and finite.
+    assert!(r.hac_se > 0.0 && r.hac_se.is_finite(), "hac_se={}", r.hac_se);
+
+    // CI must contain the true effect.
+    assert!(r.ci_lower < 2.0 && 2.0 < r.ci_upper,
+        "CI [{}, {}] should contain 2.0", r.ci_lower, r.ci_upper);
+
+    // HAC p-value should be significant for this clear effect.
+    assert!(r.hac_p_value < 0.05, "hac_p_value={}", r.hac_p_value);
+
+    // RI p-value must be in [0, 1].
+    assert!(r.ri_p_value >= 0.0 && r.ri_p_value <= 1.0, "ri_p_value={}", r.ri_p_value);
+
+    // Carryover: alternating data has no autocorrelation in residuals.
+    assert!(r.carryover_p_value >= 0.0 && r.carryover_p_value <= 1.0);
+
+    // computed_at must be set.
+    assert!(r.computed_at.is_some(), "computed_at should be set");
+}
+
+#[tokio::test]
+async fn test_switchback_analysis_invalid_experiment() {
+    let tmp = TempDir::new().unwrap();
+    let exp_id = "switchback-golden-001";
+    write_table(tmp.path(), "switchback_periods", make_switchback_batch(exp_id)).await;
+    let handler = test_handler(tmp.path().to_str().unwrap());
+
+    // Empty experiment_id → INVALID_ARGUMENT.
+    let err = handler
+        .get_switchback_analysis(Request::new(GetSwitchbackAnalysisRequest {
+            experiment_id: "".to_string(),
+        }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+    // Non-existent experiment → NOT_FOUND.
+    let err = handler
+        .get_switchback_analysis(Request::new(GetSwitchbackAnalysisRequest {
+            experiment_id: "does-not-exist".to_string(),
+        }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::NotFound);
+}
+
+// ---------------------------------------------------------------------------
+// ADR-023 — Synthetic control analysis integration test
+// ---------------------------------------------------------------------------
+
+/// Build a `synthetic_control_panel` Delta table.
+///
+/// Treated unit follows donor A in pre-period (perfect match), then jumps +3 post-treatment.
+/// Donor B is flat at 5.0. Expected: weight_A ≈ 1, ATT ≈ 3.0.
+fn make_synthetic_control_batch(exp_id: &str) -> RecordBatch {
+    let schema = Arc::new(ArrowSchema::new(vec![
+        Field::new("experiment_id", DataType::Utf8, false),
+        Field::new("metric_id", DataType::Utf8, false),
+        Field::new("unit_id", DataType::Utf8, false),
+        Field::new("period", DataType::Int64, false),
+        Field::new("value", DataType::Float64, false),
+        Field::new("is_treated_unit", DataType::Int64, false),
+        Field::new("is_post_treatment", DataType::Int64, false),
+    ]));
+
+    // Pre-treatment: 5 periods; post-treatment: 3 periods.
+    // Treated unit: pre=[1,2,3,4,5], post=[9,10,11] (counterfactual=[6,7,8] → ATT=3)
+    // Donor A:      pre=[1,2,3,4,5], post=[6,7,8]   (perfect pre-match)
+    // Donor B:      pre=[5,5,5,5,5], post=[5,5,5]   (flat)
+
+    let mut exp_ids: Vec<&str> = Vec::new();
+    let mut metric_ids: Vec<&str> = Vec::new();
+    let mut unit_ids: Vec<&str> = Vec::new();
+    let mut periods: Vec<i64> = Vec::new();
+    let mut values: Vec<f64> = Vec::new();
+    let mut is_treated: Vec<i64> = Vec::new();
+    let mut is_post: Vec<i64> = Vec::new();
+
+    // Treated unit pre-period
+    for (p, &v) in [1.0_f64, 2.0, 3.0, 4.0, 5.0].iter().enumerate() {
+        exp_ids.push(exp_id); metric_ids.push("metric_a"); unit_ids.push("treated");
+        periods.push(p as i64); values.push(v); is_treated.push(1); is_post.push(0);
+    }
+    // Treated unit post-period
+    for (p, &v) in [9.0_f64, 10.0, 11.0].iter().enumerate() {
+        exp_ids.push(exp_id); metric_ids.push("metric_a"); unit_ids.push("treated");
+        periods.push((5 + p) as i64); values.push(v); is_treated.push(1); is_post.push(1);
+    }
+
+    // Donor A pre-period
+    for (p, &v) in [1.0_f64, 2.0, 3.0, 4.0, 5.0].iter().enumerate() {
+        exp_ids.push(exp_id); metric_ids.push("metric_a"); unit_ids.push("donor_a");
+        periods.push(p as i64); values.push(v); is_treated.push(0); is_post.push(0);
+    }
+    // Donor A post-period
+    for (p, &v) in [6.0_f64, 7.0, 8.0].iter().enumerate() {
+        exp_ids.push(exp_id); metric_ids.push("metric_a"); unit_ids.push("donor_a");
+        periods.push((5 + p) as i64); values.push(v); is_treated.push(0); is_post.push(1);
+    }
+
+    // Donor B pre-period
+    for (p, &v) in [5.0_f64, 5.0, 5.0, 5.0, 5.0].iter().enumerate() {
+        exp_ids.push(exp_id); metric_ids.push("metric_a"); unit_ids.push("donor_b");
+        periods.push(p as i64); values.push(v); is_treated.push(0); is_post.push(0);
+    }
+    // Donor B post-period
+    for (p, &v) in [5.0_f64, 5.0, 5.0].iter().enumerate() {
+        exp_ids.push(exp_id); metric_ids.push("metric_a"); unit_ids.push("donor_b");
+        periods.push((5 + p) as i64); values.push(v); is_treated.push(0); is_post.push(1);
+    }
+
+    RecordBatch::try_new(
+        schema,
+        vec![
+            Arc::new(StringArray::from(exp_ids)),
+            Arc::new(StringArray::from(metric_ids)),
+            Arc::new(StringArray::from(unit_ids)),
+            Arc::new(Int64Array::from(periods)),
+            Arc::new(Float64Array::from(values)),
+            Arc::new(Int64Array::from(is_treated)),
+            Arc::new(Int64Array::from(is_post)),
+        ],
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn test_synthetic_control_analysis_golden_att() {
+    // Donor A is a perfect pre-treatment match; SCM should put weight ≈ 1 on it.
+    // Post-treatment: treated=[9,10,11], synthetic=[6,7,8] → ATT = 3.0.
+    let tmp = TempDir::new().unwrap();
+    let exp_id = "scm-golden-001";
+
+    write_table(tmp.path(), "synthetic_control_panel", make_synthetic_control_batch(exp_id)).await;
+    let handler = test_handler(tmp.path().to_str().unwrap());
+
+    let resp = handler
+        .get_synthetic_control_analysis(Request::new(GetSyntheticControlAnalysisRequest {
+            experiment_id: exp_id.to_string(),
+        }))
+        .await
+        .expect("GetSyntheticControlAnalysis should succeed");
+
+    let r = resp.into_inner();
+
+    assert_eq!(r.experiment_id, exp_id);
+
+    // ATT should be close to 3.0 (donor A weight → 1 after optimization).
+    assert!(
+        (r.treatment_effect - 3.0).abs() < 0.5,
+        "expected ATT ≈ 3.0, got {}",
+        r.treatment_effect
+    );
+
+    // CI must contain the true ATT.
+    assert!(r.ci_lower < r.treatment_effect && r.treatment_effect < r.ci_upper,
+        "CI [{}, {}] should contain ATT {}", r.ci_lower, r.ci_upper, r.treatment_effect);
+
+    // Placebo p-value must be in [0, 1].
+    assert!(r.permutation_p_value >= 0.0 && r.permutation_p_value <= 1.0,
+        "permutation_p_value={}", r.permutation_p_value);
+
+    // Donor weights must be present.
+    assert!(!r.donor_weights.is_empty(), "donor_weights should be populated");
+
+    // Pre-treatment RMSPE should be small for the perfect-match donor.
+    assert!(r.pre_treatment_rmspe < 0.5, "pre_treatment_rmspe={}", r.pre_treatment_rmspe);
+
+    // computed_at must be set.
+    assert!(r.computed_at.is_some(), "computed_at should be set");
+}
+
+#[tokio::test]
+async fn test_synthetic_control_invalid_experiment() {
+    let tmp = TempDir::new().unwrap();
+    let exp_id = "scm-golden-001";
+    write_table(tmp.path(), "synthetic_control_panel", make_synthetic_control_batch(exp_id)).await;
+    let handler = test_handler(tmp.path().to_str().unwrap());
+
+    // Empty experiment_id → INVALID_ARGUMENT.
+    let err = handler
+        .get_synthetic_control_analysis(Request::new(GetSyntheticControlAnalysisRequest {
+            experiment_id: "".to_string(),
+        }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+    // Non-existent experiment → NOT_FOUND.
+    let err = handler
+        .get_synthetic_control_analysis(Request::new(GetSyntheticControlAnalysisRequest {
+            experiment_id: "missing".to_string(),
+        }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::NotFound);
+}
+
+// ---------------------------------------------------------------------------
+// ADR-018 — E-value (GROW) integration test
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_evalue_grow_populated_with_msprt_method() {
+    // Strong treatment effect (treatment = 5.0, control = 0.0).
+    // sequential_method = MSPRT (1) → e_value and log_e_value should be populated and > 0.
+    let tmp = TempDir::new().unwrap();
+    let exp_id = "evalue-msprt-001";
+
+    let n = 20usize;
+    let exp_ids: Vec<&str> = vec![exp_id; 2 * n];
+    let user_ids_owned: Vec<String> = (0..2 * n).map(|i| format!("u{i}")).collect();
+    let user_id_refs: Vec<&str> = user_ids_owned.iter().map(|s| s.as_str()).collect();
+    let variant_ids: Vec<&str> = (0..2 * n)
+        .map(|i| if i < n { "control" } else { "treatment" })
+        .collect();
+    let metric_ids: Vec<&str> = vec!["watch_time"; 2 * n];
+    // Control ≈ 0.0 with noise, treatment ≈ 5.0 with noise — clear effect + non-zero variance.
+    let noise: Vec<f64> = (0..2 * n).map(|i| ((i as f64 * 7.3).sin()) * 0.3).collect();
+    let values: Vec<f64> = (0..2 * n)
+        .map(|i| if i < n { noise[i] } else { 5.0 + noise[i] })
+        .collect();
+    let covariates: Vec<Option<f64>> = vec![None; 2 * n];
+
+    let batch = make_analysis_data(&exp_ids, &user_id_refs, &variant_ids, &metric_ids, &values, &covariates);
+    write_table(tmp.path(), "metric_summaries", batch).await;
+
+    let handler = test_handler(tmp.path().to_str().unwrap());
+
+    // SEQUENTIAL_METHOD_MSPRT = 1
+    let resp = handler
+        .run_analysis(Request::new(RunAnalysisRequest {
+            experiment_id: exp_id.to_string(),
+            sequential_method: 1,
+            tau_sq: 0.0,
+            cuped_covariate_metric_id: String::new(),
+            adaptive_sample_size_config: None,
+        }))
+        .await
+        .expect("RunAnalysis with MSPRT should succeed");
+
+    let result = resp.into_inner();
+    assert!(!result.metric_results.is_empty(), "should have metric results");
+
+    let mr = result.metric_results.first().expect("first metric result");
+
+    // e_value must be > 0 (large treatment effect → large e-value).
+    assert!(mr.e_value > 0.0, "e_value should be positive, got {}", mr.e_value);
+
+    // log_e_value must be positive for a clear treatment effect.
+    assert!(mr.log_e_value > 0.0, "log_e_value should be positive for a large effect");
+
+    // log_e_value ≥ ln(e_value) when e_value is saturated at f64::MAX; equal otherwise.
+    if mr.e_value < f64::MAX {
+        assert!(
+            (mr.log_e_value - mr.e_value.ln()).abs() < 1e-6,
+            "log_e_value {} should equal ln(e_value {})",
+            mr.log_e_value, mr.e_value
+        );
+    }
+
+    // For a clear effect (treatment≈5, control≈0, n=20), the GROW martingale should reject.
+    // e_value > 1/alpha = 20 when sequential_method = MSPRT with alpha=0.05.
+    assert!(
+        mr.e_value > 1.0,
+        "e_value should be > 1 for a significant effect, got {}",
+        mr.e_value
+    );
+}
+
+#[tokio::test]
+async fn test_evalue_not_populated_without_msprt() {
+    // When sequential_method = 0 (UNSPECIFIED), e_value should be 0.0.
+    let tmp = TempDir::new().unwrap();
+    let exp_id = "evalue-noop-001";
+
+    let n = 10usize;
+    let exp_ids: Vec<&str> = vec![exp_id; 2 * n];
+    let user_ids_owned: Vec<String> = (0..2 * n).map(|i| format!("u{i}")).collect();
+    let user_id_refs: Vec<&str> = user_ids_owned.iter().map(|s| s.as_str()).collect();
+    let variant_ids: Vec<&str> = (0..2 * n)
+        .map(|i| if i < n { "control" } else { "treatment" })
+        .collect();
+    let metric_ids: Vec<&str> = vec!["watch_time"; 2 * n];
+    // Control and treatment both have noise to ensure non-zero variance.
+    let noise: Vec<f64> = (0..2 * n).map(|i| ((i as f64 * 3.1).sin()) * 0.5).collect();
+    let values: Vec<f64> = (0..2 * n)
+        .map(|i| if i < n { noise[i] } else { 5.0 + noise[i] })
+        .collect();
+    let covariates: Vec<Option<f64>> = vec![None; 2 * n];
+
+    let batch = make_analysis_data(&exp_ids, &user_id_refs, &variant_ids, &metric_ids, &values, &covariates);
+    write_table(tmp.path(), "metric_summaries", batch).await;
+
+    let handler = test_handler(tmp.path().to_str().unwrap());
+
+    // sequential_method = 0 (UNSPECIFIED) → e_value should stay at 0.0
+    let resp = handler
+        .run_analysis(Request::new(RunAnalysisRequest {
+            experiment_id: exp_id.to_string(),
+            sequential_method: 0,
+            tau_sq: 0.0,
+            cuped_covariate_metric_id: String::new(),
+            adaptive_sample_size_config: None,
+        }))
+        .await
+        .expect("RunAnalysis with no sequential method should succeed");
+
+    let result = resp.into_inner();
+    let mr = result.metric_results.first().expect("first metric result");
+    assert_eq!(mr.e_value, 0.0, "e_value should be 0 when sequential_method=UNSPECIFIED");
+    assert_eq!(mr.log_e_value, 0.0, "log_e_value should be 0 when sequential_method=UNSPECIFIED");
 }
