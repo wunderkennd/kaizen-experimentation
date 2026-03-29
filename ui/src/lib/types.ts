@@ -18,7 +18,9 @@ export type ExperimentType =
   | 'PLAYBACK_QOE'
   | 'MAB'
   | 'CONTEXTUAL_BANDIT'
-  | 'CUMULATIVE_HOLDOUT';
+  | 'CUMULATIVE_HOLDOUT'
+  | 'SWITCHBACK'
+  | 'QUASI';
 
 export type GuardrailAction = 'AUTO_PAUSE' | 'ALERT_ONLY';
 
@@ -760,5 +762,40 @@ export interface ProviderInfo {
 export interface ProviderHealthResult {
   series: ProviderHealthSeries[];
   providers: ProviderInfo[];
+  computedAt: string;
+}
+
+// --- Switchback Analysis (ADR-022) ---
+
+export interface SwitchbackAnalysisResult {
+  experimentId: string;
+  treatmentEffect: number;
+  hacSe: number;
+  ciLower: number;
+  ciUpper: number;
+  hacPValue: number;
+  riPValue: number;
+  carryoverPValue: number;
+  carryoverDetected: boolean;
+  computedAt: string;
+}
+
+// --- Synthetic Control Analysis (ADR-023) ---
+
+export type SyntheticControlMethod =
+  | 'CLASSIC'
+  | 'AUGMENTED'
+  | 'SYNTHETIC_DID'
+  | 'CAUSAL_IMPACT';
+
+export interface SyntheticControlAnalysisResult {
+  experimentId: string;
+  method: SyntheticControlMethod;
+  treatmentEffect: number;
+  ciLower: number;
+  ciUpper: number;
+  permutationPValue: number;
+  donorWeights: Record<string, number>;
+  preTreatmentRmspe: number;
   computedAt: string;
 }

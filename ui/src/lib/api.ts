@@ -11,7 +11,9 @@ import type {
   ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
   PortfolioAllocationResult,
+  SwitchbackAnalysisResult, SyntheticControlAnalysisResult,
 } from './types';
+import type { SyntheticControlMethod } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
 // In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
@@ -740,4 +742,24 @@ export async function getPortfolioAllocation(): Promise<PortfolioAllocationResul
   return callRpc<Record<string, never>, PortfolioAllocationResult>(
     MGMT_URL, MGMT_SVC, 'GetPortfolioAllocation', {},
   );
+}
+
+// --- Switchback Analysis (ADR-022) ---
+
+export async function getSwitchbackAnalysis(experimentId: string): Promise<SwitchbackAnalysisResult> {
+  return callRpc<{ experimentId: string }, SwitchbackAnalysisResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetSwitchbackAnalysis', { experimentId },
+  );
+}
+
+// --- Synthetic Control Analysis (ADR-023) ---
+
+export async function getSyntheticControlAnalysis(experimentId: string): Promise<SyntheticControlAnalysisResult> {
+  const raw = await callRpc<{ experimentId: string }, SyntheticControlAnalysisResult & { method: string }>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetSyntheticControlAnalysis', { experimentId },
+  );
+  return {
+    ...raw,
+    method: stripEnumPrefix(raw.method || '', 'SYNTHETIC_CONTROL_METHOD_') as SyntheticControlMethod,
+  };
 }

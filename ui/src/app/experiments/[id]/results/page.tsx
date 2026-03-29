@@ -76,10 +76,18 @@ const AdaptiveNTimeline = dynamic(
   () => import('@/components/adaptive-n-timeline').then(m => ({ default: m.AdaptiveNTimeline })),
   { ssr: false },
 );
+const SwitchbackTab = dynamic(
+  () => import('@/components/switchback-tab').then(m => ({ default: m.SwitchbackTab })),
+  { ssr: false },
+);
+const SyntheticControlTab = dynamic(
+  () => import('@/components/synthetic-control-tab').then(m => ({ default: m.SyntheticControlTab })),
+  { ssr: false },
+);
 
-type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback';
+type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback' | 'switchback' | 'synthetic-control';
 
-const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session', 'feedback'];
+const VALID_TABS: AnalysisTab[] = ['overview', 'novelty', 'interference', 'interleaving', 'surrogate', 'holdout', 'guardrails', 'qoe', 'lifecycle', 'session', 'feedback', 'switchback', 'synthetic-control'];
 
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
@@ -245,6 +253,14 @@ export default function ResultsPage() {
   // Feedback loop tab is always available for bandit/MAB experiments or any experiment with analysis
   if (experiment.type === 'MAB' || experiment.type === 'CONTEXTUAL_BANDIT' || experiment.type === 'AB') {
     tabs.push({ key: 'feedback', label: 'Feedback Loop' });
+  }
+  // Switchback tab for temporal alternation experiments (ADR-022)
+  if (experiment.type === 'SWITCHBACK') {
+    tabs.push({ key: 'switchback', label: 'Switchback' });
+  }
+  // Synthetic control tab for quasi-experiments (ADR-023)
+  if (experiment.type === 'QUASI') {
+    tabs.push({ key: 'synthetic-control', label: 'Synthetic Control' });
   }
 
   // Fall back to overview if activeTab isn't in the dynamic tab list for this experiment
@@ -436,6 +452,18 @@ export default function ResultsPage() {
       {effectiveTab === 'feedback' && (
         <div role="tabpanel" id="tabpanel-feedback" aria-labelledby="tab-feedback" tabIndex={0}>
           <FeedbackLoopTab experimentId={params.id} />
+        </div>
+      )}
+
+      {effectiveTab === 'switchback' && (
+        <div role="tabpanel" id="tabpanel-switchback" aria-labelledby="tab-switchback" tabIndex={0}>
+          <SwitchbackTab experimentId={params.id} />
+        </div>
+      )}
+
+      {effectiveTab === 'synthetic-control' && (
+        <div role="tabpanel" id="tabpanel-synthetic-control" aria-labelledby="tab-synthetic-control" tabIndex={0}>
+          <SyntheticControlTab experimentId={params.id} />
         </div>
       )}
     </div>
