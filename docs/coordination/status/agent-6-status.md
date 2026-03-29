@@ -14,6 +14,9 @@ Branch: work/gentle-panda, work/gentle-penguin
 Sprint: 5.4
 Focus: Slate Bandit UI components (ADR-016)
 Branch: work/silly-deer
+Sprint: 5.2
+Focus: AvlmSequencePlot component (ADR-015), AdaptiveNZoneBadge component (ADR-020)
+Branch: work/jolly-deer
 
 Focus: ADR-011 multi-objective bandit reward visualization, ADR-012 LP constraint status table
 Branch: work/fancy-koala
@@ -137,6 +140,32 @@ None.
   - API: `getAvlmResult(experimentId, metricId)` → AnalysisService/GetAvlmResult
   - Types: AvlmBoundaryPoint, AvlmResult
 
+- [x] **AvlmSequencePlot component** (ADR-015)
+  - `ui/src/components/AvlmSequencePlot.tsx`
+  - Recharts ComposedChart with Area (confidence sequence band [lower, upper]) + Line (CUPED estimate)
+  - ReferenceLine at H₀=0 (horizontal null line)
+  - React.memo, no `any` types (TypeScript strict)
+  - Fetches from `getAvlmResult(experimentId, metricId)`, handles 404 gracefully
+  - Wired into results page: shown when `sequentialTestConfig.method === 'AVLM'`, wrapped in Suspense
+  - Dynamic import with `ssr: false`
+
+- [x] **AdaptiveNZoneBadge component** (ADR-020)
+  - `ui/src/components/AdaptiveNZoneBadge.tsx`
+  - Zone colors: FAVORABLE=green, PROMISING=yellow, FUTILE=red, INCONCLUSIVE=gray
+  - Shows `recommended_n` when present (e.g. "Adaptive N: Promising · Rec. N: 150,000")
+  - React.memo, pure display (takes `AdaptiveNResult` as prop)
+  - Wired into results page below `ResultsSummary`, wrapped in Suspense, shown when `adaptiveN !== null`
+
+- [x] **SequentialMethod type updated**
+  - Added `'AVLM'` to `SequentialMethod` union in `ui/src/lib/types.ts`
+  - Backward-compatible: no exhaustive checks, explicit array in metrics-step.tsx unchanged
+
+- [x] **Results page wiring** (`ui/src/app/experiments/[id]/results/page.tsx`)
+  - Dynamic imports for `AvlmSequencePlot` and `AdaptiveNZoneBadge` (ssr: false)
+  - `<Suspense>` wrappers around both component usages
+  - `AdaptiveNZoneBadge` shown globally below summary when adaptiveN data exists
+  - `AvlmSequencePlot` shown per-metric in sequential section when method is AVLM
+
 - [x] **Portfolio optimization dashboard** (ADR-019)
   - `ui/src/app/portfolio/page.tsx` — `PortfolioDashboard` page with code-split, data fetch, error/loading states
   - `ui/src/components/experiment-portfolio-table.tsx` — sortable table (name, effect_size, variance, allocated_traffic_pct, priority_score)
@@ -232,6 +261,11 @@ None.
 - [x] /portfolio/provider-health page (ADR-014)
   - Time series charts, provider filter, MSW mock, 8 tests
 
+- [x] AVLM confidence sequence boundary plot — `charts/avlm-boundary-plot.tsx` (PR: work/proud-eagle)
+- [x] Adaptive N zone indicator badge — `adaptive-n-badge.tsx` (PR: work/proud-eagle)
+- [x] Extended timeline visualization — `adaptive-n-timeline.tsx` (PR: work/proud-eagle)
+- [x] Feedback loop analysis tab — `feedback-loop-tab.tsx` (PR: work/proud-eagle)
+
 ## Dependencies (wire-ready, awaiting backend)
 
 - Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis, GetOnlineFdrState, GetSlateOpe
@@ -242,3 +276,13 @@ None.
   - Response: `{ experiments: PortfolioExperiment[], totalAllocatedPct: float, computedAt: timestamp }`
   - `PortfolioExperiment` fields: `experiment_id`, `name`, `effect_size`, `variance`, `allocated_traffic_pct`, `priority_score`, `user_segments`
 - Agent-4: BanditPolicyService objectiveBreakdowns and constraintStatuses in GetBanditDashboard response
+
+## Notes
+
+- `AvlmSequencePlot` is intentionally distinct from `AvlmBoundaryPlot` (from PR work/proud-eagle):
+  - `AvlmBoundaryPlot`: shows CUPED + raw estimate dual-line chart, fetches for all sequential methods
+  - `AvlmSequencePlot`: simpler confidence band + single estimate line, shown only when method=AVLM
+- For AVLM experiments, both components render (AvlmSequencePlot first, AvlmBoundaryPlot second).
+  Opportunity: collapse to single component in a future PR if product finds dual-charts redundant.
+- `AdaptiveNZoneBadge` uses yellow for PROMISING (vs blue in `AdaptiveNBadge` from prior PR).
+  Opportunity: align color scheme across both badge components in a future PR.

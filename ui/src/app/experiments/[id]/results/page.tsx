@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
@@ -82,6 +82,14 @@ const EValueGauge = dynamic(
 );
 const FdrBudgetBar = dynamic(
   () => import('@/components/fdr-budget-bar').then(m => ({ default: m.FdrBudgetBar })),
+  { ssr: false },
+);
+const AvlmSequencePlot = dynamic(
+  () => import('@/components/avlm-sequence-plot').then(m => ({ default: m.AvlmSequencePlot })),
+  { ssr: false },
+);
+const AdaptiveNZoneBadge = dynamic(
+  () => import('@/components/adaptive-n-zone-badge').then(m => ({ default: m.AdaptiveNZoneBadge })),
   { ssr: false },
 );
 
@@ -289,6 +297,15 @@ export default function ResultsPage() {
         </div>
       )}
 
+      {/* Adaptive N zone badge (ADR-020) — shown when adaptive sample size data is available */}
+      {adaptiveN && (
+        <div className="mb-4">
+          <Suspense fallback={null}>
+            <AdaptiveNZoneBadge result={adaptiveN} />
+          </Suspense>
+        </div>
+      )}
+
       {/* Tab navigation */}
       <div className="mb-6 border-b border-gray-200">
         <nav className="-mb-px flex space-x-6" aria-label="Analysis tabs" role="tablist">
@@ -355,13 +372,32 @@ export default function ResultsPage() {
           {experiment.sequentialTestConfig && (
             <section className="mb-6">
               <h2 className="mb-3 text-lg font-semibold text-gray-900">
-                Sequential Analysis (AVLM)
+                Sequential Analysis{experiment.sequentialTestConfig.method === 'AVLM' ? ' (AVLM)' : ''}
               </h2>
-              <p className="mb-3 text-sm text-gray-500">
-                Anytime-Valid Linear Models unify CUPED variance reduction with sequential
-                testing in a single confidence sequence. The shaded band is the 95% confidence
-                sequence; when it excludes zero the experiment is conclusive.
-              </p>
+              {experiment.sequentialTestConfig.method === 'AVLM' && (
+                <p className="mb-3 text-sm text-gray-500">
+                  Anytime-Valid Linear Models unify CUPED variance reduction with sequential
+                  testing in a single confidence sequence. The shaded band is the 95% confidence
+                  sequence; when it excludes zero the experiment is conclusive.
+                </p>
+              )}
+
+              {/* AvlmSequencePlot: shown for AVLM sequential method (ADR-015) */}
+              {experiment.sequentialTestConfig.method === 'AVLM' &&
+                analysisResult.metricResults.map((m) => (
+                  <div key={`seq-${m.metricId}`} className="mb-4">
+                    <Suspense
+                      fallback={
+                        <div className="flex items-center justify-center py-6">
+                          <div className="h-5 w-5 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+                        </div>
+                      }
+                    >
+                      <AvlmSequencePlot experimentId={params.id} metricId={m.metricId} />
+                    </Suspense>
+                  </div>
+                ))}
+
               {analysisResult.metricResults.map((m) => (
                 <div key={m.metricId} className="mb-4">
                   <AvlmBoundaryPlot

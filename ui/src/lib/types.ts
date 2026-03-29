@@ -23,7 +23,7 @@ export type ExperimentType =
 
 export type GuardrailAction = 'AUTO_PAUSE' | 'ALERT_ONLY';
 
-export type SequentialMethod = 'MSPRT' | 'GST_OBF' | 'GST_POCOCK';
+export type SequentialMethod = 'MSPRT' | 'GST_OBF' | 'GST_POCOCK' | 'AVLM';
 
 export interface Variant {
   variantId: string;
