@@ -5,18 +5,9 @@
 
 ## Current Sprint
 
-Sprint: 5.2
-Focus: E-value gauge (ADR-018), Online FDR budget bar (ADR-018)
-Branch: work/fancy-platypus
-Sprint: 5.2
-Focus: Portfolio optimization dashboard (ADR-019) + Provider Health dashboard (ADR-014)
-Branch: work/gentle-panda, work/gentle-penguin
-Sprint: 5.4
-Focus: Slate Bandit UI components (ADR-016)
-Branch: work/silly-deer
-Sprint: 5.2
-Focus: AvlmSequencePlot component (ADR-015), AdaptiveNZoneBadge component (ADR-020)
-Branch: work/jolly-deer
+Sprint: 5.3
+Focus: Switchback results tab (ADR-022), Quasi-experiment / Synthetic Control results tab (ADR-023)
+Branch: work/cool-tiger
 
 Focus: ADR-011 multi-objective bandit reward visualization, ADR-012 LP constraint status table
 Branch: work/fancy-koala
@@ -132,6 +123,61 @@ None.
 
 ## Completed (Phase 5 — previous PRs)
 
+## Completed (this sprint)
+
+- [x] **Switchback experiment results tab** (ADR-022)
+  - `ui/src/components/switchback-tab.tsx`
+  - Block timeline: flex row of colored time-bands (indigo=treatment, gray=control)
+  - Block-level outcome table: blockId, period dates, assignment badge, outcome, N
+  - ACF carryover diagnostic chart: Recharts ComposedChart with ACF bars + dotted CI lines
+  - RI null distribution histogram: BarChart binned into 20 buckets, ReferenceLine at observed ATE
+  - Summary stats: ATE ± SE, RI p-value (formatPValue), block count (nT / nC), carryover badge
+  - `React.memo` on AcfChart, RiHistogram, BlockOutcomeTable
+  - Code-split via `next/dynamic` (ssr: false)
+  - API: `getSwitchbackResult(experimentId)` → AnalysisService/GetSwitchbackResult
+  - Visible only when `experiment.type === 'SWITCHBACK'`
+
+- [x] **Quasi-experiment / Synthetic Control results tab** (ADR-023)
+  - `ui/src/components/quasi-experiment-tab.tsx`
+  - Treated vs Synthetic Control time series: Area CI band + dual Lines + treatment-start ReferenceLine
+  - Pointwise treatment effects chart with y=0 ReferenceLine
+  - Cumulative treatment effects chart (green line)
+  - Donor weights table with inline progress bars
+  - Placebo small-multiples grid: `PlaceboMiniChart` (memo, 100px) per donor
+  - RMSPE diagnostic badge: colored green/amber/red by ratio, pre/post grid, p-value
+  - `React.memo` on all chart sub-components and DonorWeightTable
+  - Code-split via `next/dynamic` (ssr: false)
+  - API: `getSyntheticControlResult(experimentId)` → AnalysisService/GetSyntheticControlResult
+  - Visible only when `experiment.type === 'QUASI_EXPERIMENT'`
+
+- [x] **Types extended** (`ui/src/lib/types.ts`)
+  - `ExperimentType` union: added `'SWITCHBACK' | 'QUASI_EXPERIMENT'`
+  - New interfaces: `SwitchbackBlock`, `SwitchbackAcfPoint`, `SwitchbackResult`
+  - New interfaces: `SyntheticControlTimePoint`, `SyntheticControlEffect`, `DonorWeight`,
+    `PlaceboTimeSeries`, `PlaceboResult`, `SyntheticControlResult`
+
+- [x] **API functions** (`ui/src/lib/api.ts`)
+  - `getSwitchbackResult(experimentId)` → `GetSwitchbackResult`
+  - `getSyntheticControlResult(experimentId)` → `GetSyntheticControlResult`
+
+- [x] **utils.ts**: `TYPE_LABELS` extended with `SWITCHBACK: 'Switchback'`, `QUASI_EXPERIMENT: 'Quasi-Experiment'`
+
+- [x] **Results page** (`ui/src/app/experiments/[id]/results/page.tsx`)
+  - `AnalysisTab` type extended with `'switchback' | 'quasi'`
+  - Conditional tab entries for SWITCHBACK/QUASI_EXPERIMENT experiments
+  - Tab panels for both new tabs
+
+- [x] **Seed data** (`ui/src/__mocks__/seed-data.ts`)
+  - 2 new experiments: `cccccccc...` (SWITCHBACK, CONCLUDED), `dddddddd...` (QUASI_EXPERIMENT, CONCLUDED)
+  - `INITIAL_SWITCHBACK_RESULTS`: 12 blocks, 5 ACF lags, 500-point RI null distribution
+  - `INITIAL_SYNTHETIC_CONTROL_RESULTS`: 105-day time series, 91-day effects, 5 donors, 5 placebos
+  - MSW handlers: `GetSwitchbackResult`, `GetSyntheticControlResult`
+
+- [x] **Tests**: 20 new tests in `switchback-quasi.test.tsx` (all passing)
+  - Updated hardcoded seed counts in 3 existing test files (proto-wire-format, experiment-list, monitoring)
+
+## Completed (previous sprints)
+
 - [x] **AVLM confidence sequence boundary plot** (ADR-015)
   - `ui/src/components/charts/avlm-boundary-plot.tsx`
   - Recharts ComposedChart with Area (confidence sequence band) + dual Line (CUPED + raw estimate)
@@ -167,80 +213,16 @@ None.
   - `AvlmSequencePlot` shown per-metric in sequential section when method is AVLM
 
 - [x] **Portfolio optimization dashboard** (ADR-019)
-  - `ui/src/app/portfolio/page.tsx` — `PortfolioDashboard` page with code-split, data fetch, error/loading states
-  - `ui/src/components/experiment-portfolio-table.tsx` — sortable table (name, effect_size, variance, allocated_traffic_pct, priority_score)
-  - `ui/src/components/charts/budget-allocation-chart.tsx` — stacked horizontal bar chart (Recharts), `React.memo`
-  - `ui/src/components/conflict-badge.tsx` — highlights experiments sharing user segments
-  - Nav link updated: `/portfolio/provider-health` → `/portfolio`
-  - API: `getPortfolioAllocation()` → `MGMT_SVC/GetPortfolioAllocation`
-  - Types: `PortfolioExperiment`, `PortfolioAllocationResult`
-  - Seed data: 4 realistic experiments with overlapping segments for conflict detection
-  - Tests: 10 new tests, all passing. Zero regressions (510 total pass).
 
-- [x] **Extended timeline visualization** (ADR-020 PROMISING zone)
-  - `ui/src/components/adaptive-n-timeline.tsx`
-  - Only rendered when zone === PROMISING in results page overview tab
 - [x] **Provider Health dashboard page** (ADR-014)
-  - `ui/src/app/portfolio/provider-health/page.tsx` — `ProviderHealthPage` component
-  - Three Recharts LineChart time series: `catalog_coverage_rate`, `provider_gini_coefficient`, `longtail_impression_share`
-  - Provider dropdown filter — re-fetches all charts on change
-  - Code-split via `next/dynamic` (ssr:false, ChartSkeleton loading state)
-  - `React.memo` on all three chart components (`CatalogCoverageChart`, `ProviderGiniChart`, `LongTailImpressionChart`)
-  - `ui/src/components/charts/provider-health-charts.tsx` — shared `ProviderMetricChartInner` + three memoized exports
-  - Data fetching: `getProviderHealth(providerId?)` → `MetricComputationService/GetProviderHealth`
-  - Types: `ProviderHealthPoint`, `ProviderHealthSeries`, `ProviderInfo`, `ProviderHealthResult`
-  - MSW handler + seed data (2 providers × 2 experiments × 14 daily points)
-  - 8 tests all passing; 499 total, 0 regressions
 
-- [x] **Feedback loop analysis tab**
-  - `ui/src/components/feedback-loop-tab.tsx`
-  - Visible for AB/MAB/CONTEXTUAL_BANDIT experiments
-  - API: `getFeedbackLoopAnalysis(experimentId)` → AnalysisService/GetFeedbackLoopAnalysis
+- [x] **Feedback loop analysis tab** (ADR-021)
 
-- [x] **ADR-011 Multi-objective reward composition chart** (2026-03-24, work/fancy-koala)
-  - `ui/src/components/RewardCompositionChart.tsx`
-  - Stacked BarChart (recharts) showing each objective's weighted contribution per arm
-  - Color-coded segments: one per RewardObjective metricId
-  - Footer shows primary objective and all weights
-  - Empty state when no breakdowns or objectives provided
-  - `React.memo` wrapped, strict TypeScript
+- [x] **ADR-011 Multi-objective reward composition chart**
 
-- [x] **ADR-012 LP constraint status table** (2026-03-24, work/fancy-koala)
-  - `ui/src/components/ConstraintStatusTable.tsx`
-  - Table: constraint name, current value, limit, SATISFIED/VIOLATED badge
-  - Red row highlight (`bg-red-50`) on VIOLATED rows
-  - Red badge and bold current value for violated constraints
-  - Empty state when no constraints configured
-  - `React.memo` wrapped, strict TypeScript
+- [x] **ADR-012 LP constraint status table**
 
-- [x] **Wired into bandit dashboard page**
-  - `ui/src/app/experiments/[id]/bandit/page.tsx` updated
-  - `RewardCompositionChart` and `ConstraintStatusTable` sections rendered
-  - Conditional: only shown when `banditExperimentConfig.rewardObjectives?.length > 0`
-  - `ConstraintStatusTable` additionally guarded by `constraintStatuses?.length > 0`
-
-- [x] **Types extended** (`ui/src/lib/types.ts`)
-  - `RewardCompositionMethod` (WEIGHTED_SCALARIZATION | EPSILON_CONSTRAINT | TCHEBYCHEFF)
-  - `RewardObjective` (metricId, weight, floor, isPrimary)
-  - `BanditArmConstraint` (armId, minFraction, maxFraction)
-  - `BanditGlobalConstraint` (label, coefficients, rhs)
-  - `ArmObjectiveBreakdown` (armId, armName, objectiveContributions, composedReward)
-  - `ConstraintStatus` (label, currentValue, limit, isSatisfied)
-  - `BanditExperimentConfig` extended with optional: rewardObjectives, compositionMethod, armConstraints, globalConstraints
-  - `BanditDashboardResult` extended with optional: objectiveBreakdowns, constraintStatuses
-
-- [x] **Seed data updated** (`ui/src/__mocks__/seed-data.ts`)
-  - cold_start_bandit (444...) banditExperimentConfig: 3 rewardObjectives, WEIGHTED_SCALARIZATION, 2 globalConstraints
-  - BanditDashboardResult: objectiveBreakdowns for all 4 arms, 2 constraintStatuses (1 satisfied, 1 violated)
-
-- [x] **Tests: 15 new tests, all passing** (26 total in bandit-dashboard.test.tsx)
-  - 5 integration tests on bandit dashboard page (multi-objective sections, constraint badges)
-  - 4 unit tests for RewardCompositionChart (empty states, aria label, footer)
-  - 6 unit tests for ConstraintStatusTable (badges, red highlight, empty state, columns)
-  - Pre-existing test isolation failures (performance, chaos-resilience, MSW state bleed) unchanged
-
-- [x] `npm run build` passes
-- [x] 26 / 26 bandit dashboard tests pass
+- [x] **E-value gauge + FDR budget bar** (ADR-018)
 
 ## Blocked
 
@@ -269,12 +251,11 @@ None.
 ## Dependencies (wire-ready, awaiting backend)
 
 - Agent-4: AnalysisService/GetAvlmResult, GetAdaptiveN, GetFeedbackLoopAnalysis, GetOnlineFdrState, GetSlateOpe
+- Agent-4: AnalysisService/GetSwitchbackResult, GetSyntheticControlResult
+- Agent-4: AnalysisService/GetEvalueResult (ADR-018, next sprint)
 - Agent-1: AssignmentService/GetSlateAssignment
 - Agent-2: Feedback loop retraining event data flow
 - Agent-5: `ExperimentManagementService/GetPortfolioAllocation` gRPC endpoint
-  - Request: `{}` (empty)
-  - Response: `{ experiments: PortfolioExperiment[], totalAllocatedPct: float, computedAt: timestamp }`
-  - `PortfolioExperiment` fields: `experiment_id`, `name`, `effect_size`, `variance`, `allocated_traffic_pct`, `priority_score`, `user_segments`
 - Agent-4: BanditPolicyService objectiveBreakdowns and constraintStatuses in GetBanditDashboard response
 
 ## Notes

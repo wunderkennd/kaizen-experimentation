@@ -19,7 +19,9 @@ export type ExperimentType =
   | 'MAB'
   | 'CONTEXTUAL_BANDIT'
   | 'CUMULATIVE_HOLDOUT'
-  | 'SLATE';
+  | 'SLATE'
+  | 'SWITCHBACK'
+  | 'QUASI_EXPERIMENT';
 
 export type GuardrailAction = 'AUTO_PAUSE' | 'ALERT_ONLY';
 
@@ -793,6 +795,95 @@ export interface SlateOpeResult {
   experimentId: string;
   positionBias: SlatePositionBiasPoint[];
   estimatedValue: number;
+  computedAt: string;
+}
+
+// --- Switchback Experiments (ADR-022) ---
+
+export type SwitchbackTreatment = 'TREATMENT' | 'CONTROL';
+
+export interface SwitchbackBlock {
+  blockId: string;
+  periodStart: string;
+  periodEnd: string;
+  treatment: SwitchbackTreatment;
+  outcome: number;
+  n: number;
+}
+
+export interface SwitchbackAcfPoint {
+  lag: number;
+  acf: number;
+  ciLower: number;
+  ciUpper: number;
+}
+
+export interface SwitchbackResult {
+  experimentId: string;
+  metricId: string;
+  blocks: SwitchbackBlock[];
+  ate: number;
+  ateSe: number;
+  ateCiLower: number;
+  ateCiUpper: number;
+  riPValue: number;
+  riNullDistribution: number[];
+  acfPoints: SwitchbackAcfPoint[];
+  carryoverDetected: boolean;
+  nTreatmentBlocks: number;
+  nControlBlocks: number;
+  computedAt: string;
+}
+
+// --- Synthetic Control / Quasi-Experiments (ADR-023) ---
+
+export interface SyntheticControlTimePoint {
+  date: string;
+  treated: number;
+  synthetic: number;
+  ciLower?: number;
+  ciUpper?: number;
+}
+
+export interface SyntheticControlEffect {
+  date: string;
+  pointwiseEffect: number;
+  cumulativeEffect: number;
+}
+
+export interface DonorWeight {
+  donorId: string;
+  donorName: string;
+  weight: number;
+}
+
+export interface PlaceboTimeSeries {
+  date: string;
+  effect: number;
+}
+
+export interface PlaceboResult {
+  donorId: string;
+  donorName: string;
+  preRmspe: number;
+  postRmspe: number;
+  rmspeRatio: number;
+  series: PlaceboTimeSeries[];
+}
+
+export interface SyntheticControlResult {
+  experimentId: string;
+  metricId: string;
+  treatmentStartDate: string;
+  timeSeries: SyntheticControlTimePoint[];
+  effects: SyntheticControlEffect[];
+  donorWeights: DonorWeight[];
+  placeboResults: PlaceboResult[];
+  preRmspe: number;
+  postRmspe: number;
+  rmspeRatio: number;
+  pValue: number;
+  isSignificant: boolean;
   computedAt: string;
 }
 

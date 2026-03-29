@@ -52,13 +52,13 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     // State labels appear in both filter dropdown and table badges.
-    // Table badges: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 2 CONCLUDED, 1 ARCHIVED
+    // Table badges: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 4 CONCLUDED, 1 ARCHIVED
     // Dropdown options add 1 of each. So Running = 4+1=5, Draft = 2+1=3, etc.
     expect(screen.getAllByText('Running').length).toBe(5);
     expect(screen.getAllByText('Draft').length).toBe(3);
     expect(screen.getAllByText('Starting').length).toBe(2);
     expect(screen.getAllByText('Concluding').length).toBe(2);
-    expect(screen.getAllByText('Concluded').length).toBe(3);
+    expect(screen.getAllByText('Concluded').length).toBe(5);
     expect(screen.getAllByText('Archived').length).toBe(2);
   });
 
@@ -187,7 +187,7 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     const count = screen.getByTestId('filter-count');
-    expect(count).toHaveTextContent('Showing 11 of 11 experiments');
+    expect(count).toHaveTextContent('Showing 13 of 13 experiments');
   });
 
   it('no-match empty state displays with clear button', async () => {

@@ -70,6 +70,8 @@ export const TYPE_LABELS: Record<ExperimentType, string> = {
   CONTEXTUAL_BANDIT: 'Contextual Bandit',
   CUMULATIVE_HOLDOUT: 'Cumulative Holdout',
   SLATE: 'Slate Bandit',
+  SWITCHBACK: 'Switchback',
+  QUASI_EXPERIMENT: 'Quasi-Experiment',
 };
 
 export function formatDate(iso: string): string {

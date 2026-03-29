@@ -7,6 +7,7 @@ import type {
   AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState,
   PortfolioAllocationResult,
   SlateOpeResult,
+  SwitchbackResult, SyntheticControlResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -393,6 +394,69 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     createdAt: '2026-02-01T09:00:00Z',
     startedAt: '2026-02-02T06:00:00Z',
     concludedAt: '2026-03-02T18:00:00Z',
+  },
+  // SWITCHBACK experiment (ADR-022)
+  {
+    experimentId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    name: 'delivery_speed_switchback_v1',
+    description: 'Switchback experiment measuring delivery speed treatment on rider earnings',
+    ownerEmail: 'grace@streamco.com',
+    type: 'SWITCHBACK',
+    state: 'CONCLUDED',
+    variants: [
+      {
+        variantId: 'vc-control',
+        name: 'control',
+        trafficFraction: 0.5,
+        isControl: true,
+        payloadJson: '{"speed_tier": "standard"}',
+      },
+      {
+        variantId: 'vc-treatment',
+        name: 'priority_delivery',
+        trafficFraction: 0.5,
+        isControl: false,
+        payloadJson: '{"speed_tier": "priority_v2"}',
+      },
+    ],
+    layerId: 'layer-homepage',
+    hashSalt: 'salt-delivery-speed-switchback-v1',
+    primaryMetricId: 'click_through_rate',
+    secondaryMetricIds: ['watch_time_per_session'],
+    guardrailConfigs: [],
+    guardrailAction: 'AUTO_PAUSE',
+    isCumulativeHoldout: false,
+    createdAt: '2026-01-10T09:00:00Z',
+    startedAt: '2026-01-11T00:00:00Z',
+    concludedAt: '2026-02-08T00:00:00Z',
+  },
+  // QUASI_EXPERIMENT — synthetic control (ADR-023)
+  {
+    experimentId: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    name: 'market_expansion_synthetic_control',
+    description: 'Synthetic control analysis for regional market expansion launch',
+    ownerEmail: 'henry@streamco.com',
+    type: 'QUASI_EXPERIMENT',
+    state: 'CONCLUDED',
+    variants: [
+      {
+        variantId: 'vd-treated',
+        name: 'treated_market',
+        trafficFraction: 1.0,
+        isControl: false,
+        payloadJson: '{"region": "pacific_northwest"}',
+      },
+    ],
+    layerId: 'layer-homepage',
+    hashSalt: 'salt-market-expansion-synthetic-control',
+    primaryMetricId: 'click_through_rate',
+    secondaryMetricIds: ['watch_time_per_session'],
+    guardrailConfigs: [],
+    guardrailAction: 'AUTO_PAUSE',
+    isCumulativeHoldout: false,
+    createdAt: '2025-10-01T00:00:00Z',
+    startedAt: '2025-10-15T00:00:00Z',
+    concludedAt: '2026-01-15T00:00:00Z',
   },
   // ARCHIVED experiment for testing archived state
   {
@@ -820,6 +884,66 @@ const INITIAL_ANALYSIS_RESULTS: AnalysisResult[] = [
       expectedCounts: { 'va-control': 20000, 'va-treatment': 20000 },
     },
     computedAt: '2026-03-02T18:00:00Z',
+  },
+  // delivery_speed_switchback_v1 — minimal analysis result to allow results page to render
+  {
+    experimentId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    metricResults: [
+      {
+        metricId: 'click_through_rate',
+        variantId: 'vc-treatment',
+        controlMean: 0.118,
+        treatmentMean: 0.131,
+        absoluteEffect: 0.013,
+        relativeEffect: 0.110,
+        ciLower: 0.002,
+        ciUpper: 0.024,
+        pValue: 0.022,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+      },
+    ],
+    srmResult: {
+      chiSquared: 0.12,
+      pValue: 0.73,
+      isMismatch: false,
+      observedCounts: { 'vc-control': 5120, 'vc-treatment': 5080 },
+      expectedCounts: { 'vc-control': 5100, 'vc-treatment': 5100 },
+    },
+    computedAt: '2026-02-08T06:00:00Z',
+  },
+  // market_expansion_synthetic_control — minimal analysis result
+  {
+    experimentId: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    metricResults: [
+      {
+        metricId: 'click_through_rate',
+        variantId: 'vd-treated',
+        controlMean: 0.105,
+        treatmentMean: 0.119,
+        absoluteEffect: 0.014,
+        relativeEffect: 0.133,
+        ciLower: 0.005,
+        ciUpper: 0.023,
+        pValue: 0.003,
+        isSignificant: true,
+        cupedAdjustedEffect: 0,
+        cupedCiLower: 0,
+        cupedCiUpper: 0,
+        varianceReductionPct: 0,
+      },
+    ],
+    srmResult: {
+      chiSquared: 0.0,
+      pValue: 1.0,
+      isMismatch: false,
+      observedCounts: { 'vd-treated': 1 },
+      expectedCounts: { 'vd-treated': 1 },
+    },
+    computedAt: '2026-01-15T06:00:00Z',
   },
   // cold_start_bandit — CONTEXTUAL_BANDIT with IPW-adjusted results
   {
@@ -1994,6 +2118,7 @@ const INITIAL_ONLINE_FDR_STATES: OnlineFdrState[] = [
 ];
 
 export let SEED_ONLINE_FDR_STATES: OnlineFdrState[] = structuredClone(INITIAL_ONLINE_FDR_STATES);
+
 // --- Portfolio Optimization (ADR-019) ---
 
 const INITIAL_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = {
@@ -2065,6 +2190,178 @@ const INITIAL_SLATE_OPE_RESULTS: SlateOpeResult[] = [
 
 export let SEED_SLATE_OPE_RESULTS: SlateOpeResult[] = structuredClone(INITIAL_SLATE_OPE_RESULTS);
 
+// --- Switchback Seed Data (ADR-022) ---
+
+function makeSwitchbackBlocks(): SwitchbackResult['blocks'] {
+  const blocks = [];
+  const base = new Date('2026-01-11T00:00:00Z');
+  const treatments: Array<'TREATMENT' | 'CONTROL'> = [
+    'CONTROL', 'TREATMENT', 'CONTROL', 'TREATMENT', 'CONTROL',
+    'TREATMENT', 'TREATMENT', 'CONTROL', 'TREATMENT', 'CONTROL',
+    'CONTROL', 'TREATMENT',
+  ];
+  const outcomes = [0.115, 0.132, 0.118, 0.129, 0.113, 0.134, 0.131, 0.117, 0.133, 0.114, 0.116, 0.130];
+  for (let i = 0; i < 12; i++) {
+    const start = new Date(base.getTime() + i * 3 * 86400_000);
+    const end = new Date(base.getTime() + (i + 1) * 3 * 86400_000);
+    blocks.push({
+      blockId: `blk-${String(i + 1).padStart(2, '0')}`,
+      periodStart: start.toISOString(),
+      periodEnd: end.toISOString(),
+      treatment: treatments[i],
+      outcome: outcomes[i],
+      n: 800 + Math.round(Math.sin(i) * 50),
+    });
+  }
+  return blocks;
+}
+
+const INITIAL_SWITCHBACK_RESULTS: SwitchbackResult[] = [
+  {
+    experimentId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    metricId: 'click_through_rate',
+    blocks: makeSwitchbackBlocks(),
+    ate: 0.0155,
+    ateSe: 0.0048,
+    ateCiLower: 0.0061,
+    ateCiUpper: 0.0249,
+    riPValue: 0.031,
+    riNullDistribution: Array.from({ length: 500 }, () => Math.random()),
+    acfPoints: [
+      { lag: 1, acf: 0.08,  ciLower: -0.28, ciUpper: 0.28 },
+      { lag: 2, acf: -0.12, ciLower: -0.28, ciUpper: 0.28 },
+      { lag: 3, acf: 0.04,  ciLower: -0.28, ciUpper: 0.28 },
+      { lag: 4, acf: -0.06, ciLower: -0.28, ciUpper: 0.28 },
+      { lag: 5, acf: 0.02,  ciLower: -0.28, ciUpper: 0.28 },
+    ],
+    carryoverDetected: false,
+    nTreatmentBlocks: 6,
+    nControlBlocks: 6,
+    computedAt: '2026-02-08T06:00:00Z',
+  },
+];
+
+export let SEED_SWITCHBACK_RESULTS: SwitchbackResult[] = structuredClone(INITIAL_SWITCHBACK_RESULTS);
+
+// --- Synthetic Control Seed Data (ADR-023) ---
+
+function makeSyntheticControlTimeSeries(): SyntheticControlResult['timeSeries'] {
+  const points = [];
+  const base = new Date('2025-10-01');
+  // 105 daily points; treatment starts at index 14 (2025-10-15)
+  for (let i = 0; i < 105; i++) {
+    const d = new Date(base.getTime() + i * 86400_000);
+    const date = d.toISOString().slice(0, 10);
+    const noise = (Math.sin(i * 0.4) * 0.003);
+    const treated = i < 14
+      ? 0.105 + noise
+      : 0.119 + noise + (i - 14) * 0.0001; // gradual ramp after treatment
+    const synthetic = 0.105 + noise * 0.7;
+    points.push({
+      date,
+      treated: +treated.toFixed(4),
+      synthetic: +synthetic.toFixed(4),
+      ciLower: +(synthetic - 0.008).toFixed(4),
+      ciUpper: +(synthetic + 0.008).toFixed(4),
+    });
+  }
+  return points;
+}
+
+function makeSyntheticControlEffects(): SyntheticControlResult['effects'] {
+  const effects = [];
+  const base = new Date('2025-10-15'); // treatment start
+  let cumulative = 0;
+  for (let i = 0; i < 91; i++) {
+    const d = new Date(base.getTime() + i * 86400_000);
+    const pointwise = 0.014 + Math.sin(i * 0.3) * 0.002;
+    cumulative += pointwise;
+    effects.push({
+      date: d.toISOString().slice(0, 10),
+      pointwiseEffect: +pointwise.toFixed(4),
+      cumulativeEffect: +cumulative.toFixed(4),
+    });
+  }
+  return effects;
+}
+
+function makePlaceboSeries(offset: number): Array<{ date: string; effect: number }> {
+  return Array.from({ length: 91 }, (_, i) => {
+    const d = new Date(new Date('2025-10-15').getTime() + i * 86400_000);
+    return {
+      date: d.toISOString().slice(0, 10),
+      effect: +(Math.sin(i * 0.3 + offset) * 0.004 + offset * 0.001).toFixed(4),
+    };
+  });
+}
+
+const INITIAL_SYNTHETIC_CONTROL_RESULTS: SyntheticControlResult[] = [
+  {
+    experimentId: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    metricId: 'click_through_rate',
+    treatmentStartDate: '2025-10-15T00:00:00Z',
+    timeSeries: makeSyntheticControlTimeSeries(),
+    effects: makeSyntheticControlEffects(),
+    donorWeights: [
+      { donorId: 'donor-seattle', donorName: 'Seattle Metro', weight: 0.42 },
+      { donorId: 'donor-portland', donorName: 'Portland', weight: 0.31 },
+      { donorId: 'donor-denver', donorName: 'Denver', weight: 0.18 },
+      { donorId: 'donor-boise', donorName: 'Boise', weight: 0.07 },
+      { donorId: 'donor-spokane', donorName: 'Spokane', weight: 0.02 },
+    ],
+    placeboResults: [
+      {
+        donorId: 'donor-seattle',
+        donorName: 'Seattle Metro',
+        preRmspe: 0.0031,
+        postRmspe: 0.0045,
+        rmspeRatio: 1.45,
+        series: makePlaceboSeries(0.5),
+      },
+      {
+        donorId: 'donor-portland',
+        donorName: 'Portland',
+        preRmspe: 0.0041,
+        postRmspe: 0.0068,
+        rmspeRatio: 1.66,
+        series: makePlaceboSeries(-0.3),
+      },
+      {
+        donorId: 'donor-denver',
+        donorName: 'Denver',
+        preRmspe: 0.0055,
+        postRmspe: 0.0102,
+        rmspeRatio: 1.85,
+        series: makePlaceboSeries(0.9),
+      },
+      {
+        donorId: 'donor-boise',
+        donorName: 'Boise',
+        preRmspe: 0.0048,
+        postRmspe: 0.0079,
+        rmspeRatio: 1.65,
+        series: makePlaceboSeries(-0.7),
+      },
+      {
+        donorId: 'donor-spokane',
+        donorName: 'Spokane',
+        preRmspe: 0.0062,
+        postRmspe: 0.0139,
+        rmspeRatio: 2.24,
+        series: makePlaceboSeries(0.2),
+      },
+    ],
+    preRmspe: 0.0029,
+    postRmspe: 0.0142,
+    rmspeRatio: 4.90,
+    pValue: 0.033,
+    isSignificant: true,
+    computedAt: '2026-01-15T06:00:00Z',
+  },
+];
+
+export let SEED_SYNTHETIC_CONTROL_RESULTS: SyntheticControlResult[] = structuredClone(INITIAL_SYNTHETIC_CONTROL_RESULTS);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -2091,4 +2388,6 @@ export function resetSeedData(): void {
   SEED_ONLINE_FDR_STATES = structuredClone(INITIAL_ONLINE_FDR_STATES);
   SEED_PORTFOLIO_ALLOCATION = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
   SEED_SLATE_OPE_RESULTS = structuredClone(INITIAL_SLATE_OPE_RESULTS);
+  SEED_SWITCHBACK_RESULTS = structuredClone(INITIAL_SWITCHBACK_RESULTS);
+  SEED_SYNTHETIC_CONTROL_RESULTS = structuredClone(INITIAL_SYNTHETIC_CONTROL_RESULTS);
 }

@@ -9,6 +9,7 @@ import {
   SEED_ONLINE_FDR_STATES,
   SEED_PORTFOLIO_ALLOCATION,
   SEED_SLATE_OPE_RESULTS,
+  SEED_SWITCHBACK_RESULTS, SEED_SYNTHETIC_CONTROL_RESULTS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
 import { hasAtLeast, isValidRole } from '@/lib/auth';
@@ -873,5 +874,31 @@ export const handlers = [
     const slotProbabilities = slateItemIds.map((_, i) => parseFloat((0.9 ** i * 0.8).toFixed(4)));
     const slateProbability = slotProbabilities.reduce((acc, p) => acc * p, 1);
     return HttpResponse.json({ slateItemIds, slotProbabilities, slateProbability });
+  }),
+
+  // GetSwitchbackResult (ADR-022)
+  http.post(`${ANALYSIS_SVC}/GetSwitchbackResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_SWITCHBACK_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No switchback result found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetSyntheticControlResult (ADR-023)
+  http.post(`${ANALYSIS_SVC}/GetSyntheticControlResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_SYNTHETIC_CONTROL_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No synthetic control result found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
   }),
 ];
