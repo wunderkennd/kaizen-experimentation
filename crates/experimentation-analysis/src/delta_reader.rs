@@ -578,6 +578,141 @@ fn downcast_i64<'a>(batch: &'a RecordBatch, name: &str) -> anyhow::Result<&'a In
         .context(format!("{name} is not i64"))
 }
 
+// ---------------------------------------------------------------------------
+// Panel data reader for synthetic control (ADR-023)
+// ---------------------------------------------------------------------------
+
+/// Result of reading panel data: per-unit time series ordered by time_period.
+#[derive(Debug)]
+pub struct PanelData {
+    /// Time series keyed by unit_id, sorted by time_period.
+    pub series: HashMap<String, Vec<f64>>,
+}
+
+/// Read panel_data from Delta Lake for a given experiment.
+///
+/// The `panel_data` table has columns: experiment_id, unit_id, time_period (i32),
+/// metric_value (f64). Returns per-unit time series sorted by time_period.
+pub async fn read_panel_data(
+    delta_path: &str,
+    experiment_id: &str,
+) -> anyhow::Result<PanelData> {
+    let table_path = format!("{}/panel_data", delta_path);
+    let table = deltalake::open_table(&table_path)
+        .await
+        .context("panel_data table not found")?;
+
+    let batches = collect_batches(&table).await?;
+
+    // unit_id → Vec<(time_period, metric_value)>
+    let mut by_unit: HashMap<String, Vec<(i32, f64)>> = HashMap::new();
+
+    for batch in &batches {
+        let exp_arr = downcast_string(batch, "experiment_id")?;
+        let unit_arr = downcast_string(batch, "unit_id")?;
+        let period_arr = downcast_i64(batch, "time_period")?;
+        let value_arr = downcast_f64(batch, "metric_value")?;
+
+        for i in 0..batch.num_rows() {
+            if exp_arr.is_null(i) || exp_arr.value(i) != experiment_id {
+                continue;
+            }
+
+            let unit_id = unit_arr.value(i).to_string();
+            let time_period = period_arr.value(i) as i32;
+            let metric_value = value_arr.value(i);
+
+            by_unit
+                .entry(unit_id)
+                .or_default()
+                .push((time_period, metric_value));
+        }
+    }
+
+    if by_unit.is_empty() {
+        bail!(
+            "no panel_data found for experiment '{}'",
+            experiment_id
+        );
+    }
+
+    // Sort each unit's series by time_period, extract just the values.
+    let series: HashMap<String, Vec<f64>> = by_unit
+        .into_iter()
+        .map(|(unit_id, mut rows)| {
+            rows.sort_by_key(|(t, _)| *t);
+            let values: Vec<f64> = rows.into_iter().map(|(_, v)| v).collect();
+            (unit_id, values)
+        })
+        .collect();
+
+    Ok(PanelData { series })
+}
+
+/// Quasi-experiment configuration read from the `experiment_configs` Delta table.
+#[derive(Debug)]
+pub struct QuasiConfig {
+    pub treated_unit_id: String,
+    pub donor_unit_ids: Vec<String>,
+    pub pre_treatment_periods: i32,
+    pub method: i32,
+}
+
+/// Read quasi-experiment configuration for a given experiment from the
+/// `experiment_configs` Delta table.
+///
+/// Columns: experiment_id (string), treated_unit_id (string),
+/// donor_unit_ids (string, comma-separated), pre_treatment_periods (i64),
+/// method (i64, proto enum value).
+pub async fn read_experiment_quasi_config(
+    delta_path: &str,
+    experiment_id: &str,
+) -> anyhow::Result<QuasiConfig> {
+    let table_path = format!("{}/experiment_configs", delta_path);
+    let table = deltalake::open_table(&table_path)
+        .await
+        .context("experiment_configs table not found")?;
+
+    let batches = collect_batches(&table).await?;
+
+    for batch in &batches {
+        let exp_arr = downcast_string(batch, "experiment_id")?;
+
+        for i in 0..batch.num_rows() {
+            if exp_arr.is_null(i) || exp_arr.value(i) != experiment_id {
+                continue;
+            }
+
+            let treated_unit_id = downcast_string(batch, "treated_unit_id")?
+                .value(i)
+                .to_string();
+            let donor_ids_raw = downcast_string(batch, "donor_unit_ids")?
+                .value(i)
+                .to_string();
+            let donor_unit_ids: Vec<String> = donor_ids_raw
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let pre_treatment_periods = downcast_i64(batch, "pre_treatment_periods")?
+                .value(i) as i32;
+            let method = downcast_i64(batch, "method")?.value(i) as i32;
+
+            return Ok(QuasiConfig {
+                treated_unit_id,
+                donor_unit_ids,
+                pre_treatment_periods,
+                method,
+            });
+        }
+    }
+
+    bail!(
+        "no quasi-experiment config found for experiment '{}'",
+        experiment_id
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

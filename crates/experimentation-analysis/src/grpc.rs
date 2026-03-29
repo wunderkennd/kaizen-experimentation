@@ -19,7 +19,8 @@ use experimentation_proto::experimentation::analysis::v1::{
     SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_stats::{
-    avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm, ttest,
+    avlm, cate, clustering, cuped, interference, interleaving, ipw, novelty, srm,
+    synthetic_control, ttest,
 };
 
 /// Proto enum value for SEQUENTIAL_METHOD_AVLM (ADR-015).
@@ -89,6 +90,32 @@ fn lifecycle_segment_to_proto(s: &str) -> i32 {
         "WINBACK" => 6,
         _ => 0, // UNSPECIFIED
     }
+}
+
+/// Compute pre-treatment RMSPE: root mean squared prediction error between
+/// the treated unit and its synthetic control in the pre-treatment period.
+fn compute_pre_treatment_rmspe(
+    treated_pre: &[f64],
+    donors: &[(String, Vec<f64>)],
+    weights: &HashMap<String, f64>,
+    pre_periods: usize,
+) -> f64 {
+    if treated_pre.is_empty() {
+        return 0.0;
+    }
+    let mut sum_sq_err = 0.0;
+    for t in 0..pre_periods.min(treated_pre.len()) {
+        let synthetic: f64 = donors
+            .iter()
+            .map(|(name, series)| {
+                let w = weights.get(name).copied().unwrap_or(0.0);
+                w * series.get(t).copied().unwrap_or(0.0)
+            })
+            .sum();
+        let err = treated_pre[t] - synthetic;
+        sum_sq_err += err * err;
+    }
+    (sum_sq_err / pre_periods.max(1) as f64).sqrt()
 }
 
 // ---------------------------------------------------------------------------
@@ -812,11 +839,103 @@ impl AnalysisService for AnalysisServiceHandler {
 
     async fn get_synthetic_control_analysis(
         &self,
-        _request: Request<GetSyntheticControlAnalysisRequest>,
+        request: Request<GetSyntheticControlAnalysisRequest>,
     ) -> Result<Response<SyntheticControlAnalysisResult>, Status> {
-        Err(Status::unimplemented(
-            "GetSyntheticControlAnalysis not yet implemented (ADR-023)",
-        ))
+        let experiment_id = request.into_inner().experiment_id;
+        if experiment_id.is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+
+        // Read quasi-experiment config from the experiment_configs Delta table.
+        let quasi_config = delta_reader::read_experiment_quasi_config(
+            &self.config.delta_lake_path,
+            &experiment_id,
+        )
+        .await
+        .map_err(map_reader_error)?;
+
+        // Map proto SyntheticControlMethod enum → stats Method enum.
+        let method = match quasi_config.method {
+            1 => synthetic_control::Method::Classic,
+            2 => synthetic_control::Method::Augmented,
+            3 => synthetic_control::Method::SDiD,
+            4 => synthetic_control::Method::CausalImpact,
+            _ => {
+                return Err(Status::failed_precondition(
+                    "quasi_experiment_config.method must be set to a valid SyntheticControlMethod",
+                ));
+            }
+        };
+
+        // Read panel data from Delta Lake.
+        let panel_data = delta_reader::read_panel_data(
+            &self.config.delta_lake_path,
+            &experiment_id,
+        )
+        .await
+        .map_err(map_reader_error)?;
+
+        // Extract treated unit time series.
+        let treated_series = panel_data
+            .series
+            .get(&quasi_config.treated_unit_id)
+            .ok_or_else(|| {
+                Status::not_found(format!(
+                    "no panel data for treated unit '{}'",
+                    quasi_config.treated_unit_id
+                ))
+            })?
+            .clone();
+
+        // Extract donor unit time series.
+        let mut donors: Vec<(String, Vec<f64>)> = Vec::new();
+        for donor_id in &quasi_config.donor_unit_ids {
+            let series = panel_data.series.get(donor_id).ok_or_else(|| {
+                Status::not_found(format!("no panel data for donor unit '{donor_id}'"))
+            })?;
+            donors.push((donor_id.clone(), series.clone()));
+        }
+
+        if donors.is_empty() {
+            return Err(Status::failed_precondition(
+                "quasi_experiment_config must have at least one donor unit",
+            ));
+        }
+
+        let pre_periods = quasi_config.pre_treatment_periods as usize;
+
+        // Build input and run synthetic control analysis.
+        let input = synthetic_control::SyntheticControlInput::new(
+            quasi_config.treated_unit_id.clone(),
+            treated_series,
+            donors,
+            pre_periods,
+        );
+
+        let result = synthetic_control::synthetic_control(&input, method)
+            .map_err(map_stats_error)?;
+
+        // Compute pre-treatment RMSPE from donor weights and input data.
+        let pre_treatment_rmspe = compute_pre_treatment_rmspe(
+            &input.treated_series[..pre_periods],
+            &input.donors,
+            &result.donor_weights,
+            pre_periods,
+        );
+
+        let proto_result = SyntheticControlAnalysisResult {
+            experiment_id: experiment_id.clone(),
+            method: quasi_config.method,
+            treatment_effect: result.att,
+            ci_lower: result.ci_lower,
+            ci_upper: result.ci_upper,
+            permutation_p_value: result.placebo_p_value,
+            donor_weights: result.donor_weights.clone(),
+            pre_treatment_rmspe,
+            computed_at: Some(now_timestamp()),
+        };
+
+        Ok(Response::new(proto_result))
     }
 
     async fn get_switchback_analysis(
