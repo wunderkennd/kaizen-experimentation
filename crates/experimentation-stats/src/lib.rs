@@ -26,6 +26,7 @@
 //! - `synthetic_control` — Synthetic control methods: Classic, Augmented, SDiD, CausalImpact (ADR-023)
 //! - `clustering` — Clustered standard errors for session-level experiments
 //! - `switchback` — Switchback experiment analysis: HAC SE, randomization inference, carryover diagnostic (ADR-022)
+//! - `portfolio` — Portfolio power analysis: optimal alpha, annualized impact, traffic allocation (ADR-019)
 
 pub mod adaptive_n;
 pub mod switchback;
@@ -44,6 +45,7 @@ pub mod guardrail;
 pub mod multiple_comparison;
 pub mod novelty;
 pub mod orl;
+pub mod portfolio;
 pub mod sequential;
 pub mod srm;
 pub mod surrogate;
