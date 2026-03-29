@@ -25,6 +25,7 @@ use experimentation_proto::experimentation::management::v1::{
     ListExperimentsResponse, ListMetricDefinitionsRequest, ListMetricDefinitionsResponse,
     ListSurrogateModelsRequest, ListSurrogateModelsResponse, PauseExperimentRequest,
     ResumeExperimentRequest, StartExperimentRequest, StreamConfigUpdatesRequest,
+    GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
     TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
 };
 
@@ -504,5 +505,12 @@ impl ExperimentManagementService for ManagementServiceHandler {
         // Contract test stub: return an empty stream.
         let stream = tokio_stream::empty();
         Ok(Response::new(Box::pin(stream)))
+    }
+
+    async fn get_portfolio_allocation(
+        &self,
+        _request: Request<GetPortfolioAllocationRequest>,
+    ) -> Result<Response<GetPortfolioAllocationResponse>, Status> {
+        Err(Status::unimplemented("GetPortfolioAllocation not yet implemented in Rust M5"))
     }
 }

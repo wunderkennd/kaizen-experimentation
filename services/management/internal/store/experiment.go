@@ -449,6 +449,54 @@ func (s *ExperimentStore) ListRunningHoldouts(ctx context.Context) ([]Experiment
 	return results, rows.Err()
 }
 
+// ListRunningByLayer returns RUNNING experiments filtered by layer_id with their variants and guardrails.
+// If layerID is empty, all RUNNING experiments are returned (same as ListRunning).
+func (s *ExperimentStore) ListRunningByLayer(ctx context.Context, layerID string) ([]ExperimentRow, [][]VariantRow, [][]GuardrailConfigRow, error) {
+	var q string
+	var args []any
+	if layerID != "" {
+		q = `SELECT ` + experimentCols + ` FROM experiments WHERE state = 'RUNNING' AND layer_id = $1 ORDER BY started_at`
+		args = []any{layerID}
+	} else {
+		q = `SELECT ` + experimentCols + ` FROM experiments WHERE state = 'RUNNING' ORDER BY started_at`
+	}
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer rows.Close()
+
+	var experiments []ExperimentRow
+	for rows.Next() {
+		r, scanErr := scanExperimentRows(rows)
+		if scanErr != nil {
+			return nil, nil, nil, scanErr
+		}
+		experiments = append(experiments, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	allVariants := make([][]VariantRow, len(experiments))
+	allGuardrails := make([][]GuardrailConfigRow, len(experiments))
+	for i, exp := range experiments {
+		v, err := s.getVariants(ctx, s.pool, exp.ExperimentID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("variants for %s: %w", exp.ExperimentID, err)
+		}
+		allVariants[i] = v
+
+		g, err := s.getGuardrails(ctx, s.pool, exp.ExperimentID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("guardrails for %s: %w", exp.ExperimentID, err)
+		}
+		allGuardrails[i] = g
+	}
+
+	return experiments, allVariants, allGuardrails, nil
+}
+
 // ListRunning returns all experiments in RUNNING or PAUSED state with their variants and guardrails.
 // The proto contract states: "Server first streams all RUNNING/PAUSED experiments (backfill)".
 func (s *ExperimentStore) ListRunning(ctx context.Context) ([]ExperimentRow, [][]VariantRow, [][]GuardrailConfigRow, error) {

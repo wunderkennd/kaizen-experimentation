@@ -55,6 +55,11 @@ service ExperimentManagementService {
   // Server first streams all RUNNING/PAUSED experiments (backfill), then streams deltas.
   // Reconnect-safe: clients send last_known_version; server re-streams if behind.
   rpc StreamConfigUpdates(StreamConfigUpdatesRequest) returns (stream ConfigUpdateEvent);
+
+  // Portfolio optimization (ADR-019).
+  // Returns per-experiment traffic allocation recommendations, conflict detection,
+  // and priority-weighted variance budget for all RUNNING experiments in a layer.
+  rpc GetPortfolioAllocation(GetPortfolioAllocationRequest) returns (GetPortfolioAllocationResponse);
 }
 
 // --- Config Streaming ---
@@ -131,3 +136,79 @@ message ListSurrogateModelsResponse {
 }
 message GetSurrogateCalibrationRequest { string model_id = 1; }
 message TriggerSurrogateRecalibrationRequest { string model_id = 1; }
+
+// --- Portfolio Optimization (ADR-019) ---
+
+// GetPortfolioAllocationRequest selects the scope for portfolio analysis.
+// If layer_id is empty, all RUNNING experiments across all layers are included.
+message GetPortfolioAllocationRequest {
+  // Optional: restrict analysis to a single layer.
+  string layer_id = 1;
+  // Business priority overrides per experiment (1=lowest, 5=highest).
+  // If an experiment_id is not present here, priority defaults to 3.
+  map<string, int32> priority_overrides = 2;
+}
+
+// ConflictType describes the reason two experiments are considered conflicting.
+enum ConflictType {
+  CONFLICT_TYPE_UNSPECIFIED = 0;
+  // Both experiments share the same primary metric in the same layer,
+  // inflating the false discovery rate if analyzed jointly.
+  CONFLICT_TYPE_PRIMARY_METRIC_OVERLAP = 1;
+  // Experiments share a guardrail metric, creating correlated stopping rules.
+  CONFLICT_TYPE_GUARDRAIL_METRIC_OVERLAP = 2;
+  // Both experiments target the same user population with no targeting rule
+  // separation, causing interference in measured effects.
+  CONFLICT_TYPE_POPULATION_OVERLAP = 3;
+}
+
+// ExperimentConflict describes a detected conflict between two running experiments.
+message ExperimentConflict {
+  string experiment_id_a = 1;
+  string experiment_id_b = 2;
+  ConflictType conflict_type = 3;
+  // Human-readable explanation of why this is a conflict.
+  string rationale = 4;
+}
+
+// ExperimentAllocation contains the per-experiment portfolio recommendation.
+message ExperimentAllocation {
+  string experiment_id = 1;
+  string experiment_name = 2;
+  // Assigned business priority (1–5). Sourced from priority_overrides or default 3.
+  int32 priority = 3;
+  // Current bucket allocation as fraction of layer capacity (0.0–1.0).
+  double current_traffic_fraction = 4;
+  // Recommended fraction after priority-weighted rebalancing.
+  double recommended_traffic_fraction = 5;
+  // True if the experiment is underpowered at current allocation.
+  // Underpowered = fewer buckets than needed to detect the minimum detectable effect.
+  bool underpowered = 6;
+  // Human-readable rationale for the recommendation.
+  string rationale = 7;
+  // Variance budget share allocated to this experiment (fraction of layer total).
+  // Higher priority experiments receive proportionally more variance budget.
+  double variance_budget_share = 8;
+}
+
+// PortfolioStats summarises the health of the experiment portfolio.
+message PortfolioStats {
+  // Total number of RUNNING experiments analysed.
+  int32 running_count = 1;
+  // Fraction of layer buckets occupied by at least one experiment (0.0–1.0).
+  double traffic_utilization = 2;
+  // Bonferroni-bound expected false discovery count given current experiment volume.
+  // Computed as running_count × 0.05 (conservative; use ADR-018 e-LOND for tighter bound).
+  double expected_false_discoveries = 3;
+  // Number of underpowered experiments.
+  int32 underpowered_count = 4;
+  // Number of detected conflicts.
+  int32 conflict_count = 5;
+}
+
+// GetPortfolioAllocationResponse contains the full portfolio analysis.
+message GetPortfolioAllocationResponse {
+  repeated ExperimentAllocation allocations = 1;
+  repeated ExperimentConflict conflicts = 2;
+  PortfolioStats stats = 3;
+}

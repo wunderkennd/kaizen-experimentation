@@ -36,6 +36,7 @@ use experimentation_proto::experimentation::management::v1::{
     ListExperimentsResponse, ListMetricDefinitionsRequest, ListMetricDefinitionsResponse,
     ListSurrogateModelsRequest, ListSurrogateModelsResponse, PauseExperimentRequest,
     ResumeExperimentRequest, StartExperimentRequest, StreamConfigUpdatesRequest,
+    GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
     TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
 };
 
@@ -1100,6 +1101,15 @@ impl ExperimentManagementService for ManagementServiceHandler {
         _request: Request<TriggerSurrogateRecalibrationRequest>,
     ) -> Result<Response<()>, Status> {
         Err(Status::unimplemented("TriggerSurrogateRecalibration not yet implemented"))
+    }
+
+    async fn get_portfolio_allocation(
+        &self,
+        _request: Request<GetPortfolioAllocationRequest>,
+    ) -> Result<Response<GetPortfolioAllocationResponse>, Status> {
+        // ADR-019: Portfolio optimization is implemented in Go M5 (services/management/).
+        // This Rust port will implement it when ADR-025 Phase 3 is reached.
+        Err(Status::unimplemented("GetPortfolioAllocation not yet implemented in Rust M5"))
     }
 }
 
