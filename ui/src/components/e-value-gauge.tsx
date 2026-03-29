@@ -112,10 +112,14 @@ function EValueGaugeInner({ eValueResult }: EValueGaugeProps) {
 
       {/* Numeric details */}
       <dl className="mt-2 grid grid-cols-2 gap-x-4 text-center text-xs text-gray-500">
-        <dt className="font-medium text-gray-400">Implied p</dt>
-        <dt className="font-medium text-gray-400">Reject at α={alpha}</dt>
-        <dd>{impliedLevel < 0.001 ? '<0.001' : impliedLevel.toFixed(3)}</dd>
-        <dd>{reject ? 'Yes' : `No (need ≥${(1 / alpha).toFixed(0)})`}</dd>
+        <div>
+          <dt className="font-medium text-gray-400">Implied p</dt>
+          <dd>{impliedLevel < 0.001 ? '<0.001' : impliedLevel.toFixed(3)}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-gray-400">Reject at α={alpha}</dt>
+          <dd>{reject ? 'Yes' : `No (need ≥${(1 / alpha).toFixed(0)})`}</dd>
+        </div>
       </dl>
     </div>
   );
