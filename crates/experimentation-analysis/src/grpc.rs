@@ -702,10 +702,12 @@ fn compute_adaptive_n_result(
             Some(v) => v,
             None => continue,
         };
-        let treatment_vals = match variant_data
+        let mut sorted_variants: Vec<&String> = variant_data.keys().collect();
+        sorted_variants.sort();
+        let treatment_vals = match sorted_variants
             .iter()
-            .find(|(k, _)| *k != control_variant)
-            .map(|(_, v)| v)
+            .find(|k| k.as_str() != control_variant)
+            .and_then(|k| variant_data.get(*k))
         {
             Some(v) => v,
             None => continue,

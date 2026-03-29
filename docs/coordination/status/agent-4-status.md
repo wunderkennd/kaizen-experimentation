@@ -126,7 +126,6 @@ _None._
   - **Slate bandit roundtrip** (ADR-016): 2 tests on `experimentation_bandit::thompson::select_arm`
     - `test_slate_bandit_per_slot_selection_probabilities`: 8-candidate, 4-slot; item_00 (400/500 successes) wins slot 0 with prob > 0.70; all probabilities ≥ 0, sum to 1.0 (±1e-3), arm_id ∈ candidates
     - `test_slate_bandit_posterior_update_shifts_selection`: 200 successes on arm_0; arm_0 selection prob > 0.80; probability sum invariant holds
->>>>>>> origin/main
 
 ## Completed (Phase 5) — latest first
 
