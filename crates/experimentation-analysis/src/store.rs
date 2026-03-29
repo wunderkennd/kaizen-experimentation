@@ -128,6 +128,7 @@ impl From<&CachedAnalysisResult> for AnalysisResult {
             surrogate_projections: vec![],
             cochran_q_p_value: c.cochran_q_p_value,
             computed_at: Some(super::grpc::now_timestamp()),
+            adaptive_n_result: None, // not persisted in cache
         }
     }
 }
@@ -613,6 +614,7 @@ mod tests {
             surrogate_projections: vec![],
             cochran_q_p_value: 0.0,
             computed_at: Some(super::super::grpc::now_timestamp()),
+            adaptive_n_result: None,
         }
     }
 
