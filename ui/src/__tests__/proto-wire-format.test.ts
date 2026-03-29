@@ -673,8 +673,12 @@ describe('Proto wire format — ListExperiments server-side filters', () => {
     expect(second.nextPageToken).toBeTruthy();
 
     const third = await listExperiments({ pageSize: 4, pageToken: second.nextPageToken });
-    expect(third.experiments).toHaveLength(5);
-    expect(third.nextPageToken).toBe('');
+    expect(third.experiments).toHaveLength(4);
+    expect(third.nextPageToken).toBeTruthy();
+
+    const fourth = await listExperiments({ pageSize: 4, pageToken: third.nextPageToken });
+    expect(fourth.experiments).toHaveLength(1);
+    expect(fourth.nextPageToken).toBe('');
   });
 });
 
