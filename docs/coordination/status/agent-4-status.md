@@ -9,6 +9,8 @@ Sprint: 5.2
 Focus: ADR-015 Sprint 5.2 (AVLM cuped_covariate_metric_id integration), ADR-020 adaptive_n wiring
 Branch: work/eager-deer
 
+Branch: agent-4/test/adr-017-tc-jive-golden-vectors
+
 ## In Progress
 
 _None._
@@ -126,6 +128,20 @@ _None._
   - **Slate bandit roundtrip** (ADR-016): 2 tests on `experimentation_bandit::thompson::select_arm`
     - `test_slate_bandit_per_slot_selection_probabilities`: 8-candidate, 4-slot; item_00 (400/500 successes) wins slot 0 with prob > 0.70; all probabilities ≥ 0, sum to 1.0 (±1e-3), arm_id ∈ candidates
     - `test_slate_bandit_posterior_update_shifts_selection`: 200 successes on arm_0; arm_0 selection prob > 0.80; probability sum invariant holds
+
+## Completed (This Session)
+
+- [x] **ADR-017 TC/JIVE golden-file verification** (2026-03-24, work/gentle-owl)
+  - Verified all 3 existing golden tests pass (orl_kdd2024_no_confounding, _confounded, _weak_instrument)
+  - Created `test-vectors/tc_jive_vectors.json` with Netflix KDD 2024 Table 2 values:
+    - Scenario A (ρ_UY=0): jive_coefficient=0.3, treatment_effect_correlation=1.0, first_stage_r²=1.0
+    - Scenario B (ρ_UY≈0.5): jive_coefficient=0.2974, ols_naive=0.4373, treatment_effect_correlation=0.8834
+  - Added `tc_jive_kdd2024_table2_vectors` test in `orl.rs` validating to 4 decimal places (tolerance=1e-4)
+    against both jive_coefficient, ols_naive_estimate, treatment_effect_correlation, first_stage_r_squared
+  - Added missing proptest invariant: `jive_coefficient in (-1, 1)` in `iv_result_all_finite`
+  - Added `shrinkage_calibrated_le_naive_positive_confounding` proptest: with valid instrument
+    (block design, Cov(Z,η)=0) and positive confounding (δ∈[0.3,0.8]), JIVE ≤ OLS always holds
+  - 11 lib tests + 3 golden integration tests: all green
 
 ## Completed (Phase 5) — latest first
 
