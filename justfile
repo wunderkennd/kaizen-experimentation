@@ -460,3 +460,75 @@ gemini-review file:
 # Triage open PRs (invokes pr-triage subagent)
 pr-triage:
     claude -p "Use the pr-triage agent. There are open PRs that need triage after a system restart. Inventory all open PRs, categorize them, present the summary, and wait for my confirmation before acting."
+
+# ==============================================================================
+# Orchestration — Daily Rhythm
+# ==============================================================================
+# See docs/guides/orchestration-workflow.md for full details.
+#   just morning              — Check overnight results, triage PRs, pull main
+#   just interactive          — Start Gas Town Mayor session
+#   just evening <sprint>     — Stop Gas Town, launch Multiclaude overnight
+#   just autonomous-sprint N  — Launch Multiclaude workers for sprint N
+#   just autonomous-stop      — Stop all Multiclaude workers
+
+# Morning check: review overnight Multiclaude results, triage PRs, pull main
+morning:
+    @echo "  === Morning Check ==="
+    @echo ""
+    @echo "  [1/4] Checking Multiclaude worker status..."
+    @multiclaude status 2>/dev/null || echo "    (Multiclaude not running)"
+    @echo ""
+    @echo "  [2/4] Listing open PRs..."
+    @gh pr list --limit 20 2>/dev/null || echo "    (gh CLI not available — check PRs manually)"
+    @echo ""
+    @echo "  [3/4] Agent status summaries:"
+    @for f in docs/coordination/status/agent-*-status.md; do \
+        if [ -f "$$f" ]; then \
+            echo "    --- $$(basename $$f) ---"; \
+            head -5 "$$f"; \
+            echo ""; \
+        fi; \
+    done
+    @echo "  [4/4] Pulling latest main..."
+    @git checkout main && git pull origin main
+    @echo ""
+    @echo "  Morning check complete. Review open PRs and merge green ones."
+
+# Start Gas Town Mayor session for interactive development
+interactive:
+    @echo "  Starting Gas Town interactive session..."
+    @command -v gt >/dev/null 2>&1 || { echo "  Error: 'gt' (Gas Town) not found. See docs/guides/gastown-setup.md"; exit 1; }
+    cd ~/gt && gt up && gt mayor attach
+
+# Evening handoff: stop Gas Town, pull main, launch Multiclaude overnight workers
+evening sprint:
+    @echo "  === Evening Handoff (Sprint {{ sprint }}) ==="
+    @echo ""
+    @echo "  [1/3] Stopping Gas Town..."
+    @if command -v gt >/dev/null 2>&1; then cd ~/gt && gt down 2>/dev/null; echo "    Gas Town stopped."; else echo "    (Gas Town not installed — skipping)"; fi
+    @echo ""
+    @echo "  [2/3] Pulling latest main..."
+    @git checkout main && git pull origin main
+    @echo ""
+    @echo "  [3/3] Launching Multiclaude workers for sprint {{ sprint }}..."
+    @command -v multiclaude >/dev/null 2>&1 || { echo "  Error: 'multiclaude' not found. Install multiclaude first."; exit 1; }
+    multiclaude start --sprint {{ sprint }}
+    @echo ""
+    @echo "  Multiclaude workers running. Detach tmux with Ctrl-b d."
+
+# Launch Multiclaude workers for a specific sprint (0-5)
+autonomous-sprint sprint:
+    @echo "  Launching Multiclaude workers for Sprint 5.{{ sprint }}..."
+    @command -v multiclaude >/dev/null 2>&1 || { echo "  Error: 'multiclaude' not found. Install multiclaude first."; exit 1; }
+    @git checkout main && git pull origin main
+    multiclaude start --sprint {{ sprint }}
+    @echo ""
+    @echo "  Workers launched. Monitor with: multiclaude status"
+    @echo "  Detach tmux with Ctrl-b d."
+
+# Stop all Multiclaude workers gracefully
+autonomous-stop:
+    @echo "  Stopping Multiclaude workers..."
+    @command -v multiclaude >/dev/null 2>&1 || { echo "  Error: 'multiclaude' not found."; exit 1; }
+    multiclaude stop
+    @echo "  All workers stopped."
