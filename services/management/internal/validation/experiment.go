@@ -3,6 +3,7 @@ package validation
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -139,6 +140,93 @@ func validateTypeConfig(exp *commonv1.Experiment) *connect.Error {
 			return connect.NewError(connect.CodeInvalidArgument,
 				fmt.Errorf("cumulative holdout experiments must use ALERT_ONLY guardrail action"))
 		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_META:
+		if exp.GetMetaExperimentConfig() == nil {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config is required for META type"))
+		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_SWITCHBACK:
+		if exp.GetSwitchbackConfig() == nil {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("switchback_config is required for SWITCHBACK type"))
+		}
+	case commonv1.ExperimentType_EXPERIMENT_TYPE_QUASI:
+		if exp.GetQuasiExperimentConfig() == nil {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("quasi_experiment_config is required for QUASI type"))
+		}
+	}
+	return nil
+}
+
+// ValidateMetaExperimentForStart validates MetaExperimentConfig during STARTING phase (ADR-013).
+// Checks that variant_objectives is non-empty and all variant_ids reference known experiment variants.
+func ValidateMetaExperimentForStart(exp *commonv1.Experiment) *connect.Error {
+	cfg := exp.GetMetaExperimentConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config is required for META type"))
+	}
+	if len(cfg.GetVariantObjectives()) == 0 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config.variant_objectives must be non-empty"))
+	}
+
+	// Build set of known variant IDs.
+	knownIDs := make(map[string]struct{}, len(exp.GetVariants()))
+	for _, v := range exp.GetVariants() {
+		knownIDs[v.GetVariantId()] = struct{}{}
+	}
+
+	for i, obj := range cfg.GetVariantObjectives() {
+		vid := obj.GetVariantId()
+		if vid == "" {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id must not be empty", i))
+		}
+		if _, ok := knownIDs[vid]; !ok {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config.variant_objectives[%d].variant_id %q does not match any experiment variant", i, vid))
+		}
+	}
+	return nil
+}
+
+// ValidateSwitchbackForStart validates SwitchbackConfig during STARTING phase (ADR-022).
+// Checks that planned_cycles >= 4 and block_duration >= 1h.
+func ValidateSwitchbackForStart(exp *commonv1.Experiment) *connect.Error {
+	cfg := exp.GetSwitchbackConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("switchback_config is required for SWITCHBACK type"))
+	}
+	if cfg.GetPlannedCycles() < 4 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("switchback_config.planned_cycles must be >= 4, got %d", cfg.GetPlannedCycles()))
+	}
+	bd := cfg.GetBlockDuration()
+	if bd == nil || bd.AsDuration() < time.Hour {
+		got := "nil"
+		if bd != nil {
+			got = bd.AsDuration().String()
+		}
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("switchback_config.block_duration must be >= 1h, got %s", got))
+	}
+	return nil
+}
+
+// ValidateQuasiExperimentForStart validates QuasiExperimentConfig during STARTING phase (ADR-023).
+// Checks that donor_unit_ids is non-empty.
+func ValidateQuasiExperimentForStart(exp *commonv1.Experiment) *connect.Error {
+	cfg := exp.GetQuasiExperimentConfig()
+	if cfg == nil {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("quasi_experiment_config is required for QUASI type"))
+	}
+	if len(cfg.GetDonorUnitIds()) == 0 {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("quasi_experiment_config.donor_unit_ids must be non-empty"))
 	}
 	return nil
 }
