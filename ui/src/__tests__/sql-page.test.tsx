@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
 import SqlPage from '@/app/experiments/[id]/sql/page';
+import { ToastProvider } from '@/lib/toast-context';
 
 let mockExperimentId = '11111111-1111-1111-1111-111111111111';
 
@@ -35,12 +36,20 @@ describe('SQL Page', () => {
   });
 
   it('shows loading state initially', () => {
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
     expect(document.querySelector('.animate-spin')).toBeInTheDocument();
   });
 
   it('renders query log entries after load', async () => {
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('click_through_rate')).toBeInTheDocument();
@@ -51,7 +60,11 @@ describe('SQL Page', () => {
   });
 
   it('shows metric ID for each entry', async () => {
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('click_through_rate')).toBeInTheDocument();
@@ -62,7 +75,11 @@ describe('SQL Page', () => {
   });
 
   it('shows formatted duration and row count', async () => {
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('3.2s')).toBeInTheDocument();
@@ -75,7 +92,11 @@ describe('SQL Page', () => {
 
   it('expands row to show full SQL text', async () => {
     const user = userEvent.setup();
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('click_through_rate')).toBeInTheDocument();
@@ -93,7 +114,11 @@ describe('SQL Page', () => {
 
   it('shows empty state when no entries', async () => {
     mockExperimentId = '44444444-4444-4444-4444-444444444444';
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('No query log entries found for this experiment.')).toBeInTheDocument();
@@ -101,7 +126,11 @@ describe('SQL Page', () => {
   });
 
   it('shows Export Notebook button', async () => {
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Export Notebook')).toBeInTheDocument();
@@ -118,7 +147,11 @@ describe('SQL Page', () => {
       }),
     );
 
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/Internal server error/)).toBeInTheDocument();
@@ -126,7 +159,11 @@ describe('SQL Page', () => {
   });
 
   it('renders breadcrumb navigation', async () => {
-    render(<SqlPage />);
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Query Log')).toBeInTheDocument();

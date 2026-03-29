@@ -1,35 +1,21 @@
 'use client';
 
-import { useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
+import { CopyButton } from './copy-button';
 
 interface SqlHighlighterProps {
   sql: string;
 }
 
 export function SqlHighlighter({ sql }: SqlHighlighterProps) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(sql);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
-    }
-  };
-
   return (
     <div className="group relative">
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="absolute right-2 top-4 z-10 rounded border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-600 opacity-0 shadow-sm transition-opacity hover:bg-gray-50 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        aria-label="Copy SQL to clipboard"
-      >
-        {copied ? 'Copied!' : 'Copy'}
-      </button>
+      <CopyButton
+        value={sql}
+        label="Copy SQL to clipboard"
+        successMessage="SQL copied to clipboard"
+        className="absolute right-2 top-4 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+      />
       <Highlight theme={themes.github} code={sql} language="sql">
         {({ style, tokens, getLineProps, getTokenProps }) => (
           <pre
