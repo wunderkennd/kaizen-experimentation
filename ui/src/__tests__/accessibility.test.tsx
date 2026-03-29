@@ -6,6 +6,7 @@ import { ExperimentForm } from '@/components/experiment-form';
 import { StateBadge } from '@/components/state-badge';
 import { NavHeader } from '@/components/nav-header';
 import { QueryLogTable } from '@/components/query-log-table';
+import { ToastProvider } from '@/lib/toast-context';
 import ExperimentListPage from '@/app/page';
 import ResultsPage from '@/app/experiments/[id]/results/page';
 import { AuthProvider } from '@/lib/auth-context';
@@ -288,7 +289,11 @@ describe('Accessibility', () => {
 
     it('SQL preview button has aria-expanded that toggles on click', async () => {
       const user = userEvent.setup();
-      render(<QueryLogTable entries={entries} onExport={() => {}} exporting={false} />);
+      render(
+        <ToastProvider>
+          <QueryLogTable entries={entries} onExport={() => {}} exporting={false} />
+        </ToastProvider>,
+      );
 
       const toggleButton = screen.getByRole('button', { name: /Toggle SQL preview/ });
       expect(toggleButton).toHaveAttribute('aria-expanded', 'false');

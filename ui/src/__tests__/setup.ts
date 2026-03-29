@@ -11,3 +11,13 @@ afterEach(() => {
   clearApiCache();
 });
 afterAll(() => server.close());
+
+// Mock clipboard
+if (typeof window !== 'undefined') {
+  Object.defineProperty(navigator, 'clipboard', {
+    value: {
+      writeText: vi.fn().mockImplementation(() => Promise.resolve()),
+    },
+    configurable: true,
+  });
+}

@@ -15,6 +15,7 @@ import { TypeBadge } from '@/components/type-badge';
 import { VariantTable } from '@/components/variant-table';
 import { VariantForm } from '@/components/variant-form';
 import { StateActions } from '@/components/state-actions';
+import { CopyButton } from '@/components/copy-button';
 import { StartingChecklist } from '@/components/starting-checklist';
 import { ConcludingProgress } from '@/components/concluding-progress';
 import { LayerAllocationChart } from '@/components/layer-allocation-chart';
@@ -74,12 +75,6 @@ export default function ExperimentDetailPage() {
     }
   }, [experiment, addToast]);
 
-  const handleCopyId = useCallback(() => {
-    if (!experiment) return;
-    navigator.clipboard.writeText(experiment.experimentId);
-    addToast('Experiment ID copied to clipboard', 'success');
-  }, [experiment, addToast]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
@@ -105,27 +100,11 @@ export default function ExperimentDetailPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">{experiment.name}</h1>
-            <button
-              type="button"
-              onClick={handleCopyId}
-              className="group relative flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              aria-label="Copy experiment ID"
-              title="Copy experiment ID"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-                />
-              </svg>
-            </button>
+            <CopyButton
+              value={experiment.experimentId}
+              label="Copy experiment ID"
+              successMessage="Experiment ID copied to clipboard"
+            />
             <StateBadge state={experiment.state} />
             <TypeBadge type={experiment.type} />
             {(experiment.state === 'RUNNING' || experiment.state === 'CONCLUDED') && (
@@ -177,11 +156,25 @@ export default function ExperimentDetailPage() {
       <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-white p-4 sm:grid-cols-4">
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Owner</dt>
-          <dd className="mt-1 text-sm text-gray-900">{experiment.ownerEmail}</dd>
+          <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+            {experiment.ownerEmail}
+            <CopyButton
+              value={experiment.ownerEmail}
+              label="Copy owner email"
+              successMessage="Owner email copied to clipboard"
+            />
+          </dd>
         </div>
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Primary Metric</dt>
-          <dd className="mt-1 text-sm text-gray-900">{experiment.primaryMetricId}</dd>
+          <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+            {experiment.primaryMetricId}
+            <CopyButton
+              value={experiment.primaryMetricId}
+              label="Copy primary metric ID"
+              successMessage="Metric ID copied to clipboard"
+            />
+          </dd>
         </div>
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Created</dt>

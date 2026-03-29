@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ResultsPage from '@/app/experiments/[id]/results/page';
 import SqlPage from '@/app/experiments/[id]/sql/page';
+import { ToastProvider } from '@/lib/toast-context';
+
+function renderWithToast(ui: React.ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: '11111111-1111-1111-1111-111111111111' }),
@@ -80,7 +85,7 @@ describe('Performance targets', () => {
 
   it('results dashboard renders within 1000ms', async () => {
     const start = performance.now();
-    render(<ResultsPage />);
+    renderWithToast(<ResultsPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Results Dashboard')).toBeInTheDocument();
@@ -92,7 +97,7 @@ describe('Performance targets', () => {
 
   it('tab switch renders within 1000ms', async () => {
     const user = userEvent.setup();
-    render(<ResultsPage />);
+    renderWithToast(<ResultsPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Results Dashboard')).toBeInTheDocument();
@@ -111,7 +116,7 @@ describe('Performance targets', () => {
 
   it('SQL page query log renders within 1000ms', async () => {
     const start = performance.now();
-    render(<SqlPage />);
+    renderWithToast(<SqlPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Query Log')).toBeInTheDocument();
@@ -123,7 +128,7 @@ describe('Performance targets', () => {
 
   it('SQL page expand shows SQL within 200ms', async () => {
     const user = userEvent.setup();
-    render(<SqlPage />);
+    renderWithToast(<SqlPage />);
 
     await waitFor(() => {
       expect(screen.getByText('click_through_rate')).toBeInTheDocument();
@@ -145,7 +150,7 @@ describe('Performance targets', () => {
 
   it('notebook export completes within 5000ms', async () => {
     const user = userEvent.setup();
-    render(<SqlPage />);
+    renderWithToast(<SqlPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Export Notebook')).toBeInTheDocument();
