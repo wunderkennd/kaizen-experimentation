@@ -587,7 +587,7 @@ func (s *ExperimentService) validateMetricsForStart(ctx context.Context, experim
 // reference external resources. Called during STARTING phase, after
 // validateMetricsForStart.
 func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, experimentID string) error {
-	expRow, _, _, err := s.store.GetByID(ctx, experimentID)
+	expRow, variants, _, err := s.store.GetByID(ctx, experimentID)
 	if err != nil {
 		return internalError("read experiment for type config validation", err)
 	}
@@ -606,11 +606,7 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 	}
 
 	if expRow.Type == "META" || expRow.Type == "SWITCHBACK" || expRow.Type == "QUASI" {
-		expRow2, variants, _, err := s.store.GetByID(ctx, experimentID)
-		if err != nil {
-			return internalError("read experiment for phase5 type validation", err)
-		}
-		exp := store.RowToExperiment(expRow2, variants, nil)
+		exp := store.RowToExperiment(expRow, variants, nil)
 		switch expRow.Type {
 		case "META":
 			if verr := validation.ValidateMetaExperimentForStart(exp); verr != nil {
