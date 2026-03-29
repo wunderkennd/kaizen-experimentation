@@ -50,6 +50,26 @@ service ExperimentManagementService {
   rpc ListSurrogateModels(ListSurrogateModelsRequest) returns (ListSurrogateModelsResponse);
   rpc GetSurrogateCalibration(GetSurrogateCalibrationRequest) returns (experimentation.common.v1.SurrogateModelConfig);
   rpc TriggerSurrogateRecalibration(TriggerSurrogateRecalibrationRequest) returns (google.protobuf.Empty);
+
+  // Config streaming (ADR-025 Phase 2). M1 subscribes to receive real-time config deltas.
+  // Server first streams all RUNNING/PAUSED experiments (backfill), then streams deltas.
+  // Reconnect-safe: clients send last_known_version; server re-streams if behind.
+  rpc StreamConfigUpdates(StreamConfigUpdatesRequest) returns (stream ConfigUpdateEvent);
+}
+
+// --- Config Streaming ---
+message StreamConfigUpdatesRequest {
+  // Last config version the client saw. Server backfills from 0 if stale.
+  int64 last_known_version = 1;
+}
+
+message ConfigUpdateEvent {
+  // Updated experiment. Nil if is_deletion = true.
+  experimentation.common.v1.Experiment experiment = 1;
+  // True when the experiment has been ARCHIVED or its allocation fully released.
+  bool is_deletion = 2;
+  // Monotonically increasing per M5 instance. Not wall-clock; not persisted.
+  int64 version = 3;
 }
 
 // --- Experiment CRUD ---

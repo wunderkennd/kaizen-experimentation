@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/org/experimentation/gen/go/experimentation/analysis/v1/analysisv1connect"
@@ -31,7 +32,6 @@ type ExperimentService struct {
 	// pool is used for direct queries not covered by the store layer
 	// (e.g. reading metric_results.e_value after M4a analysis completes).
 	pool *pgxpool.Pool
-
 	// Optional external service clients (nil = graceful degradation).
 	analysisClient     analysisv1connect.AnalysisServiceClient
 	banditClient       banditv1connect.BanditPolicyServiceClient
@@ -43,6 +43,11 @@ type ExperimentService struct {
 
 	// modelTrainingPublisher publishes MLRATE model training requests (ADR-015 Phase 2).
 	modelTrainingPublisher  mlrate.Publisher
+
+	// streamVersion is a monotonically increasing counter attached to each
+	// ConfigUpdateEvent sent via StreamConfigUpdates (ADR-025 Phase 2).
+	// Clients use it to detect gaps after reconnection.
+	streamVersion atomic.Int64
 }
 
 // ServiceOption configures optional dependencies on ExperimentService.

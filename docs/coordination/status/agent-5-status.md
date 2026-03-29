@@ -73,6 +73,25 @@ PR: (pending)
 
 - [x] ADR-015 Phase 2 — MLRATE trigger in M5 (this PR)
 
+- [x] ADR-025 Phase 2 — Rust management crate (this PR)
+  - `crates/experimentation-management/` — new crate added to workspace
+  - **State machine**: DRAFT→STARTING→RUNNING→PAUSED→CONCLUDING→CONCLUDED→ARCHIVED
+    - TOCTOU-safe via `UPDATE … WHERE state=$expected`, check `rows_affected()==1`
+    - `src/state_machine.rs`: valid edge graph + `transition()` function
+  - **STARTING validators**: META (reward weights, variant count), SWITCHBACK (cycles≥4, block≥1h), QUASI (2+ donors, temporal ordering)
+    - `src/validators.rs`: `validate_starting()` dispatch
+  - **Guardrail Kafka consumer**: subscribes to `guardrail_alerts`, auto-pauses via TOCTOU-safe `pause_transition()`, publishes to `experiment_lifecycle`
+    - `src/kafka.rs`
+  - **Bucket reuse allocator**: overlap detection (SQL: `start_bucket < $end AND $start < end_bucket`), cooldown enforcement
+    - `src/bucket_reuse.rs`
+  - **StreamConfigUpdates tonic streaming RPC**: broadcast channel + active-experiment backfill on reconnect
+    - Added to `management_service.proto`
+    - Implemented in `src/grpc.rs`
+  - **Proptest**: 5 proptest properties + 5 regular tests for concurrent state transitions
+    - `tests/lifecycle_proptest.rs`
+  - **SQL migration**: `sql/migrations/009_management_phase5.sql` (PAUSED state, Phase 5 types, AVLM method)
+  - **Proto**: `EXPERIMENT_STATE_PAUSED = 7` in experiment.proto
+
 ## Blocked
 
 - **Agent-4 dependency (partial)**: `ConditionalPowerClient` interface at

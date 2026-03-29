@@ -13,6 +13,7 @@ members = [
     "crates/experimentation-pipeline",
     "crates/experimentation-policy",
     "crates/experimentation-flags",
+    "crates/experimentation-management",
 ]
 
 [workspace.package]

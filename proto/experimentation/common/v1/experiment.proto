@@ -31,6 +31,9 @@ enum ExperimentState {
   EXPERIMENT_STATE_CONCLUDED = 5;
   // Stable: retained for historical reference. Results still queryable.
   EXPERIMENT_STATE_ARCHIVED = 6;
+  // Stable: traffic paused due to guardrail breach or manual operator action.
+  // M1 MUST NOT serve assignments. Resume via ResumeExperiment.
+  EXPERIMENT_STATE_PAUSED = 7;
 }
 
 // ExperimentType determines which assignment mode M1 uses,

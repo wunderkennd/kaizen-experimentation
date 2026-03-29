@@ -111,8 +111,9 @@ func (s *ConfigStreamService) buildUpdate(ctx context.Context, notif streaming.N
 		}, nil
 	}
 
-	// If experiment is no longer RUNNING (concluded/archived), treat as deletion.
-	if expRow.State != "RUNNING" {
+	// PAUSED experiments are still active per proto contract — only treat
+	// concluded/archived/draft as deletions.
+	if expRow.State != "RUNNING" && expRow.State != "PAUSED" {
 		return &assignmentv1.ConfigUpdate{
 			IsDeletion: true,
 			Version:    s.version.Add(1),

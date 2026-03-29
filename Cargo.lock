@@ -1910,6 +1910,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "experimentation-management"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "experimentation-core",
+ "experimentation-proto",
+ "proptest",
+ "prost 0.13.5",
+ "prost-types",
+ "rdkafka",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tonic",
+ "tonic-web",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "experimentation-pipeline"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,38 @@
+[package]
+name = "experimentation-management"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "experimentation_management"
+path = "src/lib.rs"
+
+[[bin]]
+name = "experimentation-management"
+path = "src/main.rs"
+
+[dependencies]
+experimentation-core = { path = "../experimentation-core" }
+experimentation-proto = { path = "../experimentation-proto" }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+tonic-web = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+prost-types = { workspace = true }
+prost = { workspace = true }
+base64 = { workspace = true }
+rdkafka = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+proptest = { workspace = true }
+tokio-test = { workspace = true }
