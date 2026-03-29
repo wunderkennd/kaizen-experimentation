@@ -1117,7 +1117,7 @@ impl AnalysisService for AnalysisServiceHandler {
             .map(|a| PortfolioTrafficAllocation {
                 experiment_id: a.experiment_id.clone(),
                 recommended_traffic_fraction: a.recommended_traffic_fraction,
-                required_n_per_arm: a.required_n_per_arm as i64,
+                required_n_per_arm: (a.required_n_per_arm.min(i64::MAX as u64)) as i64,
             })
             .collect();
 
