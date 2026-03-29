@@ -592,7 +592,7 @@ fn downcast_i64<'a>(batch: &'a RecordBatch, name: &str) -> anyhow::Result<&'a In
 pub async fn read_switchback_periods(
     delta_path: &str,
     experiment_id: &str,
-) -> anyhow::Result<Vec<experimentation_stats::switchback::SwitchbackPeriod>> {
+) -> anyhow::Result<Vec<experimentation_stats::switchback::BlockOutcome>> {
     let table_path = format!("{}/switchback_periods", delta_path);
     let table = deltalake::open_table(&table_path)
         .await
@@ -641,11 +641,15 @@ pub async fn read_switchback_periods(
 
     Ok(rows
         .into_iter()
-        .map(|(period, value, is_treatment)| {
-            experimentation_stats::switchback::SwitchbackPeriod {
-                period: period as u32,
-                value,
+        .enumerate()
+        .map(|(idx, (_period, value, is_treatment))| {
+            experimentation_stats::switchback::BlockOutcome {
+                block_index: idx as u64,
+                cluster_id: "global".to_string(),
                 is_treatment,
+                metric_value: value,
+                user_count: 0,
+                in_washout: false,
             }
         })
         .collect())
@@ -778,13 +782,31 @@ pub async fn read_synthetic_control_panel(
 
     let treated_pre: Vec<f64> = treated_pre_map.into_iter().map(|(_, v)| v).collect();
     let treated_post: Vec<f64> = treated_post_map.into_iter().map(|(_, v)| v).collect();
+    let pre_periods = treated_pre.len();
+
+    // Concatenate pre + post into a single series (stats crate uses pre_periods to split).
+    let mut treated_series = treated_pre;
+    treated_series.extend(treated_post);
+
+    // Build donor series: concatenate each donor's pre + post, paired with its ID.
+    let donors: Vec<(String, Vec<f64>)> = donor_ids
+        .into_iter()
+        .zip(donor_pre.into_iter().zip(donor_post.into_iter()))
+        .map(|(id, (mut pre, post))| {
+            pre.extend(post);
+            (id, pre)
+        })
+        .collect();
+
+    // Find the treated unit ID — it was the one with is_treated=true in the panel.
+    // We don't store its name in the current reader, so use a placeholder.
+    let treated_unit = "treated".to_string();
 
     Ok(experimentation_stats::synthetic_control::SyntheticControlInput {
-        treated_pre,
-        treated_post,
-        donor_pre,
-        donor_post,
-        donor_ids,
+        treated_unit,
+        treated_series,
+        donors,
+        pre_periods,
         alpha: 0.05, // default; overridden by config in the handler
     })
 }

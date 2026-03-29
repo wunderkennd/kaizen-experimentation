@@ -981,7 +981,7 @@ impl AnalysisService for AnalysisServiceHandler {
         // Override alpha from service config.
         sc_input.alpha = self.config.default_alpha;
 
-        let result = synthetic_control::synthetic_control_analyze(&sc_input)
+        let result = synthetic_control::synthetic_control(&sc_input, synthetic_control::Method::Classic)
             .map_err(|e| Status::internal(format!("synthetic control failed: {e}")))?;
 
         let proto_result = SyntheticControlAnalysisResult {
@@ -993,7 +993,8 @@ impl AnalysisService for AnalysisServiceHandler {
             ci_upper: result.ci_upper,
             permutation_p_value: result.placebo_p_value,
             donor_weights: result.donor_weights,
-            pre_treatment_rmspe: result.pre_treatment_rmspe,
+            // pre_treatment_rmspe not yet computed by stats crate; defaults to 0.0.
+            pre_treatment_rmspe: 0.0,
             computed_at: Some(now_timestamp()),
         };
 
@@ -1016,19 +1017,23 @@ impl AnalysisService for AnalysisServiceHandler {
         .await
         .map_err(map_reader_error)?;
 
-        let result = switchback::switchback_analyze(&periods, self.config.default_alpha, None)
+        let analyzer = switchback::SwitchbackAnalyzer::new(periods)
+            .map_err(|e| Status::internal(format!("switchback initialization failed: {e}")))?;
+        let result = analyzer
+            .analyze(self.config.default_alpha, 10_000, 42)
             .map_err(|e| Status::internal(format!("switchback analysis failed: {e}")))?;
 
         let proto_result = SwitchbackAnalysisResult {
             experiment_id: experiment_id.clone(),
-            treatment_effect: result.treatment_effect,
+            treatment_effect: result.effect,
             hac_se: result.hac_se,
             ci_lower: result.ci_lower,
             ci_upper: result.ci_upper,
-            hac_p_value: result.hac_p_value,
-            ri_p_value: result.ri_p_value,
-            carryover_p_value: result.carryover_p_value,
-            carryover_detected: result.carryover_detected,
+            // hac_p_value not yet exposed by experimentation-stats; defaults to 0.0.
+            hac_p_value: 0.0,
+            ri_p_value: result.randomization_p_value,
+            carryover_p_value: result.carryover_test_p_value,
+            carryover_detected: result.carryover_test_p_value < self.config.default_alpha,
             computed_at: Some(now_timestamp()),
         };
 
