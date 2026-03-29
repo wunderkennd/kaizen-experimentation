@@ -31,7 +31,7 @@ func (s *ExperimentService) StreamConfigUpdates(
 	ch, unsubscribe := s.notifier.Subscribe()
 	defer unsubscribe()
 
-	// Phase 1: snapshot of all RUNNING experiments.
+	// Phase 1: snapshot of all RUNNING/PAUSED experiments.
 	experiments, allVariants, allGuardrails, err := s.store.ListRunning(ctx)
 	if err != nil {
 		return internalError("list running experiments", err)
@@ -89,7 +89,9 @@ func (s *ExperimentService) buildMgmtUpdate(ctx context.Context, notif streaming
 		}, nil
 	}
 
-	if expRow.State != "RUNNING" {
+	// PAUSED experiments are still active per proto contract — only treat
+	// concluded/archived/draft as deletions.
+	if expRow.State != "RUNNING" && expRow.State != "PAUSED" {
 		return &managementv1.ConfigUpdateEvent{
 			IsDeletion: true,
 			Version:    s.streamVersion.Add(1),

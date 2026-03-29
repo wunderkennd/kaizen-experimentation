@@ -449,10 +449,11 @@ func (s *ExperimentStore) ListRunningHoldouts(ctx context.Context) ([]Experiment
 	return results, rows.Err()
 }
 
-// ListRunning returns all experiments in RUNNING state with their variants and guardrails.
+// ListRunning returns all experiments in RUNNING or PAUSED state with their variants and guardrails.
+// The proto contract states: "Server first streams all RUNNING/PAUSED experiments (backfill)".
 func (s *ExperimentStore) ListRunning(ctx context.Context) ([]ExperimentRow, [][]VariantRow, [][]GuardrailConfigRow, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+experimentCols+` FROM experiments WHERE state = 'RUNNING' ORDER BY started_at`)
+		`SELECT `+experimentCols+` FROM experiments WHERE state IN ('RUNNING', 'PAUSED') ORDER BY started_at`)
 	if err != nil {
 		return nil, nil, nil, err
 	}
