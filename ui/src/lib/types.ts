@@ -18,7 +18,8 @@ export type ExperimentType =
   | 'PLAYBACK_QOE'
   | 'MAB'
   | 'CONTEXTUAL_BANDIT'
-  | 'CUMULATIVE_HOLDOUT';
+  | 'CUMULATIVE_HOLDOUT'
+  | 'SLATE';
 
 export type GuardrailAction = 'AUTO_PAUSE' | 'ALERT_ONLY';
 
@@ -771,6 +772,27 @@ export interface PortfolioExperiment {
 export interface PortfolioAllocationResult {
   experiments: PortfolioExperiment[];
   totalAllocatedPct: number;
+  computedAt: string;
+}
+
+// --- Slate Bandit (ADR-016) ---
+
+export interface SlateAssignmentResponse {
+  slateItemIds: string[];
+  slotProbabilities: number[];
+  slateProbability: number;
+}
+
+export interface SlatePositionBiasPoint {
+  position: number;
+  ctr: number;
+  lipsWeight: number;
+}
+
+export interface SlateOpeResult {
+  experimentId: string;
+  positionBias: SlatePositionBiasPoint[];
+  estimatedValue: number;
   computedAt: string;
 }
 

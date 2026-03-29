@@ -12,6 +12,7 @@ import type {
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
   OnlineFdrState,
   PortfolioAllocationResult,
+  SlateAssignmentResponse, SlateOpeResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
 
@@ -32,6 +33,9 @@ const BANDIT_SVC = 'experimentation.bandit.v1.BanditPolicyService';
 
 const FLAGS_URL = process.env.NEXT_PUBLIC_FLAGS_URL || '/api/rpc/flags';
 const FLAGS_SVC = 'experimentation.flags.v1.FeatureFlagService';
+
+const ASSIGNMENT_URL = process.env.NEXT_PUBLIC_ASSIGNMENT_URL || '/api/rpc/assignment';
+const ASSIGNMENT_SVC = 'experimentation.assignment.v1.AssignmentService';
 
 // --- Auth header injection ---
 let _authEmail = '';
@@ -750,5 +754,31 @@ export async function getOnlineFdrState(experimentId: string): Promise<OnlineFdr
 export async function getPortfolioAllocation(): Promise<PortfolioAllocationResult> {
   return callRpc<Record<string, never>, PortfolioAllocationResult>(
     MGMT_URL, MGMT_SVC, 'GetPortfolioAllocation', {},
+  );
+}
+
+// --- Slate Bandit (ADR-016) ---
+
+export async function getSlateAssignment(
+  experimentId: string,
+  userId: string,
+  candidateItemIds: string[],
+  contextFeatures: Record<string, number> = {},
+): Promise<SlateAssignmentResponse> {
+  return callRpc<{
+    experimentId: string;
+    userId: string;
+    candidateItemIds: string[];
+    contextFeatures: Record<string, number>;
+  }, SlateAssignmentResponse>(
+    ASSIGNMENT_URL, ASSIGNMENT_SVC, 'GetSlateAssignment',
+    { experimentId, userId, candidateItemIds, contextFeatures },
+    { skipCache: true },
+  );
+}
+
+export async function getSlateOpe(experimentId: string): Promise<SlateOpeResult> {
+  return callRpc<{ experimentId: string }, SlateOpeResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetSlateOpe', { experimentId },
   );
 }

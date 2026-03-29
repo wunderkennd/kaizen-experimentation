@@ -6,6 +6,7 @@ import type {
   AuditLogEntry, Flag, ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState,
   PortfolioAllocationResult,
+  SlateOpeResult,
 } from '@/lib/types';
 
 const INITIAL_EXPERIMENTS: Experiment[] = [
@@ -434,6 +435,38 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     createdAt: '2025-11-15T09:00:00Z',
     startedAt: '2025-11-16T06:00:00Z',
     concludedAt: '2025-12-20T18:00:00Z',
+  },
+  // Slate bandit experiment (ADR-016)
+  {
+    experimentId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    name: 'homepage_slate_v1',
+    description: 'Slot-wise factorized Thompson Sampling for homepage recommendation slate',
+    ownerEmail: 'grace@streamco.com',
+    type: 'SLATE',
+    state: 'RUNNING',
+    variants: [],
+    layerId: 'layer-homepage',
+    hashSalt: 'salt-homepage-slate-v1',
+    primaryMetricId: 'click_through_rate',
+    secondaryMetricIds: ['watch_time_per_session', 'completion_rate'],
+    guardrailConfigs: [
+      {
+        metricId: 'bounce_rate',
+        threshold: 0.45,
+        consecutiveBreachesRequired: 2,
+      },
+    ],
+    guardrailAction: 'ALERT_ONLY',
+    isCumulativeHoldout: false,
+    banditExperimentConfig: {
+      algorithm: 'THOMPSON_SAMPLING',
+      rewardMetricId: 'click_through_rate',
+      contextFeatureKeys: ['user_tenure_days', 'device_type', 'content_genre'],
+      minExplorationFraction: 0.05,
+      warmupObservations: 10000,
+    },
+    createdAt: '2026-03-20T08:00:00Z',
+    startedAt: '2026-03-21T06:00:00Z',
   },
 ];
 
@@ -2007,6 +2040,31 @@ const INITIAL_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = {
 };
 
 export let SEED_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
+
+// --- Slate OPE Seed Data (ADR-016) ---
+
+const INITIAL_SLATE_OPE_RESULTS: SlateOpeResult[] = [
+  {
+    experimentId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    positionBias: [
+      { position: 1, ctr: 0.28, lipsWeight: 1.0 },
+      { position: 2, ctr: 0.19, lipsWeight: 0.82 },
+      { position: 3, ctr: 0.14, lipsWeight: 0.68 },
+      { position: 4, ctr: 0.10, lipsWeight: 0.57 },
+      { position: 5, ctr: 0.07, lipsWeight: 0.48 },
+      { position: 6, ctr: 0.05, lipsWeight: 0.40 },
+      { position: 7, ctr: 0.04, lipsWeight: 0.34 },
+      { position: 8, ctr: 0.03, lipsWeight: 0.29 },
+      { position: 9, ctr: 0.02, lipsWeight: 0.25 },
+      { position: 10, ctr: 0.02, lipsWeight: 0.21 },
+    ],
+    estimatedValue: 0.1423,
+    computedAt: '2026-03-23T12:00:00Z',
+  },
+];
+
+export let SEED_SLATE_OPE_RESULTS: SlateOpeResult[] = structuredClone(INITIAL_SLATE_OPE_RESULTS);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -2032,4 +2090,5 @@ export function resetSeedData(): void {
   SEED_FEEDBACK_LOOP_RESULTS = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
   SEED_ONLINE_FDR_STATES = structuredClone(INITIAL_ONLINE_FDR_STATES);
   SEED_PORTFOLIO_ALLOCATION = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
+  SEED_SLATE_OPE_RESULTS = structuredClone(INITIAL_SLATE_OPE_RESULTS);
 }
