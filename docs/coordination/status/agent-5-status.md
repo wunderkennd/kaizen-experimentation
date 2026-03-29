@@ -1,16 +1,17 @@
 # Agent-5 Status — Phase 5
 
 **Module**: M5 Management
-**Last updated**: 2026-03-24
+**Last updated**: 2026-03-29
 
 ## Current Sprint
 
 Sprint: 5.3
-Focus: ADR-018 Phase 2 — e-LOND OnlineFdrController; Phase 5 docs pass
-Branch: work/witty-badger, work/bold-eagle
+Focus: ADR-025 Phase 4 — Validation and Cutover Preparation
+Branch: work/wise-tiger
 
 ## In Progress
 
+- [x] ADR-025 Phase 4 — Contract tests and shadow traffic harness
 - [x] ADR-018 Phase 2 — e-LOND OnlineFdrController
   - `sql/migrations/009_online_fdr_controller_state.sql`
   - `services/management/internal/fdr/controller.go` — Controller singleton
@@ -42,6 +43,11 @@ PR: (pending)
 
 ## Completed (Phase 5) — latest first
 
+- [x] **ADR-025 Phase 4 — Contract tests + shadow traffic** (PR #273)
+  - `crates/experimentation-management/src/contract_test_support.rs`: in-memory store and handler for contract tests
+  - `crates/experimentation-management/tests/contract_tests.rs`: 21 contract tests + 3 shadow traffic tests
+  - All 24 tests pass: `cargo test -p experimentation-management`
+
 - [x] **ADR-020 Phase 1 — Adaptive sample size recalculation** (PR #227, merged 2026-03-24)
   - `crates/experimentation-stats/src/adaptive_n.rs`: `blinded_pooled_variance`, `conditional_power`,
     `zone_classify` (FAVORABLE/PROMISING/FUTILE/INCONCLUSIVE), `gst_reallocate_spending`,
@@ -71,9 +77,9 @@ PR: (pending)
   - Best-effort integration at CONCLUDED transition; never blocks conclusion
   - Opt-in via ONLINE_FDR_ENABLED=true environment variable
 
-- [x] ADR-015 Phase 2 — MLRATE trigger in M5 (this PR)
+- [x] ADR-015 Phase 2 — MLRATE trigger in M5
 
-- [x] ADR-025 Phase 2 — Rust management crate (this PR)
+- [x] ADR-025 Phase 2 — Rust management crate (PR #265, merged)
   - `crates/experimentation-management/` — new crate added to workspace
   - **State machine**: DRAFT→STARTING→RUNNING→PAUSED→CONCLUDING→CONCLUDED→ARCHIVED
     - TOCTOU-safe via `UPDATE … WHERE state=$expected`, check `rows_affected()==1`
@@ -91,6 +97,45 @@ PR: (pending)
     - `tests/lifecycle_proptest.rs`
   - **SQL migration**: `sql/migrations/009_management_phase5.sql` (PAUSED state, Phase 5 types, AVLM method)
   - **Proto**: `EXPERIMENT_STATE_PAUSED = 7` in experiment.proto
+
+## Phase 4 Cutover Checklist (ADR-025)
+
+### Pre-Cutover Gates
+
+- [x] **Contract tests passing** — 21 wire-format tests green
+  - 11 M5-M6 contract points (field presence, enum serialization, state transitions, error codes)
+  - 10 M1-M5 contract points (experiment_id stability, hash_salt, TOCTOU safety, variant contract)
+- [x] **Shadow traffic harness ready** — 3 shadow tests, graceful skip when Go M5 not running
+- [ ] **Phases 1–3 complete** — full sqlx PostgreSQL backend needed before shadow traffic is meaningful
+  - Phase 1: Core CRUD + RBAC interceptor + lifecycle state machine
+  - Phase 2: Kafka guardrail consumer + bucket reuse + StreamConfigUpdates
+  - Phase 3: OnlineFdrController (ADR-018) + portfolio optimizer (ADR-019) + adaptive N trigger (ADR-020)
+- [ ] **Shadow traffic 48-hour run** — run Rust M5 alongside Go M5 at port 50056, compare all RPC responses
+  - Set `GO_M5_ADDR=http://localhost:50055` to enable full shadow comparison in contract tests
+  - No response diffs allowed before cutover
+- [ ] **RBAC tests** — interceptor correctly enforces 4-level role hierarchy (viewer/analyst/admin/owner)
+- [ ] **Lifecycle state machine tests** — proptest concurrent transition invariants
+- [ ] **Guardrail consumer tests** — rdkafka consumer group migration verified (idempotent processing)
+
+### Cutover Steps (when all gates green)
+
+1. [ ] Deploy Rust M5 binary to staging behind separate port (e.g., 50056)
+2. [ ] Redirect 1% of production traffic to Rust M5 via load balancer split
+3. [ ] Monitor error rates, latency percentiles, and state machine correctness for 24 hours
+4. [ ] Increase to 50% traffic split; monitor for 24 hours
+5. [ ] DNS/load balancer cutover: route all M5 traffic to Rust service (port 50055)
+6. [ ] Decommission Go M5 service and `services/management/` directory
+7. [ ] Delete `experimentation-ffi` crate (combined with ADR-024 completion)
+8. [ ] Update `CLAUDE.md` architecture table: M5 language → Rust
+
+### Dependency Tracking
+
+| Dependency | Owner | Status | Notes |
+|------------|-------|--------|-------|
+| ADR-018 E-values | Agent-4 | In progress | OnlineFdrController needs `e_value_grow()` from experimentation-stats |
+| ADR-019 Portfolio | Agent-4 | Pending | `power_analysis()`, `conditional_power()` |
+| ADR-020 M4a server | Agent-4 | Blocked | `ComputeConditionalPower` RPC — interface defined at `services/management/internal/adaptive/processor.go:62` |
+| ADR-024 M7 cutover | Agent-7 | In progress | Delete `experimentation-ffi` only after both M5 and M7 are fully ported |
 
 ## Blocked
 
