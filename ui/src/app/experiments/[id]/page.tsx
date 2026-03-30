@@ -127,6 +127,7 @@ export default function ExperimentDetailPage() {
               if (!firstConfig) return null;
               const matchingVariant = experiment.variants.find(v => v.variantId === firstConfig.variantId);
               const variantProb = matchingVariant?.trafficFraction ?? 0;
+              const armProb = firstConfig.arms.length > 0 ? 1 / firstConfig.arms.length : 0;
               return <TwoLevelIPWBadge variantProbability={variantProb} armProbability={armProb} />;
             })()}
           </div>
