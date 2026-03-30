@@ -3,7 +3,7 @@
 import { createContext, useContext, useReducer, type ReactNode } from 'react';
 import type {
   ExperimentType, Variant, GuardrailConfig, GuardrailAction, SequentialMethod,
-  InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
+  InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig, MetaConfig,
 } from '@/lib/types';
 import { generateVariantId } from '@/lib/validation';
 
@@ -22,6 +22,7 @@ export interface WizardState {
   sessionConfig: SessionConfig;
   banditExperimentConfig: BanditExperimentConfig;
   qoeConfig: QoeConfig;
+  metaConfig: MetaConfig;
   // Step 3: Variants
   variants: Variant[];
   // Step 4: Metrics & Guardrails
@@ -87,6 +88,7 @@ export function createInitialState(): WizardState {
     sessionConfig: { ...DEFAULT_SESSION_CONFIG },
     banditExperimentConfig: { ...DEFAULT_BANDIT_CONFIG, contextFeatureKeys: [] },
     qoeConfig: { ...DEFAULT_QOE_CONFIG, qoeMetrics: [] },
+    metaConfig: { variantBanditConfigs: [] },
     variants: defaultVariants(),
     primaryMetricId: '',
     secondaryMetricsInput: '',

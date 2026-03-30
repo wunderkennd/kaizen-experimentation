@@ -72,6 +72,7 @@ export const TYPE_LABELS: Record<ExperimentType, string> = {
   SLATE: 'Slate Bandit',
   SWITCHBACK: 'Switchback',
   QUASI_EXPERIMENT: 'Quasi-Experiment',
+  META: 'Meta Experiment',
 };
 
 export function formatDate(iso: string): string {

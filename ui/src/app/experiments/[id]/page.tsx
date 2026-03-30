@@ -21,6 +21,8 @@ import { ConcludingProgress } from '@/components/concluding-progress';
 import { LayerAllocationChart } from '@/components/layer-allocation-chart';
 import { AdaptiveNBadge } from '@/components/adaptive-n-badge';
 import { CopyButton } from '@/components/copy-button';
+import { MetaExperimentConfig } from '@/components/meta/MetaExperimentConfig';
+import { TwoLevelIPWBadge } from '@/components/meta/TwoLevelIPWBadge';
 
 const SlateAssignmentForm = dynamic(
   () => import('@/components/slate/SlateAssignmentForm').then((m) => ({ default: m.SlateAssignmentForm })),
@@ -120,6 +122,14 @@ export default function ExperimentDetailPage() {
             {(experiment.state === 'RUNNING' || experiment.state === 'CONCLUDED') && (
               <AdaptiveNBadge experimentId={experiment.experimentId} />
             )}
+            {experiment.type === 'META' && experiment.metaConfig && experiment.variants.length > 0 && (() => {
+              const firstConfig = experiment.metaConfig.variantBanditConfigs[0];
+              if (!firstConfig) return null;
+              const matchingVariant = experiment.variants.find(v => v.variantId === firstConfig.variantId);
+              const variantProb = matchingVariant?.trafficFraction ?? 0;
+              const armProb = firstConfig.arms.length > 0 ? 1 / firstConfig.arms.length : 0;
+              return <TwoLevelIPWBadge variantProbability={variantProb} armProbability={armProb} />;
+            })()}
           </div>
           <p className="mt-1 text-sm text-gray-600">{experiment.description}</p>
         </div>
@@ -199,6 +209,14 @@ export default function ExperimentDetailPage() {
           )}
         </div>
       </section>
+
+      {/* Meta experiment: variant-to-bandit config panel */}
+      {experiment.type === 'META' && experiment.metaConfig && (
+        <MetaExperimentConfig
+          variants={experiment.variants}
+          metaConfig={experiment.metaConfig}
+        />
+      )}
 
       {/* Layer Allocation */}
       {experiment.layerId && (
