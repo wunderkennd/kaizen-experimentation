@@ -381,6 +381,7 @@ impl AssignmentServiceImpl {
                         payload_json: payload,
                         assignment_probability: two_level_prob,
                         is_active: true,
+                        block_index: 0,
                     });
                 }
                 Err(e) => {
@@ -419,6 +420,7 @@ impl AssignmentServiceImpl {
             payload_json: selection.payload_json,
             assignment_probability: two_level_prob,
             is_active: true,
+            block_index: 0,
         })
     }
 

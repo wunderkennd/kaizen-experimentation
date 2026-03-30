@@ -476,8 +476,16 @@ func TestValidateCreateExperiment_Phase5Types(t *testing.T) {
 			name: "META with meta_experiment_config - valid at create",
 			modify: func(e *commonv1.Experiment) {
 				e.Type = commonv1.ExperimentType_EXPERIMENT_TYPE_META
+				e.Variants = []*commonv1.Variant{
+					{VariantId: "v-ctrl", Name: "control", TrafficFraction: 0.5, IsControl: false},
+					{VariantId: "v-treat", Name: "treatment", TrafficFraction: 0.5, IsControl: false},
+				}
 				e.MetaExperimentConfig = &commonv1.MetaExperimentConfig{
 					BaseAlgorithm: commonv1.BanditAlgorithm_BANDIT_ALGORITHM_THOMPSON_SAMPLING,
+					VariantObjectives: []*commonv1.MetaVariantObjective{
+						{VariantId: "v-ctrl", RewardWeights: map[string]float64{"watch_time": 1.0}},
+						{VariantId: "v-treat", RewardWeights: map[string]float64{"watch_time": 1.0}},
+					},
 				}
 			},
 			wantOK: true,
