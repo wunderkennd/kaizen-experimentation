@@ -20,7 +20,14 @@ Service ports: 50052 (Rust gRPC), 50058 (Go ConnectRPC)
 - Run `go test ./services/pipeline-orch/...` for Go changes.
 - Event validation must reject invalid timestamps (negative nanos guard from PR #161).
 - Kafka topic creation: document partition count rationale in PR description.
-- Write status to `docs/coordination/status/agent-2-status.md`.
+## Work Tracking
+Find your assigned work via GitHub Issues:
+```bash
+gh issue list --label "agent-2" --state open
+gh issue view <number>
+```
+When starting work, comment on the Issue. When creating a PR, include `Closes #<number>`.
+If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Dependencies on Other Agents
 - Agent-Proto: `ModelRetrainingEvent` proto definition must land first.

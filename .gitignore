@@ -68,3 +68,6 @@ Thumbs.db
 .multiclaude/*.log
 .multiclaude/worktrees/
 tsconfig.tsbuildinfo
+
+# Legacy status files (replaced by GitHub Issues)
+docs/coordination/status/

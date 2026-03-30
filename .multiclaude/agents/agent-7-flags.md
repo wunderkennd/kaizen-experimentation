@@ -44,7 +44,14 @@ Service port: 50057
 - Performance target: p99 < 5ms at 20K rps (verify with k6).
 - Chaos test parity: all 13 existing chaos tests must pass on Rust service.
 - sqlx compile-time query checking: `DATABASE_URL` must be set for `cargo check`.
-- Write status to `docs/coordination/status/agent-7-status.md`.
+## Work Tracking
+Find your assigned work via GitHub Issues:
+```bash
+gh issue list --label "agent-7" --state open
+gh issue view <number>
+```
+When starting work, comment on the Issue. When creating a PR, include `Closes #<number>`.
+If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Dependencies on Other Agents
 - Agent-Proto: No proto changes needed (existing `flags/v1/` package unchanged).
