@@ -6,6 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tokio_stream::wrappers::ReceiverStream;
@@ -148,6 +149,13 @@ impl AssignmentServiceImpl {
 
         // 8. Map bucket to variant.
         let variant = select_variant(exp, bucket);
+
+        // 9. META experiments: forward to variant-scoped bandit policy in M4b (ADR-013).
+        if exp.r#type == "META" {
+            return self
+                .assign_meta(exp, user_id, experiment_id, variant, attributes)
+                .await;
+        }
 
         Ok(GetAssignmentResponse {
             experiment_id: experiment_id.to_string(),
@@ -320,6 +328,99 @@ impl AssignmentServiceImpl {
             assignment_probability: 1.0,
             is_active: true,
             block_index,
+        })
+    }
+
+    /// Meta-experiment arm selection for META experiments (ADR-013).
+    ///
+    /// The outer variant was already selected by standard bucketing. This method
+    /// forwards to M4b SelectArm using the compound key `{experiment_id}:{variant_id}`,
+    /// which isolates bandit policy state per (experiment, variant) in RocksDB.
+    ///
+    /// The returned `assignment_probability` is the **two-level IPW** product:
+    /// `P(variant) × P(arm | variant)`. M4a uses this to compute unbiased IPW
+    /// estimates across both levels of randomisation.
+    ///
+    /// Falls back to uniform random arm selection when M4b is unavailable or times out.
+    #[allow(clippy::result_large_err)]
+    async fn assign_meta(
+        &self,
+        exp: &crate::config::ExperimentConfig,
+        user_id: &str,
+        experiment_id: &str,
+        variant: &crate::config::VariantConfig,
+        attributes: &HashMap<String, String>,
+    ) -> Result<GetAssignmentResponse, Status> {
+        // Policy key scopes each variant to an isolated M4b policy.
+        let policy_key = format!("{}:{}", experiment_id, variant.variant_id);
+
+        // Arms are defined in the shared bandit_config (same arm set across all variants).
+        let bandit_config = exp.bandit_config.as_ref().ok_or_else(|| {
+            Status::failed_precondition(format!(
+                "META experiment {experiment_id} has no bandit_config (needed for arm definitions)",
+            ))
+        })?;
+
+        let context_features =
+            bandit_client::extract_context_features(bandit_config, attributes);
+
+        // Try live M4b client.
+        if let Some(ref client) = self.bandit_client {
+            match client
+                .select_arm(&policy_key, user_id, context_features)
+                .await
+            {
+                Ok(result) => {
+                    // Two-level IPW: P(variant) × P(arm|variant).
+                    let two_level_prob = variant.traffic_fraction * result.assignment_probability;
+                    let payload =
+                        bandit_client::lookup_arm_payload(&bandit_config.arms, &result.arm_id);
+                    return Ok(GetAssignmentResponse {
+                        experiment_id: experiment_id.to_string(),
+                        variant_id: result.arm_id,
+                        payload_json: payload,
+                        assignment_probability: two_level_prob,
+                        is_active: true,
+                        block_index: 0,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        experiment_id,
+                        variant_id = %variant.variant_id,
+                        policy_key = %policy_key,
+                        error = %e,
+                        "M4b SelectArm failed for META variant, falling back to uniform random",
+                    );
+                }
+            }
+        }
+
+        // Fallback: uniform random arm selection.
+        // Seed combines user_id, experiment_id, and variant_id for determinism.
+        let seed_input = format!("{user_id}\x00{experiment_id}\x00{}", variant.variant_id);
+        let lo = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 0) as u64;
+        let hi = experimentation_hash::murmur3::murmurhash3_x86_32(seed_input.as_bytes(), 1) as u64;
+        let seed = (hi << 32) | lo;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        let selection = bandit_client::select_arm_uniform(bandit_config, &mut rng)
+            .ok_or_else(|| {
+                Status::failed_precondition(format!(
+                    "META experiment {experiment_id} bandit_config has no arms",
+                ))
+            })?;
+
+        // Two-level IPW for fallback: P(variant) × P(arm|variant).
+        let two_level_prob = variant.traffic_fraction * selection.assignment_probability;
+
+        Ok(GetAssignmentResponse {
+            experiment_id: experiment_id.to_string(),
+            variant_id: selection.arm_id,
+            payload_json: selection.payload_json,
+            assignment_probability: two_level_prob,
+            is_active: true,
+            block_index: 0,
         })
     }
 

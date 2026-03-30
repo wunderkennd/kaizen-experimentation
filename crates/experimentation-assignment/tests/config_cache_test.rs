@@ -45,6 +45,7 @@ fn make_test_config() -> Config {
             bandit_config: None,
             is_cumulative_holdout: false,
             switchback_config: None,
+            meta_experiment_config: None,
         }],
         vec![LayerConfig {
             layer_id: "layer_default".to_string(),
@@ -273,6 +274,7 @@ fn test_layers_preserved() {
             bandit_config: None,
             is_cumulative_holdout: false,
             switchback_config: None,
+            meta_experiment_config: None,
         }],
         vec![
             LayerConfig {
