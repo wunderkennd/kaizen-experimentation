@@ -180,7 +180,14 @@ export default function ExperimentDetailPage() {
         </div>
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Primary Metric</dt>
-          <dd className="mt-1 text-sm text-gray-900">{experiment.primaryMetricId}</dd>
+          <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+            {experiment.primaryMetricId}
+            <CopyButton
+              value={experiment.primaryMetricId}
+              label="Copy primary metric ID"
+              successMessage="Primary metric ID copied to clipboard"
+            />
+          </dd>
         </div>
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Created</dt>
