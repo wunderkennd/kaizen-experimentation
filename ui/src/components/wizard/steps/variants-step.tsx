@@ -88,13 +88,23 @@ export function VariantsStep() {
         <span className={`text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}>
           Total traffic: {formatPercent(trafficSum)}
         </span>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: 'ADD_VARIANT' })}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Add Variant
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'DISTRIBUTE_VARIANTS' })}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            aria-label="Distribute traffic evenly across all variants"
+          >
+            Distribute Evenly
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'ADD_VARIANT' })}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Add Variant
+          </button>
+        </div>
       </div>
     </section>
   );
