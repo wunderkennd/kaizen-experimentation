@@ -108,6 +108,7 @@ export type WizardAction =
   | { type: 'SET_FIELD'; field: string; value: unknown }
   | { type: 'SET_STEP'; step: number }
   | { type: 'ADD_VARIANT' }
+  | { type: 'DISTRIBUTE_VARIANTS' }
   | { type: 'REMOVE_VARIANT'; index: number }
   | { type: 'UPDATE_VARIANT'; index: number; field: keyof Variant; value: string | number | boolean }
   | { type: 'ADD_GUARDRAIL' }
@@ -132,6 +133,23 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
           { variantId: generateVariantId(), name: '', trafficFraction: 0, isControl: false, payloadJson: '{}' },
         ],
       };
+
+    case 'DISTRIBUTE_VARIANTS': {
+      const count = state.variants.length;
+      if (count === 0) return state;
+      const equalTraffic = Math.floor((1.0 / count) * 1000) / 1000;
+      const remainder = Math.round((1.0 - equalTraffic * count) * 1000) / 1000;
+
+      const variants = state.variants.map((v, i) => ({
+        ...v,
+        trafficFraction: i === count - 1 ? Math.round((equalTraffic + remainder) * 1000) / 1000 : equalTraffic,
+      }));
+      return {
+        ...state,
+        variants,
+        stepErrors: { ...state.stepErrors, [state.currentStep]: null },
+      };
+    }
 
     case 'REMOVE_VARIANT':
       return { ...state, variants: state.variants.filter((_, i) => i !== action.index) };

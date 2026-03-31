@@ -187,4 +187,27 @@ describe('Experiment Creation Wizard', () => {
     expect(screen.getByText('Rebuffer Ratio')).toBeInTheDocument();
     expect(screen.getByText('Time to First Frame (ms)')).toBeInTheDocument();
   });
+
+  it('distributes traffic evenly when "Distribute Evenly" is clicked in the wizard', async () => {
+    const user = userEvent.setup();
+    renderNewPage();
+
+    await fillBasicsAndAdvance(user); // Step 1 -> 2
+    await user.click(screen.getByRole('button', { name: 'Next' })); // Step 2 -> 3 (Variants)
+
+    // Add a third variant
+    await user.click(screen.getByRole('button', { name: 'Add Variant' }));
+
+    // Initially: 0.5, 0.5, 0 -> 1.0 (defaults + 1 new)
+    expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Distribute Evenly'));
+
+    // Should be 0.333, 0.333, 0.334
+    const trafficInputs = screen.getAllByRole('spinbutton', { name: /traffic/i });
+    expect(trafficInputs[0]).toHaveValue(0.333);
+    expect(trafficInputs[1]).toHaveValue(0.333);
+    expect(trafficInputs[2]).toHaveValue(0.334);
+    expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();
+  });
 });
