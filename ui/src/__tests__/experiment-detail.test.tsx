@@ -91,6 +91,7 @@ describe('Experiment Detail Page', () => {
     expect(screen.getByText('Control')).toBeInTheDocument();
     const variantsSection = screen.getByText('Variants').closest('section')!;
     expect(within(variantsSection).getAllByText('50.0%')).toHaveLength(2);
+    expect(within(variantsSection).getByText('ID')).toBeInTheDocument();
   });
 
   it('renders metadata fields', async () => {

@@ -2,6 +2,7 @@
 
 import type { Variant } from '@/lib/types';
 import { formatPercent, truncateJson } from '@/lib/utils';
+import { CopyButton } from './copy-button';
 
 interface VariantTableProps {
   variants: Variant[];
@@ -15,6 +16,9 @@ export function VariantTable({ variants }: VariantTableProps) {
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Name
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              ID
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Traffic
@@ -32,6 +36,18 @@ export function VariantTable({ variants }: VariantTableProps) {
             <tr key={v.variantId}>
               <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                 {v.name}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                    {v.variantId}
+                  </code>
+                  <CopyButton
+                    value={v.variantId}
+                    label="Copy variant ID"
+                    successMessage="Variant ID copied"
+                  />
+                </div>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                 {formatPercent(v.trafficFraction)}
