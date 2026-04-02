@@ -20,3 +20,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-03-24 - Standardizing Clipboard Interactions
 **Learning:** A reusable `CopyButton` component provides a consistent and accessible way for users to copy technical identifiers. Standardizing this pattern across Experiment IDs, Flag IDs, and SQL blocks improves the overall discoverability and reliability of the feature.
 **Action:** Use the `CopyButton` component for all technical identifiers. Ensure it includes an `aria-label` for screen readers and provides both visual (icon change) and toast feedback. Wrap tests for pages using this component in `ToastProvider` to avoid context errors.
+
+## 2026-04-05 - Copy-to-Clipboard in Wizard Review
+**Learning:** Technical identifiers (like Layer IDs or primary metrics) in the final review step of a creation wizard are high-value copy targets for users who need to document the setup before clicking "Create". When placing these buttons in dense description lists, ensuring vertical alignment with `flex items-center gap-2` maintains visual hierarchy without disrupting the layout.
+**Action:** Extend description list helpers (like `DlRow`) to support optional copy functionality for identifiers. Always use a smaller button size (e.g., `h-4 w-4`) to fit within single-line list items.
