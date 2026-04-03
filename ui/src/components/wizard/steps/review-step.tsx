@@ -3,6 +3,7 @@
 import { useWizard } from '../wizard-context';
 import { TYPE_LABELS } from '@/lib/utils';
 import { formatPercent } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 
 interface ReviewSectionProps {
   title: string;
@@ -29,11 +30,27 @@ function ReviewSection({ title, step, onEdit, children }: ReviewSectionProps) {
   );
 }
 
-function DlRow({ label, value }: { label: string; value: string }) {
+function DlRow({ label, value, copyValue }: { label: string; value: string; copyValue?: string }) {
   return (
     <div className="flex gap-2 py-1">
       <dt className="w-40 flex-shrink-0 text-xs font-medium text-gray-500">{label}</dt>
-      <dd className="text-xs text-gray-900">{value || '\u2014'}</dd>
+      <dd className="flex items-center gap-2 text-xs text-gray-900">
+        {copyValue ? (
+          <>
+            <code className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">
+              {value || '\u2014'}
+            </code>
+            <CopyButton
+              value={copyValue}
+              label={`Copy ${label}`}
+              successMessage={`${label} copied`}
+              className="h-4 w-4"
+            />
+          </>
+        ) : (
+          value || '\u2014'
+        )}
+      </dd>
     </div>
   );
 }
@@ -55,9 +72,11 @@ export function ReviewStep() {
           <DlRow label="Name" value={state.name} />
           <DlRow label="Owner" value={state.ownerEmail} />
           <DlRow label="Type" value={TYPE_LABELS[state.type]} />
-          <DlRow label="Layer" value={state.layerId} />
+          <DlRow label="Layer" value={state.layerId} copyValue={state.layerId} />
           <DlRow label="Description" value={state.description} />
-          {state.targetingRuleId && <DlRow label="Targeting Rule" value={state.targetingRuleId} />}
+          {state.targetingRuleId && (
+            <DlRow label="Targeting Rule" value={state.targetingRuleId} copyValue={state.targetingRuleId} />
+          )}
           {state.isCumulativeHoldout && <DlRow label="Cumulative Holdout" value="Yes" />}
         </dl>
       </ReviewSection>
@@ -99,7 +118,7 @@ export function ReviewStep() {
       {/* Metrics & Guardrails */}
       <ReviewSection title="Metrics & Guardrails" step={3} onEdit={goToStep}>
         <dl>
-          <DlRow label="Primary Metric" value={state.primaryMetricId} />
+          <DlRow label="Primary Metric" value={state.primaryMetricId} copyValue={state.primaryMetricId} />
           <DlRow label="Secondary Metrics" value={state.secondaryMetricsInput || 'None'} />
           {state.guardrails.length > 0 && (
             <DlRow
