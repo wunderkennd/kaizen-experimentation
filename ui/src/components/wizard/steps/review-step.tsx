@@ -3,6 +3,7 @@
 import { useWizard } from '../wizard-context';
 import { TYPE_LABELS } from '@/lib/utils';
 import { formatPercent } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 
 interface ReviewSectionProps {
   title: string;
@@ -29,11 +30,37 @@ function ReviewSection({ title, step, onEdit, children }: ReviewSectionProps) {
   );
 }
 
-function DlRow({ label, value }: { label: string; value: string }) {
+function DlRow({
+  label,
+  value,
+  copyValue,
+  isCode,
+}: {
+  label: string;
+  value: string;
+  copyValue?: string;
+  isCode?: boolean;
+}) {
   return (
     <div className="flex gap-2 py-1">
       <dt className="w-40 flex-shrink-0 text-xs font-medium text-gray-500">{label}</dt>
-      <dd className="text-xs text-gray-900">{value || '\u2014'}</dd>
+      <dd className="flex items-center gap-2 text-xs text-gray-900">
+        {isCode ? (
+          <code className="rounded bg-gray-50 px-1 py-0.5 text-gray-600">
+            {value || '\u2014'}
+          </code>
+        ) : (
+          <span>{value || '\u2014'}</span>
+        )}
+        {copyValue && value && (
+          <CopyButton
+            value={copyValue}
+            label={`Copy ${label}`}
+            className="h-4 w-4"
+            successMessage={`${label} copied`}
+          />
+        )}
+      </dd>
     </div>
   );
 }
@@ -55,9 +82,21 @@ export function ReviewStep() {
           <DlRow label="Name" value={state.name} />
           <DlRow label="Owner" value={state.ownerEmail} />
           <DlRow label="Type" value={TYPE_LABELS[state.type]} />
-          <DlRow label="Layer" value={state.layerId} />
+          <DlRow
+            label="Layer"
+            value={state.layerId}
+            isCode
+            copyValue={state.layerId}
+          />
           <DlRow label="Description" value={state.description} />
-          {state.targetingRuleId && <DlRow label="Targeting Rule" value={state.targetingRuleId} />}
+          {state.targetingRuleId && (
+            <DlRow
+              label="Targeting Rule"
+              value={state.targetingRuleId}
+              isCode
+              copyValue={state.targetingRuleId}
+            />
+          )}
           {state.isCumulativeHoldout && <DlRow label="Cumulative Holdout" value="Yes" />}
         </dl>
       </ReviewSection>
@@ -99,7 +138,12 @@ export function ReviewStep() {
       {/* Metrics & Guardrails */}
       <ReviewSection title="Metrics & Guardrails" step={3} onEdit={goToStep}>
         <dl>
-          <DlRow label="Primary Metric" value={state.primaryMetricId} />
+          <DlRow
+            label="Primary Metric"
+            value={state.primaryMetricId}
+            isCode
+            copyValue={state.primaryMetricId}
+          />
           <DlRow label="Secondary Metrics" value={state.secondaryMetricsInput || 'None'} />
           {state.guardrails.length > 0 && (
             <DlRow
@@ -132,7 +176,12 @@ function renderTypeConfigSummary(state: ReturnType<typeof useWizard>['state']) {
           <DlRow label="Method" value={c.method} />
           <DlRow label="Algorithm IDs" value={c.algorithmIds.filter(Boolean).join(', ')} />
           <DlRow label="Credit Assignment" value={c.creditAssignment} />
-          <DlRow label="Credit Metric" value={c.creditMetricEvent} />
+          <DlRow
+            label="Credit Metric"
+            value={c.creditMetricEvent}
+            isCode
+            copyValue={c.creditMetricEvent}
+          />
           <DlRow label="Max List Size" value={String(c.maxListSize)} />
         </dl>
       );
@@ -141,7 +190,12 @@ function renderTypeConfigSummary(state: ReturnType<typeof useWizard>['state']) {
       const c = state.sessionConfig;
       return (
         <dl>
-          <DlRow label="Session ID Attribute" value={c.sessionIdAttribute} />
+          <DlRow
+            label="Session ID Attribute"
+            value={c.sessionIdAttribute}
+            isCode
+            copyValue={c.sessionIdAttribute}
+          />
           <DlRow label="Cross-Session" value={c.allowCrossSessionVariation ? 'Yes' : 'No'} />
           <DlRow label="Min Sessions" value={String(c.minSessionsPerUser)} />
         </dl>
@@ -153,7 +207,12 @@ function renderTypeConfigSummary(state: ReturnType<typeof useWizard>['state']) {
       return (
         <dl>
           <DlRow label="Algorithm" value={c.algorithm} />
-          <DlRow label="Reward Metric" value={c.rewardMetricId} />
+          <DlRow
+            label="Reward Metric"
+            value={c.rewardMetricId}
+            isCode
+            copyValue={c.rewardMetricId}
+          />
           {state.type === 'CONTEXTUAL_BANDIT' && (
             <DlRow label="Context Features" value={c.contextFeatureKeys.filter(Boolean).join(', ')} />
           )}
