@@ -22,5 +22,5 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Action:** Use the `CopyButton` component for all technical identifiers. Ensure it includes an `aria-label` for screen readers and provides both visual (icon change) and toast feedback. Wrap tests for pages using this component in `ToastProvider` to avoid context errors.
 
 ## 2025-05-16 - Wizard Review Density and Utility
-**Learning:** The wizard's Review step is the final point of verification before experiment creation. Providing high-density technical identifiers (using `text-[10px]` for `<code>`) alongside a `CopyButton` allows users to quickly cross-reference and copy IDs for documentation or configuration before the experiment is even created.
+**Learning:** The wizard's Review step is the final point of verification before experiment creation. Providing technical identifiers (using `text-xs` for `<code>`) alongside a `CopyButton` allows users to quickly cross-reference and copy IDs for documentation or configuration before the experiment is even created.
 **Action:** Enhance the `DlRow` component in wizards to support `isCode` and `copyValue` props for technical identifiers.

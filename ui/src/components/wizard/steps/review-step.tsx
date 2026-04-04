@@ -46,7 +46,7 @@ function DlRow({
       <dt className="w-40 flex-shrink-0 text-xs font-medium text-gray-500">{label}</dt>
       <dd className="flex items-center gap-2 text-xs text-gray-900">
         {isCode ? (
-          <code className="rounded bg-gray-50 px-1 py-0.5 text-[10px] text-gray-600">
+          <code className="rounded bg-gray-50 px-1 py-0.5 text-gray-600">
             {value || '\u2014'}
           </code>
         ) : (
