@@ -12,7 +12,7 @@ Object.defineProperty(navigator, 'clipboard', {
 });
 
 const mockInitialState = {
-  step: 4, // Review step
+  currentStep: 4, // Review step
   name: 'Test Experiment',
   ownerEmail: 'test@example.com',
   type: 'AB' as const,
@@ -28,14 +28,18 @@ const mockInitialState = {
   guardrailAction: 'ALERT_ONLY' as const,
   isCumulativeHoldout: false,
   enableSequential: false,
-  sequentialMethod: 'ALWAYS_VALID' as const,
+  sequentialMethod: 'AVLM' as const,
   plannedLooks: 1,
   overallAlpha: 0.05,
-  interleavingConfig: { method: 'TEAM_DRAFT', algorithmIds: [], creditAssignment: 'REWARD', creditMetricEvent: '', maxListSize: 10 },
+  interleavingConfig: { method: 'TEAM_DRAFT' as const, algorithmIds: [], creditAssignment: 'BINARY_WIN' as const, creditMetricEvent: '', maxListSize: 10 },
   sessionConfig: { sessionIdAttribute: 'session_id', allowCrossSessionVariation: false, minSessionsPerUser: 1 },
-  banditExperimentConfig: { algorithm: 'EPSILON_GREEDY', rewardMetricId: 'reward-metric-id', contextFeatureKeys: [], minExplorationFraction: 0.1, warmupObservations: 100 },
+  banditExperimentConfig: { algorithm: 'THOMPSON_SAMPLING' as const, rewardMetricId: 'reward-metric-id', contextFeatureKeys: [], minExplorationFraction: 0.1, warmupObservations: 100 },
   qoeConfig: { qoeMetrics: [], deviceFilter: '' },
   targetingRuleId: 'test-targeting-rule',
+  metaConfig: { variantBanditConfigs: [] },
+  submitting: false,
+  formError: null,
+  stepErrors: {},
 };
 
 describe('ReviewStep Enhancements', () => {
