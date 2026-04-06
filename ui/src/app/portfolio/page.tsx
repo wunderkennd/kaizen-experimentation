@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { getPortfolioAllocation } from '@/lib/api';
-import type { PortfolioAllocationResult } from '@/lib/types';
+import { getPortfolioAllocation, getPortfolioMetrics, getParetoFrontier } from '@/lib/api';
+import type { PortfolioAllocationResult, PortfolioMetricsResult, ParetoFrontierResult } from '@/lib/types';
 import { ExperimentPortfolioTable } from '@/components/experiment-portfolio-table';
 import { RetryableError } from '@/components/retryable-error';
 
-// Code-split: chart bundle loaded only when page renders
+// Code-split: chart bundles loaded only when page renders
 const BudgetAllocationChart = dynamic(
   () =>
     import('@/components/charts/budget-allocation-chart').then(
@@ -20,17 +20,63 @@ const BudgetAllocationChart = dynamic(
   },
 );
 
-function ChartSkeleton() {
+const WinRateChart = dynamic(
+  () =>
+    import('@/components/charts/win-rate-chart').then(
+      (m) => ({ default: m.WinRateChart }),
+    ),
+  {
+    ssr: false,
+    loading: () => <ChartSkeleton height={240} />,
+  },
+);
+
+const LearningRateChart = dynamic(
+  () =>
+    import('@/components/charts/learning-rate-chart').then(
+      (m) => ({ default: m.LearningRateChart }),
+    ),
+  {
+    ssr: false,
+    loading: () => <ChartSkeleton height={240} />,
+  },
+);
+
+const AnnualizedImpactChart = dynamic(
+  () =>
+    import('@/components/charts/annualized-impact-chart').then(
+      (m) => ({ default: m.AnnualizedImpactChart }),
+    ),
+  {
+    ssr: false,
+    loading: () => <ChartSkeleton height={200} />,
+  },
+);
+
+const ParetoFrontierPlot = dynamic(
+  () =>
+    import('@/components/charts/pareto-frontier-plot').then(
+      (m) => ({ default: m.ParetoFrontierPlot }),
+    ),
+  {
+    ssr: false,
+    loading: () => <ChartSkeleton height={320} />,
+  },
+);
+
+function ChartSkeleton({ height = 72 }: { height?: number }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="mb-2 h-4 w-48 animate-pulse rounded bg-gray-200" />
-      <div className="h-[72px] animate-pulse rounded bg-gray-100" />
+      <div className="animate-pulse rounded bg-gray-100" style={{ height }} />
     </div>
   );
 }
 
 export default function PortfolioDashboard() {
   const [result, setResult] = useState<PortfolioAllocationResult | null>(null);
+  const [metrics, setMetrics] = useState<PortfolioMetricsResult | null>(null);
+  const [pareto, setPareto] = useState<ParetoFrontierResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,8 +84,14 @@ export default function PortfolioDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getPortfolioAllocation();
-      setResult(data);
+      const [allocationData, metricsData, paretoData] = await Promise.all([
+        getPortfolioAllocation(),
+        getPortfolioMetrics().catch(() => null),
+        getParetoFrontier().catch(() => null),
+      ]);
+      setResult(allocationData);
+      setMetrics(metricsData);
+      setPareto(paretoData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load portfolio allocation data.');
     } finally {
@@ -107,6 +159,36 @@ export default function PortfolioDashboard() {
           <h2 id="budget-chart-heading" className="sr-only">Budget Allocation Chart</h2>
           <BudgetAllocationChart experiments={experiments} />
         </section>
+
+        {/* Win Rate + Learning Rate side-by-side */}
+        {metrics && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <section aria-labelledby="win-rate-heading">
+              <h2 id="win-rate-heading" className="sr-only">Win Rate Chart</h2>
+              <WinRateChart data={metrics.winRates} />
+            </section>
+            <section aria-labelledby="learning-rate-heading">
+              <h2 id="learning-rate-heading" className="sr-only">Learning Rate Chart</h2>
+              <LearningRateChart data={metrics.learningRates} />
+            </section>
+          </div>
+        )}
+
+        {/* Annualized Impact */}
+        {metrics && metrics.annualizedImpacts.length > 0 && (
+          <section aria-labelledby="annualized-impact-heading">
+            <h2 id="annualized-impact-heading" className="sr-only">Annualized Impact Chart</h2>
+            <AnnualizedImpactChart data={metrics.annualizedImpacts} />
+          </section>
+        )}
+
+        {/* Pareto Frontier */}
+        {pareto && pareto.points.length > 0 && (
+          <section aria-labelledby="pareto-heading">
+            <h2 id="pareto-heading" className="sr-only">Pareto Frontier Plot</h2>
+            <ParetoFrontierPlot points={pareto.points} frontierIds={pareto.frontierIds} />
+          </section>
+        )}
 
         <section aria-labelledby="portfolio-table-heading">
           <h2 id="portfolio-table-heading" className="mb-3 text-base font-semibold text-gray-900">

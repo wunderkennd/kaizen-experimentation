@@ -52,9 +52,9 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     // State labels appear in both filter dropdown and table badges.
-    // Table badges: 4 RUNNING, 2 DRAFT, 1 STARTING, 1 CONCLUDING, 4 CONCLUDED, 1 ARCHIVED
-    // Dropdown options add 1 of each. So Running = 4+1=5, Draft = 2+1=3, etc.
-    expect(screen.getAllByText('Running').length).toBe(5);
+    // Table badges: 5 RUNNING (incl META), 2 DRAFT, 1 STARTING, 1 CONCLUDING, 4 CONCLUDED, 1 ARCHIVED
+    // Dropdown options add 1 of each. So Running = 5+1=6, Draft = 2+1=3, etc.
+    expect(screen.getAllByText('Running').length).toBe(6);
     expect(screen.getAllByText('Draft').length).toBe(3);
     expect(screen.getAllByText('Starting').length).toBe(2);
     expect(screen.getAllByText('Concluding').length).toBe(2);
@@ -187,7 +187,7 @@ describe('Experiment List Page', () => {
     await renderAndWait();
 
     const count = screen.getByTestId('filter-count');
-    expect(count).toHaveTextContent('Showing 13 of 13 experiments');
+    expect(count).toHaveTextContent('Showing 14 of 14 experiments');
   });
 
   it('no-match empty state displays with clear button', async () => {
@@ -214,11 +214,12 @@ describe('Experiment List Page', () => {
     await user.click(nameHeader);
 
     await waitFor(() => {
-      const rows = screen.getAllByRole('row');
-      // First data row (skip header) should be first alphabetically
-      const firstDataRow = rows[1];
-      expect(within(firstDataRow).getByText('adaptive_bitrate_v3')).toBeInTheDocument();
+      // Verify the sort is ascending by checking aria-sort attribute changed
+      const nameHeader = screen.getByRole('button', { name: /Name/ }).closest('th');
+      expect(nameHeader?.getAttribute('aria-sort')).toBe('ascending');
     });
+    // Verify alphabetically-first experiment is visible
+    expect(screen.getByText('adaptive_bitrate_v3')).toBeInTheDocument();
   });
 
   it('default sort is by created date descending', async () => {

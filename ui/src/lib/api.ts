@@ -11,8 +11,10 @@ import type {
   ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
   OnlineFdrState,
-  PortfolioAllocationResult,
-  SlateAssignmentResponse, SlateOpeResult,
+  PortfolioAllocationResult, PortfolioMetricsResult,
+  ParetoFrontierResult,
+  MetaExperimentResult,
+  SlateAssignmentResponse, SlateOpeResult, SlateHeatmapResult,
   SwitchbackResult, SyntheticControlResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
@@ -758,6 +760,30 @@ export async function getPortfolioAllocation(): Promise<PortfolioAllocationResul
   );
 }
 
+export async function getPortfolioMetrics(): Promise<PortfolioMetricsResult> {
+  return callRpc<Record<string, never>, PortfolioMetricsResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetPortfolioMetrics', {},
+  );
+}
+
+// --- Pareto Frontier (ADR-011 / ADR-019) ---
+
+export async function getParetoFrontier(experimentId?: string): Promise<ParetoFrontierResult> {
+  const request: Record<string, unknown> = {};
+  if (experimentId) request.experimentId = experimentId;
+  return callRpc<Record<string, unknown>, ParetoFrontierResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetParetoFrontier', request,
+  );
+}
+
+// --- Meta-Experiment Results (ADR-013) ---
+
+export async function getMetaExperimentResult(experimentId: string): Promise<MetaExperimentResult> {
+  return callRpc<{ experimentId: string }, MetaExperimentResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetMetaExperimentResult', { experimentId },
+  );
+}
+
 // --- Slate Bandit (ADR-016) ---
 
 export async function getSlateAssignment(
@@ -781,6 +807,12 @@ export async function getSlateAssignment(
 export async function getSlateOpe(experimentId: string): Promise<SlateOpeResult> {
   return callRpc<{ experimentId: string }, SlateOpeResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetSlateOpe', { experimentId },
+  );
+}
+
+export async function getSlateHeatmap(experimentId: string): Promise<SlateHeatmapResult> {
+  return callRpc<{ experimentId: string }, SlateHeatmapResult>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetSlateHeatmap', { experimentId },
   );
 }
 

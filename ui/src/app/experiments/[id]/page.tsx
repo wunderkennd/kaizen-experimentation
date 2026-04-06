@@ -32,6 +32,14 @@ const SlatePositionBiasChart = dynamic(
   () => import('@/components/slate/SlatePositionBiasChart').then((m) => ({ default: m.SlatePositionBiasChart })),
   { ssr: false },
 );
+const SlateHeatmap = dynamic(
+  () => import('@/components/slate/SlateHeatmap').then((m) => ({ default: m.SlateHeatmap })),
+  { ssr: false },
+);
+const MetaResultsPanel = dynamic(
+  () => import('@/components/meta/MetaResultsPanel').then((m) => ({ default: m.MetaResultsPanel })),
+  { ssr: false },
+);
 
 export default function ExperimentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -302,6 +310,20 @@ export default function ExperimentDetailPage() {
         </section>
       )}
 
+      {/* Meta-Experiment Results — only shown for META experiment type */}
+      {experiment.type === 'META' && (
+        <section className="mb-6" data-testid="meta-results-tab">
+          <div className="mb-3 border-b border-gray-200">
+            <nav className="-mb-px flex">
+              <span className="border-b-2 border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-600">
+                Meta Results
+              </span>
+            </nav>
+          </div>
+          <MetaResultsPanel experimentId={experiment.experimentId} />
+        </section>
+      )}
+
       {/* Slate Tab — only shown for SLATE experiment type */}
       {experiment.type === 'SLATE' && (
         <section className="mb-6" data-testid="slate-tab">
@@ -313,14 +335,18 @@ export default function ExperimentDetailPage() {
             </nav>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <SlateAssignmentForm experimentId={experiment.experimentId} />
+          <div className="flex flex-col gap-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <SlateAssignmentForm experimentId={experiment.experimentId} />
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <SlatePositionBiasChart experimentId={experiment.experimentId} />
+              </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <SlatePositionBiasChart experimentId={experiment.experimentId} />
-            </div>
+            <SlateHeatmap experimentId={experiment.experimentId} />
           </div>
         </section>
       )}
