@@ -24,8 +24,9 @@ use experimentation_proto::experimentation::analysis::v1::{
     GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest,
     GetPortfolioAllocationRequest, GetPortfolioAllocationResponse, GetSwitchbackAnalysisRequest,
     GetSyntheticControlAnalysisRequest, InterleavingAnalysisResult, InterferenceAnalysisResult,
-    GetPortfolioPowerAnalysisRequest, NoveltyAnalysisResult, PortfolioPowerAnalysisResult,
-    RunAnalysisRequest, SwitchbackAnalysisResult, SyntheticControlAnalysisResult,
+    GetOrlAnalysisRequest, GetPortfolioPowerAnalysisRequest, NoveltyAnalysisResult,
+    OrlAnalysisResult, PortfolioPowerAnalysisResult, RunAnalysisRequest,
+    SwitchbackAnalysisResult, SyntheticControlAnalysisResult,
 };
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -274,6 +275,13 @@ impl AnalysisService for PortfolioTestService {
             .compute_portfolio_allocation(&req.experiment_ids, req.total_traffic_budget)?;
 
         Ok(Response::new(resp))
+    }
+
+    async fn get_orl_analysis(
+        &self,
+        _r: Request<GetOrlAnalysisRequest>,
+    ) -> Result<Response<OrlAnalysisResult>, Status> {
+        Err(Status::unimplemented("not used in portfolio contract tests"))
     }
 
     async fn get_portfolio_power_analysis(

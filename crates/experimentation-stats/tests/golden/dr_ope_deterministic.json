@@ -1,0 +1,184 @@
+{
+  "test_name": "dr_ope_deterministic_treatment_effect",
+  "description": "Deterministic MDP: 20 users, half control (a=0, r=0.2), half treatment (a=1, r=0.8), 3 steps each. Evaluate 'always treat' policy. With gamma=1.0, expected cumulative reward under always-treat ≈ 2.4 (3 * 0.8). DR estimator should recover this.",
+  "config": {
+    "gamma": 1.0,
+    "max_density_ratio": 100.0,
+    "alpha": 0.05,
+    "n_actions": 2,
+    "target_policy": [0.0, 1.0]
+  },
+  "trajectories": [
+    {
+      "user_id": "ctrl_0",
+      "steps": [
+        {"state_features": [0.1, 0.2], "action": 0, "reward": 0.2, "next_state_features": [0.2, 0.3], "logging_probability": 0.5},
+        {"state_features": [0.2, 0.3], "action": 0, "reward": 0.2, "next_state_features": [0.3, 0.4], "logging_probability": 0.5},
+        {"state_features": [0.3, 0.4], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_1",
+      "steps": [
+        {"state_features": [0.11, 0.21], "action": 0, "reward": 0.2, "next_state_features": [0.21, 0.31], "logging_probability": 0.5},
+        {"state_features": [0.21, 0.31], "action": 0, "reward": 0.2, "next_state_features": [0.31, 0.41], "logging_probability": 0.5},
+        {"state_features": [0.31, 0.41], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_2",
+      "steps": [
+        {"state_features": [0.12, 0.22], "action": 0, "reward": 0.2, "next_state_features": [0.22, 0.32], "logging_probability": 0.5},
+        {"state_features": [0.22, 0.32], "action": 0, "reward": 0.2, "next_state_features": [0.32, 0.42], "logging_probability": 0.5},
+        {"state_features": [0.32, 0.42], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_3",
+      "steps": [
+        {"state_features": [0.13, 0.23], "action": 0, "reward": 0.2, "next_state_features": [0.23, 0.33], "logging_probability": 0.5},
+        {"state_features": [0.23, 0.33], "action": 0, "reward": 0.2, "next_state_features": [0.33, 0.43], "logging_probability": 0.5},
+        {"state_features": [0.33, 0.43], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_4",
+      "steps": [
+        {"state_features": [0.14, 0.24], "action": 0, "reward": 0.2, "next_state_features": [0.24, 0.34], "logging_probability": 0.5},
+        {"state_features": [0.24, 0.34], "action": 0, "reward": 0.2, "next_state_features": [0.34, 0.44], "logging_probability": 0.5},
+        {"state_features": [0.34, 0.44], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_5",
+      "steps": [
+        {"state_features": [0.15, 0.25], "action": 0, "reward": 0.2, "next_state_features": [0.25, 0.35], "logging_probability": 0.5},
+        {"state_features": [0.25, 0.35], "action": 0, "reward": 0.2, "next_state_features": [0.35, 0.45], "logging_probability": 0.5},
+        {"state_features": [0.35, 0.45], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_6",
+      "steps": [
+        {"state_features": [0.16, 0.26], "action": 0, "reward": 0.2, "next_state_features": [0.26, 0.36], "logging_probability": 0.5},
+        {"state_features": [0.26, 0.36], "action": 0, "reward": 0.2, "next_state_features": [0.36, 0.46], "logging_probability": 0.5},
+        {"state_features": [0.36, 0.46], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_7",
+      "steps": [
+        {"state_features": [0.17, 0.27], "action": 0, "reward": 0.2, "next_state_features": [0.27, 0.37], "logging_probability": 0.5},
+        {"state_features": [0.27, 0.37], "action": 0, "reward": 0.2, "next_state_features": [0.37, 0.47], "logging_probability": 0.5},
+        {"state_features": [0.37, 0.47], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_8",
+      "steps": [
+        {"state_features": [0.18, 0.28], "action": 0, "reward": 0.2, "next_state_features": [0.28, 0.38], "logging_probability": 0.5},
+        {"state_features": [0.28, 0.38], "action": 0, "reward": 0.2, "next_state_features": [0.38, 0.48], "logging_probability": 0.5},
+        {"state_features": [0.38, 0.48], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "ctrl_9",
+      "steps": [
+        {"state_features": [0.19, 0.29], "action": 0, "reward": 0.2, "next_state_features": [0.29, 0.39], "logging_probability": 0.5},
+        {"state_features": [0.29, 0.39], "action": 0, "reward": 0.2, "next_state_features": [0.39, 0.49], "logging_probability": 0.5},
+        {"state_features": [0.39, 0.49], "action": 0, "reward": 0.2, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_0",
+      "steps": [
+        {"state_features": [0.1, 0.2], "action": 1, "reward": 0.8, "next_state_features": [0.2, 0.3], "logging_probability": 0.5},
+        {"state_features": [0.2, 0.3], "action": 1, "reward": 0.8, "next_state_features": [0.3, 0.4], "logging_probability": 0.5},
+        {"state_features": [0.3, 0.4], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_1",
+      "steps": [
+        {"state_features": [0.11, 0.21], "action": 1, "reward": 0.8, "next_state_features": [0.21, 0.31], "logging_probability": 0.5},
+        {"state_features": [0.21, 0.31], "action": 1, "reward": 0.8, "next_state_features": [0.31, 0.41], "logging_probability": 0.5},
+        {"state_features": [0.31, 0.41], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_2",
+      "steps": [
+        {"state_features": [0.12, 0.22], "action": 1, "reward": 0.8, "next_state_features": [0.22, 0.32], "logging_probability": 0.5},
+        {"state_features": [0.22, 0.32], "action": 1, "reward": 0.8, "next_state_features": [0.32, 0.42], "logging_probability": 0.5},
+        {"state_features": [0.32, 0.42], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_3",
+      "steps": [
+        {"state_features": [0.13, 0.23], "action": 1, "reward": 0.8, "next_state_features": [0.23, 0.33], "logging_probability": 0.5},
+        {"state_features": [0.23, 0.33], "action": 1, "reward": 0.8, "next_state_features": [0.33, 0.43], "logging_probability": 0.5},
+        {"state_features": [0.33, 0.43], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_4",
+      "steps": [
+        {"state_features": [0.14, 0.24], "action": 1, "reward": 0.8, "next_state_features": [0.24, 0.34], "logging_probability": 0.5},
+        {"state_features": [0.24, 0.34], "action": 1, "reward": 0.8, "next_state_features": [0.34, 0.44], "logging_probability": 0.5},
+        {"state_features": [0.34, 0.44], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_5",
+      "steps": [
+        {"state_features": [0.15, 0.25], "action": 1, "reward": 0.8, "next_state_features": [0.25, 0.35], "logging_probability": 0.5},
+        {"state_features": [0.25, 0.35], "action": 1, "reward": 0.8, "next_state_features": [0.35, 0.45], "logging_probability": 0.5},
+        {"state_features": [0.35, 0.45], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_6",
+      "steps": [
+        {"state_features": [0.16, 0.26], "action": 1, "reward": 0.8, "next_state_features": [0.26, 0.36], "logging_probability": 0.5},
+        {"state_features": [0.26, 0.36], "action": 1, "reward": 0.8, "next_state_features": [0.36, 0.46], "logging_probability": 0.5},
+        {"state_features": [0.36, 0.46], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_7",
+      "steps": [
+        {"state_features": [0.17, 0.27], "action": 1, "reward": 0.8, "next_state_features": [0.27, 0.37], "logging_probability": 0.5},
+        {"state_features": [0.27, 0.37], "action": 1, "reward": 0.8, "next_state_features": [0.37, 0.47], "logging_probability": 0.5},
+        {"state_features": [0.37, 0.47], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_8",
+      "steps": [
+        {"state_features": [0.18, 0.28], "action": 1, "reward": 0.8, "next_state_features": [0.28, 0.38], "logging_probability": 0.5},
+        {"state_features": [0.28, 0.38], "action": 1, "reward": 0.8, "next_state_features": [0.38, 0.48], "logging_probability": 0.5},
+        {"state_features": [0.38, 0.48], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    },
+    {
+      "user_id": "treat_9",
+      "steps": [
+        {"state_features": [0.19, 0.29], "action": 1, "reward": 0.8, "next_state_features": [0.29, 0.39], "logging_probability": 0.5},
+        {"state_features": [0.29, 0.39], "action": 1, "reward": 0.8, "next_state_features": [0.39, 0.49], "logging_probability": 0.5},
+        {"state_features": [0.39, 0.49], "action": 1, "reward": 0.8, "next_state_features": [], "logging_probability": 0.5}
+      ]
+    }
+  ],
+  "expected": {
+    "effect_min": 1.5,
+    "effect_max": 3.5,
+    "se_positive": true,
+    "ci_contains_effect": true,
+    "p_value_max": 1.0,
+    "effective_n_min": 1.0,
+    "n_trajectories": 20,
+    "dm_positive": true
+  },
+  "tolerance": 0.5
+}

@@ -11,13 +11,13 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
 use experimentation_proto::experimentation::analysis::v1::{
     AdaptiveNInterimResult, AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult,
     GetAnalysisResultRequest, GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest,
-    GetNoveltyAnalysisRequest, GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
-    GetPortfolioPowerAnalysisRequest, GetSwitchbackAnalysisRequest,
+    GetNoveltyAnalysisRequest, GetOrlAnalysisRequest, GetPortfolioAllocationRequest,
+    GetPortfolioAllocationResponse, GetPortfolioPowerAnalysisRequest, GetSwitchbackAnalysisRequest,
     GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult, InterleavingAnalysisResult,
     IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
     PositionAnalysis as ProtoPositionAnalysis, PortfolioImpactParams, PortfolioPowerAnalysisResult,
-    PortfolioTrafficAllocation, RunAnalysisRequest, SegmentResult, SequentialResult,
-    SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
+    OrlAnalysisResult, PortfolioTrafficAllocation, RunAnalysisRequest, SegmentResult,
+    SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
     SyntheticControlAnalysisResult, TitleSpillover,
 };
 use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
@@ -1128,6 +1128,17 @@ impl AnalysisService for AnalysisServiceHandler {
             expected_portfolio_fdr: rec.expected_portfolio_fdr,
             computed_at: Some(now_timestamp()),
         }))
+    }
+
+    async fn get_orl_analysis(
+        &self,
+        _request: Request<GetOrlAnalysisRequest>,
+    ) -> Result<Response<OrlAnalysisResult>, Status> {
+        // ADR-017: Doubly-robust OPE analysis.
+        // Contract is defined; full wiring is Phase 5 work.
+        Err(Status::unimplemented(
+            "GetOrlAnalysis not yet implemented (ADR-017)",
+        ))
     }
 }
 
