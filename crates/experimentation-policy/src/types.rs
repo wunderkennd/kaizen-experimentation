@@ -87,6 +87,37 @@ pub struct GetSnapshotResponse {
     pub snapshot_at_epoch_ms: i64,
 }
 
+/// Request to register isolated bandit policies for a META experiment (ADR-013).
+/// Each variant gets its own policy keyed as `{experiment_id}::v::{variant_id}`.
+pub struct RegisterMetaExperimentRequest {
+    /// Parent META experiment ID.
+    pub experiment_id: String,
+    /// Per-variant configurations. Each entry creates an isolated policy.
+    pub variant_policies: Vec<MetaVariantPolicyConfig>,
+    /// Channel to send the result back to the caller.
+    pub reply_tx: oneshot::Sender<Result<RegisterMetaExperimentResponse, PolicyError>>,
+}
+
+/// Per-variant policy configuration for a META experiment.
+#[derive(Debug, Clone)]
+pub struct MetaVariantPolicyConfig {
+    /// Variant ID from the experiment's variant definitions.
+    pub variant_id: String,
+    /// Arm IDs for this variant's bandit policy.
+    pub arm_ids: Vec<String>,
+    /// Reward weight map: metric_id → weight (must sum to 1.0).
+    pub reward_weights: HashMap<String, f64>,
+}
+
+/// Response from registering a META experiment.
+#[derive(Debug, Clone)]
+pub struct RegisterMetaExperimentResponse {
+    /// Parent experiment ID.
+    pub experiment_id: String,
+    /// Compound policy IDs created (one per variant).
+    pub policy_ids: Vec<String>,
+}
+
 /// Request to rollback policy to a previous snapshot.
 pub struct RollbackPolicyRequest {
     pub experiment_id: String,

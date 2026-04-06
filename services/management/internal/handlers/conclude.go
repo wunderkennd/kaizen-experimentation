@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -82,6 +83,8 @@ func analysisTypeForExperiment(expType string) string {
 		return "ipw_causal"
 	case "CUMULATIVE_HOLDOUT":
 		return "cumulative_lift_report"
+	case "META":
+		return "meta_cross_objective"
 	default:
 		return "standard"
 	}
@@ -104,6 +107,12 @@ func (s *ExperimentService) handleTypeSpecificConclude(ctx context.Context, exp 
 		s.capturePolicySnapshot(ctx, exp.ExperimentID, details)
 	}
 
+	// 3. ADR-013: Capture per-variant policy snapshots for META experiments.
+	// Each variant has an isolated policy keyed as {experiment_id}::v::{variant_id}.
+	if exp.Type == "META" {
+		s.captureMetaVariantSnapshots(ctx, exp, details)
+	}
+
 	// 3. Flag surrogate projection if surrogate model is configured.
 	if exp.SurrogateModelID != nil && *exp.SurrogateModelID != "" {
 		details["surrogate_projection"] = "requested"
@@ -111,6 +120,30 @@ func (s *ExperimentService) handleTypeSpecificConclude(ctx context.Context, exp 
 	}
 
 	return details
+}
+
+// captureMetaVariantSnapshots captures M4b policy snapshots for each variant
+// of a META experiment. Each variant's policy uses the compound ID format
+// {experiment_id}::v::{variant_id}. All calls are best-effort.
+func (s *ExperimentService) captureMetaVariantSnapshots(ctx context.Context, exp store.ExperimentRow, details map[string]any) {
+	variantIDs := extractMetaVariantObjectives(exp.TypeConfig)
+	if len(variantIDs) == 0 {
+		details["meta_variant_snapshots"] = "skipped_no_objectives"
+		return
+	}
+
+	snapResults := make(map[string]string, len(variantIDs))
+	for _, vid := range variantIDs {
+		policyID := exp.ExperimentID + "::v::" + vid
+		varDetails := map[string]any{}
+		s.capturePolicySnapshot(ctx, policyID, varDetails)
+		if status, ok := varDetails["policy_snapshot"]; ok {
+			snapResults[vid] = fmt.Sprintf("%v", status)
+		} else {
+			snapResults[vid] = "unknown"
+		}
+	}
+	details["meta_variant_snapshots"] = snapResults
 }
 
 // triggerAnalysis calls M4a RunAnalysis with a 5-second timeout.

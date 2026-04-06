@@ -8,24 +8,28 @@ use crate::config::PolicyConfig;
 use crate::snapshot::SnapshotStore;
 use crate::types::{
     CreateColdStartRequest, CreateColdStartResponse, ExportAffinityRequest, ExportAffinityResponse,
-    GetSnapshotRequest, GetSnapshotResponse, PolicyError, RewardUpdate, RollbackPolicyRequest,
-    SelectArmRequest, SelectArmResponse,
+    GetSnapshotRequest, GetSnapshotResponse, PolicyError, RegisterMetaExperimentRequest,
+    RegisterMetaExperimentResponse, RewardUpdate, RollbackPolicyRequest, SelectArmRequest,
+    SelectArmResponse,
 };
 use experimentation_bandit::cold_start;
 use experimentation_bandit::linucb::LinUcbPolicy;
-use experimentation_bandit::reward_composer::{sigmoid, RewardComposer};
+use experimentation_bandit::reward_composer::{sigmoid, CompositionMethod, Objective, RewardComposer};
 use experimentation_bandit::policy::AnyPolicy;
 use experimentation_bandit::thompson::ThompsonSamplingPolicy;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-/// Management commands sent to the policy core (cold-start, snapshots, rollback).
+/// Management commands sent to the policy core (cold-start, snapshots, rollback, meta).
 pub enum ManagementCommand {
     CreateColdStart(CreateColdStartRequest),
     ExportAffinity(ExportAffinityRequest),
     GetSnapshot(GetSnapshotRequest),
     RollbackPolicy(RollbackPolicyRequest),
+    /// ADR-013: register isolated bandit policies for each variant of a META experiment.
+    #[allow(dead_code)] // constructed by gRPC handler (not yet wired)
+    RegisterMetaExperiment(RegisterMetaExperimentRequest),
 }
 
 /// The single-threaded policy core that owns all mutable bandit state.
@@ -221,6 +225,13 @@ impl PolicyCore {
             ManagementCommand::RollbackPolicy(req) => {
                 let result =
                     self.handle_rollback_policy(&req.experiment_id, req.target_snapshot_epoch_ms);
+                let _ = req.reply_tx.send(result);
+            }
+            ManagementCommand::RegisterMetaExperiment(req) => {
+                let result = self.handle_register_meta_experiment(
+                    &req.experiment_id,
+                    &req.variant_policies,
+                );
                 let _ = req.reply_tx.send(result);
             }
         }
@@ -422,6 +433,77 @@ impl PolicyCore {
             total_rewards_processed: envelope.total_rewards_processed,
             kafka_offset: envelope.kafka_offset,
             snapshot_at_epoch_ms: envelope.snapshot_at_epoch_ms,
+        })
+    }
+
+    /// Build the compound policy ID for a META experiment variant.
+    /// Format: `{experiment_id}::v::{variant_id}`
+    pub fn meta_variant_policy_id(experiment_id: &str, variant_id: &str) -> String {
+        format!("{experiment_id}::v::{variant_id}")
+    }
+
+    /// ADR-013: Register isolated bandit policies for each variant of a META experiment.
+    ///
+    /// Each variant gets its own Thompson Sampling policy with a dedicated
+    /// `RewardComposer` configured from the variant's reward weights.
+    /// Policy IDs use the compound format `{experiment_id}::v::{variant_id}`.
+    fn handle_register_meta_experiment(
+        &mut self,
+        experiment_id: &str,
+        variant_policies: &[crate::types::MetaVariantPolicyConfig],
+    ) -> Result<RegisterMetaExperimentResponse, PolicyError> {
+        let mut policy_ids = Vec::with_capacity(variant_policies.len());
+
+        for vp in variant_policies {
+            let policy_id = Self::meta_variant_policy_id(experiment_id, &vp.variant_id);
+
+            // Build Objectives from reward_weights for the RewardComposer.
+            let objectives: Vec<_> = vp
+                .reward_weights
+                .iter()
+                .map(|(metric_id, &weight)| Objective {
+                    metric_id: metric_id.clone(),
+                    weight,
+                    floor: 0.0,
+                    is_primary: false,
+                })
+                .collect();
+
+            let composer = RewardComposer::new(
+                objectives,
+                CompositionMethod::WeightedScalarization,
+            );
+
+            // Create isolated policy (Thompson Sampling) with variant-specific composer.
+            self.policies
+                .entry(policy_id.clone())
+                .or_insert_with(|| {
+                    info!(
+                        %experiment_id,
+                        variant_id = %vp.variant_id,
+                        %policy_id,
+                        arms = ?vp.arm_ids,
+                        "Registered META variant policy"
+                    );
+                    AnyPolicy::Thompson(ThompsonSamplingPolicy::new(
+                        policy_id.clone(),
+                        vp.arm_ids.clone(),
+                    ))
+                });
+
+            self.reward_composers.insert(policy_id.clone(), composer);
+            policy_ids.push(policy_id);
+        }
+
+        info!(
+            %experiment_id,
+            variant_count = variant_policies.len(),
+            "Registered META experiment with isolated per-variant policies"
+        );
+
+        Ok(RegisterMetaExperimentResponse {
+            experiment_id: experiment_id.to_string(),
+            policy_ids,
         })
     }
 
@@ -1594,5 +1676,143 @@ mod tests {
         }
 
         let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_register_meta_experiment_isolated_policies() {
+        use crate::types::{MetaVariantPolicyConfig, RegisterMetaExperimentRequest};
+
+        let db_path = temp_db_path("meta-experiment");
+        let store = SnapshotStore::open(&db_path).unwrap();
+        let config = test_config(db_path.to_str().unwrap());
+        let core = PolicyCore::new(store, config);
+
+        let (policy_tx, reward_tx, mgmt_tx, handle) = spawn_core(core);
+
+        // Register a META experiment with two variants, each with different reward weights.
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        mgmt_tx
+            .send(ManagementCommand::RegisterMetaExperiment(
+                RegisterMetaExperimentRequest {
+                    experiment_id: "meta-exp-1".into(),
+                    variant_policies: vec![
+                        MetaVariantPolicyConfig {
+                            variant_id: "obj_watch_time".into(),
+                            arm_ids: vec!["content-a".into(), "content-b".into()],
+                            reward_weights: [("watch_time".into(), 1.0)]
+                                .into_iter()
+                                .collect(),
+                        },
+                        MetaVariantPolicyConfig {
+                            variant_id: "obj_engagement".into(),
+                            arm_ids: vec!["content-a".into(), "content-b".into()],
+                            reward_weights: [
+                                ("watch_time".into(), 0.4),
+                                ("engagement".into(), 0.6),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        },
+                    ],
+                    reply_tx,
+                },
+            ))
+            .await
+            .unwrap();
+
+        let resp = reply_rx.await.unwrap().unwrap();
+        assert_eq!(resp.experiment_id, "meta-exp-1");
+        assert_eq!(resp.policy_ids.len(), 2);
+        assert!(resp
+            .policy_ids
+            .contains(&"meta-exp-1::v::obj_watch_time".to_string()));
+        assert!(resp
+            .policy_ids
+            .contains(&"meta-exp-1::v::obj_engagement".to_string()));
+
+        // Each variant policy should be independently selectable.
+        for policy_id in &resp.policy_ids {
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            policy_tx
+                .send(SelectArmRequest {
+                    experiment_id: policy_id.clone(),
+                    context: None,
+                    reply_tx,
+                })
+                .await
+                .unwrap();
+            let arm = reply_rx.await.unwrap().unwrap();
+            assert!(arm.arm_id == "content-a" || arm.arm_id == "content-b");
+        }
+
+        // Train variant "obj_watch_time" — content-a gets all rewards.
+        for i in 0..20 {
+            reward_tx
+                .send(RewardUpdate {
+                    experiment_id: "meta-exp-1::v::obj_watch_time".into(),
+                    arm_id: "content-a".into(),
+                    reward: 1.0,
+                    context: None,
+                    kafka_offset: i,
+                    metric_values: Some(
+                        [("watch_time".into(), 10.0)]
+                            .into_iter()
+                            .collect(),
+                    ),
+                })
+                .await
+                .unwrap();
+        }
+
+        // Train variant "obj_engagement" — content-b gets all rewards.
+        for i in 0..20 {
+            reward_tx
+                .send(RewardUpdate {
+                    experiment_id: "meta-exp-1::v::obj_engagement".into(),
+                    arm_id: "content-b".into(),
+                    reward: 1.0,
+                    context: None,
+                    kafka_offset: 20 + i,
+                    metric_values: Some(
+                        [("watch_time".into(), 2.0), ("engagement".into(), 8.0)]
+                            .into_iter()
+                            .collect(),
+                    ),
+                })
+                .await
+                .unwrap();
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // The parent experiment ID should NOT be registered as a policy.
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        policy_tx
+            .send(SelectArmRequest {
+                experiment_id: "meta-exp-1".into(),
+                context: None,
+                reply_tx,
+            })
+            .await
+            .unwrap();
+        assert!(
+            reply_rx.await.unwrap().is_err(),
+            "parent meta experiment should not have a policy; only variants do"
+        );
+
+        drop(policy_tx);
+        drop(reward_tx);
+        drop(mgmt_tx);
+        handle.await.unwrap();
+
+        let _ = std::fs::remove_dir_all(&db_path);
+    }
+
+    #[test]
+    fn test_meta_variant_policy_id_format() {
+        assert_eq!(
+            PolicyCore::meta_variant_policy_id("exp-123", "variant-a"),
+            "exp-123::v::variant-a"
+        );
     }
 }

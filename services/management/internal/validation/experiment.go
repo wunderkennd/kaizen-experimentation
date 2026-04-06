@@ -213,8 +213,35 @@ func validateMetaExperimentConfig(exp *commonv1.Experiment) *connect.Error {
 }
 
 // ValidateMetaExperimentForStart validates MetaExperimentConfig during STARTING phase (ADR-013).
+// In addition to creation-time checks, it verifies 1:1 variant-to-objective coverage.
 func ValidateMetaExperimentForStart(exp *commonv1.Experiment) *connect.Error {
-	return validateMetaExperimentConfig(exp)
+	if err := validateMetaExperimentConfig(exp); err != nil {
+		return err
+	}
+
+	// ADR-013: Every declared variant must have exactly one matching objective.
+	cfg := exp.GetMetaExperimentConfig()
+	objectives := cfg.GetVariantObjectives()
+	variants := exp.GetVariants()
+
+	if len(objectives) != len(variants) {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("meta_experiment_config: variant_objectives count (%d) must equal variants count (%d)",
+				len(objectives), len(variants)))
+	}
+
+	// Check for duplicate variant_ids in objectives.
+	seen := make(map[string]bool, len(objectives))
+	for _, obj := range objectives {
+		if seen[obj.GetVariantId()] {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("meta_experiment_config: duplicate variant_id %q in variant_objectives",
+					obj.GetVariantId()))
+		}
+		seen[obj.GetVariantId()] = true
+	}
+
+	return nil
 }
 
 // ValidateSwitchbackForStart validates SwitchbackConfig during STARTING phase (ADR-022).
