@@ -632,24 +632,27 @@ autonomous-sprint sprint_num:
     esac
     echo "=== Launching workers for: $MS ==="
     # Query by label first (always present), fall back to milestone
-    ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title,body \
-      --jq '.[] | "\(.number)\t\(.title)\t\(.body)"' 2>/dev/null)
+    # Use jq to produce one JSON object per line (handles multi-line bodies safely)
+    ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
     if [ -z "$ISSUES" ]; then
       echo "  No issues found with label '$LABEL', trying milestone..."
-      ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title,body \
-        --jq '.[] | "\(.number)\t\(.title)\t\(.body)"' 2>/dev/null)
+      ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
     fi
     if [ -z "$ISSUES" ]; then
       echo "  ⚠ No open issues found for sprint {{sprint_num}}. Nothing to launch."
       exit 0
     fi
     COUNT=0
-    echo "$ISSUES" | while IFS=$'\t' read -r num title body; do
+    echo "$ISSUES" | while IFS= read -r line; do
+      num=$(echo "$line" | jq -r '.number')
+      title=$(echo "$line" | jq -r '.title')
+      # Fetch full issue body separately to avoid newline parsing issues
+      body=$(gh issue view "$num" --json body -q '.body' 2>/dev/null | head -50)
       echo "  → Issue #$num: $title"
       multiclaude worker create "$title. $body. Branch: use agent-N/feat/adr-XXX naming. PR must include 'Closes #$num'."
       COUNT=$((COUNT + 1))
     done
-    echo "✓ Workers launched for $MS"
+    echo "✓ Workers launched for $MS ($COUNT issues)"
     echo "Monitor: just autonomous-status"
 
 # --- Solo Mode ---
