@@ -24,3 +24,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-04-10 - Enhancing Review Steps with Copy-to-Clipboard
 **Learning:** Providing technical identifiers in a `<code>` block with an adjacent `CopyButton` in a "Review" or "Summary" step significantly reduces the cognitive load for users who need to verify or cross-reference these IDs before final submission. Using `text-xs` for these inline code blocks maintains legibility without breaking the layout of dense description lists.
 **Action:** Always include copy-to-clipboard utilities for primary technical IDs in summary views. Use `flex items-center gap-2` to align the code block and the copy button.
+
+## 2026-04-12 - Expandable Audit Log for Technical IDs
+**Learning:** Even if an audit entry doesn't have "changed values", users still benefit from row expansion to access the Experiment ID and other metadata without leaving the page.
+**Action:** Design tables such that all rows are interactive/expandable if they contain hidden technical identifiers that are useful for developer workflows.
