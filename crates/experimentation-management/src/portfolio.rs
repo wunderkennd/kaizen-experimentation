@@ -404,7 +404,7 @@ pub fn optimize(
     let mut recommendations: HashMap<&str, f64> = HashMap::new();
     let mut underpowered_flags: HashMap<&str, bool> = HashMap::new();
 
-    for (_layer_id, layer_exps) in &by_layer {
+    for layer_exps in by_layer.values() {
         let (layer_rec, layer_underpowered) =
             recommend_layer(layer_exps, &priorities, &budget_shares);
         recommendations.extend(layer_rec);
@@ -607,7 +607,7 @@ fn compute_traffic_utilization(
     avg.min(1.0)
 }
 
-fn group_by_layer<'a>(experiments: &'a [ExperimentInfo]) -> HashMap<&'a str, Vec<&'a ExperimentInfo>> {
+fn group_by_layer(experiments: &[ExperimentInfo]) -> HashMap<&str, Vec<&ExperimentInfo>> {
     let mut map: HashMap<&str, Vec<&ExperimentInfo>> = HashMap::new();
     for e in experiments {
         map.entry(e.layer_id.as_str()).or_default().push(e);
