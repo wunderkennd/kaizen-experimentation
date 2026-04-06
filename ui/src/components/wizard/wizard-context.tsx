@@ -197,8 +197,8 @@ interface WizardContextValue {
 
 const WizardContext = createContext<WizardContextValue | null>(null);
 
-export function WizardProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(wizardReducer, undefined, createInitialState);
+export function WizardProvider({ children, initialState }: { children: ReactNode; initialState?: WizardState }) {
+  const [state, dispatch] = useReducer(wizardReducer, initialState || createInitialState());
   return (
     <WizardContext.Provider value={{ state, dispatch }}>
       {children}
