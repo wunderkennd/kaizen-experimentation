@@ -792,6 +792,81 @@ export interface PortfolioAllocationResult {
   computedAt: string;
 }
 
+// --- Portfolio Metrics (ADR-019 extension) ---
+
+export interface PortfolioWinRatePoint {
+  date: string;
+  experimentId: string;
+  experimentName: string;
+  winRate: number;
+}
+
+export interface PortfolioLearningRatePoint {
+  date: string;
+  experimentId: string;
+  experimentName: string;
+  learningRate: number;
+  samplesProcessed: number;
+}
+
+export interface AnnualizedImpactEntry {
+  experimentId: string;
+  experimentName: string;
+  annualizedImpact: number;
+  ciLower: number;
+  ciUpper: number;
+  metricId: string;
+}
+
+export interface PortfolioMetricsResult {
+  winRates: PortfolioWinRatePoint[];
+  learningRates: PortfolioLearningRatePoint[];
+  annualizedImpacts: AnnualizedImpactEntry[];
+  computedAt: string;
+}
+
+// --- Pareto Frontier (ADR-011 / ADR-019) ---
+
+export interface ParetoPoint {
+  experimentId: string;
+  experimentName: string;
+  objectiveX: number;
+  objectiveY: number;
+  objectiveXLabel: string;
+  objectiveYLabel: string;
+  isPareto: boolean;
+}
+
+export interface ParetoFrontierResult {
+  points: ParetoPoint[];
+  frontierIds: string[];
+  computedAt: string;
+}
+
+// --- Meta-Experiment Results (ADR-013) ---
+
+export interface MetaVariantResult {
+  variantId: string;
+  variantName: string;
+  banditType: BanditAlgorithm;
+  bestArm: string;
+  bestArmRewardRate: number;
+  avgRewardRate: number;
+  explorationFraction: number;
+  ipwEffect: number;
+  ipwSe: number;
+  ipwCiLower: number;
+  ipwCiUpper: number;
+}
+
+export interface MetaExperimentResult {
+  experimentId: string;
+  variantResults: MetaVariantResult[];
+  overallWinner?: string;
+  cochranQPValue: number;
+  computedAt: string;
+}
+
 // --- Slate Bandit (ADR-016) ---
 
 export interface SlateAssignmentResponse {
@@ -810,6 +885,22 @@ export interface SlateOpeResult {
   experimentId: string;
   positionBias: SlatePositionBiasPoint[];
   estimatedValue: number;
+  computedAt: string;
+}
+
+// --- Slate Heatmap (ADR-016 extension) ---
+
+export interface SlateHeatmapCell {
+  itemId: string;
+  position: number;
+  probability: number;
+}
+
+export interface SlateHeatmapResult {
+  experimentId: string;
+  items: string[];
+  positions: number[];
+  cells: SlateHeatmapCell[];
   computedAt: string;
 }
 

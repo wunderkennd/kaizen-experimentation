@@ -7,8 +7,9 @@ import {
   SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS, SEED_PROVIDER_HEALTH,
   SEED_AVLM_RESULTS, SEED_ADAPTIVE_N_RESULTS, SEED_FEEDBACK_LOOP_RESULTS,
   SEED_ONLINE_FDR_STATES,
-  SEED_PORTFOLIO_ALLOCATION,
-  SEED_SLATE_OPE_RESULTS,
+  SEED_PORTFOLIO_ALLOCATION, SEED_PORTFOLIO_METRICS, SEED_PARETO_FRONTIER,
+  SEED_META_EXPERIMENT_RESULTS,
+  SEED_SLATE_OPE_RESULTS, SEED_SLATE_HEATMAP_RESULTS,
   SEED_SWITCHBACK_RESULTS, SEED_SYNTHETIC_CONTROL_RESULTS,
 } from './seed-data';
 import type { UserRole } from '@/lib/auth';
@@ -858,6 +859,42 @@ export const handlers = [
   // GetPortfolioAllocation (ADR-019)
   http.post(`${MGMT_SVC}/GetPortfolioAllocation`, () => {
     return HttpResponse.json(SEED_PORTFOLIO_ALLOCATION);
+  }),
+
+  // GetPortfolioMetrics (ADR-019 extension)
+  http.post(`${ANALYSIS_SVC}/GetPortfolioMetrics`, () => {
+    return HttpResponse.json(SEED_PORTFOLIO_METRICS);
+  }),
+
+  // GetParetoFrontier (ADR-011 / ADR-019)
+  http.post(`${ANALYSIS_SVC}/GetParetoFrontier`, () => {
+    return HttpResponse.json(SEED_PARETO_FRONTIER);
+  }),
+
+  // GetMetaExperimentResult (ADR-013)
+  http.post(`${ANALYSIS_SVC}/GetMetaExperimentResult`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_META_EXPERIMENT_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No meta-experiment result found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
+  }),
+
+  // GetSlateHeatmap (ADR-016 extension)
+  http.post(`${ANALYSIS_SVC}/GetSlateHeatmap`, async ({ request }) => {
+    const body = await request.json() as { experimentId: string };
+    const result = SEED_SLATE_HEATMAP_RESULTS.find((r) => r.experimentId === body.experimentId);
+    if (!result) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No slate heatmap data found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(result);
   }),
 
   // GetSlateAssignment (ADR-016) — on Assignment service

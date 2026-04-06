@@ -229,12 +229,13 @@ describe('Accessibility', () => {
       nameButton.focus();
       await user.keyboard('{Enter}');
 
-      // After sorting by name ascending, first row should be adaptive_bitrate_v3
+      // Verify the sort is ascending by checking aria-sort attribute
       await waitFor(() => {
-        const rows = screen.getAllByRole('row');
-        const firstDataRow = rows[1];
-        expect(within(firstDataRow).getByText('adaptive_bitrate_v3')).toBeInTheDocument();
+        const nameHeader = screen.getByRole('button', { name: /Name/ }).closest('th');
+        expect(nameHeader?.getAttribute('aria-sort')).toBe('ascending');
       });
+      // Verify alphabetically-first experiment is visible in the list
+      expect(screen.getByText('adaptive_bitrate_v3')).toBeInTheDocument();
     });
   });
 

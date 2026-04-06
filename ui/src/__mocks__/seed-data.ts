@@ -5,8 +5,8 @@ import type {
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
   AuditLogEntry, Flag, ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState,
-  PortfolioAllocationResult,
-  SlateOpeResult,
+  PortfolioAllocationResult, PortfolioMetricsResult, ParetoFrontierResult, MetaExperimentResult,
+  SlateOpeResult, SlateHeatmapResult,
   SwitchbackResult, SyntheticControlResult,
 } from '@/lib/types';
 
@@ -531,6 +531,46 @@ const INITIAL_EXPERIMENTS: Experiment[] = [
     },
     createdAt: '2026-03-20T08:00:00Z',
     startedAt: '2026-03-21T06:00:00Z',
+  },
+  // META experiment (ADR-013)
+  {
+    experimentId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    name: 'meta_bandit_comparison',
+    description: 'Meta-experiment comparing Thompson Sampling vs Linear UCB for homepage recommendations',
+    ownerEmail: 'irene@streamco.com',
+    type: 'META',
+    state: 'RUNNING',
+    variants: [
+      {
+        variantId: 'v-ctrl',
+        name: 'control',
+        trafficFraction: 0.5,
+        isControl: true,
+        payloadJson: '{}',
+      },
+      {
+        variantId: 'v-treat',
+        name: 'treatment',
+        trafficFraction: 0.5,
+        isControl: false,
+        payloadJson: '{}',
+      },
+    ],
+    layerId: 'layer-homepage',
+    hashSalt: 'salt-meta-bandit-comparison',
+    primaryMetricId: 'click_through_rate',
+    secondaryMetricIds: ['watch_time_per_session'],
+    guardrailConfigs: [],
+    guardrailAction: 'AUTO_PAUSE',
+    isCumulativeHoldout: false,
+    metaConfig: {
+      variantBanditConfigs: [
+        { variantId: 'v-ctrl', banditType: 'THOMPSON_SAMPLING', arms: ['arm-a', 'arm-b'] },
+        { variantId: 'v-treat', banditType: 'LINEAR_UCB', arms: ['arm-x', 'arm-y', 'arm-z'] },
+      ],
+    },
+    createdAt: '2026-03-18T08:00:00Z',
+    startedAt: '2026-03-19T06:00:00Z',
   },
 ];
 
@@ -2362,6 +2402,136 @@ const INITIAL_SYNTHETIC_CONTROL_RESULTS: SyntheticControlResult[] = [
 
 export let SEED_SYNTHETIC_CONTROL_RESULTS: SyntheticControlResult[] = structuredClone(INITIAL_SYNTHETIC_CONTROL_RESULTS);
 
+// --- Portfolio Metrics (ADR-019 extension) ---
+
+const DATES_7D = ['2026-03-18', '2026-03-19', '2026-03-20', '2026-03-21', '2026-03-22', '2026-03-23', '2026-03-24'];
+
+const INITIAL_PORTFOLIO_METRICS: PortfolioMetricsResult = {
+  winRates: [
+    ...DATES_7D.flatMap((date, i) => [
+      { date, experimentId: '11111111-1111-1111-1111-111111111111', experimentName: 'homepage_recs_v2', winRate: 0.52 + i * 0.01 },
+      { date, experimentId: '22222222-2222-2222-2222-222222222222', experimentName: 'search_ranking_v3', winRate: 0.48 + i * 0.015 },
+      { date, experimentId: '33333333-3333-3333-3333-333333333333', experimentName: 'playback_buffer_opt', winRate: 0.45 + i * 0.005 },
+    ]),
+  ],
+  learningRates: [
+    ...DATES_7D.flatMap((date, i) => [
+      { date, experimentId: '11111111-1111-1111-1111-111111111111', experimentName: 'homepage_recs_v2', learningRate: 0.12 + i * 0.02, samplesProcessed: 5000 + i * 1000 },
+      { date, experimentId: '22222222-2222-2222-2222-222222222222', experimentName: 'search_ranking_v3', learningRate: 0.08 + i * 0.025, samplesProcessed: 3000 + i * 800 },
+    ]),
+  ],
+  annualizedImpacts: [
+    { experimentId: '11111111-1111-1111-1111-111111111111', experimentName: 'homepage_recs_v2', annualizedImpact: 0.0312, ciLower: 0.0112, ciUpper: 0.0512, metricId: 'engagement_rate' },
+    { experimentId: '22222222-2222-2222-2222-222222222222', experimentName: 'search_ranking_v3', annualizedImpact: 0.0218, ciLower: 0.0018, ciUpper: 0.0418, metricId: 'click_through_rate' },
+    { experimentId: '33333333-3333-3333-3333-333333333333', experimentName: 'playback_buffer_opt', annualizedImpact: -0.0045, ciLower: -0.0145, ciUpper: 0.0055, metricId: 'rebuffer_rate' },
+    { experimentId: '44444444-4444-4444-4444-444444444444', experimentName: 'content_diversity_boost', annualizedImpact: 0.0089, ciLower: -0.0011, ciUpper: 0.0189, metricId: 'catalog_coverage' },
+  ],
+  computedAt: '2026-03-24T10:00:00Z',
+};
+
+export let SEED_PORTFOLIO_METRICS: PortfolioMetricsResult = structuredClone(INITIAL_PORTFOLIO_METRICS);
+
+// --- Pareto Frontier (ADR-011 / ADR-019) ---
+
+const INITIAL_PARETO_FRONTIER: ParetoFrontierResult = {
+  points: [
+    { experimentId: '11111111-1111-1111-1111-111111111111', experimentName: 'homepage_recs_v2', objectiveX: 0.032, objectiveY: 0.85, objectiveXLabel: 'Engagement Lift', objectiveYLabel: 'Diversity Score', isPareto: true },
+    { experimentId: '22222222-2222-2222-2222-222222222222', experimentName: 'search_ranking_v3', objectiveX: 0.022, objectiveY: 0.91, objectiveXLabel: 'Engagement Lift', objectiveYLabel: 'Diversity Score', isPareto: true },
+    { experimentId: '33333333-3333-3333-3333-333333333333', experimentName: 'playback_buffer_opt', objectiveX: 0.015, objectiveY: 0.72, objectiveXLabel: 'Engagement Lift', objectiveYLabel: 'Diversity Score', isPareto: false },
+    { experimentId: '44444444-4444-4444-4444-444444444444', experimentName: 'content_diversity_boost', objectiveX: 0.009, objectiveY: 0.95, objectiveXLabel: 'Engagement Lift', objectiveYLabel: 'Diversity Score', isPareto: true },
+    { experimentId: '55555555-5555-5555-5555-555555555555', experimentName: 'retention_nudge', objectiveX: 0.028, objectiveY: 0.78, objectiveXLabel: 'Engagement Lift', objectiveYLabel: 'Diversity Score', isPareto: false },
+  ],
+  frontierIds: ['11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', '44444444-4444-4444-4444-444444444444'],
+  computedAt: '2026-03-24T10:00:00Z',
+};
+
+export let SEED_PARETO_FRONTIER: ParetoFrontierResult = structuredClone(INITIAL_PARETO_FRONTIER);
+
+// --- Meta-Experiment Results (ADR-013) ---
+
+const META_EXP_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+const INITIAL_META_EXPERIMENT_RESULTS: MetaExperimentResult[] = [
+  {
+    experimentId: META_EXP_ID,
+    variantResults: [
+      {
+        variantId: 'v-ctrl',
+        variantName: 'control',
+        banditType: 'THOMPSON_SAMPLING',
+        bestArm: 'arm-a',
+        bestArmRewardRate: 0.142,
+        avgRewardRate: 0.118,
+        explorationFraction: 0.15,
+        ipwEffect: 0.0,
+        ipwSe: 0.005,
+        ipwCiLower: -0.0098,
+        ipwCiUpper: 0.0098,
+      },
+      {
+        variantId: 'v-treat',
+        variantName: 'treatment',
+        banditType: 'LINEAR_UCB',
+        bestArm: 'arm-x',
+        bestArmRewardRate: 0.168,
+        avgRewardRate: 0.139,
+        explorationFraction: 0.10,
+        ipwEffect: 0.0210,
+        ipwSe: 0.0072,
+        ipwCiLower: 0.0069,
+        ipwCiUpper: 0.0351,
+      },
+    ],
+    overallWinner: 'treatment',
+    cochranQPValue: 0.032,
+    computedAt: '2026-03-24T12:00:00Z',
+  },
+];
+
+export let SEED_META_EXPERIMENT_RESULTS: MetaExperimentResult[] = structuredClone(INITIAL_META_EXPERIMENT_RESULTS);
+
+// --- Slate Heatmap (ADR-016 extension) ---
+
+const SLATE_EXP_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+const INITIAL_SLATE_HEATMAP_RESULTS: SlateHeatmapResult[] = [
+  {
+    experimentId: SLATE_EXP_ID,
+    items: ['item-a', 'item-b', 'item-c', 'item-d', 'item-e'],
+    positions: [1, 2, 3, 4, 5],
+    cells: [
+      { itemId: 'item-a', position: 1, probability: 0.45 },
+      { itemId: 'item-a', position: 2, probability: 0.25 },
+      { itemId: 'item-a', position: 3, probability: 0.15 },
+      { itemId: 'item-a', position: 4, probability: 0.10 },
+      { itemId: 'item-a', position: 5, probability: 0.05 },
+      { itemId: 'item-b', position: 1, probability: 0.20 },
+      { itemId: 'item-b', position: 2, probability: 0.35 },
+      { itemId: 'item-b', position: 3, probability: 0.22 },
+      { itemId: 'item-b', position: 4, probability: 0.13 },
+      { itemId: 'item-b', position: 5, probability: 0.10 },
+      { itemId: 'item-c', position: 1, probability: 0.15 },
+      { itemId: 'item-c', position: 2, probability: 0.18 },
+      { itemId: 'item-c', position: 3, probability: 0.30 },
+      { itemId: 'item-c', position: 4, probability: 0.22 },
+      { itemId: 'item-c', position: 5, probability: 0.15 },
+      { itemId: 'item-d', position: 1, probability: 0.12 },
+      { itemId: 'item-d', position: 2, probability: 0.14 },
+      { itemId: 'item-d', position: 3, probability: 0.20 },
+      { itemId: 'item-d', position: 4, probability: 0.32 },
+      { itemId: 'item-d', position: 5, probability: 0.22 },
+      { itemId: 'item-e', position: 1, probability: 0.08 },
+      { itemId: 'item-e', position: 2, probability: 0.08 },
+      { itemId: 'item-e', position: 3, probability: 0.13 },
+      { itemId: 'item-e', position: 4, probability: 0.23 },
+      { itemId: 'item-e', position: 5, probability: 0.48 },
+    ],
+    computedAt: '2026-03-23T12:00:00Z',
+  },
+];
+
+export let SEED_SLATE_HEATMAP_RESULTS: SlateHeatmapResult[] = structuredClone(INITIAL_SLATE_HEATMAP_RESULTS);
+
 /** Reset seed data to initial state. Call in afterEach for test isolation. */
 export function resetSeedData(): void {
   SEED_FLAGS = structuredClone(INITIAL_FLAGS);
@@ -2390,4 +2560,8 @@ export function resetSeedData(): void {
   SEED_SLATE_OPE_RESULTS = structuredClone(INITIAL_SLATE_OPE_RESULTS);
   SEED_SWITCHBACK_RESULTS = structuredClone(INITIAL_SWITCHBACK_RESULTS);
   SEED_SYNTHETIC_CONTROL_RESULTS = structuredClone(INITIAL_SYNTHETIC_CONTROL_RESULTS);
+  SEED_PORTFOLIO_METRICS = structuredClone(INITIAL_PORTFOLIO_METRICS);
+  SEED_PARETO_FRONTIER = structuredClone(INITIAL_PARETO_FRONTIER);
+  SEED_META_EXPERIMENT_RESULTS = structuredClone(INITIAL_META_EXPERIMENT_RESULTS);
+  SEED_SLATE_HEATMAP_RESULTS = structuredClone(INITIAL_SLATE_HEATMAP_RESULTS);
 }
