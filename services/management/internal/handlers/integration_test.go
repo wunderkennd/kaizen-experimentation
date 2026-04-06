@@ -1958,7 +1958,7 @@ func fetchAuditRows(t *testing.T, pool *pgxpool.Pool, experimentID string) []aud
 	t.Helper()
 	rows, err := pool.Query(context.Background(),
 		`SELECT action, actor_email, previous_state, new_state, details_json
-		 FROM audit_trail WHERE experiment_id = $1 ORDER BY created_at ASC`, experimentID)
+		 FROM audit_trail WHERE experiment_id = $1 ORDER BY created_at ASC, audit_id ASC`, experimentID)
 	require.NoError(t, err)
 	defer rows.Close()
 
