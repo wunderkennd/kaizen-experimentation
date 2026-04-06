@@ -32,8 +32,8 @@
 
 ## Phase 5 ADR Tracker
 
-> Updated: 2026-04-06. 15 ADRs across 6 clusters. PRs counted: **28 submitted, 28 merged, 0 pending, 0 red**.
-> Sprints 5.0–5.3 complete. Sprint 5.4 in progress.
+> Updated: 2026-04-06. 15 ADRs across 6 clusters. PRs counted: **35 submitted, 35 merged, 0 pending, 0 red**.
+> Sprints 5.0–5.4 complete. Sprint 5.5 in progress.
 
 ### ADR Implementation Status
 
@@ -44,10 +44,10 @@
 | ADR-013 | Meta-experiments | A | Agent-1, Agent-5 | #249, #259 | Green | MERGED (M5 validation + M1 assignment) |
 | ADR-014 | Provider-side metrics | A | Agent-3, Agent-4, Agent-5, Agent-6 | #208, #211, #212 | Green | MERGED |
 | ADR-015 | AVLM (sequential CUPED) | B | Agent-4, Agent-6 | #199, #223, #226 | Green | MERGED |
-| ADR-016 | Slate bandits | C | Agent-1, Agent-4 | #253 (UI) | Green | IN PROGRESS (policy + RPC pending) |
+| ADR-016 | Slate bandits | C | Agent-1, Agent-4 | #253, #327, #329 | Green | MERGED |
 | ADR-017 | Offline RL / TC+JIVE surrogate calibration | C | Agent-4 | #198 | Green | Ph 1 MERGED / Ph 2 pending |
 | ADR-018 | E-values + online FDR (e-LOND) | B | Agent-4, Agent-5 | #200, #231, #267 | Green | Ph 1+2 MERGED / Ph 3 pending |
-| ADR-019 | Portfolio optimization | E | Agent-5, Agent-6 | #250, #261 | Green | IN PROGRESS (gRPC + power analysis merged, UI pending) |
+| ADR-019 | Portfolio optimization | E | Agent-5, Agent-6 | #250, #261, #328, #330 | Green | MERGED |
 | ADR-020 | Adaptive sample size recalculation | B | Agent-4, Agent-5, Agent-6 | #223, #227, #228 | Green | MERGED |
 | ADR-021 | Feedback loop interference detection | E | Agent-2, Agent-3, Agent-4, Agent-6 | #209, #222, #223 | Green | MERGED |
 | ADR-022 | Switchback experiments | D | Agent-1, Agent-4 | #229, #252, #258, #259 | Green | MERGED |
@@ -61,9 +61,9 @@
 |---------|------|-------------|-------------|-------------|
 | A: Multi-Stakeholder | 011, 012, 013, 014 | 011, 012, 013, 014 | — | — |
 | B: Statistical Methods | 015, 018, 020 | 015, 018 (Ph 1+2), 020 | 018 (Ph 3) | — |
-| C: Bandit & RL | 016, 017 | 017 (Ph 1) | 016, 017 (Ph 2) | — |
+| C: Bandit & RL | 016, 017 | 016, 017 (Ph 1) | 017 (Ph 2) | — |
 | D: Quasi-Experimental | 022, 023 | 022, 023 | — | — |
-| E: Platform Operations | 019, 021 | 021 | 019 | — |
+| E: Platform Operations | 019, 021 | 019, 021 | — | — |
 | F: Language Migration | 024, 025 | 024 | — | 025 |
 
 ### Phase 5 PR Index
@@ -108,10 +108,10 @@
 
 | ADR | Gap | Owner | Depends On |
 |-----|-----|-------|------------|
-| ADR-016 | M1 `GetSlateAssignment` RPC; M4b slate bandit policy | Agent-1, Agent-4 | Proto (#196) |
+| ADR-015 Ph 2 | MLRATE cross-fitting | Agent-3 | — |
 | ADR-017 Ph 2 | Doubly-robust offline RL policy evaluation | Agent-4 | — |
-| ADR-019 | M6 /portfolio page (gRPC + power analysis merged, UI pending) | Agent-6 | #250, #261 |
-| ADR-025 | M5 Rust port (conditional — awaiting go/no-go, 2/5 triggers met) | Agent-5 | ADR-024 |
+| ADR-018 Ph 3 | MAD e-processes | Agent-4 | — |
+| ADR-025 | M5 Rust port (conditional — awaiting go/no-go, 3/5 triggers met) | Agent-5 | ADR-024 |
 
 ---
 

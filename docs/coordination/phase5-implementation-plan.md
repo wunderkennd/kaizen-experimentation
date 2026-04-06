@@ -1,6 +1,6 @@
 # Phase 5 Implementation Plan
 
-**Status**: Sprint 5.4 in progress (2026-04-06)
+**Status**: Sprint 5.5 in progress (2026-04-06)
 **Owner**: Multiclaude (7 agents, supervisor daemon)
 **ADRs**: 011–025 (15 decisions, 6 clusters)
 **Sprint length**: ~3 weeks each; 6 sprints total (5.0–5.5)
@@ -15,8 +15,8 @@
 | 5.1 | 4–6 | Measurement Foundations | ✅ Complete |
 | 5.2 | 7–9 | Statistical Core | ✅ Complete |
 | 5.3 | 10–12 | Constraints & New Experiment Types | ✅ Complete |
-| 5.4 | 13–15 | Slate Bandits & Meta-Experiments | 🔵 In Progress |
-| 5.5 | 16–18 | Advanced & Integration | 🟡 Planned |
+| 5.4 | 13–15 | Slate Bandits & Meta-Experiments | ✅ Complete |
+| 5.5 | 16–18 | Advanced & Integration | 🔵 In Progress |
 
 ---
 
@@ -73,11 +73,11 @@
 
 | # | Task | Owner | Status | PR | Notes |
 |---|------|-------|--------|-----|-------|
-| 5.4.1 | Slate bandit policy (ADR-016) | Agent-4 | 🟡 Planned | — | SlatePolicy slot-wise factorized TS, 3 reward attribution models, LIPS OPE estimator |
-| 5.4.2 | GetSlateAssignment RPC in M1 (ADR-016) | Agent-1 | 🟡 Planned | — | Forward candidates to M4b, return ordered slate with per-slot probabilities |
-| 5.4.3 | META experiment type (ADR-013) | Agent-5 | 🟡 Planned | — | STARTING validation for MetaExperimentConfig, M4b isolated policy per variant |
-| 5.4.4 | Portfolio optimization (ADR-019) | Agent-5 | 🟡 Planned | — | ExperimentLearning, alpha recommendation, traffic allocator, decision rule eval |
-| 5.4.5 | Portfolio page + meta-experiment results + slate heatmap (M6) | Agent-6 | 🟡 Planned | — | Win rate, learning rate, annualized impact, Pareto frontier, slate visualization |
+| 5.4.1 | Slate bandit policy (ADR-016) | Agent-4 | ✅ Complete | #329 | SlatePolicy slot-wise factorized TS, 3 reward attribution models, LIPS OPE estimator |
+| 5.4.2 | GetSlateAssignment RPC in M1 (ADR-016) | Agent-1 | ✅ Complete | #327 | Forward candidates to M4b, return ordered slate with per-slot probabilities |
+| 5.4.3 | META experiment type (ADR-013) | Agent-5 | ✅ Complete | #331 | STARTING validation for MetaExperimentConfig, M4b isolated policy per variant |
+| 5.4.4 | Portfolio optimization (ADR-019) | Agent-5 | ✅ Complete | #328 | ExperimentLearning, alpha recommendation, traffic allocator, decision rule eval |
+| 5.4.5 | Portfolio page + meta-experiment results + slate heatmap (M6) | Agent-6 | ✅ Complete | #330 | Win rate, learning rate, annualized impact, Pareto frontier, slate visualization |
 
 ---
 
