@@ -98,6 +98,13 @@ export function formatPValue(p: number): string {
   return p.toFixed(2);
 }
 
+export function formatEValue(e: number): string {
+  if (e >= 1000) return `${(e / 1000).toFixed(1)}k`;
+  if (e >= 100) return e.toFixed(0);
+  if (e >= 10) return e.toFixed(1);
+  return e.toFixed(2);
+}
+
 export function formatEffect(effect: number, isPercent = false): string {
   const prefix = effect > 0 ? '+' : '';
   if (isPercent) return `${prefix}${(effect * 100).toFixed(2)}%`;

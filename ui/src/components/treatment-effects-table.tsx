@@ -1,16 +1,19 @@
 'use client';
 
 import { memo } from 'react';
-import type { MetricResult } from '@/lib/types';
-import { formatPValue, formatEffect } from '@/lib/utils';
+import type { MetricResult, EValueResult } from '@/lib/types';
+import { formatPValue, formatEffect, formatEValue } from '@/lib/utils';
 
 interface TreatmentEffectsTableProps {
   metricResults: MetricResult[];
   showCuped: boolean;
   showIpw?: boolean;
+  eValueResult?: EValueResult;
 }
 
-function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw }: TreatmentEffectsTableProps) {
+function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw, eValueResult }: TreatmentEffectsTableProps) {
+  const showEValue = !!eValueResult;
+
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
@@ -22,6 +25,12 @@ function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw }: Treat
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Effect</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">95% CI</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">p-value</th>
+            {showEValue && (
+              <>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500" data-testid="evalue-header">E-value</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Implied p</th>
+              </>
+            )}
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Significance</th>
           </tr>
         </thead>
@@ -64,6 +73,18 @@ function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw }: Treat
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                   {formatPValue(pVal)}
                 </td>
+                {showEValue && (
+                  <>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600" data-testid="evalue-cell">
+                      <span className={eValueResult.reject ? 'font-medium text-red-700' : ''}>
+                        {formatEValue(eValueResult.eValue)}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
+                      {formatPValue(eValueResult.impliedLevel)}
+                    </td>
+                  </>
+                )}
                 <td className="whitespace-nowrap px-4 py-3 text-sm">
                   {significant ? (
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${

@@ -730,6 +730,16 @@ export interface OnlineFdrState {
   computedAt: string;
 }
 
+/** FDR decision status for a single experiment within an online testing program. */
+export type FdrDecision = 'PASS' | 'FAIL' | 'PENDING';
+
+/** Portfolio-level optimal alpha recommendation (ADR-019). */
+export interface OptimalAlphaRecommendation {
+  optimalAlpha: number;
+  expectedPortfolioFdr: number;
+  computedAt: string;
+}
+
 // --- Feedback Loop Analysis ---
 
 export interface RetrainingEvent {

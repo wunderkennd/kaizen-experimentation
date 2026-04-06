@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import type { Experiment, AnalysisResult } from '@/lib/types';
-import { getExperiment, getAnalysisResult, getAdaptiveN, RpcError } from '@/lib/api';
+import type { Experiment, AnalysisResult, OnlineFdrState } from '@/lib/types';
+import { getExperiment, getAnalysisResult, getAdaptiveN, getOnlineFdrState, RpcError } from '@/lib/api';
 import type { AdaptiveNResult } from '@/lib/types';
 import { RetryableError } from '@/components/retryable-error';
 import { Breadcrumb } from '@/components/breadcrumb';
@@ -92,6 +92,14 @@ const FdrBudgetBar = dynamic(
   () => import('@/components/fdr-budget-bar').then(m => ({ default: m.FdrBudgetBar })),
   { ssr: false },
 );
+const FdrDecisionBadge = dynamic(
+  () => import('@/components/fdr-decision-badge').then(m => ({ default: m.FdrDecisionBadge })),
+  { ssr: false },
+);
+const OptimalAlphaWidget = dynamic(
+  () => import('@/components/optimal-alpha-widget').then(m => ({ default: m.OptimalAlphaWidget })),
+  { ssr: false },
+);
 const AvlmSequencePlot = dynamic(
   () => import('@/components/avlm-sequence-plot').then(m => ({ default: m.AvlmSequencePlot })),
   { ssr: false },
@@ -114,6 +122,7 @@ export default function ResultsPage() {
   const [showCuped, setShowCuped] = useState(false);
   const [showIpw, setShowIpw] = useState(false);
   const [adaptiveN, setAdaptiveN] = useState<AdaptiveNResult | null>(null);
+  const [fdrState, setFdrState] = useState<OnlineFdrState | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawTab = searchParams.get('tab');
@@ -161,11 +170,15 @@ export default function ResultsPage() {
             throw err;
           }),
           getAdaptiveN(params.id).catch(() => null), // best-effort; 404 = not applicable
+          exp.onlineFdrConfig
+            ? getOnlineFdrState(params.id).catch(() => null)
+            : Promise.resolve(null),
         ]);
       })
-      .then(([analysis, adaptiveNResult]) => {
+      .then(([analysis, adaptiveNResult, fdrResult]) => {
         if (analysis) setAnalysisResult(analysis);
         setAdaptiveN(adaptiveNResult);
+        setFdrState(fdrResult);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -297,16 +310,26 @@ export default function ResultsPage() {
       {/* Summary */}
       <ResultsSummary analysisResult={analysisResult} experiment={experiment} />
 
-      {/* ADR-018: E-value gauge + online FDR budget (shown when data is present) */}
+      {/* ADR-018: E-value gauge + FDR decision badge + online FDR budget + optimal alpha (shown when data is present) */}
       {(analysisResult.eValueResult || experiment.onlineFdrConfig) && (
-        <div className="mb-6 flex flex-wrap gap-4">
-          {analysisResult.eValueResult && (
-            <EValueGauge eValueResult={analysisResult.eValueResult} />
-          )}
-          {experiment.onlineFdrConfig && (
-            <div className="flex-1 min-w-64">
-              <FdrBudgetBar experimentId={params.id} />
-            </div>
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-wrap items-start gap-4">
+            {analysisResult.eValueResult && (
+              <EValueGauge eValueResult={analysisResult.eValueResult} />
+            )}
+            {analysisResult.eValueResult && (
+              <div className="flex items-center self-center">
+                <FdrDecisionBadge eValueResult={analysisResult.eValueResult} fdrState={fdrState} />
+              </div>
+            )}
+            {experiment.onlineFdrConfig && (
+              <div className="flex-1 min-w-64">
+                <FdrBudgetBar experimentId={params.id} />
+              </div>
+            )}
+          </div>
+          {experiment.onlineFdrConfig && analysisResult.eValueResult && (
+            <OptimalAlphaWidget experimentId={params.id} currentAlpha={analysisResult.eValueResult.alpha} />
           )}
         </div>
       )}
@@ -366,7 +389,7 @@ export default function ResultsPage() {
           {/* Treatment Effects Table */}
           <section className="mb-6">
             <h2 className="mb-3 text-lg font-semibold text-gray-900">Metric Results</h2>
-            <TreatmentEffectsTable metricResults={analysisResult.metricResults} showCuped={showCuped} showIpw={showIpw} />
+            <TreatmentEffectsTable metricResults={analysisResult.metricResults} showCuped={showCuped} showIpw={showIpw} eValueResult={analysisResult.eValueResult} />
           </section>
 
           {/* IPW Details Panel (when IPW data exists) */}
