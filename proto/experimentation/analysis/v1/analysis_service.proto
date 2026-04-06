@@ -33,6 +33,10 @@ service AnalysisService {
   rpc GetPortfolioAllocation(GetPortfolioAllocationRequest) returns (GetPortfolioAllocationResponse);
   // Portfolio power analysis: optimal alpha, annualized impact, traffic allocation (ADR-019).
   rpc GetPortfolioPowerAnalysis(GetPortfolioPowerAnalysisRequest) returns (PortfolioPowerAnalysisResult);
+  // Offline RL doubly-robust OPE for long-term causal effects (ADR-017 Phase 2).
+  // Estimates policy value under a target policy using MDP trajectory data from M3's
+  // user_trajectories table. Combines Q-function + importance weighting for robustness.
+  rpc GetOrlAnalysis(GetOrlAnalysisRequest) returns (OrlAnalysisResult);
 }
 
 message RunAnalysisRequest {
@@ -389,4 +393,59 @@ message PortfolioTrafficAllocation {
   double recommended_traffic_fraction = 2;
   // Minimum users per arm to achieve min_power at optimal_alpha.
   int64 required_n_per_arm = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Offline RL doubly-robust OPE (ADR-017 Phase 2)
+// ---------------------------------------------------------------------------
+
+// Request for offline RL analysis using MDP trajectory data.
+message GetOrlAnalysisRequest {
+  string experiment_id = 1;
+  // Discount factor γ for future rewards. Must be in (0, 1]. Default: 0.99.
+  double gamma = 2;
+  // Maximum cumulative importance weight before clipping. Default: 10.0.
+  // High values preserve unbiasedness but increase variance.
+  double max_density_ratio = 3;
+  // Target policy probabilities for each action.
+  // For "always treat": [0.0, 1.0]. Must sum to 1.0.
+  repeated double target_policy = 4;
+  // Significance level for CI (e.g., 0.05). Default: 0.05.
+  double alpha = 5;
+}
+
+// Result of offline RL doubly-robust off-policy evaluation.
+// Implements Tran, Bibaut, Kallus (Netflix, ICML 2024) sequential DR estimator.
+message OrlAnalysisResult {
+  string experiment_id = 1;
+  // Estimated policy value under the target policy (DR estimator).
+  double effect = 2;
+  // Standard error (sandwich variance estimator).
+  double se = 3;
+  // Lower bound of (1-α) confidence interval.
+  double ci_lower = 4;
+  // Upper bound of (1-α) confidence interval.
+  double ci_upper = 5;
+  // Two-sided p-value (large-sample normal approximation).
+  double p_value = 6;
+  // Kish's effective sample size accounting for importance weighting.
+  // Low values indicate severe policy mismatch between target and logging.
+  double effective_n = 7;
+  // Maximum cumulative density ratio observed (before clipping).
+  // High values (>10) indicate significant distribution mismatch.
+  double max_observed_ratio = 8;
+  // Fraction of trajectory steps where the density ratio was clipped.
+  // High clipping (>10%) suggests the target and logging policies diverge.
+  double clipping_fraction = 9;
+  // Out-of-sample R² of the fitted Q-function.
+  // Low R² (<0.3) means the Q-function control variate provides limited
+  // variance reduction — the estimate relies more on importance weighting.
+  double q_function_r_squared = 10;
+  // Number of user trajectories used in the estimate.
+  int32 n_trajectories = 11;
+  // Direct-method-only estimate (Q-function alone, no importance weighting).
+  double dm_estimate = 12;
+  // Importance-weighting-only estimate (no Q-function control variate).
+  double ipw_estimate = 13;
+  google.protobuf.Timestamp computed_at = 14;
 }
