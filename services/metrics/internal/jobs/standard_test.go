@@ -353,6 +353,57 @@ func TestStandardJob_Run_CustomMetricType(t *testing.T) {
 	assert.Contains(t, customLogEntry.SQLText, "custom_result")
 }
 
+func TestStandardJob_Run_MLRATECrossFitting(t *testing.T) {
+	job, executor, qlWriter := setupTestJob(t)
+	ctx := context.Background()
+
+	// mlrate_crossfit_test (e...0008): mlrate_enabled=true, mlrate_folds=3
+	// watch_time_minutes_mlrate: MEAN + MLRATE with 2 features (heartbeat, stream_start)
+	result, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000008")
+	require.NoError(t, err)
+
+	assert.Equal(t, "e0000000-0000-0000-0000-000000000008", result.ExperimentID)
+	assert.Equal(t, 1, result.MetricsComputed)
+
+	calls := executor.GetCalls()
+	// 1 daily metric + 1 MLRATE features + 3 MLRATE crossfit + 1 daily treatment effect = 6
+	assert.Len(t, calls, 6)
+
+	// First call: daily metric (MEAN) → delta.metric_summaries
+	assert.Equal(t, "delta.metric_summaries", calls[0].TargetTable)
+	assert.Contains(t, calls[0].SQL, "AVG(metric_data.value)")
+
+	// Second call: MLRATE feature prep → delta.mlrate_features
+	assert.Equal(t, "delta.mlrate_features", calls[1].TargetTable)
+	assert.Contains(t, calls[1].SQL, "fold_id")
+	assert.Contains(t, calls[1].SQL, "'heartbeat', 'stream_start'")
+
+	// Calls 3-5: MLRATE fold predictions → delta.metric_summaries
+	for i := 2; i <= 4; i++ {
+		assert.Equal(t, "delta.metric_summaries", calls[i].TargetTable)
+		assert.Contains(t, calls[i].SQL, "ai_predict")
+		assert.Contains(t, calls[i].SQL, "mlrate_covariate")
+	}
+
+	// Last call: daily treatment effect → delta.daily_treatment_effects
+	assert.Equal(t, "delta.daily_treatment_effects", calls[5].TargetTable)
+
+	// Verify query log
+	entries := qlWriter.AllEntries()
+	mlrateFeatCount := 0
+	mlrateCrossfitCount := 0
+	for _, e := range entries {
+		switch e.JobType {
+		case "mlrate_features":
+			mlrateFeatCount++
+		case "mlrate_crossfit":
+			mlrateCrossfitCount++
+		}
+	}
+	assert.Equal(t, 1, mlrateFeatCount)
+	assert.Equal(t, 3, mlrateCrossfitCount)
+}
+
 func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 	job, executor, _ := setupTestJob(t)
 	ctx := context.Background()

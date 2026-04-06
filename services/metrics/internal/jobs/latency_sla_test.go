@@ -224,9 +224,10 @@ func TestSLA_DailyPipeline_QueryBudget(t *testing.T) {
 
 	total := runDailyPipeline(t, cfg, executor, qlWriter)
 
-	// Exact regression check: 35 standard + 6 content_consumption + 1 interleaving = 42.
-	assert.Equal(t, 42, total,
-		"Daily pipeline query count regression: expected exactly 42 SQL queries")
+	// Exact regression check: 35 standard + 6 content_consumption + 1 interleaving
+	// + 1 mlrate_metric + 4 mlrate (1 feat + 3 crossfit) + 1 mlrate_treatment_effect + 1 mlrate_cc = 49.
+	assert.Equal(t, 49, total,
+		"Daily pipeline query count regression: expected exactly 49 SQL queries")
 
 	// SLA budget check.
 	assert.Less(t, total, MaxDailyQueries,

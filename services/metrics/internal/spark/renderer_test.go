@@ -357,6 +357,81 @@ func TestRenderQoEEngagementCorrelation_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "STDDEV_SAMP")
 }
 
+// ADR-015 Phase 2: MLRATE cross-fitting templates.
+
+func TestRenderMLRATEFeatures(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.ExperimentStartDate = "2024-01-08"
+	p.MLRATEFolds = 5
+	p.MLRATEFeatureEventTypes = []string{"heartbeat", "stream_start"}
+	p.MLRATELookbackDays = 14
+	sql, err := r.RenderMLRATEFeatures(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "mlrate_features_expected.sql"), sql)
+}
+
+func TestRenderMLRATEFeatures_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{
+		ExperimentID:            "test-exp-mlrate",
+		ComputationDate:         "2024-06-01",
+		ExperimentStartDate:     "2024-05-15",
+		MLRATEFolds:             3,
+		MLRATEFeatureEventTypes: []string{"heartbeat", "stream_start", "click"},
+		MLRATELookbackDays:      7,
+	}
+	sql, err := r.RenderMLRATEFeatures(p)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "delta.exposures")
+	assert.Contains(t, sql, "delta.metric_events")
+	assert.Contains(t, sql, "'heartbeat', 'stream_start', 'click'")
+	assert.Contains(t, sql, "DATE_SUB")
+	assert.Contains(t, sql, "2024-05-15")
+	assert.Contains(t, sql, "% 3 + 1")
+	assert.Contains(t, sql, "fold_id")
+	assert.Contains(t, sql, "feature_heartbeat")
+	assert.Contains(t, sql, "feature_stream_start")
+	assert.Contains(t, sql, "feature_click")
+}
+
+func TestRenderMLRATECrossFitPredict(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "watch_time_minutes"
+	p.MLRATEFolds = 5
+	p.MLRATEFeatureEventTypes = []string{"heartbeat", "stream_start"}
+	p.MLRATEModelURI = "models:/mlrate-watch-time"
+	p.MLRATEFoldID = 2
+	sql, err := r.RenderMLRATECrossFitPredict(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "mlrate_crossfit_predict_expected.sql"), sql)
+}
+
+func TestRenderMLRATECrossFitPredict_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{
+		ExperimentID:            "test-exp-mlrate",
+		MetricID:                "ctr_recommendation",
+		ComputationDate:         "2024-06-01",
+		MLRATEFolds:             5,
+		MLRATEFeatureEventTypes: []string{"impression", "click"},
+		MLRATEModelURI:          "models:/mlrate-ctr",
+		MLRATEFoldID:            3,
+	}
+	sql, err := r.RenderMLRATECrossFitPredict(p)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "delta.mlrate_features")
+	assert.Contains(t, sql, "ai_predict")
+	assert.Contains(t, sql, "models:/mlrate-ctr/fold_3")
+	assert.Contains(t, sql, "NAMED_STRUCT")
+	assert.Contains(t, sql, "mlrate_covariate")
+	assert.Contains(t, sql, "fold_id = 3")
+	assert.Contains(t, sql, "'ctr_recommendation' AS metric_id")
+}
+
 // ADR-021: Feedback loop contamination template.
 
 func TestRenderFeedbackLoopContamination(t *testing.T) {

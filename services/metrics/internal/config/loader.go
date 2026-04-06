@@ -38,6 +38,9 @@ type ExperimentConfig struct {
 	CreditAssignment             string            `json:"credit_assignment,omitempty"`       // "binary_win", "proportional", or "weighted"
 	EngagementEventType          string            `json:"engagement_event_type,omitempty"`   // event_type to join for engagement
 	SessionLevel                 bool              `json:"session_level,omitempty"`           // whether metrics are session-level
+	// MLRATE cross-fitting fields (ADR-015 Phase 2)
+	MLRATEEnabled                bool              `json:"mlrate_enabled,omitempty"`          // enable MLRATE cross-fitting for AVLM covariates
+	MLRATEFolds                  int               `json:"mlrate_folds,omitempty"`            // K-fold count (default 5)
 }
 
 type SurrogateModelConfig struct {
@@ -67,6 +70,10 @@ type MetricConfig struct {
 	IsQoEMetric          bool   `json:"is_qoe_metric,omitempty"`
 	QoEField             string `json:"qoe_field,omitempty"`
 	CustomSQL            string `json:"custom_sql,omitempty"`
+	// MLRATE cross-fitting fields (ADR-015 Phase 2)
+	MLRATEFeatureEventTypes []string `json:"mlrate_feature_event_types,omitempty"` // pre-experiment event types as LightGBM features
+	MLRATEModelURI          string   `json:"mlrate_model_uri,omitempty"`           // MLflow model URI prefix (fold models at {uri}/fold_{k})
+	MLRATELookbackDays      int      `json:"mlrate_lookback_days,omitempty"`       // days of pre-experiment data for features (default 14)
 }
 
 type seedFile struct {
@@ -173,6 +180,22 @@ func (e *ExperimentConfig) ControlVariantID() string {
 		}
 	}
 	return ""
+}
+
+// MLRATEFoldsOrDefault returns the configured fold count, or 5 if unset.
+func (e *ExperimentConfig) MLRATEFoldsOrDefault() int {
+	if e.MLRATEFolds > 0 {
+		return e.MLRATEFolds
+	}
+	return 5
+}
+
+// MLRATELookbackDaysOrDefault returns the configured lookback, or 14 if unset.
+func (m *MetricConfig) MLRATELookbackDaysOrDefault() int {
+	if m.MLRATELookbackDays > 0 {
+		return m.MLRATELookbackDays
+	}
+	return 14
 }
 
 func (c *ConfigStore) GetSurrogateModel(id string) (*SurrogateModelConfig, error) {

@@ -161,6 +161,8 @@ func TestM3M5_ExperimentConfig_FieldCompleteness(t *testing.T) {
 		"credit_assignment":               "interleavingConfig.creditAssignment",
 		"engagement_event_type":           "interleavingConfig.engagementEventType",
 		"session_level":                   "sessionConfig.sessionLevel",
+		"mlrate_enabled":                  "mlrateConfig.enabled",
+		"mlrate_folds":                    "mlrateConfig.folds",
 	}
 
 	// Extract JSON tags from M3's ExperimentConfig struct.
@@ -193,8 +195,11 @@ func TestM3M5_MetricConfig_FieldCompleteness(t *testing.T) {
 		"percentile":              "percentile",
 		"lower_is_better":         "lowerIsBetter",
 		"is_qoe_metric":           "isQoeMetric",
-		"qoe_field":               "", // M3-only; not in M5 proto (derived from source_event_type)
-		"custom_sql":              "customSql",
+		"qoe_field":                  "", // M3-only; not in M5 proto (derived from source_event_type)
+		"custom_sql":                 "customSql",
+		"mlrate_feature_event_types": "mlrateConfig.featureEventTypes",
+		"mlrate_model_uri":           "mlrateConfig.modelUri",
+		"mlrate_lookback_days":       "mlrateConfig.lookbackDays",
 	}
 
 	m3Tags := extractJSONTags(reflect.TypeOf(config.MetricConfig{}))
