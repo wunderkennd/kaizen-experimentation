@@ -143,6 +143,31 @@
       ]
     },
     {
+      "experiment_id": "e0000000-0000-0000-0000-000000000008",
+      "name": "mlrate_crossfit_test",
+      "type": "AB",
+      "state": "RUNNING",
+      "started_at": "2024-02-01",
+      "primary_metric_id": "watch_time_minutes_mlrate",
+      "secondary_metric_ids": [],
+      "mlrate_enabled": true,
+      "mlrate_folds": 3,
+      "variants": [
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000015",
+          "name": "control",
+          "traffic_fraction": 0.5,
+          "is_control": true
+        },
+        {
+          "variant_id": "f0000000-0000-0000-0000-000000000016",
+          "name": "treatment",
+          "traffic_fraction": 0.5,
+          "is_control": false
+        }
+      ]
+    },
+    {
       "experiment_id": "e0000000-0000-0000-0000-000000000004",
       "name": "playback_qoe_test",
       "type": "AB",
@@ -245,6 +270,15 @@
       "name": "Power Users Watch Time",
       "type": "CUSTOM",
       "custom_sql": "SELECT user_id, AVG(value) AS metric_value FROM delta.metric_events WHERE event_type = 'heartbeat' GROUP BY user_id HAVING COUNT(*) >= 10"
+    },
+    {
+      "metric_id": "watch_time_minutes_mlrate",
+      "name": "Watch Time (MLRATE)",
+      "type": "MEAN",
+      "source_event_type": "heartbeat",
+      "mlrate_feature_event_types": ["heartbeat", "stream_start"],
+      "mlrate_model_uri": "models:/mlrate-watch-time",
+      "mlrate_lookback_days": 14
     },
     {
       "metric_id": "ttff_mean",

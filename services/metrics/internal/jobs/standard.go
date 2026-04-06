@@ -198,6 +198,23 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			)
 		}
 
+		// MLRATE cross-fitting: if experiment has MLRATE enabled and metric has
+		// feature config, generate K-fold cross-fitted predictions as AVLM covariates.
+		if exp.MLRATEEnabled && len(m.MLRATEFeatureEventTypes) > 0 && m.MLRATEModelURI != "" && exp.StartedAt != "" {
+			mlrateJob := NewMLRATEJob(j.renderer, j.executor, j.queryLog)
+			mlrateResult, err := mlrateJob.Run(ctx, exp, &m, computationDate)
+			if err != nil {
+				return nil, fmt.Errorf("jobs: MLRATE cross-fit for %s: %w", m.MetricID, err)
+			}
+
+			slog.Info("computed MLRATE cross-fitted predictions",
+				"experiment_id", experimentID,
+				"metric_id", m.MetricID,
+				"folds", mlrateResult.Folds,
+				"users_scored", mlrateResult.UsersScored,
+			)
+		}
+
 		// Session-level aggregation: if enabled, also compute per-session metrics.
 		if exp.SessionLevel && !m.IsQoEMetric {
 			slParams := params

@@ -47,6 +47,12 @@ type TemplateParams struct {
 	LongtailThreshold float64 // PERCENT_RANK threshold for longtail classification (e.g. 0.80)
 	ProviderField     string  // provider column name in content_catalog (default "provider_id")
 	GenreField        string  // genre column name in content_catalog (default "genre")
+	// MLRATE cross-fitting fields (ADR-015 Phase 2)
+	MLRATEFolds             int      // K-fold count for cross-fitting
+	MLRATEFeatureEventTypes []string // pre-experiment event types used as LightGBM features
+	MLRATELookbackDays      int      // days of pre-experiment data for feature computation
+	MLRATEModelURI          string   // MLflow model URI prefix; fold models at {uri}/fold_{k}
+	MLRATEFoldID            int      // current fold ID for per-fold prediction (1-indexed)
 }
 
 type SQLRenderer struct {
@@ -101,6 +107,18 @@ func (r *SQLRenderer) RenderUserGenreEntropy(p TemplateParams) (string, error)  
 func (r *SQLRenderer) RenderUserDiscoveryRate(p TemplateParams) (string, error)     { return r.Render("user_discovery_rate.sql.tmpl", p) }
 func (r *SQLRenderer) RenderUserProviderDiversity(p TemplateParams) (string, error) { return r.Render("user_provider_diversity.sql.tmpl", p) }
 func (r *SQLRenderer) RenderIntraListDistance(p TemplateParams) (string, error)     { return r.Render("intra_list_distance.sql.tmpl", p) }
+
+// MLRATE cross-fitting (ADR-015 Phase 2).
+// Step 1: Feature preparation with fold assignment — results go to delta.mlrate_features.
+func (r *SQLRenderer) RenderMLRATEFeatures(p TemplateParams) (string, error) {
+	return r.Render("mlrate_features.sql.tmpl", p)
+}
+
+// Step 2: Per-fold cross-fitted prediction — results go to delta.metric_summaries.
+// Called K times (once per fold), each time with a different MLRATEFoldID.
+func (r *SQLRenderer) RenderMLRATECrossFitPredict(p TemplateParams) (string, error) {
+	return r.Render("mlrate_crossfit_predict.sql.tmpl", p)
+}
 
 // Feedback loop contamination (ADR-021).
 // Results go to delta.feedback_loop_contamination; consumed by M4a FeedbackLoopDetector.
