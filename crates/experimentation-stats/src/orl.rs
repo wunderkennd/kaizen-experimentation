@@ -966,7 +966,7 @@ fn validate_dr_config(config: &DrOpeConfig) -> Result<()> {
         )));
     }
     for &p in &config.target_policy {
-        if p < 0.0 || p > 1.0 {
+        if !(0.0..=1.0).contains(&p) {
             return Err(Error::Validation(format!(
                 "target_policy entries must be in [0, 1], got {p}"
             )));
