@@ -62,8 +62,8 @@ export const AnnualizedImpactChart = memo(function AnnualizedImpactChart({
               formatter={(value: number) => [value.toFixed(4), 'Annualized Impact']}
             />
             <Bar dataKey="impact" isAnimationActive={false}>
-              <ErrorBar dataKey="errorUpper" direction="right" width={4} stroke="#6b7280" />
-              <ErrorBar dataKey="errorLower" direction="left" width={4} stroke="#6b7280" />
+              <ErrorBar dataKey="errorUpper" direction="x" width={4} stroke="#6b7280" />
+              <ErrorBar dataKey="errorLower" direction="x" width={4} stroke="#6b7280" />
               {chartData.map((entry, i) => (
                 <Cell
                   key={i}
