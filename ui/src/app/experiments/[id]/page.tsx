@@ -180,7 +180,16 @@ export default function ExperimentDetailPage() {
         </div>
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Primary Metric</dt>
-          <dd className="mt-1 text-sm text-gray-900">{experiment.primaryMetricId}</dd>
+          <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+            <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+              {experiment.primaryMetricId}
+            </code>
+            <CopyButton
+              value={experiment.primaryMetricId}
+              label="Copy metric ID"
+              successMessage="Metric ID copied"
+            />
+          </dd>
         </div>
         <div>
           <dt className="text-xs font-medium uppercase text-gray-500">Created</dt>
@@ -257,7 +266,16 @@ export default function ExperimentDetailPage() {
                 {experiment.guardrailConfigs.map((g) => (
                   <tr key={g.metricId}>
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                      {g.metricId}
+                      <div className="flex items-center gap-2">
+                        <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                          {g.metricId}
+                        </code>
+                        <CopyButton
+                          value={g.metricId}
+                          label="Copy metric ID"
+                          successMessage="Metric ID copied"
+                        />
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                       {g.threshold}
