@@ -4,7 +4,7 @@ import type {
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation, MetricDefinition,
   AuditLogEntry, Flag, ProviderHealthResult,
-  AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState,
+  AvlmResult, AdaptiveNResult, FeedbackLoopResult, OnlineFdrState, OptimalAlphaRecommendation,
   PortfolioAllocationResult, PortfolioMetricsResult, ParetoFrontierResult, MetaExperimentResult,
   SlateOpeResult, SlateHeatmapResult,
   SwitchbackResult, SyntheticControlResult,
@@ -2159,6 +2159,18 @@ const INITIAL_ONLINE_FDR_STATES: OnlineFdrState[] = [
 
 export let SEED_ONLINE_FDR_STATES: OnlineFdrState[] = structuredClone(INITIAL_ONLINE_FDR_STATES);
 
+// --- Optimal Alpha Recommendation (ADR-019) ---
+
+const INITIAL_OPTIMAL_ALPHA: OptimalAlphaRecommendation[] = [
+  {
+    optimalAlpha: 0.10,
+    expectedPortfolioFdr: 0.042,
+    computedAt: '2026-03-24T10:00:00Z',
+  },
+];
+
+export let SEED_OPTIMAL_ALPHA: OptimalAlphaRecommendation[] = structuredClone(INITIAL_OPTIMAL_ALPHA);
+
 // --- Portfolio Optimization (ADR-019) ---
 
 const INITIAL_PORTFOLIO_ALLOCATION: PortfolioAllocationResult = {
@@ -2556,6 +2568,7 @@ export function resetSeedData(): void {
   SEED_ADAPTIVE_N_RESULTS = structuredClone(INITIAL_ADAPTIVE_N_RESULTS);
   SEED_FEEDBACK_LOOP_RESULTS = structuredClone(INITIAL_FEEDBACK_LOOP_RESULTS);
   SEED_ONLINE_FDR_STATES = structuredClone(INITIAL_ONLINE_FDR_STATES);
+  SEED_OPTIMAL_ALPHA = structuredClone(INITIAL_OPTIMAL_ALPHA);
   SEED_PORTFOLIO_ALLOCATION = structuredClone(INITIAL_PORTFOLIO_ALLOCATION);
   SEED_SLATE_OPE_RESULTS = structuredClone(INITIAL_SLATE_OPE_RESULTS);
   SEED_SWITCHBACK_RESULTS = structuredClone(INITIAL_SWITCHBACK_RESULTS);

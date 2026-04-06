@@ -6,7 +6,7 @@ import {
   SEED_GST_RESULTS, SEED_CATE_RESULTS, SEED_LAYERS, SEED_LAYER_ALLOCATIONS,
   SEED_METRIC_DEFINITIONS, SEED_AUDIT_LOG, SEED_FLAGS, SEED_PROVIDER_HEALTH,
   SEED_AVLM_RESULTS, SEED_ADAPTIVE_N_RESULTS, SEED_FEEDBACK_LOOP_RESULTS,
-  SEED_ONLINE_FDR_STATES,
+  SEED_ONLINE_FDR_STATES, SEED_OPTIMAL_ALPHA,
   SEED_PORTFOLIO_ALLOCATION, SEED_PORTFOLIO_METRICS, SEED_PARETO_FRONTIER,
   SEED_META_EXPERIMENT_RESULTS,
   SEED_SLATE_OPE_RESULTS, SEED_SLATE_HEATMAP_RESULTS,
@@ -841,6 +841,17 @@ export const handlers = [
       );
     }
     return HttpResponse.json(result);
+  }),
+
+  // GetOptimalAlpha (ADR-019)
+  http.post(`${ANALYSIS_SVC}/GetOptimalAlpha`, async () => {
+    if (SEED_OPTIMAL_ALPHA.length === 0) {
+      return HttpResponse.json(
+        { code: 'not_found', message: 'No optimal alpha recommendation found' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(SEED_OPTIMAL_ALPHA[0]);
   }),
 
   // GetSlateOpe (ADR-016)
