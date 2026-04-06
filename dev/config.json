@@ -231,6 +231,35 @@
         "washout_period_secs": 600,
         "design": "REGULAR_BALANCED"
       }
+    },
+    {
+      "experiment_id": "exp_dev_slate_001",
+      "name": "Slate Bandit — Content Row (ADR-016)",
+      "state": "RUNNING",
+      "type": "SLATE_BANDIT",
+      "hash_salt": "dev_salt_slate_001",
+      "layer_id": "layer_slate",
+      "variants": [],
+      "allocation": { "start_bucket": 0, "end_bucket": 9999 },
+      "bandit_config": {
+        "algorithm": "SLATE_FACTORIZED_TS",
+        "arms": [
+          { "arm_id": "drama_series", "name": "Drama Series", "payload_json": "{\"genre\":\"drama\"}" },
+          { "arm_id": "comedy_film", "name": "Comedy Film", "payload_json": "{\"genre\":\"comedy\"}" },
+          { "arm_id": "documentary", "name": "Documentary", "payload_json": "{\"genre\":\"documentary\"}" },
+          { "arm_id": "action_blockbuster", "name": "Action Blockbuster", "payload_json": "{\"genre\":\"action\"}" },
+          { "arm_id": "kids_animation", "name": "Kids Animation", "payload_json": "{\"genre\":\"kids\"}" },
+          { "arm_id": "thriller", "name": "Thriller", "payload_json": "{\"genre\":\"thriller\"}" }
+        ],
+        "reward_metric_id": "click_through_rate",
+        "context_feature_keys": ["genre_affinity", "watch_history_len"],
+        "min_exploration_fraction": 0.1,
+        "warmup_observations": 500,
+        "slate_config": {
+          "num_slots": 3,
+          "candidate_pool_size": 6
+        }
+      }
     }
   ],
   "layers": [
@@ -242,6 +271,7 @@
     { "layer_id": "layer_interleave_multi", "total_buckets": 10000 },
     { "layer_id": "layer_session_locked", "total_buckets": 10000 },
     { "layer_id": "layer_cold_start", "total_buckets": 10000 },
-    { "layer_id": "layer_switchback", "total_buckets": 10000 }
+    { "layer_id": "layer_switchback", "total_buckets": 10000 },
+    { "layer_id": "layer_slate", "total_buckets": 10000 }
   ]
 }

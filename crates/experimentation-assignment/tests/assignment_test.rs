@@ -1424,9 +1424,34 @@ impl BanditPolicyService for MockBanditService {
 
     async fn select_slate(
         &self,
-        _request: tonic::Request<SelectSlateRequest>,
+        request: tonic::Request<SelectSlateRequest>,
     ) -> Result<tonic::Response<SlateSelection>, tonic::Status> {
-        Err(tonic::Status::unimplemented("select_slate not used in assignment_test"))
+        let req = request.into_inner();
+
+        if let Some(delay) = self.delay {
+            tokio::time::sleep(delay).await;
+        }
+
+        // Return top n_slots candidates in order with mock probabilities.
+        let n = req.n_slots as usize;
+        let slate: Vec<String> = req.candidate_item_ids.into_iter().take(n).collect();
+        let slot_assignments = slate
+            .iter()
+            .enumerate()
+            .map(|(i, item_id)| {
+                experimentation_proto::experimentation::bandit::v1::SlotAssignment {
+                    slot_index: i as i32,
+                    item_id: item_id.clone(),
+                    probability: self.probability,
+                }
+            })
+            .collect();
+
+        Ok(tonic::Response::new(SlateSelection {
+            slate_item_ids: slate,
+            slot_assignments,
+            is_uniform_random: false,
+        }))
     }
 
     async fn rollback_policy(
@@ -2197,4 +2222,254 @@ async fn meta_inactive_returns_empty() {
         .unwrap();
     assert!(!resp.is_active, "DRAFT META experiment must return is_active=false");
     assert!(resp.variant_id.is_empty());
+}
+
+// ── Slate Assignment Tests (ADR-016) ──
+
+/// Slate config JSON for test experiments.
+fn slate_experiment_json(experiment_id: &str, state: &str, num_slots: i32) -> String {
+    format!(
+        r#"{{
+        "experiments": [{{
+            "experiment_id": "{experiment_id}",
+            "state": "{state}",
+            "type": "SLATE_BANDIT",
+            "hash_salt": "salt_slate",
+            "layer_id": "layer_slate",
+            "variants": [],
+            "allocation": {{"start_bucket": 0, "end_bucket": 9999}},
+            "bandit_config": {{
+                "algorithm": "SLATE_FACTORIZED_TS",
+                "arms": [
+                    {{"arm_id": "item_a", "name": "Item A", "payload_json": "{{}}"}},
+                    {{"arm_id": "item_b", "name": "Item B", "payload_json": "{{}}"}},
+                    {{"arm_id": "item_c", "name": "Item C", "payload_json": "{{}}"}},
+                    {{"arm_id": "item_d", "name": "Item D", "payload_json": "{{}}"}},
+                    {{"arm_id": "item_e", "name": "Item E", "payload_json": "{{}}"}}
+                ],
+                "reward_metric_id": "ctr",
+                "context_feature_keys": ["genre_affinity"],
+                "slate_config": {{
+                    "num_slots": {num_slots},
+                    "candidate_pool_size": 10
+                }}
+            }}
+        }}],
+        "layers": [{{"layer_id": "layer_slate", "total_buckets": 10000}}]
+    }}"#
+    )
+}
+
+#[tokio::test]
+async fn slate_random_fallback_returns_correct_slots() {
+    let json = slate_experiment_json("slate_exp", "RUNNING", 3);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let candidates = vec![
+        "c1".into(), "c2".into(), "c3".into(), "c4".into(), "c5".into(),
+    ];
+    let resp = svc
+        .assign_slate("slate_exp", "user_1", candidates, &no_attrs())
+        .await
+        .unwrap();
+
+    assert_eq!(resp.experiment_id, "slate_exp");
+    assert_eq!(resp.slate_item_ids.len(), 3, "slate must have num_slots items");
+    assert_eq!(resp.slot_probabilities.len(), 3);
+    assert!(resp.is_uniform_random, "no bandit client → uniform random");
+
+    // All items must be unique and from the candidate set.
+    let unique: std::collections::HashSet<_> = resp.slate_item_ids.iter().collect();
+    assert_eq!(unique.len(), 3, "slate items must be unique");
+    for item in &resp.slate_item_ids {
+        assert!(
+            ["c1", "c2", "c3", "c4", "c5"].contains(&item.as_str()),
+            "unknown item {item}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn slate_random_fallback_deterministic() {
+    let json = slate_experiment_json("slate_det", "RUNNING", 3);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let candidates: Vec<String> = (1..=6).map(|i| format!("item_{i}")).collect();
+    let r1 = svc
+        .assign_slate("slate_det", "user_stable", candidates.clone(), &no_attrs())
+        .await
+        .unwrap();
+    let r2 = svc
+        .assign_slate("slate_det", "user_stable", candidates, &no_attrs())
+        .await
+        .unwrap();
+
+    assert_eq!(r1.slate_item_ids, r2.slate_item_ids, "same user → same slate");
+}
+
+#[tokio::test]
+async fn slate_not_running_returns_empty() {
+    let json = slate_experiment_json("slate_draft", "DRAFT", 3);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let resp = svc
+        .assign_slate("slate_draft", "user_1", vec!["c1".into()], &no_attrs())
+        .await
+        .unwrap();
+
+    assert!(resp.slate_item_ids.is_empty(), "DRAFT must return empty slate");
+}
+
+#[tokio::test]
+async fn slate_unknown_experiment_not_found() {
+    let json = slate_experiment_json("slate_exists", "RUNNING", 3);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let err = svc
+        .assign_slate("nonexistent", "user_1", vec!["c1".into()], &no_attrs())
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn slate_too_few_candidates_returns_error() {
+    let json = slate_experiment_json("slate_few", "RUNNING", 3);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let err = svc
+        .assign_slate("slate_few", "user_1", vec!["c1".into(), "c2".into()], &no_attrs())
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+}
+
+#[tokio::test]
+async fn slate_uniform_probability_correct() {
+    let json = slate_experiment_json("slate_prob", "RUNNING", 2);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let candidates: Vec<String> = (1..=5).map(|i| format!("item_{i}")).collect();
+    let resp = svc
+        .assign_slate("slate_prob", "user_prob", candidates, &no_attrs())
+        .await
+        .unwrap();
+
+    // Uniform probability = 1/5 = 0.2 (5 candidates).
+    let expected = 0.2;
+    for sp in &resp.slot_probabilities {
+        assert!(
+            (sp.probability - expected).abs() < 1e-9,
+            "uniform prob must be 1/n_candidates, got {}",
+            sp.probability
+        );
+        assert!(sp.probability.is_finite());
+    }
+}
+
+#[tokio::test]
+async fn slate_grpc_forwarding_success() {
+    // Start mock M4b that supports SelectSlate.
+    let (addr, _captured) = start_mock_m4b(None, "arm_hero", 0.6).await;
+
+    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
+        "http://{addr}"
+    ))
+    .await
+    .unwrap();
+
+    let json = slate_experiment_json("live_slate", "RUNNING", 3);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::new(
+        experimentation_assignment::config_cache::ConfigCacheHandle::from_static(Arc::new(config)),
+        Some(client),
+    );
+
+    let candidates = vec![
+        "item_a".into(), "item_b".into(), "item_c".into(), "item_d".into(), "item_e".into(),
+    ];
+    let resp = svc
+        .assign_slate("live_slate", "user_grpc", candidates.clone(), &no_attrs())
+        .await
+        .unwrap();
+
+    // Mock returns first n_slots candidates in order.
+    assert_eq!(resp.slate_item_ids, &["item_a", "item_b", "item_c"]);
+    assert_eq!(resp.slot_probabilities.len(), 3);
+    assert!(!resp.is_uniform_random, "live M4b response should not be uniform");
+
+    // Verify per-slot probabilities match mock's probability.
+    for sp in &resp.slot_probabilities {
+        assert!(
+            (sp.probability - 0.6).abs() < 1e-9,
+            "mock probability must be forwarded, got {}",
+            sp.probability
+        );
+    }
+}
+
+#[tokio::test]
+async fn slate_grpc_timeout_falls_back_to_random() {
+    // Start mock M4b that sleeps 50ms (>> 10ms timeout).
+    let (addr, _captured) = start_mock_m4b(Some(Duration::from_millis(50)), "arm_hero", 0.6).await;
+
+    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
+        "http://{addr}"
+    ))
+    .await
+    .unwrap();
+
+    let json = slate_experiment_json("timeout_slate", "RUNNING", 2);
+    let config = Config::from_json(&json).unwrap();
+    let svc = AssignmentServiceImpl::new(
+        experimentation_assignment::config_cache::ConfigCacheHandle::from_static(Arc::new(config)),
+        Some(client),
+    );
+
+    let candidates = vec!["c1".into(), "c2".into(), "c3".into(), "c4".into()];
+    let resp = svc
+        .assign_slate("timeout_slate", "user_timeout", candidates, &no_attrs())
+        .await
+        .unwrap();
+
+    // Must fall back to random slate (M4b timed out).
+    assert!(resp.is_uniform_random, "timeout must trigger random fallback");
+    assert_eq!(resp.slate_item_ids.len(), 2, "fallback must respect num_slots");
+    assert_eq!(resp.slot_probabilities.len(), 2);
+}
+
+#[tokio::test]
+async fn slate_dev_config_parses() {
+    // Verify the dev config SLATE_BANDIT experiment parses correctly.
+    let svc = make_service();
+    let config = svc.config_snapshot();
+    let exp = config.experiments_by_id.get("exp_dev_slate_001")
+        .expect("dev config must have SLATE_BANDIT experiment");
+    assert_eq!(exp.r#type, "SLATE_BANDIT");
+    let sc = exp.bandit_config.as_ref().unwrap().slate_config.as_ref().unwrap();
+    assert_eq!(sc.num_slots, 3);
+    assert_eq!(sc.candidate_pool_size, 6);
+}
+
+#[tokio::test]
+async fn slate_dev_config_random_fallback() {
+    let svc = make_service();
+    let candidates = vec![
+        "drama_series".into(), "comedy_film".into(), "documentary".into(),
+        "action_blockbuster".into(), "kids_animation".into(), "thriller".into(),
+    ];
+    let resp = svc
+        .assign_slate("exp_dev_slate_001", "user_dev", candidates, &no_attrs())
+        .await
+        .unwrap();
+
+    assert_eq!(resp.experiment_id, "exp_dev_slate_001");
+    assert_eq!(resp.slate_item_ids.len(), 3);
+    assert!(resp.is_uniform_random);
 }
