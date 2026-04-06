@@ -29,15 +29,17 @@ use experimentation_proto::experimentation::management::v1::{
         ExperimentManagementService, ExperimentManagementServiceServer,
     },
     ArchiveExperimentRequest, ConcludeExperimentRequest, ConfigUpdateEvent,
-    CreateExperimentRequest, CreateLayerRequest, CreateMetricDefinitionRequest,
-    CreateSurrogateModelRequest, CreateTargetingRuleRequest, GetExperimentRequest,
+    ConflictType as ProtoConflictType, CreateExperimentRequest, CreateLayerRequest,
+    CreateMetricDefinitionRequest, CreateSurrogateModelRequest, CreateTargetingRuleRequest,
+    ExperimentAllocation as ProtoExperimentAllocation,
+    ExperimentConflict as ProtoExperimentConflict, GetExperimentRequest,
     GetLayerAllocationsRequest, GetLayerAllocationsResponse, GetLayerRequest,
-    GetMetricDefinitionRequest, GetSurrogateCalibrationRequest, ListExperimentsRequest,
-    ListExperimentsResponse, ListMetricDefinitionsRequest, ListMetricDefinitionsResponse,
-    ListSurrogateModelsRequest, ListSurrogateModelsResponse, PauseExperimentRequest,
-    ResumeExperimentRequest, StartExperimentRequest, StreamConfigUpdatesRequest,
-    GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
-    TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
+    GetMetricDefinitionRequest, GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
+    GetSurrogateCalibrationRequest, ListExperimentsRequest, ListExperimentsResponse,
+    ListMetricDefinitionsRequest, ListMetricDefinitionsResponse, ListSurrogateModelsRequest,
+    ListSurrogateModelsResponse, PauseExperimentRequest,
+    PortfolioStats as ProtoPortfolioStats, ResumeExperimentRequest, StartExperimentRequest,
+    StreamConfigUpdatesRequest, TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
 };
 
 use crate::bucket_reuse;
@@ -1105,11 +1107,143 @@ impl ExperimentManagementService for ManagementServiceHandler {
 
     async fn get_portfolio_allocation(
         &self,
-        _request: Request<GetPortfolioAllocationRequest>,
+        request: Request<GetPortfolioAllocationRequest>,
     ) -> Result<Response<GetPortfolioAllocationResponse>, Status> {
-        // ADR-019: Portfolio optimization is implemented in Go M5 (services/management/).
-        // This Rust port will implement it when ADR-025 Phase 3 is reached.
-        Err(Status::unimplemented("GetPortfolioAllocation not yet implemented in Rust M5"))
+        let req = request.into_inner();
+
+        // Load all RUNNING experiments, optionally filtered by layer_id.
+        let experiments = self
+            .state
+            .store
+            .list_active_experiments()
+            .await
+            .map_err(store_err_to_status)?;
+
+        let running_experiments: Vec<_> = experiments
+            .iter()
+            .filter(|e| e.state == "RUNNING")
+            .filter(|e| req.layer_id.is_empty() || e.layer_id.to_string() == req.layer_id)
+            .collect();
+
+        // Load bucket allocations for each experiment and build ExperimentInfo vec.
+        let mut experiment_infos = Vec::with_capacity(running_experiments.len());
+        for exp in &running_experiments {
+            let allocations = crate::bucket_reuse::list_allocations(
+                self.state.store.pool(),
+                exp.layer_id,
+                false,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("allocation lookup failed: {e}")))?;
+
+            // Find this experiment's allocation in the layer.
+            let alloc = allocations
+                .iter()
+                .find(|a| a.experiment_id == exp.experiment_id);
+
+            let (start_bucket, end_bucket, total_buckets) = if let Some(a) = alloc {
+                let layer_total = get_layer_total_buckets(self.state.store.pool(), exp.layer_id)
+                    .await
+                    .unwrap_or(1000);
+                (a.start_bucket, a.end_bucket, layer_total)
+            } else {
+                // No allocation found — use variant fractions as approximation.
+                let variants = self
+                    .state
+                    .store
+                    .get_variants(exp.experiment_id)
+                    .await
+                    .map_err(store_err_to_status)?;
+                let total_fraction: f64 = variants.iter().map(|v| v.traffic_fraction).sum();
+                let end = (total_fraction * 1000.0).round() as i32;
+                (0, end.max(1) - 1, 1000)
+            };
+
+            // Extract guardrail metric IDs from the type_config JSON.
+            let guardrail_ids = extract_guardrail_ids(&exp.type_config);
+
+            experiment_infos.push(crate::portfolio::ExperimentInfo {
+                experiment_id: exp.experiment_id.to_string(),
+                experiment_name: exp.name.clone(),
+                layer_id: exp.layer_id.to_string(),
+                primary_metric_id: exp.primary_metric_id.clone(),
+                guardrail_metric_ids: guardrail_ids,
+                targeting_rule_id: exp
+                    .targeting_rule_id
+                    .map(|u| u.to_string())
+                    .unwrap_or_default(),
+                start_bucket,
+                end_bucket,
+                layer_total_buckets: total_buckets,
+            });
+        }
+
+        // Convert priority_overrides from proto map.
+        let priority_overrides: std::collections::HashMap<String, i32> = req
+            .priority_overrides
+            .into_iter()
+            .collect();
+
+        // Run the optimizer.
+        let result = crate::portfolio::optimize(&experiment_infos, &priority_overrides);
+
+        // Convert to proto types.
+        let proto_allocations: Vec<ProtoExperimentAllocation> = result
+            .allocations
+            .iter()
+            .map(|a| ProtoExperimentAllocation {
+                experiment_id: a.experiment_id.clone(),
+                experiment_name: a.experiment_name.clone(),
+                priority: a.priority,
+                current_traffic_fraction: a.current_traffic_fraction,
+                recommended_traffic_fraction: a.recommended_traffic_fraction,
+                underpowered: a.underpowered,
+                rationale: a.rationale.clone(),
+                variance_budget_share: a.variance_budget_share,
+            })
+            .collect();
+
+        let proto_conflicts: Vec<ProtoExperimentConflict> = result
+            .conflicts
+            .iter()
+            .map(|c| ProtoExperimentConflict {
+                experiment_id_a: c.experiment_id_a.clone(),
+                experiment_id_b: c.experiment_id_b.clone(),
+                conflict_type: match c.conflict_type {
+                    crate::portfolio::ConflictType::PrimaryMetricOverlap => {
+                        ProtoConflictType::PrimaryMetricOverlap as i32
+                    }
+                    crate::portfolio::ConflictType::GuardrailMetricOverlap => {
+                        ProtoConflictType::GuardrailMetricOverlap as i32
+                    }
+                    crate::portfolio::ConflictType::PopulationOverlap => {
+                        ProtoConflictType::PopulationOverlap as i32
+                    }
+                },
+                rationale: c.rationale.clone(),
+            })
+            .collect();
+
+        let proto_stats = ProtoPortfolioStats {
+            running_count: result.stats.running_count,
+            traffic_utilization: result.stats.traffic_utilization,
+            expected_false_discoveries: result.stats.expected_false_discoveries,
+            underpowered_count: result.stats.underpowered_count,
+            conflict_count: result.stats.conflict_count,
+        };
+
+        info!(
+            running = result.stats.running_count,
+            conflicts = result.stats.conflict_count,
+            underpowered = result.stats.underpowered_count,
+            "portfolio allocation computed"
+        );
+
+        Ok(Response::new(GetPortfolioAllocationResponse {
+            allocations: proto_allocations,
+            conflicts: proto_conflicts,
+            stats: Some(proto_stats),
+        }))
     }
 }
 
@@ -1200,4 +1334,32 @@ fn build_type_config(exp: &Experiment) -> serde_json::Value {
     }
 
     serde_json::Value::Object(obj)
+}
+
+/// Look up total_buckets for a layer from the database.
+async fn get_layer_total_buckets(pool: &sqlx::postgres::PgPool, layer_id: Uuid) -> Result<i32, ()> {
+    let row: Option<(i32,)> = sqlx::query_as(
+        "SELECT total_buckets FROM layers WHERE layer_id = $1",
+    )
+    .bind(layer_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| ())?;
+
+    row.map(|(total,)| total).ok_or(())
+}
+
+/// Extract guardrail metric IDs from the type_config JSONB column.
+fn extract_guardrail_ids(type_config: &serde_json::Value) -> Vec<String> {
+    // Guardrail configs may be stored as a top-level array in type_config.
+    if let Some(guardrails) = type_config.get("guardrail_configs") {
+        if let Some(arr) = guardrails.as_array() {
+            return arr
+                .iter()
+                .filter_map(|g| g.get("metric_id").and_then(|v| v.as_str()))
+                .map(|s| s.to_string())
+                .collect();
+        }
+    }
+    vec![]
 }
