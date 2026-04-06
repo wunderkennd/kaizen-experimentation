@@ -113,6 +113,7 @@ impl BanditPolicyService for BanditPolicyServiceHandler {
             arm_id: response.arm_id,
             assignment_probability: response.assignment_probability,
             all_arm_probabilities: response.all_arm_probabilities,
+            is_uniform_random: response.is_uniform_random,
         }))
     }
 

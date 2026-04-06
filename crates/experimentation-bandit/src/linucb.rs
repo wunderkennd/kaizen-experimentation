@@ -296,6 +296,7 @@ impl Policy for LinUcbPolicy {
             arm_id,
             assignment_probability,
             all_arm_probabilities,
+            is_uniform_random: false,
         }
     }
 
