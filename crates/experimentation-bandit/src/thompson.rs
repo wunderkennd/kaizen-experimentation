@@ -110,6 +110,7 @@ pub fn select_arm<R: Rng>(arms: &[BetaArm], rng: &mut R) -> ArmSelection {
         arm_id: arms[best_idx].arm_id.clone(),
         assignment_probability,
         all_arm_probabilities,
+        is_uniform_random: false,
     }
 }
 

@@ -126,6 +126,7 @@ impl BanditPolicyService for RealBanditService {
                     arm_id: selection.arm_id,
                     assignment_probability: selection.assignment_probability,
                     all_arm_probabilities: selection.all_arm_probabilities,
+                    is_uniform_random: false,
                 }));
             }
         }
@@ -149,6 +150,7 @@ impl BanditPolicyService for RealBanditService {
                     arm_id: selection.arm_id,
                     assignment_probability: selection.assignment_probability,
                     all_arm_probabilities: selection.all_arm_probabilities,
+                    is_uniform_random: false,
                 }));
             }
         }
@@ -171,6 +173,7 @@ impl BanditPolicyService for RealBanditService {
                     arm_id: selection.arm_id,
                     assignment_probability: selection.assignment_probability,
                     all_arm_probabilities: selection.all_arm_probabilities,
+                    is_uniform_random: false,
                 }));
             }
         }

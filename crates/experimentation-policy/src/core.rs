@@ -252,6 +252,7 @@ impl PolicyCore {
             arm_id: selection.arm_id,
             assignment_probability: selection.assignment_probability,
             all_arm_probabilities: selection.all_arm_probabilities,
+            is_uniform_random: selection.is_uniform_random,
         })
     }
 

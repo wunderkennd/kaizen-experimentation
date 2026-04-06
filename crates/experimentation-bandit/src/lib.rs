@@ -11,6 +11,7 @@
 pub mod cold_start;
 pub mod linucb;
 pub mod lp_constraints;
+pub mod mad;
 #[cfg(feature = "gpu")]
 pub mod neural;
 pub mod policy;
@@ -26,4 +27,8 @@ pub struct ArmSelection {
     pub arm_id: String,
     pub assignment_probability: f64,
     pub all_arm_probabilities: HashMap<String, f64>,
+    /// Whether this observation was drawn from the uniform random component
+    /// of MAD mixing (ADR-018 Phase 3). When true, this observation is valid
+    /// for e-process computation in M4a.
+    pub is_uniform_random: bool,
 }

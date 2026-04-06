@@ -195,4 +195,7 @@ message ArmSelection {
   double assignment_probability = 2;
   // All arm probabilities at selection time (for IPW computation).
   map<string, double> all_arm_probabilities = 3;
+  // Whether this observation was drawn from the uniform random component (MAD mixing, ADR-018 Phase 3).
+  // When true, this observation is valid for e-process computation in M4a.
+  bool is_uniform_random = 4;
 }

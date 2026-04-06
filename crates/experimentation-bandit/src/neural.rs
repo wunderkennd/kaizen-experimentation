@@ -218,6 +218,7 @@ impl NeuralContextualPolicy {
             arm_id: self.arm_ids[best_idx].clone(),
             assignment_probability,
             all_arm_probabilities,
+            is_uniform_random: false,
         })
     }
 

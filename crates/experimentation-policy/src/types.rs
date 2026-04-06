@@ -19,6 +19,8 @@ pub struct SelectArmResponse {
     pub arm_id: String,
     pub assignment_probability: f64,
     pub all_arm_probabilities: HashMap<String, f64>,
+    /// Whether this observation came from the MAD uniform component (ADR-018 Phase 3).
+    pub is_uniform_random: bool,
 }
 
 /// Reward event sent from the Kafka consumer into the policy core.
