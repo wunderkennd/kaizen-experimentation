@@ -1,6 +1,6 @@
 # Phase 5 Implementation Plan
 
-**Status**: Sprint 5.2 in progress (2026-03-24)
+**Status**: Sprint 5.4 in progress (2026-04-06)
 **Owner**: Multiclaude (7 agents, supervisor daemon)
 **ADRs**: 011–025 (15 decisions, 6 clusters)
 **Sprint length**: ~3 weeks each; 6 sprints total (5.0–5.5)
@@ -13,9 +13,9 @@
 |--------|-------|-------|--------|
 | 5.0 | 1–3 | Schema & Foundations | ✅ Complete |
 | 5.1 | 4–6 | Measurement Foundations | ✅ Complete |
-| 5.2 | 7–9 | Statistical Core | 🔵 In Progress |
-| 5.3 | 10–12 | Constraints & New Experiment Types | 🟡 Planned |
-| 5.4 | 13–15 | Slate Bandits & Meta-Experiments | 🟡 Planned |
+| 5.2 | 7–9 | Statistical Core | ✅ Complete |
+| 5.3 | 10–12 | Constraints & New Experiment Types | ✅ Complete |
+| 5.4 | 13–15 | Slate Bandits & Meta-Experiments | 🔵 In Progress |
 | 5.5 | 16–18 | Advanced & Integration | 🟡 Planned |
 
 ---
@@ -53,7 +53,7 @@
 | 5.2.3 | Adaptive sample size recalculation (ADR-020) | Agent-5 | ✅ Complete | #227 | conditional_power, blinded_pooled_variance, zone_classify, GST spending realloc, M5 scheduler |
 | 5.2.4 | Feedback loop detection in experimentation-stats (ADR-021) | Agent-4 | ✅ Complete | #222 | FeedbackLoopDetector, paired t-test, OLS bias correction, M3 contamination SQL |
 | 5.2.5 | AVLM + adaptive N + feedback loop UI (ADR-015/020/021) | Agent-6 | ✅ Complete | #223 | CS boundary plot, zone badge, retraining timeline, bias-corrected estimate panel |
-| 5.2.6 | LP constraint layer (ADR-012) | Agent-4 | 🔵 In Progress | — | KL(q‖p) over constraint polytope, <50μs target, LMAX integration |
+| 5.2.6 | LP constraint layer (ADR-012) | Agent-4 | ✅ Complete | #245 | KL(q‖p) over constraint polytope, <50μs target, LMAX integration |
 
 ---
 
@@ -61,11 +61,11 @@
 
 | # | Task | Owner | Status | PR | Notes |
 |---|------|-------|--------|-----|-------|
-| 5.3.1 | Switchback analysis (ADR-022) | Agent-4 | 🟡 Planned | — | SwitchbackAnalyzer, HAC SE (Newey-West), randomization inference, carryover test |
-| 5.3.2 | Switchback assignment in M1 (ADR-022) | Agent-1 | 🟡 Planned | — | Time-based assignment, 3 designs (simple/balanced/randomized), washout exclusion |
-| 5.3.3 | Synthetic control (ADR-023) | Agent-4 | 🟡 Planned | — | SyntheticControlAnalyzer 4 methods, placebo tests, golden-file vs R augsynth |
-| 5.3.4 | e-LOND OnlineFdrController (ADR-018 Phase 2) | Agent-5 | 🟡 Planned | — | M5 singleton, PostgreSQL persistence, alpha-wealth geometric decay |
-| 5.3.5 | Switchback + SCM M6 UI tabs | Agent-6 | 🟡 Planned | — | Block timeline, ACF plot, treated vs synthetic control, placebo panel |
+| 5.3.1 | Switchback analysis (ADR-022) | Agent-4 | ✅ Complete | #258 | SwitchbackAnalyzer, HAC SE (Newey-West), randomization inference, carryover test |
+| 5.3.2 | Switchback assignment in M1 (ADR-022) | Agent-1 | ✅ Complete | #229 | Time-based assignment, 3 designs (simple/balanced/randomized), washout exclusion |
+| 5.3.3 | Synthetic control (ADR-023) | Agent-4 | ✅ Complete | #243, #258 | SyntheticControlAnalyzer 4 methods, placebo tests, golden-file vs R augsynth |
+| 5.3.4 | e-LOND OnlineFdrController (ADR-018 Phase 2) | Agent-5 | ✅ Complete | #231 | M5 singleton, PostgreSQL persistence, alpha-wealth geometric decay |
+| 5.3.5 | Switchback + SCM M6 UI tabs | Agent-6 | ✅ Complete | #252 | Block timeline, ACF plot, treated vs synthetic control, placebo panel |
 
 ---
 
@@ -99,22 +99,22 @@
 | ADR | Title | Cluster | Status | Sprint Done | PR(s) |
 |-----|-------|---------|--------|-------------|-------|
 | ADR-011 | Multi-objective bandit reward | A | ✅ Complete | 5.2 | #221, #228 |
-| ADR-012 | LP constraint post-processing | A | 🔵 In Progress | 5.2/5.3 | — |
-| ADR-013 | Meta-experiments | A | 🟡 Planned | 5.4 | — |
+| ADR-012 | LP constraint post-processing | A | ✅ Complete | 5.2 | #245 |
+| ADR-013 | Meta-experiments | A | 🔵 In Progress | 5.4 | #249, #259 |
 | ADR-014 | Provider-side metrics | A | ✅ Complete | 5.1 | #208, #211, #212 |
 | ADR-015 P1 | AVLM sequential CUPED | B | ✅ Complete | 5.0/5.2 | #199, #226 |
 | ADR-015 P2 | MLRATE cross-fitting | B | 🟡 Planned | 5.5 | — |
-| ADR-016 | Slate bandit optimization | C | 🟡 Planned | 5.4 | — |
+| ADR-016 | Slate bandit optimization | C | 🔵 In Progress | 5.4 | #253 |
 | ADR-017 P1 | TC/JIVE calibration fix | C | ✅ Complete | 5.0 | #198 |
 | ADR-017 P2 | ORL estimator | C | 🟡 Planned | 5.5 | — |
 | ADR-018 P1 | E-value computation | B | ✅ Complete | 5.0 | #200 |
-| ADR-018 P2 | e-LOND FDR controller | B | 🟡 Planned | 5.3 | — |
+| ADR-018 P2 | e-LOND FDR controller | B | ✅ Complete | 5.3 | #231, #267 |
 | ADR-018 P3 | MAD e-processes | B | 🟡 Planned | 5.5 | — |
-| ADR-019 | Portfolio optimization | E | 🟡 Planned | 5.4 | — |
+| ADR-019 | Portfolio optimization | E | 🔵 In Progress | 5.4 | #250, #261 |
 | ADR-020 | Adaptive sample size | B | ✅ Complete | 5.2 | #227 |
 | ADR-021 | Feedback loop interference | E | ✅ Complete | 5.1/5.2 | #209, #222 |
-| ADR-022 | Switchback experiments | D | 🟡 Planned | 5.3 | — |
-| ADR-023 | Synthetic control | D | 🟡 Planned | 5.3 | — |
+| ADR-022 | Switchback experiments | D | ✅ Complete | 5.3 | #229, #252, #258, #259 |
+| ADR-023 | Synthetic control | D | ✅ Complete | 5.3 | #243, #252, #258 |
 | ADR-024 | M7 Rust port | F | ✅ Complete | 5.0/5.1 | #197, #215 |
 | ADR-025 | M5 conditional Rust port | F | 🔵 Conditional | 5.5 eval | — |
 

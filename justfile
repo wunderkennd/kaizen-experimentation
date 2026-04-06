@@ -527,7 +527,7 @@ evening sprint_num:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "=== Evening Handoff ==="
-    cd "$(eval echo {{kaizen_repo}})" && gt down 2>/dev/null || true
+    (cd "$(eval echo {{kaizen_repo}})" && gt down 2>/dev/null) || true
     git checkout main && git pull origin main
     just autonomous-sprint {{sprint_num}}
     echo ""
@@ -535,16 +535,24 @@ evening sprint_num:
 
 # --- Work Tracking (GitHub Issues) ---
 
-# Show current sprint Issues
-sprint-status milestone="":
+# Show current sprint Issues (queries by label, falls back to milestone)
+sprint-status sprint_label="":
     #!/usr/bin/env bash
-    if [ -z "{{milestone}}" ]; then
-      MS=$(gh api repos/:owner/:repo/milestones --jq '[.[] | select(.state=="open")] | sort_by(.due_on) | .[0].title' 2>/dev/null)
+    if [ -z "{{sprint_label}}" ]; then
+      # Find the earliest open sprint label with issues
+      for s in 5.0 5.1 5.2 5.3 5.4 5.5; do
+        COUNT=$(gh issue list --label "sprint-$s" --state open --json number --jq 'length' 2>/dev/null)
+        if [ "$COUNT" -gt 0 ]; then
+          LABEL="sprint-$s"
+          break
+        fi
+      done
+      LABEL="${LABEL:-sprint-5.0}"
     else
-      MS="{{milestone}}"
+      LABEL="sprint-{{sprint_label}}"
     fi
-    echo "=== $MS ==="
-    gh issue list --milestone "$MS" \
+    echo "=== $LABEL ==="
+    gh issue list --label "$LABEL" \
       --json number,title,state,assignees,labels \
       --jq '.[] | "\(.state)\t\(.assignees | map(.login) | join(",") // "unassigned")\t#\(.number)\t\(.title)"'
 
@@ -607,26 +615,39 @@ autonomous-shutdown:
     multiclaude stop 2>/dev/null || true
     echo "✓ Multiclaude fully stopped."
 
-# Sprint launchers read Issues from the milestone and create workers
+# Sprint launchers read Issues by label (primary) with milestone fallback
 autonomous-sprint sprint_num:
     #!/usr/bin/env bash
     set -euo pipefail
     multiclaude start 2>/dev/null || true
+    # Normalize sprint number to label format (e.g., "2" → "sprint-5.2", "5.2" → "sprint-5.2")
     case "{{sprint_num}}" in
-      0) MS="Sprint 5.0: Schema & Foundations" ;;
-      1) MS="Sprint 5.1: Measurement Foundations" ;;
-      2) MS="Sprint 5.2: Statistical Core" ;;
-      3) MS="Sprint 5.3: Constraints & New Experiment Types" ;;
-      4) MS="Sprint 5.4: Slate Bandits & Meta-Experiments" ;;
-      5) MS="Sprint 5.5: Advanced & Integration" ;;
-      *) echo "Unknown sprint: {{sprint_num}}"; exit 1 ;;
+      0|5.0) LABEL="sprint-5.0"; MS="Sprint 5.0: Schema & Foundations" ;;
+      1|5.1) LABEL="sprint-5.1"; MS="Sprint 5.1: Measurement Foundations" ;;
+      2|5.2) LABEL="sprint-5.2"; MS="Sprint 5.2: Statistical Core" ;;
+      3|5.3) LABEL="sprint-5.3"; MS="Sprint 5.3: Constraints & New Experiment Types" ;;
+      4|5.4) LABEL="sprint-5.4"; MS="Sprint 5.4: Slate Bandits & Meta-Experiments" ;;
+      5|5.5) LABEL="sprint-5.5"; MS="Sprint 5.5: Advanced & Integration" ;;
+      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5 or 5.0-5.5."; exit 1 ;;
     esac
     echo "=== Launching workers for: $MS ==="
-    gh issue list --milestone "$MS" --state open --json number,title,body \
-      --jq '.[] | "\(.number)\t\(.title)\t\(.body)"' | \
-    while IFS=$'\t' read -r num title body; do
+    # Query by label first (always present), fall back to milestone
+    ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title,body \
+      --jq '.[] | "\(.number)\t\(.title)\t\(.body)"' 2>/dev/null)
+    if [ -z "$ISSUES" ]; then
+      echo "  No issues found with label '$LABEL', trying milestone..."
+      ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title,body \
+        --jq '.[] | "\(.number)\t\(.title)\t\(.body)"' 2>/dev/null)
+    fi
+    if [ -z "$ISSUES" ]; then
+      echo "  ⚠ No open issues found for sprint {{sprint_num}}. Nothing to launch."
+      exit 0
+    fi
+    COUNT=0
+    echo "$ISSUES" | while IFS=$'\t' read -r num title body; do
       echo "  → Issue #$num: $title"
       multiclaude worker create "$title. $body. Branch: use agent-N/feat/adr-XXX naming. PR must include 'Closes #$num'."
+      COUNT=$((COUNT + 1))
     done
     echo "✓ Workers launched for $MS"
     echo "Monitor: just autonomous-status"
