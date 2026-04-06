@@ -55,7 +55,9 @@ func TestGetPortfolioAllocation_SingleRunning(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	resp, err := env.client.GetPortfolioAllocation(ctx, connect.NewRequest(&mgmtv1.GetPortfolioAllocationRequest{}))
+	resp, err := env.client.GetPortfolioAllocation(ctx, connect.NewRequest(&mgmtv1.GetPortfolioAllocationRequest{
+		LayerId: layer.LayerId,
+	}))
 	require.NoError(t, err)
 
 	// Find our experiment in the allocations.
@@ -106,6 +108,7 @@ func TestGetPortfolioAllocation_PriorityOverride(t *testing.T) {
 
 	// exp1 gets priority 5, exp2 gets priority 1.
 	resp, err := env.client.GetPortfolioAllocation(ctx, connect.NewRequest(&mgmtv1.GetPortfolioAllocationRequest{
+		LayerId: layer.LayerId,
 		PriorityOverrides: map[string]int32{
 			exp1.Msg.ExperimentId: 5,
 			exp2.Msg.ExperimentId: 1,
