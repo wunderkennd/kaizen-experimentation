@@ -28,6 +28,7 @@ pub enum ManagementCommand {
     GetSnapshot(GetSnapshotRequest),
     RollbackPolicy(RollbackPolicyRequest),
     /// ADR-013: register isolated bandit policies for each variant of a META experiment.
+    #[allow(dead_code)] // constructed by gRPC handler (not yet wired)
     RegisterMetaExperiment(RegisterMetaExperimentRequest),
 }
 
