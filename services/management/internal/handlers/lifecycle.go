@@ -609,13 +609,9 @@ func (s *ExperimentService) validateTypeConfigForStart(ctx context.Context, expe
 		return nil
 	}
 
-	if expRow.Type == "META" || expRow.Type == "SWITCHBACK" || expRow.Type == "QUASI" {
+	if expRow.Type == "SWITCHBACK" || expRow.Type == "QUASI" {
 		exp := store.RowToExperiment(expRow, variants, nil)
 		switch expRow.Type {
-		case "META":
-			if verr := validation.ValidateMetaExperimentForStart(exp); verr != nil {
-				return verr
-			}
 		case "SWITCHBACK":
 			if verr := validation.ValidateSwitchbackForStart(exp); verr != nil {
 				return verr
@@ -714,7 +710,8 @@ func extractTrafficPercentage(typeConfig json.RawMessage) float64 {
 }
 
 // validateMetaForStart validates MetaExperimentConfig during the STARTING phase (ADR-013).
-// Checks that variant_objectives is non-empty and all variant_ids reference declared variants.
+// Checks that variant_objectives is non-empty, all variant_ids reference declared variants,
+// there is exactly one objective per variant, and outcome_metric_ids reference existing metrics.
 func (s *ExperimentService) validateMetaForStart(ctx context.Context, experimentID string) error {
 	expRow, variants, _, err := s.store.GetByID(ctx, experimentID)
 	if err != nil {
@@ -733,6 +730,13 @@ func (s *ExperimentService) validateMetaForStart(ctx context.Context, experiment
 		variantSet[v.VariantID] = struct{}{}
 	}
 
+	// ADR-013: Enforce 1:1 mapping between variants and objectives.
+	if len(objectives) != len(variants) {
+		return connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("META experiment %q: variant_objectives count (%d) must equal variants count (%d)",
+				experimentID, len(objectives), len(variants)))
+	}
+
 	for i, vid := range objectives {
 		if _, ok := variantSet[vid]; !ok {
 			return connect.NewError(connect.CodeInvalidArgument,
@@ -740,6 +744,20 @@ func (s *ExperimentService) validateMetaForStart(ctx context.Context, experiment
 					experimentID, i, vid))
 		}
 	}
+
+	// ADR-013: Validate outcome_metric_ids reference existing metrics.
+	outcomeMetricIDs := extractMetaOutcomeMetricIDs(expRow.TypeConfig)
+	if len(outcomeMetricIDs) > 0 {
+		missing, mErr := s.metrics.ExistAll(ctx, outcomeMetricIDs)
+		if mErr != nil {
+			return internalError("check META outcome metric existence", mErr)
+		}
+		if missing != "" {
+			return connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("META experiment %q: outcome_metric_id %q does not exist", experimentID, missing))
+		}
+	}
+
 	return nil
 }
 
@@ -771,6 +789,29 @@ func extractMetaVariantObjectives(typeConfig json.RawMessage) []string {
 		ids = append(ids, obj.VariantID)
 	}
 	return ids
+}
+
+// extractMetaOutcomeMetricIDs reads outcome_metric_ids from the
+// meta_experiment_config nested in the experiment's type_config JSONB.
+func extractMetaOutcomeMetricIDs(typeConfig json.RawMessage) []string {
+	if len(typeConfig) == 0 {
+		return nil
+	}
+	var tc map[string]json.RawMessage
+	if err := json.Unmarshal(typeConfig, &tc); err != nil {
+		return nil
+	}
+	raw, ok := tc["meta_experiment_config"]
+	if !ok {
+		return nil
+	}
+	var mc struct {
+		OutcomeMetricIDs []string `json:"outcome_metric_ids"`
+	}
+	if err := json.Unmarshal(raw, &mc); err != nil {
+		return nil
+	}
+	return mc.OutcomeMetricIDs
 }
 
 // validateQoeMetricsForStart checks that at least one metric in the experiment's

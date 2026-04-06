@@ -617,6 +617,39 @@ func TestValidateMetaExperimentForStart(t *testing.T) {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
+
+	t.Run("variant count mismatch — more objectives than variants", func(t *testing.T) {
+		exp := validMetaExperiment()
+		exp.MetaExperimentConfig.VariantObjectives = append(
+			exp.MetaExperimentConfig.VariantObjectives,
+			&commonv1.MetaVariantObjective{
+				VariantId:     "v-extra",
+				RewardWeights: map[string]float64{"watch_time_minutes": 1.0},
+			},
+		)
+		err := ValidateMetaExperimentForStart(exp)
+		if err == nil || err.Code() != connect.CodeInvalidArgument {
+			t.Errorf("expected InvalidArgument for count mismatch, got %v", err)
+		}
+	})
+
+	t.Run("variant count mismatch — fewer objectives than variants", func(t *testing.T) {
+		exp := validMetaExperiment()
+		exp.MetaExperimentConfig.VariantObjectives = exp.MetaExperimentConfig.VariantObjectives[:1]
+		err := ValidateMetaExperimentForStart(exp)
+		if err == nil || err.Code() != connect.CodeInvalidArgument {
+			t.Errorf("expected InvalidArgument for count mismatch, got %v", err)
+		}
+	})
+
+	t.Run("duplicate variant_id in objectives", func(t *testing.T) {
+		exp := validMetaExperiment()
+		exp.MetaExperimentConfig.VariantObjectives[1].VariantId = "v-control"
+		err := ValidateMetaExperimentForStart(exp)
+		if err == nil || err.Code() != connect.CodeInvalidArgument {
+			t.Errorf("expected InvalidArgument for duplicate variant_id, got %v", err)
+		}
+	})
 }
 
 func TestValidateSwitchbackForStart(t *testing.T) {
