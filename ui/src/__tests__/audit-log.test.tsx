@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
 import { describe, it, expect } from 'vitest';
 import AuditLogPage from '@/app/audit/page';
+import { ToastProvider } from '@/lib/toast-context';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 
@@ -22,7 +23,11 @@ vi.mock('next/link', () => ({
 }));
 
 async function renderAndWait() {
-  render(<AuditLogPage />);
+  render(
+    <ToastProvider>
+      <AuditLogPage />
+    </ToastProvider>
+  );
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Audit Log' })).toBeInTheDocument();
     expect(screen.getAllByText('homepage_recs_v2').length).toBeGreaterThanOrEqual(1);
@@ -173,7 +178,11 @@ describe('Audit Log Page', () => {
       }),
     );
 
-    render(<AuditLogPage />);
+    render(
+      <ToastProvider>
+        <AuditLogPage />
+      </ToastProvider>
+    );
     await waitFor(() => {
       expect(screen.getByText('Created experiment')).toBeInTheDocument();
     });

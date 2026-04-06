@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { AuditLogEntry } from '@/lib/types';
 import { AuditActionBadge } from '@/components/audit-action-badge';
+import { CopyButton } from '@/components/copy-button';
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -54,12 +55,11 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
         <tbody className="divide-y divide-gray-200">
           {entries.map((entry) => {
             const isExpanded = expandedId === entry.entryId;
-            const hasExpandableContent = entry.previousValue || entry.newValue;
             return (
               <tr
                 key={entry.entryId}
-                className={`${hasExpandableContent ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                onClick={() => hasExpandableContent && toggleExpand(entry.entryId)}
+                className="cursor-pointer hover:bg-gray-50"
+                onClick={() => toggleExpand(entry.entryId)}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
@@ -82,23 +82,51 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
                   <div>{entry.details}</div>
-                  {hasExpandableContent && (
-                    <span className="ml-1 text-xs text-gray-400">
-                      {isExpanded ? '(click to collapse)' : '(click to expand)'}
-                    </span>
-                  )}
-                  {isExpanded && hasExpandableContent && (
+                  <span className="text-xs text-gray-400">
+                    {isExpanded ? '(click to collapse)' : '(click to expand details)'}
+                  </span>
+                  {isExpanded && (
                     <div className="mt-2 rounded-md bg-gray-50 p-3 text-xs" data-testid={`audit-detail-${entry.entryId}`}>
+                      <div className="mb-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-gray-500">Experiment ID: </span>
+                          <CopyButton
+                            value={entry.experimentId}
+                            label="Copy experiment ID"
+                            successMessage="Experiment ID copied"
+                            className="h-4 w-4"
+                          />
+                        </div>
+                        <code className="mt-1 block rounded bg-gray-100 px-1.5 py-1 font-mono text-[10px] text-gray-600 break-all border border-gray-200">
+                          {entry.experimentId}
+                        </code>
+                      </div>
                       {entry.previousValue && (
                         <div className="mb-2">
-                          <span className="font-semibold text-red-600">Previous: </span>
-                          <code className="break-all">{entry.previousValue}</code>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-red-600">Previous: </span>
+                            <CopyButton
+                              value={entry.previousValue}
+                              label="Copy previous value"
+                              successMessage="Previous value copied"
+                              className="h-4 w-4"
+                            />
+                          </div>
+                          <code className="mt-1 block break-all rounded bg-red-50/50 p-1">{entry.previousValue}</code>
                         </div>
                       )}
                       {entry.newValue && (
                         <div>
-                          <span className="font-semibold text-green-600">New: </span>
-                          <code className="break-all">{entry.newValue}</code>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-green-600">New: </span>
+                            <CopyButton
+                              value={entry.newValue}
+                              label="Copy new value"
+                              successMessage="New value copied"
+                              className="h-4 w-4"
+                            />
+                          </div>
+                          <code className="mt-1 block break-all rounded bg-green-50/50 p-1">{entry.newValue}</code>
                         </div>
                       )}
                     </div>
