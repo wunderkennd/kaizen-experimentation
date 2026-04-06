@@ -1,0 +1,20 @@
+WITH fold_data AS (
+    SELECT user_id, variant_id,
+        {{range $i, $et := .MLRATEFeatureEventTypes}}feature_{{$et}},
+        {{end}}fold_id
+    FROM delta.mlrate_features
+    WHERE experiment_id = '{{.ExperimentID}}'
+      AND computation_date = CAST('{{.ComputationDate}}' AS DATE)
+      AND fold_id = {{.MLRATEFoldID}}
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    fd.user_id,
+    fd.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    ai_predict(
+        '{{.MLRATEModelURI}}/fold_{{.MLRATEFoldID}}',
+        NAMED_STRUCT({{range $i, $et := .MLRATEFeatureEventTypes}}{{if $i}}, {{end}}'{{$et}}', fd.feature_{{$et}}{{end}})
+    ) AS mlrate_covariate,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM fold_data fd

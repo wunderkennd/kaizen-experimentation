@@ -1,0 +1,31 @@
+WITH exposed_users AS (
+    SELECT DISTINCT user_id, variant_id
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+),
+pre_experiment_events AS (
+    SELECT me.user_id, me.event_type, AVG(me.value) AS avg_value
+    FROM delta.metric_events me
+    WHERE me.event_type IN ({{range $i, $et := .MLRATEFeatureEventTypes}}{{if $i}}, {{end}}'{{$et}}'{{end}})
+      AND me.event_date >= DATE_SUB(CAST('{{.ExperimentStartDate}}' AS DATE), {{.MLRATELookbackDays}})
+      AND me.event_date < CAST('{{.ExperimentStartDate}}' AS DATE)
+    GROUP BY me.user_id, me.event_type
+),
+user_features AS (
+    SELECT
+        eu.user_id,
+        eu.variant_id,
+        {{range $i, $et := .MLRATEFeatureEventTypes}}COALESCE(MAX(CASE WHEN pee.event_type = '{{$et}}' THEN pee.avg_value END), 0.0) AS feature_{{$et}},
+        {{end}}CAST(ABS(HASH(eu.user_id)) % {{.MLRATEFolds}} + 1 AS INT) AS fold_id
+    FROM exposed_users eu
+    LEFT JOIN pre_experiment_events pee ON eu.user_id = pee.user_id
+    GROUP BY eu.user_id, eu.variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    uf.user_id,
+    uf.variant_id,
+    {{range $i, $et := .MLRATEFeatureEventTypes}}uf.feature_{{$et}},
+    {{end}}uf.fold_id,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date
+FROM user_features uf
