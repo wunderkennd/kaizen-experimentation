@@ -1370,6 +1370,7 @@ impl BanditPolicyService for MockBanditService {
             arm_id: self.arm_id.clone(),
             assignment_probability: self.probability,
             all_arm_probabilities: all_probs,
+            is_uniform_random: false,
         }))
     }
 
