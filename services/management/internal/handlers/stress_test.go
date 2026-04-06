@@ -254,7 +254,7 @@ func TestStress_AuditTrailCompleteness(t *testing.T) {
 		`SELECT action, previous_state, new_state, actor_email
 		 FROM audit_trail
 		 WHERE experiment_id = $1
-		 ORDER BY created_at ASC`, id)
+		 ORDER BY created_at ASC, audit_id ASC`, id)
 	require.NoError(t, err)
 	defer rows.Close()
 
