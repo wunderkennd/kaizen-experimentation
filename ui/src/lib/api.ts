@@ -10,7 +10,7 @@ import type {
   AuditLogEntry, AuditAction, ListAuditLogResponse,
   ProviderHealthResult,
   AvlmResult, AdaptiveNResult, FeedbackLoopResult,
-  OnlineFdrState,
+  OnlineFdrState, OptimalAlphaRecommendation,
   PortfolioAllocationResult, PortfolioMetricsResult,
   ParetoFrontierResult,
   MetaExperimentResult,
@@ -763,6 +763,12 @@ export async function getPortfolioAllocation(): Promise<PortfolioAllocationResul
 export async function getPortfolioMetrics(): Promise<PortfolioMetricsResult> {
   return callRpc<Record<string, never>, PortfolioMetricsResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetPortfolioMetrics', {},
+  );
+}
+
+export async function getOptimalAlpha(experimentId: string): Promise<OptimalAlphaRecommendation> {
+  return callRpc<{ experimentId: string }, OptimalAlphaRecommendation>(
+    ANALYSIS_URL, ANALYSIS_SVC, 'GetOptimalAlpha', { experimentId },
   );
 }
 
