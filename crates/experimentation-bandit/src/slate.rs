@@ -436,8 +436,8 @@ impl SlatePolicy {
         match clicked_position {
             Some(click_pos) if click_pos < n => {
                 // Slots before click: examined but not clicked → failure update.
-                for pos in 0..click_pos {
-                    let arm_id = slate[pos].clone();
+                for (pos, arm_id) in slate.iter().enumerate().take(click_pos) {
+                    let arm_id = arm_id.clone();
                     let debiased_zero = self.position_bias.debias_reward(0.0, pos);
                     if let Some(arm) = self.slot_arms[pos].get_mut(&arm_id) {
                         arm.update(debiased_zero);
@@ -453,8 +453,8 @@ impl SlatePolicy {
             }
             _ => {
                 // No click (or click_pos out of range): all slots examined, none clicked.
-                for pos in 0..n {
-                    let arm_id = slate[pos].clone();
+                for (pos, arm_id) in slate.iter().enumerate().take(n) {
+                    let arm_id = arm_id.clone();
                     let debiased_zero = self.position_bias.debias_reward(0.0, pos);
                     if let Some(arm) = self.slot_arms[pos].get_mut(&arm_id) {
                         arm.update(debiased_zero);
