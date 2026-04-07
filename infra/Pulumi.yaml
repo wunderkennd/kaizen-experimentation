@@ -1,0 +1,6 @@
+name: kaizen-experimentation
+runtime:
+  name: go
+  options:
+    binary: kaizen-experimentation
+description: Infrastructure for the Kaizen SVOD experimentation platform

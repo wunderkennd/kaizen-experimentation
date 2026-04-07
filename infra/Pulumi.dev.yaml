@@ -1,0 +1,14 @@
+config:
+  aws:region: us-east-1
+  kaizen-experimentation:environment: dev
+  kaizen-experimentation:vpcCidr: "10.0.0.0/16"
+  kaizen-experimentation:rdsInstanceClass: db.t4g.medium
+  kaizen-experimentation:rdsMultiAz: "false"
+  kaizen-experimentation:mskBrokerCount: "2"
+  kaizen-experimentation:mskInstanceType: kafka.t3.small
+  kaizen-experimentation:redisNodeType: cache.t4g.medium
+  kaizen-experimentation:m4bInstanceType: t3.large
+  kaizen-experimentation:natGatewayCount: "1"
+  kaizen-experimentation:wafEnabled: "false"
+  kaizen-experimentation:fargateMinTasks: "1"
+  kaizen-experimentation:cloudwatchRetentionDays: "7"
