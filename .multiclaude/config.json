@@ -9,18 +9,17 @@
     "worktree_refresh_interval_seconds": 120
   },
   "worker": {
-    "branch_prefix": "agent-",
+    "branch_prefix": "infra-",
     "auto_push": true,
     "create_pr_on_completion": true,
-    "pr_labels": ["multiclaude", "phase-5"],
-    "status_file_pattern": "docs/coordination/status/agent-{agent_number}-status.md"
+    "pr_labels": ["multiclaude", "iac"],
+    "status_file_pattern": "docs/coordination/status/infra-{agent_number}-status.md"
   },
   "ci": {
     "required_checks": [
-      "cargo test --workspace",
-      "go test ./...",
-      "buf lint proto/",
-      "buf breaking proto/ --against .git#branch=main"
+      "cd infra && go build ./...",
+      "cd infra && go vet ./...",
+      "cd infra && go test ./..."
     ]
   }
 }

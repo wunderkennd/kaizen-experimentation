@@ -1,6 +1,6 @@
 # Phase 5 Implementation Plan
 
-**Status**: Sprint 5.5 in progress (2026-04-06)
+**Status**: COMPLETE (2026-04-06) — All 6 sprints finished, 41 PRs merged
 **Owner**: Multiclaude (7 agents, supervisor daemon)
 **ADRs**: 011–025 (15 decisions, 6 clusters)
 **Sprint length**: ~3 weeks each; 6 sprints total (5.0–5.5)
@@ -16,7 +16,7 @@
 | 5.2 | 7–9 | Statistical Core | ✅ Complete |
 | 5.3 | 10–12 | Constraints & New Experiment Types | ✅ Complete |
 | 5.4 | 13–15 | Slate Bandits & Meta-Experiments | ✅ Complete |
-| 5.5 | 16–18 | Advanced & Integration | 🔵 In Progress |
+| 5.5 | 16–18 | Advanced & Integration | ✅ Complete |
 
 ---
 
@@ -85,12 +85,12 @@
 
 | # | Task | Owner | Status | PR | Notes |
 |---|------|-------|--------|-----|-------|
-| 5.5.1 | ORL doubly-robust estimator (ADR-017 Phase 2) | Agent-4 | 🟡 Planned | — | Q-function, density ratio, DR combination, M3 user_trajectories table |
-| 5.5.2 | MLRATE cross-fitting (ADR-015 Phase 2) | Agent-3 | 🟡 Planned | — | LightGBM K-fold cross-fitted predictions in metric_summaries |
-| 5.5.3 | MAD e-processes (ADR-018 Phase 3) | Agent-4 | 🟡 Planned | — | M4b uniform mixing, MAD e-process from uniform component |
-| 5.5.4 | E-value UI + FDR badge (ADR-018) | Agent-6 | 🟡 Planned | — | e-value column alongside p-values, FDR decision badge, optimal alpha widget |
-| 5.5.5 | Phase 5 integration test suite | Agent-4 | 🟡 Planned | — | 4 E2E tests: multi-objective+AVLM, switchback, SCM, meta-experiment |
-| 5.5.6 | ADR-025 trigger evaluation | Coordinator | ✅ Complete | — | **TRIGGER MET**: 3/5 complete (019✅, 020✅, 021✅). M5 Rust port approved for Phase 6. |
+| 5.5.1 | ORL doubly-robust estimator (ADR-017 Phase 2) | Agent-4 | ✅ Complete | #335 | Q-function, density ratio, DR combination, M3 user_trajectories table |
+| 5.5.2 | MLRATE cross-fitting (ADR-015 Phase 2) | Agent-3 | ✅ Complete | #334 | LightGBM K-fold cross-fitted predictions in metric_summaries |
+| 5.5.3 | MAD e-processes (ADR-018 Phase 3) | Agent-4 | ✅ Complete | #337 | M4b uniform mixing, MAD e-process from uniform component |
+| 5.5.4 | E-value UI + FDR badge (ADR-018) | Agent-6 | ✅ Complete | #333 | e-value column alongside p-values, FDR decision badge, optimal alpha widget |
+| 5.5.5 | Phase 5 integration test suite | Agent-4 | ✅ Complete | #336 | 4 E2E tests: multi-objective+AVLM, switchback, SCM, meta-experiment |
+| 5.5.6 | ADR-025 trigger evaluation | Coordinator | ✅ Complete | #332 | TRIGGER MET: 5/5 (ADR-015 P2 ✅, ADR-018 ✅, ADR-019 ✅, ADR-020 ✅, ADR-021 ✅) |
 
 ---
 
@@ -103,22 +103,22 @@
 | ADR-013 | Meta-experiments | A | ✅ Complete | 5.4 | #249, #259, #331 |
 | ADR-014 | Provider-side metrics | A | ✅ Complete | 5.1 | #208, #211, #212 |
 | ADR-015 P1 | AVLM sequential CUPED | B | ✅ Complete | 5.0/5.2 | #199, #226 |
-| ADR-015 P2 | MLRATE cross-fitting | B | 🟡 Planned | 5.5 | — |
+| ADR-015 P2 | MLRATE cross-fitting | B | ✅ Complete | 5.5 | #334 |
 | ADR-016 | Slate bandit optimization | C | ✅ Complete | 5.4 | #253, #327, #329 |
 | ADR-017 P1 | TC/JIVE calibration fix | C | ✅ Complete | 5.0 | #198 |
-| ADR-017 P2 | ORL estimator | C | 🟡 Planned | 5.5 | — |
+| ADR-017 P2 | ORL estimator | C | ✅ Complete | 5.5 | #335 |
 | ADR-018 P1 | E-value computation | B | ✅ Complete | 5.0 | #200 |
 | ADR-018 P2 | e-LOND FDR controller | B | ✅ Complete | 5.3 | #231, #267 |
-| ADR-018 P3 | MAD e-processes | B | 🟡 Planned | 5.5 | — |
-| ADR-019 | Portfolio optimization | E | ✅ Complete | 5.4 | #250, #261, #328 |
+| ADR-018 P3 | MAD e-processes | B | ✅ Complete | 5.5 | #337 |
+| ADR-019 | Portfolio optimization | E | ✅ Complete | 5.4 | #250, #261, #328, #330 |
 | ADR-020 | Adaptive sample size | B | ✅ Complete | 5.2 | #227 |
 | ADR-021 | Feedback loop interference | E | ✅ Complete | 5.1/5.2 | #209, #222 |
 | ADR-022 | Switchback experiments | D | ✅ Complete | 5.3 | #229, #252, #258, #259 |
 | ADR-023 | Synthetic control | D | ✅ Complete | 5.3 | #243, #252, #258 |
 | ADR-024 | M7 Rust port | F | ✅ Complete | 5.0/5.1 | #197, #215 |
-| ADR-025 | M5 conditional Rust port | F | ✅ Trigger Met | 5.5 eval | — | 3/5 prerequisites complete (019, 020, 021); proceed to Phase 6 |
+| ADR-025 | M5 conditional Rust port | F | ✅ Trigger MET | 5.5 | #332 |
 
-**Legend**: ✅ Complete | 🔵 In Progress/Conditional | 🟡 Planned | ⚪ Blocked
+**Legend**: ✅ Complete | All 15 ADRs now complete.
 
 ---
 
@@ -126,23 +126,22 @@
 
 Port M5 to Rust when ≥3 of {ADR-015 P2, ADR-018 (full), ADR-019, ADR-020, ADR-021} are complete:
 
-| ADR | Requirement | Status | Evidence |
-|-----|-------------|--------|----------|
-| ADR-015 Phase 2 | MLRATE in M3 | 🟡 Planned | Issue #313 open; no code yet |
-| ADR-018 (all phases) | OnlineFdrController + MAD | 🔵 P1+P2 done | P3 (MAD e-processes) issue #314 open |
-| ADR-019 | Portfolio optimization | ✅ Complete | PR #328 merged 2026-04-06; issue #310 closed |
-| ADR-020 | Adaptive sample size | ✅ Complete | PR #227 merged |
-| ADR-021 | Feedback loop interference | ✅ Complete | PR #222 merged |
+| ADR | Requirement | Status |
+|-----|-------------|--------|
+| ADR-015 Phase 2 | MLRATE in M3 | ✅ Complete (#334) |
+| ADR-018 (all phases) | OnlineFdrController + MAD | ✅ Complete (#200, #231, #337) |
+| ADR-019 | Portfolio optimization | ✅ Complete (#328, #330) |
+| ADR-020 | Adaptive sample size | ✅ Complete (#227) |
+| ADR-021 | Feedback loop interference | ✅ Complete (#209, #222) |
 
-**Count**: 3/5 complete. **TRIGGER MET** (2026-04-06). M5 Rust port approved for Phase 6 planning.
+**Count**: 5/5 complete. Trigger requires 3. **TRIGGER MET** — M5 Rust port greenlit for Phase 6.
 
 ### Decision Record
 
 - **Evaluated**: 2026-04-06 (Sprint 5.5)
-- **Result**: PROCEED — 3/5 prerequisites satisfied (ADR-019, ADR-020, ADR-021)
+- **Result**: PROCEED — 5/5 prerequisites satisfied
 - **Tipping point**: ADR-019 portfolio optimization completed in Sprint 5.4 (PR #328)
-- **Remaining prerequisites**: ADR-015 P2 and ADR-018 P3 are in-flight Sprint 5.5 work; their completion will further strengthen the Rust stats ecosystem but is not blocking the port
-- **Next step**: Create ADR-025 implementation issues for Phase 6
+- **Next step**: IaC deployment (Sprints I.0–I.2), then Phase 6 M5 Rust port
 
 ---
 

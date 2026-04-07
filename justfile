@@ -628,7 +628,10 @@ autonomous-sprint sprint_num:
       3|5.3) LABEL="sprint-5.3"; MS="Sprint 5.3: Constraints & New Experiment Types" ;;
       4|5.4) LABEL="sprint-5.4"; MS="Sprint 5.4: Slate Bandits & Meta-Experiments" ;;
       5|5.5) LABEL="sprint-5.5"; MS="Sprint 5.5: Advanced & Integration" ;;
-      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5 or 5.0-5.5."; exit 1 ;;
+      I.0) LABEL="sprint-I.0"; MS="Sprint I.0: Scaffold + Foundation" ;;
+      I.1) LABEL="sprint-I.1"; MS="Sprint I.1: Services + Wiring" ;;
+      I.2) LABEL="sprint-I.2"; MS="Sprint I.2: Integration + Hardening" ;;
+      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, or I.0-I.2."; exit 1 ;;
     esac
     echo "=== Launching workers for: $MS ==="
     # Query by label first (always present), fall back to milestone
@@ -649,7 +652,13 @@ autonomous-sprint sprint_num:
       # Fetch full issue body separately to avoid newline parsing issues
       body=$(gh issue view "$num" --json body -q '.body' 2>/dev/null | head -50)
       echo "  → Issue #$num: $title"
-      multiclaude worker create "$title. $body. Branch: use agent-N/feat/adr-XXX naming. PR must include 'Closes #$num'."
+      # Use infra-N branch naming for IaC sprints, agent-N for Phase 5
+      if [[ "$LABEL" == sprint-I.* ]]; then
+        BRANCH_HINT="Branch: use infra-N/feat/description naming."
+      else
+        BRANCH_HINT="Branch: use agent-N/feat/adr-XXX naming."
+      fi
+      multiclaude worker create "$title. $body. $BRANCH_HINT PR must include 'Closes #$num'."
       COUNT=$((COUNT + 1))
     done
     echo "✓ Workers launched for $MS ($COUNT issues)"

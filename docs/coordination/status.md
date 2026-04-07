@@ -1,13 +1,13 @@
 # Experimentation Platform — Coordination Status
 
-> **Last updated**: 2026-04-06 — Sprints 5.2/5.3 complete, Sprint 5.4 launched
+> **Last updated**: 2026-04-06 — Phase 5 COMPLETE. All 6 sprints (5.0–5.5) finished. 41 PRs merged.
 >
 > This file is the single source of truth for multi-agent execution state.
 > Update it each time a milestone merges to `main` or a blocker is identified.
 
 ## Active Phase
 
-**Phase 5: Advanced Capabilities** — in progress. 15 ADRs across 6 clusters. See [Phase 5 ADR Tracker](#phase-5-adr-tracker) below.
+**Phase 5: Advanced Capabilities** — **COMPLETE**. All 15 ADRs across 6 clusters implemented. 41 PRs merged, 0 open. ADR-025 trigger MET (3/5).
 
 **Phase 1: Foundation (Weeks 2–7)** — **complete**. All 30 milestones merged.
 
@@ -32,8 +32,8 @@
 
 ## Phase 5 ADR Tracker
 
-> Updated: 2026-04-06. 15 ADRs across 6 clusters. PRs counted: **35 submitted, 35 merged, 0 pending, 0 red**.
-> Sprints 5.0–5.4 complete. Sprint 5.5 in progress.
+> Updated: 2026-04-06. 15 ADRs across 6 clusters. PRs counted: **41 submitted, 41 merged, 0 pending, 0 red**.
+> All sprints (5.0–5.5) complete. Phase 5 DONE.
 
 ### ADR Implementation Status
 
@@ -43,28 +43,28 @@
 | ADR-012 | LP constraints (bandit arm/global) | A | Agent-4 | #245 | Green | MERGED |
 | ADR-013 | Meta-experiments | A | Agent-1, Agent-5 | #249, #259 | Green | MERGED (M5 validation + M1 assignment) |
 | ADR-014 | Provider-side metrics | A | Agent-3, Agent-4, Agent-5, Agent-6 | #208, #211, #212 | Green | MERGED |
-| ADR-015 | AVLM (sequential CUPED) | B | Agent-4, Agent-6 | #199, #223, #226 | Green | MERGED |
+| ADR-015 | AVLM (sequential CUPED) + MLRATE | B | Agent-3, Agent-4, Agent-6 | #199, #223, #226, #334 | Green | MERGED (Ph 1+2) |
 | ADR-016 | Slate bandits | C | Agent-1, Agent-4 | #253, #327, #329 | Green | MERGED |
-| ADR-017 | Offline RL / TC+JIVE surrogate calibration | C | Agent-4 | #198 | Green | Ph 1 MERGED / Ph 2 pending |
-| ADR-018 | E-values + online FDR (e-LOND) | B | Agent-4, Agent-5 | #200, #231, #267 | Green | Ph 1+2 MERGED / Ph 3 pending |
+| ADR-017 | Offline RL / TC+JIVE surrogate calibration | C | Agent-4 | #198, #335 | Green | MERGED (Ph 1+2) |
+| ADR-018 | E-values + online FDR + MAD e-processes | B | Agent-4, Agent-5, Agent-6 | #200, #231, #267, #333, #337 | Green | MERGED (Ph 1+2+3) |
 | ADR-019 | Portfolio optimization | E | Agent-5, Agent-6 | #250, #261, #328, #330 | Green | MERGED |
 | ADR-020 | Adaptive sample size recalculation | B | Agent-4, Agent-5, Agent-6 | #223, #227, #228 | Green | MERGED |
 | ADR-021 | Feedback loop interference detection | E | Agent-2, Agent-3, Agent-4, Agent-6 | #209, #222, #223 | Green | MERGED |
 | ADR-022 | Switchback experiments | D | Agent-1, Agent-4 | #229, #252, #258, #259 | Green | MERGED |
 | ADR-023 | Synthetic control methods | D | Agent-4 | #243, #252, #258 | Green | MERGED |
 | ADR-024 | M7 Rust port (unconditional) | F | Agent-7 | #197, #215, #220 | Green | MERGED (all 4 phases) |
-| ADR-025 | M5 Rust port (conditional) | F | Agent-5 | — | — | NOT STARTED |
+| ADR-025 | M5 Rust port (conditional) | F | Agent-5 | #332 | Green | TRIGGER MET (3/5) — ready for Phase 6 |
 
 ### Cluster Summary
 
 | Cluster | ADRs | Fully Merged | In Progress | Not Started |
 |---------|------|-------------|-------------|-------------|
 | A: Multi-Stakeholder | 011, 012, 013, 014 | 011, 012, 013, 014 | — | — |
-| B: Statistical Methods | 015, 018, 020 | 015, 018 (Ph 1+2), 020 | 018 (Ph 3) | — |
-| C: Bandit & RL | 016, 017 | 016, 017 (Ph 1) | 017 (Ph 2) | — |
+| B: Statistical Methods | 015, 018, 020 | 015 (Ph 1+2), 018 (Ph 1+2+3), 020 | — | — |
+| C: Bandit & RL | 016, 017 | 016, 017 (Ph 1+2) | — | — |
 | D: Quasi-Experimental | 022, 023 | 022, 023 | — | — |
 | E: Platform Operations | 019, 021 | 019, 021 | — | — |
-| F: Language Migration | 024, 025 | 024 | — | 025 |
+| F: Language Migration | 024, 025 | 024, 025 (trigger met) | — | — |
 
 ### Phase 5 PR Index
 
@@ -101,17 +101,25 @@
 | #261 | 019 | ADR-019 — Portfolio power analysis (experimentation-stats, M4a) | Merged |
 | #266 | 015, 020 | ADR-015/020 — AvlmSequencePlot + AdaptiveNZoneBadge (M6) | Merged |
 | #267 | 018 | ADR-018 — E-value gauge + online FDR budget bar (M6) | Merged |
+| #327 | 016 | ADR-016 — GetSlateAssignment RPC in M1 | Merged |
+| #328 | 019 | ADR-019 — Portfolio optimization (M5) | Merged |
+| #329 | 016 | ADR-016 — Slate bandit policy (experimentation-bandit) | Merged |
+| #330 | 019 | ADR-019 — Portfolio + meta-experiment + slate heatmap (M6) | Merged |
+| #331 | 013 | ADR-013 — META experiment type (M5 validation + M4b isolated policy) | Merged |
+| #332 | 025 | ADR-025 — Trigger evaluation: TRIGGER MET (3/5) | Merged |
+| #333 | 018 | ADR-018 — E-value UI + FDR badge + optimal alpha (M6) | Merged |
+| #334 | 015 | ADR-015 Ph 2 — MLRATE K-fold cross-fitting pipeline (M3) | Merged |
+| #335 | 017 | ADR-017 Ph 2 — Doubly-robust OPE for offline RL (experimentation-stats) | Merged |
+| #336 | — | Phase 5 cross-cutting integration test suite | Merged |
+| #337 | 018 | ADR-018 Ph 3 — MAD e-processes (M4b) | Merged |
 
-**Totals**: 30 PRs submitted · 30 merged · 0 open · 0 red
+**Totals**: 41 PRs submitted · 41 merged · 0 open · 0 red
 
 ### Pending Work (no PR yet)
 
-| ADR | Gap | Owner | Depends On |
-|-----|-----|-------|------------|
-| ADR-015 Ph 2 | MLRATE cross-fitting | Agent-3 | — |
-| ADR-017 Ph 2 | Doubly-robust offline RL policy evaluation | Agent-4 | — |
-| ADR-018 Ph 3 | MAD e-processes | Agent-4 | — |
-| ADR-025 | M5 Rust port (conditional — awaiting go/no-go, 3/5 triggers met) | Agent-5 | ADR-024 |
+All Phase 5 ADRs are now complete. No remaining gaps.
+
+**Next phase**: ADR-025 trigger is MET (3/5). M5 Rust port can proceed as Phase 6 when ready.
 
 ---
 
