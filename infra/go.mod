@@ -1,6 +1,6 @@
 module github.com/kaizen-experimentation/infra
 
-go 1.26.1
+go 1.25
 
 require (
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.2
