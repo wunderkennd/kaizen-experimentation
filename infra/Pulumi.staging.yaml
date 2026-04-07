@@ -1,0 +1,14 @@
+config:
+  aws:region: us-east-1
+  kaizen-experimentation:environment: staging
+  kaizen-experimentation:vpcCidr: "10.1.0.0/16"
+  kaizen-experimentation:rdsInstanceClass: db.r6g.large
+  kaizen-experimentation:rdsMultiAz: "true"
+  kaizen-experimentation:mskBrokerCount: "3"
+  kaizen-experimentation:mskInstanceType: kafka.m5.large
+  kaizen-experimentation:redisNodeType: cache.r6g.large
+  kaizen-experimentation:m4bInstanceType: c6i.xlarge
+  kaizen-experimentation:natGatewayCount: "2"
+  kaizen-experimentation:wafEnabled: "true"
+  kaizen-experimentation:fargateMinTasks: "1"
+  kaizen-experimentation:cloudwatchRetentionDays: "14"
