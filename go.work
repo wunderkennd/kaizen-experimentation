@@ -1,6 +1,7 @@
-go 1.25.0
+go 1.26.1
 
 use (
 	./gen/go
+	./infra
 	./services
 )
