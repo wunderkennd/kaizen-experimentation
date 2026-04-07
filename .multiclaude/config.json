@@ -13,6 +13,7 @@
     "auto_push": true,
     "create_pr_on_completion": true,
     "pr_labels": ["multiclaude", "iac"],
+    "claude_args": ["--dangerously-skip-permissions"],
     "status_file_pattern": "docs/coordination/status/infra-{agent_number}-status.md"
   },
   "ci": {
