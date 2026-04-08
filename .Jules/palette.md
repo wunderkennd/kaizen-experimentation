@@ -25,6 +25,14 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Learning:** Providing technical identifiers in a `<code>` block with an adjacent `CopyButton` in a "Review" or "Summary" step significantly reduces the cognitive load for users who need to verify or cross-reference these IDs before final submission. Using `text-xs` for these inline code blocks maintains legibility without breaking the layout of dense description lists.
 **Action:** Always include copy-to-clipboard utilities for primary technical IDs in summary views. Use `flex items-center gap-2` to align the code block and the copy button.
 
+## 2026-05-20 - Keyboard Accessibility for Expandable Rows
+**Learning:** Making table rows clickable for expansion is a common UX pattern, but it's completely inaccessible to keyboard users unless explicitly handled. Adding `role="button"`, `tabIndex={0}`, and an `onKeyDown` handler for 'Enter' and 'Space' keys is critical for a11y.
+**Action:** When making non-interactive elements (like table rows) interactive, always provide standard keyboard triggers and appropriate ARIA roles/attributes.
+
+## 2026-05-20 - Consistent Search UI Pattern
+**Learning:** Consistency in repetitive UI elements like search bars builds user trust and makes the interface feel predictable. Using a relative container with an absolute-positioned icon (with `pointer-events-none`) and `pl-9` padding on the input is the established pattern in this app.
+**Action:** Always wrap search inputs in a relative container with a magnifying glass SVG to maintain visual consistency with other filtered lists.
+
 ## 2026-04-12 - Expandable Audit Log for Technical IDs
 **Learning:** Even if an audit entry doesn't have "changed values", users still benefit from row expansion to access the Experiment ID and other metadata without leaving the page.
 **Action:** Design tables such that all rows are interactive/expandable if they contain hidden technical identifiers that are useful for developer workflows.
