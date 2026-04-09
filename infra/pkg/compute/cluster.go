@@ -47,6 +47,8 @@ type ClusterOutputs struct {
 	ClusterName pulumi.StringOutput
 	// M4bCapacityProvider is the name of the EC2 capacity provider for M4b.
 	M4bCapacityProvider pulumi.StringOutput
+	// M4bASGName is the Auto Scaling Group name for M4b EC2 instances.
+	M4bASGName pulumi.StringOutput
 }
 
 // NewCluster creates an ECS cluster with Container Insights, Fargate capacity
@@ -157,6 +159,7 @@ func NewCluster(ctx *pulumi.Context, args *ClusterArgs) (*ClusterOutputs, error)
 		ClusterArn:          cluster.Arn,
 		ClusterName:         cluster.Name,
 		M4bCapacityProvider: m4bProvider.Name,
+		M4bASGName:          asg.Name,
 	}, nil
 }
 

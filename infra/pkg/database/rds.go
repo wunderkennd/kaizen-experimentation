@@ -17,8 +17,9 @@ import (
 // secrets). The struct shape is part of the cross-agent contract defined in
 // docs/coordination/iac-implementation-plan.md.
 type DatabaseOutputs struct {
-	RdsEndpoint pulumi.StringOutput
-	RdsPort     pulumi.IntOutput
+	RdsEndpoint   pulumi.StringOutput
+	RdsPort       pulumi.IntOutput
+	RdsInstanceId pulumi.StringOutput
 }
 
 // RdsInputs contains optional overrides injected by the caller (main.go) once
@@ -149,7 +150,8 @@ func NewRds(ctx *pulumi.Context, kcfg *kconfig.KaizenConfig, inputs *RdsInputs) 
 	}
 
 	return &DatabaseOutputs{
-		RdsEndpoint: instance.Endpoint,
-		RdsPort:     instance.Port,
+		RdsEndpoint:   instance.Endpoint,
+		RdsPort:       instance.Port,
+		RdsInstanceId: instance.Identifier,
 	}, nil
 }

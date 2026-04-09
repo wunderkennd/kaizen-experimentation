@@ -11,6 +11,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/dns"
 	"github.com/kaizen-experimentation/infra/pkg/loadbalancer"
 	"github.com/kaizen-experimentation/infra/pkg/network"
+	"github.com/kaizen-experimentation/infra/pkg/observability"
 	"github.com/kaizen-experimentation/infra/pkg/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/storage"
 	"github.com/kaizen-experimentation/infra/pkg/streaming"
@@ -169,6 +170,20 @@ func main() {
 		if url, ok := ecrOutputs.RepositoryURLs["assignment"]; ok {
 			ctx.Export("ecrAssignmentUrl", url)
 		}
+
+		// ── 12. Observability (CloudWatch log groups + alarms) ──────────────
+		obsOutputs, err := observability.New(ctx, &observability.Args{
+			Environment:             env,
+			CloudwatchRetention:     cfg.CloudwatchRetention,
+			RdsInstanceId:           dbOutputs.RdsInstanceId,
+			MskClusterName:          mskOutputs.MskClusterName,
+			M4bAutoScalingGroupName: clusterOutputs.M4bASGName,
+			Tags:                    config.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("alarmTopicArn", obsOutputs.AlarmTopicArn)
 
 		// Suppress unused variable warnings.
 		_ = albOutputs
