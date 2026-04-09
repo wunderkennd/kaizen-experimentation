@@ -160,6 +160,21 @@ func main() {
 		ctx.Export("albDnsName", albOutputs.AlbDnsName)
 		ctx.Export("albArn", albOutputs.AlbArn)
 
+		// ── 10a. ALB Target Groups + Listener Rules ────────────────────────
+		tgOutputs, err := loadbalancer.NewTargetGroups(ctx, &loadbalancer.TargetGroupInputs{
+			VpcId:            vpcOutputs.VpcId,
+			HttpsListenerArn: albOutputs.HttpsListenerArn,
+			Domain:           cfg.Domain,
+			Environment:      env,
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("m1AssignmentTgArn", tgOutputs.M1AssignmentTgArn)
+		ctx.Export("m5ManagementTgArn", tgOutputs.M5ManagementTgArn)
+		ctx.Export("m6UITgArn", tgOutputs.M6UITgArn)
+		ctx.Export("m7FlagsTgArn", tgOutputs.M7FlagsTgArn)
+
 		// ── 11. ECR Repositories ────────────────────────────────────────────
 		ecrOutputs, err := cicd.NewECRRepositories(ctx, env)
 		if err != nil {
@@ -171,7 +186,6 @@ func main() {
 		}
 
 		// Suppress unused variable warnings.
-		_ = albOutputs
 		_ = redisOutputs
 		_ = secretsOutputs
 

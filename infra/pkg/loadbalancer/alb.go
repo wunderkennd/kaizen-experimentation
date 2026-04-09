@@ -1,7 +1,7 @@
 // Package loadbalancer provisions the internet-facing Application Load Balancer
 // for the Kaizen experimentation platform.
 //
-// Sprint I.0: ALB + listeners (code only). Target groups wired in I.1.18.
+// Sprint I.0: ALB + listeners. Target groups + listener rules in target_groups.go (I.1.8).
 package loadbalancer
 
 import (
