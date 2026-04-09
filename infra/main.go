@@ -123,6 +123,18 @@ func main() {
 		ctx.Export("ecsClusterId", clusterOutputs.ClusterId)
 		ctx.Export("ecsClusterArn", clusterOutputs.ClusterArn)
 
+		// ── 8b. M4b Operational Resources (Backup, Alarm, Cloud Map) ────────
+		m4bOutputs, err := compute.NewM4bService(ctx, &compute.M4bServiceArgs{
+			Environment:         env,
+			CloudMapNamespaceId: sdOutputs.NamespaceId,
+			AsgName:             clusterOutputs.M4bAsgName,
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("m4bBackupVaultArn", m4bOutputs.BackupVaultArn)
+		ctx.Export("m4bCloudMapServiceArn", m4bOutputs.CloudMapServiceArn)
+
 		// ── 9. DNS (Route 53 + ACM) ─────────────────────────────────────────
 		// DNS must be created before ALB so the certificate ARN is available.
 		dnsOutputs, err := dns.NewDNS(ctx, &dns.Args{
