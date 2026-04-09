@@ -36,3 +36,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-04-12 - Expandable Audit Log for Technical IDs
 **Learning:** Even if an audit entry doesn't have "changed values", users still benefit from row expansion to access the Experiment ID and other metadata without leaving the page.
 **Action:** Design tables such that all rows are interactive/expandable if they contain hidden technical identifiers that are useful for developer workflows.
+
+## 2026-04-15 - Keyboard Accessibility for Expandable Rows
+**Learning:** Interactive table rows that toggle visibility of details must be explicitly marked as buttons and support keyboard navigation. Without `role="button"` and `onKeyDown` handlers for Enter/Space, these features remain "mouse-only" and inaccessible to screen reader or keyboard-only users.
+**Action:** Always add `role="button"`, `tabIndex={0}`, `aria-expanded`, and keyboard handlers to custom interactive containers that lack native button semantics. Use `focus-within` with a ring to provide clear focus indicators.

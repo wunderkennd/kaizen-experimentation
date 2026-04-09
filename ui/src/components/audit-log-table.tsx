@@ -58,8 +58,17 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
             return (
               <tr
                 key={entry.entryId}
-                className="cursor-pointer hover:bg-gray-50"
+                className="cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
                 onClick={() => toggleExpand(entry.entryId)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleExpand(entry.entryId);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
