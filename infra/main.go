@@ -44,6 +44,18 @@ func main() {
 		}
 		ctx.Export("cloudMapNamespaceId", sdOutputs.NamespaceId)
 
+		// ── 1b. VPC Endpoints ───────────────────────────────────────────────
+		vpceOutputs, err := network.NewVpcEndpoints(ctx, &network.VpcEndpointArgs{
+			VpcId:                vpcOutputs.VpcId,
+			PrivateSubnetIds:     vpcOutputs.PrivateSubnetIds,
+			PrivateRouteTableIds: vpcOutputs.PrivateRouteTableIds,
+			EcsSecurityGroupId:   sgResult.Groups["ecs"],
+			M4bSecurityGroupId:   sgResult.Groups["m4b"],
+		})
+		if err != nil {
+			return err
+		}
+
 		// ── 2. Secrets ──────────────────────────────────────────────────────
 		secretsOutputs, err := secrets.NewSecrets(ctx, cfg)
 		if err != nil {
@@ -60,6 +72,16 @@ func main() {
 		ctx.Export("dataBucketName", storageOutputs.DataBucketName)
 		ctx.Export("mlflowBucketName", storageOutputs.MlflowBucketName)
 		ctx.Export("logsBucketName", storageOutputs.LogsBucketName)
+
+		// ── 3b. IAM Roles (ECS task, execution, CI deploy) ─────────────────
+		iamOutputs, err := network.NewIAMRoles(ctx, &network.IAMArgs{
+			Environment:     env,
+			DataBucketArn:   storageOutputs.DataBucketArn,
+			MlflowBucketArn: storageOutputs.MlflowBucketArn,
+		})
+		if err != nil {
+			return err
+		}
 
 		// ── 4. Cache (ElastiCache Redis) ────────────────────────────────────
 		redisOutputs, err := cache.NewRedis(ctx, "kaizen-redis", &cache.RedisConfig{
@@ -174,6 +196,8 @@ func main() {
 		_ = albOutputs
 		_ = redisOutputs
 		_ = secretsOutputs
+		_ = vpceOutputs
+		_ = iamOutputs
 
 		return nil
 	})
