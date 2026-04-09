@@ -2,15 +2,17 @@ package main
 
 import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 
 	"github.com/kaizen-experimentation/infra/pkg/cache"
 	"github.com/kaizen-experimentation/infra/pkg/cicd"
 	"github.com/kaizen-experimentation/infra/pkg/compute"
-	"github.com/kaizen-experimentation/infra/pkg/config"
+	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/database"
 	"github.com/kaizen-experimentation/infra/pkg/dns"
 	"github.com/kaizen-experimentation/infra/pkg/loadbalancer"
 	"github.com/kaizen-experimentation/infra/pkg/network"
+	"github.com/kaizen-experimentation/infra/pkg/observability"
 	"github.com/kaizen-experimentation/infra/pkg/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/storage"
 	"github.com/kaizen-experimentation/infra/pkg/streaming"
@@ -18,7 +20,7 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := config.LoadConfig(ctx)
+		cfg := kconfig.LoadConfig(ctx)
 		env := cfg.Environment
 
 		ctx.Export("environment", pulumi.String(env))
@@ -44,16 +46,22 @@ func main() {
 		}
 		ctx.Export("cloudMapNamespaceId", sdOutputs.NamespaceId)
 
-		// ── 2. Secrets ──────────────────────────────────────────────────────
-		secretsOutputs, err := secrets.NewSecrets(ctx, cfg)
+		// VPC endpoints for private AWS service access (S3 gateway, ECR/Logs/SM interface).
+		vpceOutputs, err := network.NewVpcEndpoints(ctx, &network.VpcEndpointArgs{
+			VpcId:                vpcOutputs.VpcId,
+			PrivateSubnetIds:     vpcOutputs.PrivateSubnetIds,
+			PrivateRouteTableIds: vpcOutputs.PrivateRouteTableIds,
+			EcsSecurityGroupId:   sgResult.Groups["ecs"],
+			M4bSecurityGroupId:   sgResult.Groups["m4b"],
+		})
 		if err != nil {
 			return err
 		}
-		ctx.Export("databaseSecretArn", secretsOutputs.DatabaseSecretArn)
-		ctx.Export("kafkaSecretArn", secretsOutputs.KafkaSecretArn)
 
-		// ── 3. Storage (S3 buckets) ─────────────────────────────────────────
-		storageOutputs, err := storage.NewStorage(ctx, env)
+		// ── 2. Storage (S3 buckets) ─────────────────────────────────────────
+		storageOutputs, err := storage.NewStorage(ctx, env, &storage.StorageInputs{
+			S3VpcEndpointId: vpceOutputs.S3EndpointId,
+		})
 		if err != nil {
 			return err
 		}
@@ -61,20 +69,30 @@ func main() {
 		ctx.Export("mlflowBucketName", storageOutputs.MlflowBucketName)
 		ctx.Export("logsBucketName", storageOutputs.LogsBucketName)
 
-		// ── 4. Cache (ElastiCache Redis) ────────────────────────────────────
+		// IAM roles for ECS tasks and CI/CD (depends on S3 bucket ARNs).
+		iamOutputs, err := network.NewIAMRoles(ctx, &network.IAMArgs{
+			Environment:     env,
+			DataBucketArn:   storageOutputs.DataBucketArn,
+			MlflowBucketArn: storageOutputs.MlflowBucketArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		// ── 3. Cache (ElastiCache Redis) ────────────────────────────────────
 		redisOutputs, err := cache.NewRedis(ctx, "kaizen-redis", &cache.RedisConfig{
 			NodeType:         cfg.RedisNodeType,
 			NumCacheClusters: 2,
 			SubnetIds:        vpcOutputs.PrivateSubnetIds,
 			SecurityGroupIds: pulumi.StringArray{sgResult.Groups["redis"].ToStringOutput()},
-			Tags:             config.DefaultTags(env),
+			Tags:             kconfig.DefaultTags(env),
 		})
 		if err != nil {
 			return err
 		}
 		ctx.Export("redisEndpoint", redisOutputs.RedisEndpoint)
 
-		// ── 5. Database (RDS PostgreSQL) ────────────────────────────────────
+		// ── 4. Database (RDS PostgreSQL) ────────────────────────────────────
 		dbOutputs, err := database.NewRds(ctx, cfg, &database.RdsInputs{
 			SubnetIds:           vpcOutputs.PrivateSubnetIds,
 			VpcSecurityGroupIds: pulumi.StringArray{sgResult.Groups["rds"].ToStringOutput()},
@@ -84,33 +102,76 @@ func main() {
 		}
 		ctx.Export("rdsEndpoint", dbOutputs.RdsEndpoint)
 
-		// ── 6. Streaming (MSK Kafka) ────────────────────────────────────────
+		// ── 5. Streaming (MSK Kafka) ────────────────────────────────────────
 		mskOutputs, err := streaming.NewMskCluster(ctx, "kaizen", &streaming.MskInputs{
 			SubnetIds:        vpcOutputs.PrivateSubnetIds,
 			SecurityGroupIds: pulumi.StringArray{sgResult.Groups["msk"].ToStringOutput()},
-			Config: config.MskConfig{
+			KafkaSecretArn:   nil, // SCRAM association wired after secrets are created below.
+			Config: kconfig.MskConfig{
 				KafkaVersion:  "3.5.1",
 				BrokerCount:   cfg.MskBrokerCount,
 				InstanceType:  cfg.MskInstanceType,
 				EbsVolumeSize: 100,
 				Environment:   env,
 			},
-			Tags: config.DefaultTags(env),
+			Tags: kconfig.DefaultTags(env),
 		})
 		if err != nil {
 			return err
 		}
 		ctx.Export("mskBootstrapBrokers", mskOutputs.MskBootstrapBrokers)
 
-		// ── 7. Kafka Topics ─────────────────────────────────────────────────
+		// ── 6. Secrets (depends on RDS, MSK, Redis endpoints) ───────────────
+		secretsOutputs, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
+			RdsEndpoint:         dbOutputs.RdsEndpoint,
+			MskBootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			RedisEndpoint:       redisOutputs.RedisEndpoint,
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("databaseSecretArn", secretsOutputs.DatabaseSecretArn)
+		ctx.Export("kafkaSecretArn", secretsOutputs.KafkaSecretArn)
+
+		// ── 7. Kafka Topics (SASL_SSL auth via stack config) ────────────────
+		kafkaCfg := config.New(ctx, "kafka")
 		_, err = streaming.NewTopics(ctx, &streaming.TopicsArgs{
 			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			SaslUsername:     pulumi.String(kafkaCfg.Require("saslUsername")),
+			SaslPassword:     pulumi.String(kafkaCfg.Require("saslPassword")),
+			KafkaVersion:     "3.5.1",
 		})
 		if err != nil {
 			return err
 		}
 
-		// ── 8. Compute (ECS Cluster) ────────────────────────────────────────
+		// ── 8. Schema Registry (ECS Fargate service) ────────────────────────
+		schemaRegOutputs, err := streaming.NewSchemaRegistry(ctx, &streaming.SchemaRegistryArgs{
+			Environment:      env,
+			Region:           "us-east-1",
+			ClusterArn:       pulumi.StringOutput{}, // Placeholder — resolved after cluster creation.
+			PrivateSubnetIds: vpcOutputs.PrivateSubnetIds,
+			SecurityGroupId:  sgResult.Groups["ecs"],
+			NamespaceId:      sdOutputs.NamespaceId,
+			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			KafkaSecretArn:   secretsOutputs.KafkaSecretArn,
+			Tags:             kconfig.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+		_ = schemaRegOutputs
+
+		// ── 9. ECR Repositories ─────────────────────────────────────────────
+		ecrOutputs, err := cicd.NewECRRepositories(ctx, env)
+		if err != nil {
+			return err
+		}
+		if url, ok := ecrOutputs.RepositoryURLs["assignment"]; ok {
+			ctx.Export("ecrAssignmentUrl", url)
+		}
+
+		// ── 10. Compute (ECS Cluster + M4b EC2) ────────────────────────────
 		clusterOutputs, err := compute.NewCluster(ctx, &compute.ClusterArgs{
 			Environment:        env,
 			M4bInstanceType:    cfg.M4bInstanceType,
@@ -123,22 +184,44 @@ func main() {
 		ctx.Export("ecsClusterId", clusterOutputs.ClusterId)
 		ctx.Export("ecsClusterArn", clusterOutputs.ClusterArn)
 
-		// ── 9. DNS (Route 53 + ACM) ─────────────────────────────────────────
-		// DNS must be created before ALB so the certificate ARN is available.
+		// ── 11. ECS Fargate Services ────────────────────────────────────────
+		svcOutputs, err := compute.NewServices(ctx, &compute.ServicesArgs{
+			Environment:       env,
+			ClusterArn:        clusterOutputs.ClusterArn,
+			PrivateSubnetIds:  vpcOutputs.PrivateSubnetIds,
+			SecurityGroupId:   sgResult.Groups["ecs"],
+			NamespaceId:       sdOutputs.NamespaceId,
+			ECRRepositoryURLs: ecrOutputs.RepositoryURLs,
+			DatabaseSecretArn: secretsOutputs.DatabaseSecretArn,
+			KafkaSecretArn:    secretsOutputs.KafkaSecretArn,
+			RedisSecretArn:    secretsOutputs.RedisSecretArn,
+			AuthSecretArn:     secretsOutputs.AuthSecretArn,
+			DesiredCount:      cfg.FargateMinTasks,
+		})
+		if err != nil {
+			return err
+		}
+
+		// ── 12. M4b Operational Resources ───────────────────────────────────
+		_, err = compute.NewM4bService(ctx, &compute.M4bServiceArgs{
+			Environment:         env,
+			CloudMapNamespaceId: sdOutputs.NamespaceId,
+			AsgName:             clusterOutputs.M4bAsgName,
+		})
+		if err != nil {
+			return err
+		}
+
+		// ── 13. DNS (Route 53 + ACM) ────────────────────────────────────────
 		dnsOutputs, err := dns.NewDNS(ctx, &dns.Args{
-			Config: config.KaizenConfig{
+			Config: kconfig.KaizenConfig{
 				Domain:      cfg.Domain,
 				ProjectName: cfg.ProjectName,
 				Environment: env,
 				Project:     cfg.Project,
 				Env:         cfg.Env,
 			},
-			ALB: config.ALBOutputs{
-				// Placeholder — will be replaced once ALB is created.
-				// In practice, DNS alias records depend on ALB outputs which
-				// creates a circular dependency. We break the cycle by creating
-				// the ALB first and passing its outputs to DNS.
-			},
+			ALB: kconfig.ALBOutputs{},
 		})
 		if err != nil {
 			return err
@@ -146,7 +229,7 @@ func main() {
 		ctx.Export("certificateArn", dnsOutputs.CertificateArn)
 		ctx.Export("hostedZoneId", dnsOutputs.HostedZoneID)
 
-		// ── 10. Load Balancer (ALB) ─────────────────────────────────────────
+		// ── 14. Load Balancer (ALB) ─────────────────────────────────────────
 		albOutputs, err := loadbalancer.NewALB(ctx, &loadbalancer.ALBInputs{
 			PublicSubnetIds: vpcOutputs.PublicSubnetIds,
 			SecurityGroupId: sgResult.Groups["alb"].ToStringOutput(),
@@ -160,20 +243,56 @@ func main() {
 		ctx.Export("albDnsName", albOutputs.AlbDnsName)
 		ctx.Export("albArn", albOutputs.AlbArn)
 
-		// ── 11. ECR Repositories ────────────────────────────────────────────
-		ecrOutputs, err := cicd.NewECRRepositories(ctx, env)
+		// ── 15. Target Groups + Listener Rules ──────────────────────────────
+		_, err = loadbalancer.NewTargetGroups(ctx, &loadbalancer.TargetGroupInputs{
+			VpcId:            vpcOutputs.VpcId.ToStringOutput(),
+			HttpsListenerArn: albOutputs.HttpsListenerArn,
+			Domain:           cfg.Domain,
+			Environment:      env,
+		})
 		if err != nil {
 			return err
 		}
-		// Export a representative ECR URL for verification.
-		if url, ok := ecrOutputs.RepositoryURLs["assignment"]; ok {
-			ctx.Export("ecrAssignmentUrl", url)
+
+		// ── 16. Autoscaling Policies ────────────────────────────────────────
+		scalingArgs := compute.DefaultAutoscalingArgs(env)
+		scalingArgs.ClusterName = clusterOutputs.ClusterName
+		// ALB full name and target group full names would be wired from the ALB/TG
+		// outputs once those export FullName fields. For now, autoscaling is created
+		// without ALB-based request count metrics (CPU-based scaling still works).
+		_, err = compute.NewAutoscaling(ctx, &scalingArgs)
+		if err != nil {
+			return err
+		}
+
+		// ── 17. Observability: CloudWatch Log Groups + Alarms ───────────────
+		cwOutputs, err := observability.NewCloudWatch(ctx, &observability.CloudWatchArgs{
+			Environment:             env,
+			CloudwatchRetention:     cfg.CloudwatchRetention,
+			RdsInstanceId:           dbOutputs.RdsInstanceId,
+			MskClusterName:          mskOutputs.MskClusterName,
+			M4bAutoScalingGroupName: clusterOutputs.M4bAsgName,
+			Tags:                    kconfig.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+
+		// ── 18. Observability: AMP/AMG Workspaces ───────────────────────────
+		ampOutputs, err := observability.New(ctx, &observability.Args{
+			Environment:    env,
+			EcsClusterName: clusterOutputs.ClusterName,
+			Tags:           kconfig.DefaultTags(env),
+		})
+		if err != nil {
+			return err
 		}
 
 		// Suppress unused variable warnings.
-		_ = albOutputs
-		_ = redisOutputs
-		_ = secretsOutputs
+		_ = iamOutputs
+		_ = svcOutputs
+		_ = cwOutputs
+		_ = ampOutputs
 
 		return nil
 	})

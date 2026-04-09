@@ -6,8 +6,9 @@ package secrets
 
 import (
 	"encoding/json"
+	"fmt"
 
-	"github.com/kennethsylvain/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/secretsmanager"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -35,9 +36,9 @@ type DatabaseSecret struct {
 
 // KafkaSecret holds SASL/SCRAM credentials and bootstrap servers for MSK.
 type KafkaSecret struct {
-	SaslUsername    string `json:"sasl_username"`
-	SaslPassword   string `json:"sasl_password"`
-	SaslMechanism  string `json:"sasl_mechanism"`
+	SaslUsername     string `json:"sasl_username"`
+	SaslPassword     string `json:"sasl_password"`
+	SaslMechanism    string `json:"sasl_mechanism"`
 	BootstrapBrokers string `json:"bootstrap_brokers"`
 }
 
@@ -56,43 +57,106 @@ type AuthSecret struct {
 	Issuer       string `json:"issuer"`
 }
 
+// SecretsInputs holds actual resource outputs wired from data store modules.
+// These replace the placeholder values from Sprint I.0.
+type SecretsInputs struct {
+	// RDS endpoint (host:port format from the RDS instance).
+	RdsEndpoint pulumi.StringOutput
+	// MSK bootstrap broker connection string.
+	MskBootstrapBrokers pulumi.StringOutput
+	// Redis primary endpoint address.
+	RedisEndpoint pulumi.StringOutput
+}
+
 // NewSecrets creates all four Secrets Manager secrets with environment-
-// appropriate recovery windows.
-func NewSecrets(ctx *pulumi.Context, cfg *config.Config) (*SecretsOutputs, error) {
+// appropriate recovery windows. Resource endpoints from SecretsInputs
+// replace the Sprint I.0 placeholders.
+func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) (*SecretsOutputs, error) {
 	// recovery_window_in_days: 7 for prod (safety), 0 for dev/staging (instant cleanup).
 	recoveryDays := 0
 	if cfg.IsProd() {
 		recoveryDays = 7
 	}
 
-	dbSecret, err := createSecret(ctx, cfg, "database", recoveryDays, DatabaseSecret{
-		Engine:   "postgres",
-		Host:     "placeholder-rds-endpoint",
-		Port:     5432,
-		Username: "kaizen",
-		Password: "CHANGE_ME",
-		Dbname:   "kaizen",
-	})
+	dbSecret, err := createSecretContainer(ctx, cfg, "database", recoveryDays)
 	if err != nil {
 		return nil, err
 	}
 
-	kafkaSecret, err := createSecret(ctx, cfg, "kafka", recoveryDays, KafkaSecret{
-		SaslUsername:    "kaizen-msk-user",
-		SaslPassword:   "CHANGE_ME",
-		SaslMechanism:  "SCRAM-SHA-512",
-		BootstrapBrokers: "placeholder-msk-brokers",
-	})
+	// Database secret version: wire actual RDS endpoint.
+	dbSecretValue := inputs.RdsEndpoint.ApplyT(func(endpoint string) (string, error) {
+		v := DatabaseSecret{
+			Engine:   "postgres",
+			Host:     endpoint,
+			Port:     5432,
+			Username: "kaizen_admin",
+			Password: "CHANGE_ME",
+			Dbname:   "kaizen",
+		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("marshal database secret: %w", err)
+		}
+		return string(b), nil
+	}).(pulumi.StringOutput)
+
+	if _, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-database")+"-version", &secretsmanager.SecretVersionArgs{
+		SecretId:     dbSecret.ID(),
+		SecretString: dbSecretValue,
+	}); err != nil {
+		return nil, err
+	}
+
+	kafkaSecret, err := createSecretContainer(ctx, cfg, "kafka", recoveryDays)
 	if err != nil {
 		return nil, err
 	}
 
-	redisSecret, err := createSecret(ctx, cfg, "redis", recoveryDays, RedisSecret{
-		AuthToken: "CHANGE_ME",
-		Endpoint:  "placeholder-redis-endpoint",
-		Port:      6379,
-	})
+	// Kafka secret version: wire actual MSK bootstrap brokers.
+	kafkaSecretValue := inputs.MskBootstrapBrokers.ApplyT(func(brokers string) (string, error) {
+		v := KafkaSecret{
+			SaslUsername:     "kaizen-msk-user",
+			SaslPassword:     "CHANGE_ME",
+			SaslMechanism:    "SCRAM-SHA-512",
+			BootstrapBrokers: brokers,
+		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("marshal kafka secret: %w", err)
+		}
+		return string(b), nil
+	}).(pulumi.StringOutput)
+
+	if _, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-kafka")+"-version", &secretsmanager.SecretVersionArgs{
+		SecretId:     kafkaSecret.ID(),
+		SecretString: kafkaSecretValue,
+	}); err != nil {
+		return nil, err
+	}
+
+	redisSecret, err := createSecretContainer(ctx, cfg, "redis", recoveryDays)
 	if err != nil {
+		return nil, err
+	}
+
+	// Redis secret version: wire actual ElastiCache endpoint.
+	redisSecretValue := inputs.RedisEndpoint.ApplyT(func(endpoint string) (string, error) {
+		v := RedisSecret{
+			AuthToken: "CHANGE_ME",
+			Endpoint:  endpoint,
+			Port:      6379,
+		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("marshal redis secret: %w", err)
+		}
+		return string(b), nil
+	}).(pulumi.StringOutput)
+
+	if _, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-redis")+"-version", &secretsmanager.SecretVersionArgs{
+		SecretId:     redisSecret.ID(),
+		SecretString: redisSecretValue,
+	}); err != nil {
 		return nil, err
 	}
 
@@ -114,10 +178,35 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config) (*SecretsOutputs, error
 	}, nil
 }
 
+// createSecretContainer provisions a Secrets Manager secret without an initial
+// version. The caller is responsible for creating a SecretVersion with resolved
+// resource outputs (used for database, kafka, redis secrets).
+func createSecretContainer(
+	ctx *pulumi.Context,
+	cfg *config.Config,
+	name string,
+	recoveryDays int,
+) (*secretsmanager.Secret, error) {
+	secretPath := cfg.SecretPath(name)
+	resourceName := cfg.ResourceName("secret-" + name)
+
+	return secretsmanager.NewSecret(ctx, resourceName, &secretsmanager.SecretArgs{
+		Name:                        pulumi.String(secretPath),
+		Description:                 pulumi.Sprintf("Kaizen %s credentials (%s)", name, cfg.Env),
+		RecoveryWindowInDays:        pulumi.Int(recoveryDays),
+		ForceOverwriteReplicaSecret: pulumi.Bool(false),
+		Tags: pulumi.StringMap{
+			"Project":     pulumi.String(cfg.Project),
+			"Environment": pulumi.String(string(cfg.Env)),
+			"ManagedBy":   pulumi.String("pulumi"),
+			"Component":   pulumi.String(name),
+		},
+	})
+}
+
 // createSecret provisions a single Secrets Manager secret with an initial
-// placeholder version. The secret value is JSON-encoded from the provided
-// struct. In Sprint I.1, the wiring task (I.1.4) replaces placeholders
-// with actual resource outputs (RDS endpoint, MSK brokers, etc.).
+// version from a static value (used for auth secret which doesn't reference
+// infrastructure outputs).
 func createSecret(
 	ctx *pulumi.Context,
 	cfg *config.Config,
@@ -129,9 +218,9 @@ func createSecret(
 	resourceName := cfg.ResourceName("secret-" + name)
 
 	secret, err := secretsmanager.NewSecret(ctx, resourceName, &secretsmanager.SecretArgs{
-		Name:                    pulumi.String(secretPath),
-		Description:             pulumi.Sprintf("Kaizen %s credentials (%s)", name, cfg.Env),
-		RecoveryWindowInDays:    pulumi.Int(recoveryDays),
+		Name:                        pulumi.String(secretPath),
+		Description:                 pulumi.Sprintf("Kaizen %s credentials (%s)", name, cfg.Env),
+		RecoveryWindowInDays:        pulumi.Int(recoveryDays),
 		ForceOverwriteReplicaSecret: pulumi.Bool(false),
 		Tags: pulumi.StringMap{
 			"Project":     pulumi.String(cfg.Project),

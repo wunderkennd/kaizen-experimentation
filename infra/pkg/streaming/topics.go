@@ -65,9 +65,14 @@ var topics = []topicSpec{
 
 // TopicsArgs holds the inputs for Kafka topic provisioning.
 type TopicsArgs struct {
-	// BootstrapBrokers is the comma-separated MSK bootstrap broker string.
-	// Wired from MskOutputs.BootstrapBrokers in Sprint I.1.
+	// BootstrapBrokers is the comma-separated MSK SASL_SSL bootstrap broker string.
 	BootstrapBrokers pulumi.StringInput
+	// SaslUsername for SCRAM-SHA-512 authentication against MSK.
+	SaslUsername pulumi.StringInput
+	// SaslPassword for SCRAM-SHA-512 authentication against MSK.
+	SaslPassword pulumi.StringInput
+	// KafkaVersion matches the MSK cluster's Kafka version (e.g. "3.5.1").
+	KafkaVersion string
 }
 
 // TopicsOutputs holds references to all created Kafka topic resources.
@@ -87,12 +92,17 @@ type TopicsOutputs struct {
 // the MSK cluster being available. In Sprint I.0 this module is code-only;
 // it will be wired to MSK outputs in Sprint I.1.
 func NewTopics(ctx *pulumi.Context, args *TopicsArgs) (*TopicsOutputs, error) {
-	// Create a Kafka provider that targets the MSK cluster.
-	// MSK bootstrap brokers come as "b-1:9098,b-2:9098,b-3:9098".
+	// Create a Kafka provider that targets the MSK cluster via SASL_SSL.
+	// MSK SASL/SCRAM bootstrap brokers come as "b-1:9096,b-2:9096,b-3:9096".
 	provider, err := kafka.NewProvider(ctx, "kaizen-kafka", &kafka.ProviderArgs{
 		BootstrapServers: args.BootstrapBrokers.ToStringOutput().ApplyT(func(brokers string) []string {
 			return strings.Split(brokers, ",")
 		}).(pulumi.StringArrayOutput),
+		TlsEnabled:    pulumi.BoolPtr(true),
+		SaslMechanism: pulumi.StringPtr("scram-sha512"),
+		SaslUsername:   args.SaslUsername,
+		SaslPassword:   args.SaslPassword,
+		KafkaVersion:   pulumi.StringPtr(args.KafkaVersion),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating Kafka provider: %w", err)

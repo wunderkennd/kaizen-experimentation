@@ -47,6 +47,8 @@ type ClusterOutputs struct {
 	ClusterName pulumi.StringOutput
 	// M4bCapacityProvider is the name of the EC2 capacity provider for M4b.
 	M4bCapacityProvider pulumi.StringOutput
+	// M4bAsgName is the ASG name, consumed by M4b operational resources (alarms).
+	M4bAsgName pulumi.StringOutput
 }
 
 // NewCluster creates an ECS cluster with Container Insights, Fargate capacity
@@ -157,6 +159,7 @@ func NewCluster(ctx *pulumi.Context, args *ClusterArgs) (*ClusterOutputs, error)
 		ClusterArn:          cluster.Arn,
 		ClusterName:         cluster.Name,
 		M4bCapacityProvider: m4bProvider.Name,
+		M4bAsgName:          asg.Name,
 	}, nil
 }
 
@@ -267,16 +270,25 @@ chown -R 1000:1000 /data/rocksdb
 		},
 
 		// EBS data volume for RocksDB (attached as /dev/xvdf).
+		// gp3 baseline is 3000 IOPS / 125 MB/s — explicit for auditability.
 		BlockDeviceMappings: ec2.LaunchTemplateBlockDeviceMappingArray{
 			&ec2.LaunchTemplateBlockDeviceMappingArgs{
 				DeviceName: pulumi.String("/dev/xvdf"),
 				Ebs: &ec2.LaunchTemplateBlockDeviceMappingEbsArgs{
 					VolumeSize:          pulumi.Int(args.M4bEbsSizeGb),
 					VolumeType:          pulumi.String("gp3"),
+					Iops:                pulumi.Int(3000),
+					Throughput:          pulumi.Int(125),
 					Encrypted:           pulumi.String("true"),
 					DeleteOnTermination: pulumi.String("true"),
 				},
 			},
+		},
+
+		// EC2 auto-recovery: migrate to new hardware on system-level failures,
+		// preserving EBS volumes, private IP, and instance ID.
+		MaintenanceOptions: &ec2.LaunchTemplateMaintenanceOptionsArgs{
+			AutoRecovery: pulumi.String("enabled"),
 		},
 
 		// Metadata options: IMDSv2 required for security.
@@ -306,6 +318,7 @@ chown -R 1000:1000 /data/rocksdb
 					"Name":        pulumi.Sprintf("%s-m4b-data", prefix),
 					"Environment": pulumi.String(args.Environment),
 					"Project":     pulumi.String("kaizen"),
+					"Service":     pulumi.String("m4b-policy"),
 				},
 			},
 		},

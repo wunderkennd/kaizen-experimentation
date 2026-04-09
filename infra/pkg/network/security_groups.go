@@ -211,6 +211,19 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 		return nil, fmt.Errorf("ecs-out-msk-tls: %w", err)
 	}
 
+	// ECS egress: to MSK (SASL_SSL Kafka — port 9096).
+	if _, err = ec2.NewSecurityGroupRule(ctx, fmt.Sprintf("%s-ecs-out-msk-sasl", prefix), &ec2.SecurityGroupRuleArgs{
+		Type:                     pulumi.String("egress"),
+		SecurityGroupId:          ecsSg.ID().ToStringOutput(),
+		Protocol:                 pulumi.String("tcp"),
+		FromPort:                 pulumi.Int(9096),
+		ToPort:                   pulumi.Int(9096),
+		SourceSecurityGroupId:    mskSg.ID().ToStringOutput(),
+		Description:              pulumi.String("Kafka SASL_SSL to MSK"),
+	}); err != nil {
+		return nil, fmt.Errorf("ecs-out-msk-sasl: %w", err)
+	}
+
 	// ECS egress: to Redis (ElastiCache).
 	if _, err = ec2.NewSecurityGroupRule(ctx, fmt.Sprintf("%s-ecs-out-redis", prefix), &ec2.SecurityGroupRuleArgs{
 		Type:                     pulumi.String("egress"),
@@ -304,6 +317,19 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 		return nil, fmt.Errorf("msk-in-ecs-tls: %w", err)
 	}
 
+	// MSK ingress: Kafka SASL_SSL from ECS (port 9096).
+	if _, err = ec2.NewSecurityGroupRule(ctx, fmt.Sprintf("%s-msk-in-ecs-sasl", prefix), &ec2.SecurityGroupRuleArgs{
+		Type:                     pulumi.String("ingress"),
+		SecurityGroupId:          mskSg.ID().ToStringOutput(),
+		Protocol:                 pulumi.String("tcp"),
+		FromPort:                 pulumi.Int(9096),
+		ToPort:                   pulumi.Int(9096),
+		SourceSecurityGroupId:    ecsSg.ID().ToStringOutput(),
+		Description:              pulumi.String("Kafka SASL_SSL from ECS services"),
+	}); err != nil {
+		return nil, fmt.Errorf("msk-in-ecs-sasl: %w", err)
+	}
+
 	// MSK ingress: Kafka plaintext from M4b.
 	if _, err = ec2.NewSecurityGroupRule(ctx, fmt.Sprintf("%s-msk-in-m4b-plain", prefix), &ec2.SecurityGroupRuleArgs{
 		Type:                     pulumi.String("ingress"),
@@ -328,6 +354,19 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 		Description:              pulumi.String("Kafka TLS from M4b Policy service"),
 	}); err != nil {
 		return nil, fmt.Errorf("msk-in-m4b-tls: %w", err)
+	}
+
+	// MSK ingress: Kafka SASL_SSL from M4b (port 9096).
+	if _, err = ec2.NewSecurityGroupRule(ctx, fmt.Sprintf("%s-msk-in-m4b-sasl", prefix), &ec2.SecurityGroupRuleArgs{
+		Type:                     pulumi.String("ingress"),
+		SecurityGroupId:          mskSg.ID().ToStringOutput(),
+		Protocol:                 pulumi.String("tcp"),
+		FromPort:                 pulumi.Int(9096),
+		ToPort:                   pulumi.Int(9096),
+		SourceSecurityGroupId:    m4bSg.ID().ToStringOutput(),
+		Description:              pulumi.String("Kafka SASL_SSL from M4b Policy service"),
+	}); err != nil {
+		return nil, fmt.Errorf("msk-in-m4b-sasl: %w", err)
 	}
 
 	// Redis ingress: from ECS.
@@ -434,6 +473,19 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 		Description:              pulumi.String("Kafka TLS to MSK"),
 	}); err != nil {
 		return nil, fmt.Errorf("m4b-out-msk-tls: %w", err)
+	}
+
+	// M4b egress: to MSK (SASL_SSL — port 9096).
+	if _, err = ec2.NewSecurityGroupRule(ctx, fmt.Sprintf("%s-m4b-out-msk-sasl", prefix), &ec2.SecurityGroupRuleArgs{
+		Type:                     pulumi.String("egress"),
+		SecurityGroupId:          m4bSg.ID().ToStringOutput(),
+		Protocol:                 pulumi.String("tcp"),
+		FromPort:                 pulumi.Int(9096),
+		ToPort:                   pulumi.Int(9096),
+		SourceSecurityGroupId:    mskSg.ID().ToStringOutput(),
+		Description:              pulumi.String("Kafka SASL_SSL to MSK"),
+	}); err != nil {
+		return nil, fmt.Errorf("m4b-out-msk-sasl: %w", err)
 	}
 
 	// M4b egress: to Redis.
