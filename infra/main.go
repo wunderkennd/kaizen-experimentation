@@ -11,6 +11,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/dns"
 	"github.com/kaizen-experimentation/infra/pkg/loadbalancer"
 	"github.com/kaizen-experimentation/infra/pkg/network"
+	"github.com/kaizen-experimentation/infra/pkg/observability"
 	"github.com/kaizen-experimentation/infra/pkg/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/storage"
 	"github.com/kaizen-experimentation/infra/pkg/streaming"
@@ -170,10 +171,23 @@ func main() {
 			ctx.Export("ecrAssignmentUrl", url)
 		}
 
+		// ── 12. Observability (AMP + AMG) ───────────────────────────────────
+		obsOutputs, err := observability.New(ctx, &observability.Args{
+			Environment:    env,
+			EcsClusterName: clusterOutputs.ClusterName,
+			Tags:           config.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+
 		// Suppress unused variable warnings.
+		// TODO: Wire obsOutputs.EcsRemoteWriteRoleArn into ECS task definitions
+		// when service definitions are added in Sprint I.1.
 		_ = albOutputs
 		_ = redisOutputs
 		_ = secretsOutputs
+		_ = obsOutputs
 
 		return nil
 	})
