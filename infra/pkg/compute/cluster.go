@@ -285,10 +285,10 @@ chown -R 1000:1000 /data/rocksdb
 			},
 		},
 
-		// EC2 auto-recovery: migrate to new hardware on system failures,
+		// EC2 auto-recovery: migrate to new hardware on system-level failures,
 		// preserving EBS volumes, private IP, and instance ID.
 		MaintenanceOptions: &ec2.LaunchTemplateMaintenanceOptionsArgs{
-			AutoRecovery: pulumi.String("default"),
+			AutoRecovery: pulumi.String("enabled"),
 		},
 
 		// Metadata options: IMDSv2 required for security.
@@ -318,6 +318,7 @@ chown -R 1000:1000 /data/rocksdb
 					"Name":        pulumi.Sprintf("%s-m4b-data", prefix),
 					"Environment": pulumi.String(args.Environment),
 					"Project":     pulumi.String("kaizen"),
+					"Service":     pulumi.String("m4b-policy"),
 				},
 			},
 		},

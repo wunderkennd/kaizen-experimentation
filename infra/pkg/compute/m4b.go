@@ -212,7 +212,8 @@ func newM4bStatusCheckAlarm(
 		Period:             pulumi.Int(60),
 		Statistic:          pulumi.String("Minimum"),
 		Threshold:          pulumi.Float64(1),
-		TreatMissingData:   pulumi.String("breaching"),
+		DatapointsToAlarm:  pulumi.Int(2),
+		TreatMissingData:   pulumi.String("missing"),
 		Dimensions: pulumi.StringMap{
 			"AutoScalingGroupName": args.AsgName,
 		},
@@ -241,7 +242,7 @@ func newM4bCloudMapService(
 		Description: pulumi.String("M4b Policy service — LMAX bandit evaluation (port 50054)"),
 		DnsConfig: &servicediscovery.ServiceDnsConfigArgs{
 			NamespaceId:   args.CloudMapNamespaceId.ToStringOutput(),
-			RoutingPolicy: pulumi.String("MULTIVALUE"),
+			RoutingPolicy: pulumi.String("WEIGHTED"),
 			DnsRecords: servicediscovery.ServiceDnsConfigDnsRecordArray{
 				&servicediscovery.ServiceDnsConfigDnsRecordArgs{
 					Type: pulumi.String("A"),
