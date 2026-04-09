@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	pulumiConfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 
 	"github.com/kaizen-experimentation/infra/pkg/cache"
 	"github.com/kaizen-experimentation/infra/pkg/cicd"
@@ -88,6 +89,7 @@ func main() {
 		mskOutputs, err := streaming.NewMskCluster(ctx, "kaizen", &streaming.MskInputs{
 			SubnetIds:        vpcOutputs.PrivateSubnetIds,
 			SecurityGroupIds: pulumi.StringArray{sgResult.Groups["msk"].ToStringOutput()},
+			KafkaSecretArn:   secretsOutputs.KafkaSecretArn,
 			Config: config.MskConfig{
 				KafkaVersion:  "3.5.1",
 				BrokerCount:   cfg.MskBrokerCount,
@@ -103,8 +105,12 @@ func main() {
 		ctx.Export("mskBootstrapBrokers", mskOutputs.MskBootstrapBrokers)
 
 		// ── 7. Kafka Topics ─────────────────────────────────────────────────
+		kafkaCfg := pulumiConfig.New(ctx, "kafka")
 		_, err = streaming.NewTopics(ctx, &streaming.TopicsArgs{
 			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			SaslUsername:     kafkaCfg.RequireSecretOutput("saslUsername"),
+			SaslPassword:     kafkaCfg.RequireSecretOutput("saslPassword"),
+			KafkaVersion:     "3.5.1",
 		})
 		if err != nil {
 			return err

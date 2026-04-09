@@ -11,7 +11,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/msk"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/wunderkennd/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/config"
 )
 
 // MskInputs are the parameters required to create the MSK cluster.
@@ -22,6 +22,9 @@ type MskInputs struct {
 	SubnetIds pulumi.StringArrayInput
 	// SecurityGroupIds to attach to the MSK brokers.
 	SecurityGroupIds pulumi.StringArrayInput
+	// KafkaSecretArn is the Secrets Manager secret ARN containing SASL/SCRAM
+	// credentials. Wired in Sprint I.1 to enable SCRAM authentication.
+	KafkaSecretArn pulumi.StringInput
 	// Config holds environment-specific sizing and monitoring settings.
 	Config config.MskConfig
 	// Tags applied to all resources created by this module.
@@ -124,6 +127,19 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 	}, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating MSK cluster: %w", err)
+	}
+
+	// --- SCRAM secret association ---
+	// Links the Secrets Manager SASL/SCRAM credential to the MSK cluster,
+	// enabling clients to authenticate via SASL/SCRAM-SHA-512 on port 9096.
+	if inputs.KafkaSecretArn != nil {
+		_, err = msk.NewSingleScramSecretAssociation(ctx, fmt.Sprintf("%s-scram-assoc", name), &msk.SingleScramSecretAssociationArgs{
+			ClusterArn: cluster.Arn,
+			SecretArn:  inputs.KafkaSecretArn,
+		}, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("creating SCRAM secret association: %w", err)
+		}
 	}
 
 	return &config.StreamingOutputs{
