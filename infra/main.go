@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	pulumiConfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 
 	"github.com/kaizen-experimentation/infra/pkg/cache"
 	"github.com/kaizen-experimentation/infra/pkg/cicd"
@@ -20,6 +21,9 @@ func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		cfg := config.LoadConfig(ctx)
 		env := cfg.Environment
+
+		awsCfg := pulumiConfig.New(ctx, "aws")
+		awsRegion := awsCfg.Require("region")
 
 		ctx.Export("environment", pulumi.String(env))
 
@@ -122,6 +126,23 @@ func main() {
 		}
 		ctx.Export("ecsClusterId", clusterOutputs.ClusterId)
 		ctx.Export("ecsClusterArn", clusterOutputs.ClusterArn)
+
+		// ── 8b. Schema Registry (Fargate on ECS) ───────────────────────────
+		srOutputs, err := streaming.NewSchemaRegistry(ctx, &streaming.SchemaRegistryArgs{
+			Environment:      env,
+			Region:           awsRegion,
+			ClusterArn:       clusterOutputs.ClusterArn,
+			PrivateSubnetIds: vpcOutputs.PrivateSubnetIds,
+			SecurityGroupId:  sgResult.Groups["ecs"],
+			NamespaceId:      sdOutputs.NamespaceId,
+			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			KafkaSecretArn:   secretsOutputs.KafkaSecretArn,
+			Tags:             config.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("schemaRegistryUrl", srOutputs.SchemaRegistryUrl)
 
 		// ── 9. DNS (Route 53 + ACM) ─────────────────────────────────────────
 		// DNS must be created before ALB so the certificate ARN is available.
