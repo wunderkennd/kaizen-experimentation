@@ -2,7 +2,7 @@
 package cache
 
 import (
-	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/elasticache"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elasticache"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 

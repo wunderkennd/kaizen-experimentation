@@ -17,6 +17,7 @@ type VpcOutputs struct {
 	VpcId            pulumi.IDOutput
 	PublicSubnetIds  pulumi.StringArrayOutput
 	PrivateSubnetIds pulumi.StringArrayOutput
+	S3VpcEndpointId  pulumi.IDOutput
 }
 
 // NewVpc creates the core networking foundation: VPC, subnets across 3 AZs,
@@ -36,6 +37,13 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 	if natCount == 0 {
 		natCount = 2
 	}
+
+	// Discover the current region (needed for VPC endpoint service names).
+	currentRegion, err := aws.GetRegion(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get region: %w", err)
+	}
+	region := currentRegion.Name
 
 	// Discover AZs in the current region.
 	azs, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{
@@ -177,6 +185,7 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 	}
 
 	// ── Private route tables → NAT (round-robin across NAT GWs) ────────
+	privateRouteTableIds := pulumi.StringArray{}
 	for i, subnet := range privateSubnets {
 		natIdx := i % natCount
 		rtName := fmt.Sprintf("kaizen-private-rt-%d", i)
@@ -190,6 +199,8 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 		if err != nil {
 			return nil, fmt.Errorf("create private route table %d: %w", i, err)
 		}
+
+		privateRouteTableIds = append(privateRouteTableIds, privateRT.ID().ToStringOutput())
 
 		_, err = ec2.NewRoute(ctx, fmt.Sprintf("kaizen-private-default-%d", i), &ec2.RouteArgs{
 			RouteTableId:         privateRT.ID(),
@@ -209,16 +220,34 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 		}
 	}
 
+	// ── S3 Gateway VPC Endpoint ─────────────────────────────────────────
+	// Gateway endpoint keeps S3 traffic on the AWS backbone (free, no ENIs).
+	// Associated with private route tables so ECS/M4b tasks access S3 without NAT.
+	s3Endpoint, err := ec2.NewVpcEndpoint(ctx, "kaizen-s3-endpoint", &ec2.VpcEndpointArgs{
+		VpcId:          vpc.ID(),
+		ServiceName:    pulumi.String(fmt.Sprintf("com.amazonaws.%s.s3", region)),
+		VpcEndpointType: pulumi.String("Gateway"),
+		RouteTableIds:  privateRouteTableIds,
+		Tags: kconfig.MergeTags(tags, pulumi.StringMap{
+			"Name": pulumi.String("kaizen-s3-endpoint"),
+		}),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create S3 VPC endpoint: %w", err)
+	}
+
 	// ── Pulumi stack exports ────────────────────────────────────────────
 	pubIds := publicSubnetIds.ToStringArrayOutput()
 	privIds := privateSubnetIds.ToStringArrayOutput()
 	ctx.Export("vpcId", vpc.ID())
 	ctx.Export("publicSubnetIds", pubIds)
 	ctx.Export("privateSubnetIds", privIds)
+	ctx.Export("s3VpcEndpointId", s3Endpoint.ID())
 
 	return &VpcOutputs{
 		VpcId:            vpc.ID(),
 		PublicSubnetIds:  pubIds,
 		PrivateSubnetIds: privIds,
+		S3VpcEndpointId:  s3Endpoint.ID(),
 	}, nil
 }

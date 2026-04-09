@@ -11,7 +11,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/msk"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/wunderkennd/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/config"
 )
 
 // MskInputs are the parameters required to create the MSK cluster.

@@ -44,16 +44,10 @@ func main() {
 		}
 		ctx.Export("cloudMapNamespaceId", sdOutputs.NamespaceId)
 
-		// ── 2. Secrets ──────────────────────────────────────────────────────
-		secretsOutputs, err := secrets.NewSecrets(ctx, cfg)
-		if err != nil {
-			return err
-		}
-		ctx.Export("databaseSecretArn", secretsOutputs.DatabaseSecretArn)
-		ctx.Export("kafkaSecretArn", secretsOutputs.KafkaSecretArn)
-
-		// ── 3. Storage (S3 buckets) ─────────────────────────────────────────
-		storageOutputs, err := storage.NewStorage(ctx, env)
+		// ── 2. Storage (S3 buckets) ─────────────────────────────────────────
+		storageOutputs, err := storage.NewStorage(ctx, env, &storage.StorageInputs{
+			S3VpcEndpointId: vpcOutputs.S3VpcEndpointId,
+		})
 		if err != nil {
 			return err
 		}
@@ -61,7 +55,7 @@ func main() {
 		ctx.Export("mlflowBucketName", storageOutputs.MlflowBucketName)
 		ctx.Export("logsBucketName", storageOutputs.LogsBucketName)
 
-		// ── 4. Cache (ElastiCache Redis) ────────────────────────────────────
+		// ── 3. Cache (ElastiCache Redis) ────────────────────────────────────
 		redisOutputs, err := cache.NewRedis(ctx, "kaizen-redis", &cache.RedisConfig{
 			NodeType:         cfg.RedisNodeType,
 			NumCacheClusters: 2,
@@ -74,7 +68,7 @@ func main() {
 		}
 		ctx.Export("redisEndpoint", redisOutputs.RedisEndpoint)
 
-		// ── 5. Database (RDS PostgreSQL) ────────────────────────────────────
+		// ── 4. Database (RDS PostgreSQL) ────────────────────────────────────
 		dbOutputs, err := database.NewRds(ctx, cfg, &database.RdsInputs{
 			SubnetIds:           vpcOutputs.PrivateSubnetIds,
 			VpcSecurityGroupIds: pulumi.StringArray{sgResult.Groups["rds"].ToStringOutput()},
@@ -84,7 +78,7 @@ func main() {
 		}
 		ctx.Export("rdsEndpoint", dbOutputs.RdsEndpoint)
 
-		// ── 6. Streaming (MSK Kafka) ────────────────────────────────────────
+		// ── 5. Streaming (MSK Kafka) ────────────────────────────────────────
 		mskOutputs, err := streaming.NewMskCluster(ctx, "kaizen", &streaming.MskInputs{
 			SubnetIds:        vpcOutputs.PrivateSubnetIds,
 			SecurityGroupIds: pulumi.StringArray{sgResult.Groups["msk"].ToStringOutput()},
@@ -101,6 +95,19 @@ func main() {
 			return err
 		}
 		ctx.Export("mskBootstrapBrokers", mskOutputs.MskBootstrapBrokers)
+
+		// ── 6. Secrets (wired to actual data store endpoints) ───────────────
+		secretsOutputs, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
+			RdsEndpoint:         dbOutputs.RdsEndpoint,
+			MskBootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			RedisEndpoint:       redisOutputs.RedisEndpoint,
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("databaseSecretArn", secretsOutputs.DatabaseSecretArn)
+		ctx.Export("kafkaSecretArn", secretsOutputs.KafkaSecretArn)
+		ctx.Export("redisSecretArn", secretsOutputs.RedisSecretArn)
 
 		// ── 7. Kafka Topics ─────────────────────────────────────────────────
 		_, err = streaming.NewTopics(ctx, &streaming.TopicsArgs{
@@ -169,11 +176,6 @@ func main() {
 		if url, ok := ecrOutputs.RepositoryURLs["assignment"]; ok {
 			ctx.Export("ecrAssignmentUrl", url)
 		}
-
-		// Suppress unused variable warnings.
-		_ = albOutputs
-		_ = redisOutputs
-		_ = secretsOutputs
 
 		return nil
 	})
