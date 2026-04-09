@@ -170,10 +170,29 @@ func main() {
 			ctx.Export("ecrAssignmentUrl", url)
 		}
 
+		// ── 12. ECS Services (Fargate) ──────────────────────────────────────
+		svcOutputs, err := compute.NewServices(ctx, &compute.ServicesArgs{
+			Environment:       env,
+			ClusterArn:        clusterOutputs.ClusterArn,
+			PrivateSubnetIds:  vpcOutputs.PrivateSubnetIds,
+			SecurityGroupId:   sgResult.Groups["ecs"],
+			NamespaceId:       sdOutputs.NamespaceId,
+			ECRRepositoryURLs: ecrOutputs.RepositoryURLs,
+			DatabaseSecretArn: secretsOutputs.DatabaseSecretArn,
+			KafkaSecretArn:    secretsOutputs.KafkaSecretArn,
+			RedisSecretArn:    secretsOutputs.RedisSecretArn,
+			AuthSecretArn:     secretsOutputs.AuthSecretArn,
+			DesiredCount:      cfg.FargateMinTasks,
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("ecsTaskRoleArn", svcOutputs.TaskRoleArn)
+		ctx.Export("ecsExecRoleArn", svcOutputs.ExecRoleArn)
+
 		// Suppress unused variable warnings.
 		_ = albOutputs
 		_ = redisOutputs
-		_ = secretsOutputs
 
 		return nil
 	})
