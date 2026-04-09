@@ -172,6 +172,7 @@ type DatabaseOutputs struct {
 // StreamingOutputs is the contract exported by the streaming module.
 type StreamingOutputs struct {
 	MskClusterArn       pulumi.StringOutput
+	MskClusterName      pulumi.StringOutput
 	MskBootstrapBrokers pulumi.StringOutput
 	SchemaRegistryUrl   pulumi.StringOutput
 }

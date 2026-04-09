@@ -10,7 +10,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/wunderkennd/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/config"
 )
 
 // StorageOutputs is the cross-agent contract for S3 resources.
@@ -23,8 +23,15 @@ type StorageOutputs struct {
 	LogsBucketArn    pulumi.StringOutput
 }
 
+// StorageInputs contains VPC-level resources injected by the caller.
+type StorageInputs struct {
+	// S3VpcEndpointId is the Gateway VPC endpoint ID used to restrict
+	// bucket access to VPC-internal traffic only.
+	S3VpcEndpointId pulumi.IDOutput
+}
+
 // NewStorage provisions the three S3 buckets and returns their outputs.
-func NewStorage(ctx *pulumi.Context, env string) (*StorageOutputs, error) {
+func NewStorage(ctx *pulumi.Context, env string, inputs *StorageInputs) (*StorageOutputs, error) {
 	tags := config.DefaultTags(env)
 
 	data, err := newDataBucket(ctx, env, tags)
@@ -40,6 +47,18 @@ func NewStorage(ctx *pulumi.Context, env string) (*StorageOutputs, error) {
 	logs, err := newLogsBucket(ctx, env, tags)
 	if err != nil {
 		return nil, fmt.Errorf("logs bucket: %w", err)
+	}
+
+	// VPC endpoint policies for data and mlflow buckets restrict access to
+	// traffic originating from the VPC gateway endpoint. The logs bucket is
+	// excluded — ALB writes logs via the AWS ELB service account, not the VPC.
+	if inputs != nil {
+		if err := applyVpcEndpointPolicy(ctx, "data", data, inputs.S3VpcEndpointId); err != nil {
+			return nil, fmt.Errorf("data bucket vpc policy: %w", err)
+		}
+		if err := applyVpcEndpointPolicy(ctx, "mlflow", mlflow, inputs.S3VpcEndpointId); err != nil {
+			return nil, fmt.Errorf("mlflow bucket vpc policy: %w", err)
+		}
 	}
 
 	return &StorageOutputs{
@@ -281,6 +300,37 @@ func newLogsBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+// applyVpcEndpointPolicy attaches a bucket policy that denies access unless
+// the request originates from the specified S3 Gateway VPC endpoint. This
+// ensures data/mlflow bucket traffic stays within the VPC.
+func applyVpcEndpointPolicy(ctx *pulumi.Context, prefix string, bucket *s3.BucketV2, vpceId pulumi.IDOutput) error {
+	policyJSON := pulumi.All(bucket.Arn, vpceId).ApplyT(func(args []interface{}) string {
+		bucketArn := args[0].(string)
+		endpointId := args[1].(string)
+		return fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "VPCEndpointOnly",
+    "Effect": "Deny",
+    "Principal": "*",
+    "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+    "Resource": ["%s", "%s/*"],
+    "Condition": {
+      "StringNotEquals": {
+        "aws:sourceVpce": "%s"
+      }
+    }
+  }]
+}`, bucketArn, bucketArn, endpointId)
+	}).(pulumi.StringOutput)
+
+	_, err := s3.NewBucketPolicy(ctx, prefix+"-bucket-vpce-policy", &s3.BucketPolicyArgs{
+		Bucket: bucket.ID(),
+		Policy: policyJSON,
+	}, pulumi.Parent(bucket))
+	return err
+}
 
 // applyBucketDefaults configures ownership controls and public access block
 // on every bucket. These are security baselines — all buckets are private.

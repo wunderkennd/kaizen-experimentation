@@ -14,9 +14,10 @@ import (
 
 // VpcOutputs exposes the VPC resources that downstream modules consume.
 type VpcOutputs struct {
-	VpcId            pulumi.IDOutput
-	PublicSubnetIds  pulumi.StringArrayOutput
-	PrivateSubnetIds pulumi.StringArrayOutput
+	VpcId                pulumi.IDOutput
+	PublicSubnetIds      pulumi.StringArrayOutput
+	PrivateSubnetIds     pulumi.StringArrayOutput
+	PrivateRouteTableIds pulumi.StringArrayOutput
 }
 
 // NewVpc creates the core networking foundation: VPC, subnets across 3 AZs,
@@ -177,6 +178,7 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 	}
 
 	// ── Private route tables → NAT (round-robin across NAT GWs) ────────
+	privateRTIds := pulumi.StringArray{}
 	for i, subnet := range privateSubnets {
 		natIdx := i % natCount
 		rtName := fmt.Sprintf("kaizen-private-rt-%d", i)
@@ -190,6 +192,8 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 		if err != nil {
 			return nil, fmt.Errorf("create private route table %d: %w", i, err)
 		}
+
+		privateRTIds = append(privateRTIds, privateRT.ID().ToStringOutput())
 
 		_, err = ec2.NewRoute(ctx, fmt.Sprintf("kaizen-private-default-%d", i), &ec2.RouteArgs{
 			RouteTableId:         privateRT.ID(),
@@ -212,13 +216,16 @@ func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
 	// ── Pulumi stack exports ────────────────────────────────────────────
 	pubIds := publicSubnetIds.ToStringArrayOutput()
 	privIds := privateSubnetIds.ToStringArrayOutput()
+	privRTIds := privateRTIds.ToStringArrayOutput()
 	ctx.Export("vpcId", vpc.ID())
 	ctx.Export("publicSubnetIds", pubIds)
 	ctx.Export("privateSubnetIds", privIds)
+	ctx.Export("privateRouteTableIds", privRTIds)
 
 	return &VpcOutputs{
-		VpcId:            vpc.ID(),
-		PublicSubnetIds:  pubIds,
-		PrivateSubnetIds: privIds,
+		VpcId:                vpc.ID(),
+		PublicSubnetIds:      pubIds,
+		PrivateSubnetIds:     privIds,
+		PrivateRouteTableIds: privRTIds,
 	}, nil
 }

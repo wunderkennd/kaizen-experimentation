@@ -12,3 +12,5 @@ config:
   kaizen-experimentation:wafEnabled: "true"
   kaizen-experimentation:fargateMinTasks: "2"
   kaizen-experimentation:cloudwatchRetentionDays: "30"
+  kafka:saslUsername: kaizen-msk-user
+  kafka:saslPassword: CHANGE_ME_VIA_PULUMI_CONFIG_SET_SECRET
