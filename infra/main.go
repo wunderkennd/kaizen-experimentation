@@ -160,7 +160,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		_ = schemaRegOutputs
+		ctx.Export("schemaRegistryUrl", schemaRegOutputs.SchemaRegistryUrl)
 
 		// ── 9. ECR Repositories ─────────────────────────────────────────────
 		ecrOutputs, err := cicd.NewECRRepositories(ctx, env)
@@ -287,6 +287,18 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		// ── 19. Schema Registry Health Gate ─────────────────────────────
+		healthGateOutputs, err := streaming.NewHealthGate(ctx, &streaming.HealthGateArgs{
+			Environment:               env,
+			ClusterName:               clusterOutputs.ClusterName,
+			SchemaRegistryServiceName: schemaRegOutputs.ServiceName,
+			Tags:                      kconfig.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("schemaRegistryHealthAlarmArn", healthGateOutputs.HealthAlarmArn)
 
 		// Suppress unused variable warnings.
 		_ = iamOutputs

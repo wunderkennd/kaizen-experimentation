@@ -37,6 +37,8 @@ type SchemaRegistryArgs struct {
 type SchemaRegistryOutputs struct {
 	// ServiceArn is the ECS service ARN.
 	ServiceArn pulumi.StringOutput
+	// ServiceName is the ECS service name (used by CloudWatch alarms).
+	ServiceName pulumi.StringOutput
 	// SchemaRegistryUrl is the internal URL for schema-registry.kaizen.local:8081.
 	SchemaRegistryUrl pulumi.StringOutput
 }
@@ -234,6 +236,13 @@ func NewSchemaRegistry(ctx *pulumi.Context, args *SchemaRegistryArgs) (*SchemaRe
 		DesiredCount:   pulumi.Int(1),
 		LaunchType:     pulumi.String("FARGATE"),
 
+		// Deployment circuit breaker: rolls back automatically if the
+		// container health check (HTTP GET :8081/subjects) keeps failing.
+		DeploymentCircuitBreaker: &ecs.ServiceDeploymentCircuitBreakerArgs{
+			Enable:   pulumi.Bool(true),
+			Rollback: pulumi.Bool(true),
+		},
+
 		NetworkConfiguration: &ecs.ServiceNetworkConfigurationArgs{
 			Subnets:        args.PrivateSubnetIds,
 			SecurityGroups: pulumi.StringArray{args.SecurityGroupId.ToStringOutput()},
@@ -257,6 +266,7 @@ func NewSchemaRegistry(ctx *pulumi.Context, args *SchemaRegistryArgs) (*SchemaRe
 
 	return &SchemaRegistryOutputs{
 		ServiceArn:        svc.ID().ToStringOutput(),
+		ServiceName:       pulumi.Sprintf("%s-schema-registry", prefix),
 		SchemaRegistryUrl: pulumi.Sprintf("http://schema-registry.kaizen.local:8081"),
 	}, nil
 }
