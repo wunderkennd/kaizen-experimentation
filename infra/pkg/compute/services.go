@@ -12,6 +12,8 @@ package compute
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
@@ -46,6 +48,9 @@ type ServicesArgs struct {
 	AuthSecretArn     pulumi.StringOutput
 	// DesiredCount is the initial task count per service.
 	DesiredCount int
+	// PreDeployDeps lists resources that must complete before the M5
+	// management service starts (e.g., database migration task).
+	PreDeployDeps []pulumi.Resource
 }
 
 // ServicesOutputs holds the outputs from ECS service provisioning.
@@ -57,11 +62,30 @@ type ServicesOutputs struct {
 	TaskRoleArn pulumi.StringOutput
 	// ExecRoleArn is the IAM role used by ECS to pull images and push logs.
 	ExecRoleArn pulumi.StringOutput
+	// M5ServiceResource exposes the M5 ECS service for dependency wiring.
+	// Downstream modules (e.g., M4b) can use pulumi.DependsOn with this.
+	M5ServiceResource pulumi.Resource
+	// Tier1Resources lists all Tier 1 ECS service resources, used for
+	// external dependency wiring (e.g., M4b Cloud Map depends on Tier 1).
+	Tier1Resources []pulumi.Resource
 }
 
 // ---------------------------------------------------------------------------
 // Service specification table
 // ---------------------------------------------------------------------------
+
+// Startup tiers control service deployment ordering. Higher tiers wait for
+// all services in lower tiers to reach steady state before deploying.
+//
+//	Tier 0: M5 — owns PostgreSQL schema via migration, must start first.
+//	Tier 1: M1, M2, M2-Orch — core assignment/pipeline services, depend on M5.
+//	        M4b (EC2) is logically Tier 1 but created separately in main.go.
+//	Tier 2: M3, M4a, M6, M7 — depend on Tier 1 services + M4b.
+const (
+	TierFoundation = 0
+	TierCore       = 1
+	TierDependent  = 2
+)
 
 // serviceSpec defines one Fargate service declaratively.
 type serviceSpec struct {
@@ -73,57 +97,99 @@ type serviceSpec struct {
 	ports     []int  // container ports
 	lang      string // "rust", "go", "ts" — determines health check
 	healthCmd []string
+	tier      int         // startup tier (TierFoundation, TierCore, TierDependent)
+	deps      []healthDep // upstream services to health-gate on at runtime
+}
+
+// healthDep describes an upstream service endpoint that a health-gate init
+// container must verify before the main container starts.
+type healthDep struct {
+	name  string // human-readable label (for log messages)
+	host  string // Cloud Map DNS name
+	port  int
+	proto string // "http" (wget) or "tcp" (nc)
+	path  string // HTTP health path (e.g., "/healthz"); ignored for "tcp"
+}
+
+// m5Dep is the health dependency on M5 Management (HTTP healthz).
+var m5Dep = healthDep{name: "M5", host: "m5-management.kaizen.local", port: 50055, proto: "http", path: "/healthz"}
+
+// tier1Deps are the health dependencies on Tier 1 services (M1, M2, M4b).
+// Used by Tier 2 services. M4b is included because it is logically Tier 1.
+var tier1Deps = []healthDep{
+	{name: "M1", host: "m1-assignment.kaizen.local", port: 50051, proto: "tcp"},
+	{name: "M2", host: "m2-pipeline.kaizen.local", port: 50052, proto: "tcp"},
+	{name: "M4b", host: "m4b-policy.kaizen.local", port: 50054, proto: "tcp"},
 }
 
 func serviceSpecs() []serviceSpec {
 	return []serviceSpec{
+		// ── Tier 0: Foundation ── M5 starts first (owns PG schema via migration)
+		{
+			key: "m5", name: "m5-management", ecrKey: "management",
+			cpu: "512", memoryMB: "1024", ports: []int{50055, 50060},
+			lang:      "go",
+			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50055/healthz || exit 1"},
+			tier:      TierFoundation,
+			deps:      nil, // No upstream dependencies.
+		},
+		// ── Tier 1: Core ── M1, M2, M2-Orch start after M5 is healthy
 		{
 			key: "m1", name: "m1-assignment", ecrKey: "assignment",
 			cpu: "512", memoryMB: "1024", ports: []int{50051},
 			lang:      "rust",
 			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50051"},
+			tier:      TierCore,
+			deps:      []healthDep{m5Dep},
 		},
 		{
 			key: "m2", name: "m2-pipeline", ecrKey: "pipeline",
 			cpu: "512", memoryMB: "1024", ports: []int{50052},
 			lang:      "rust",
 			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50052"},
+			tier:      TierCore,
+			deps:      []healthDep{m5Dep},
 		},
 		{
 			key: "m2-orch", name: "m2-orchestration", ecrKey: "orchestration",
 			cpu: "256", memoryMB: "512", ports: []int{50058},
 			lang:      "go",
 			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50058/healthz || exit 1"},
+			tier:      TierCore,
+			deps:      []healthDep{m5Dep},
 		},
+		// ── Tier 2: Dependent ── M3, M4a, M6, M7 start after Tier 1 + M4b
 		{
 			key: "m3", name: "m3-metrics", ecrKey: "metrics",
 			cpu: "1024", memoryMB: "2048", ports: []int{50056, 50059},
 			lang:      "go",
 			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50056/healthz || exit 1"},
+			tier:      TierDependent,
+			deps:      tier1Deps,
 		},
 		{
 			key: "m4a", name: "m4a-analysis", ecrKey: "analysis",
 			cpu: "1024", memoryMB: "2048", ports: []int{50053},
 			lang:      "rust",
 			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50053"},
-		},
-		{
-			key: "m5", name: "m5-management", ecrKey: "management",
-			cpu: "512", memoryMB: "1024", ports: []int{50055, 50060},
-			lang:      "go",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50055/healthz || exit 1"},
+			tier:      TierDependent,
+			deps:      tier1Deps,
 		},
 		{
 			key: "m6", name: "m6-ui", ecrKey: "ui",
 			cpu: "512", memoryMB: "1024", ports: []int{3000},
 			lang:      "ts",
 			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:3000/ || exit 1"},
+			tier:      TierDependent,
+			deps:      tier1Deps,
 		},
 		{
 			key: "m7", name: "m7-flags", ecrKey: "flags",
 			cpu: "256", memoryMB: "512", ports: []int{50057},
 			lang:      "rust",
 			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50057"},
+			tier:      TierDependent,
+			deps:      tier1Deps,
 		},
 	}
 }
@@ -149,14 +215,24 @@ func serviceEndpoints() map[string]string {
 // ---------------------------------------------------------------------------
 
 type containerDef struct {
-	Name             string       `json:"name"`
-	Image            string       `json:"image"`
-	Essential        bool         `json:"essential"`
-	PortMappings     []portMap    `json:"portMappings"`
-	LogConfiguration logCfg       `json:"logConfiguration"`
-	Environment      []envKV      `json:"environment"`
-	Secrets          []secretRef  `json:"secrets"`
-	HealthCheck      *healthCheck `json:"healthCheck,omitempty"`
+	Name             string                `json:"name"`
+	Image            string                `json:"image"`
+	Essential        bool                  `json:"essential"`
+	EntryPoint       []string              `json:"entryPoint,omitempty"`
+	Command          []string              `json:"command,omitempty"`
+	PortMappings     []portMap             `json:"portMappings,omitempty"`
+	LogConfiguration logCfg                `json:"logConfiguration"`
+	Environment      []envKV               `json:"environment"`
+	Secrets          []secretRef           `json:"secrets,omitempty"`
+	HealthCheck      *healthCheck          `json:"healthCheck,omitempty"`
+	DependsOn        []containerDependency `json:"dependsOn,omitempty"`
+}
+
+// containerDependency defines an intra-task dependency between containers.
+// Used to chain the health-gate init container to the main application container.
+type containerDependency struct {
+	ContainerName string `json:"containerName"`
+	Condition     string `json:"condition"` // "SUCCESS", "HEALTHY", "START", "COMPLETE"
 }
 
 type portMap struct {
@@ -192,9 +268,16 @@ type healthCheck struct {
 // ---------------------------------------------------------------------------
 
 // NewServices creates 8 ECS Fargate task definitions and services for the
-// Kaizen platform. Each service gets Cloud Map registration, structured
-// logging via awslogs, environment variables for service discovery, and
-// secrets injected from Secrets Manager.
+// Kaizen platform, deployed in dependency tiers:
+//
+//	Tier 0 (Foundation): M5 — deployed first, waits for steady state.
+//	Tier 1 (Core):       M1, M2, M2-Orch — deployed after Tier 0 is healthy.
+//	Tier 2 (Dependent):  M3, M4a, M6, M7 — deployed after Tier 1 is healthy.
+//
+// Each service gets Cloud Map registration, structured logging via awslogs,
+// environment variables for service discovery, secrets injected from Secrets
+// Manager, and (for Tier 1+) health-gate init containers that poll upstream
+// services before the main container starts.
 func NewServices(ctx *pulumi.Context, args *ServicesArgs) (*ServicesOutputs, error) {
 	prefix := fmt.Sprintf("kaizen-%s", args.Environment)
 
@@ -234,24 +317,92 @@ func NewServices(ctx *pulumi.Context, args *ServicesArgs) (*ServicesOutputs, err
 		return nil, fmt.Errorf("creating log group: %w", err)
 	}
 
-	// --- Create services ---
+	// --- Create services tier by tier ---
 
 	specs := serviceSpecs()
+	tierMap := groupSpecsByTier(specs)
 	serviceArns := make(map[string]pulumi.StringOutput, len(specs))
+	ecsServices := make(map[string]*ecs.Service, len(specs))
 
-	for _, spec := range specs {
-		svcArn, err := newFargateService(ctx, prefix, region.Name, spec, args, execRole, taskRole, logGroup)
-		if err != nil {
-			return nil, fmt.Errorf("creating service %s: %w", spec.name, err)
+	// Ordered tier keys for deterministic iteration.
+	tierKeys := sortedTierKeys(tierMap)
+
+	for _, tier := range tierKeys {
+		tierSpecs := tierMap[tier]
+
+		// Collect Pulumi resource dependencies from the previous tier.
+		var pulumiDeps []pulumi.Resource
+		if tier > 0 {
+			if prevSpecs, ok := tierMap[tier-1]; ok {
+				for _, prev := range prevSpecs {
+					if svc, ok := ecsServices[prev.key]; ok {
+						pulumiDeps = append(pulumiDeps, svc)
+					}
+				}
+			}
 		}
-		serviceArns[spec.key] = svcArn
+
+		// Tier 0 services also depend on pre-deploy deps (e.g., migration task).
+		if tier == TierFoundation && len(args.PreDeployDeps) > 0 {
+			pulumiDeps = append(pulumiDeps, args.PreDeployDeps...)
+		}
+
+		// Tier 0 and Tier 1 block Pulumi until steady state so downstream
+		// tiers only deploy after upstream tasks are actually healthy.
+		waitForSteady := tier < TierDependent
+
+		for _, spec := range tierSpecs {
+			svc, err := newFargateService(ctx, prefix, region.Name, spec, args,
+				execRole, taskRole, logGroup, pulumiDeps, waitForSteady)
+			if err != nil {
+				return nil, fmt.Errorf("creating service %s: %w", spec.name, err)
+			}
+			serviceArns[spec.key] = svc.ID().ToStringOutput()
+			ecsServices[spec.key] = svc
+		}
+	}
+
+	// Collect Tier 1 resources for external wiring (M4b depends on these).
+	var tier1Resources []pulumi.Resource
+	if coreSpecs, ok := tierMap[TierCore]; ok {
+		for _, s := range coreSpecs {
+			if svc, ok := ecsServices[s.key]; ok {
+				tier1Resources = append(tier1Resources, svc)
+			}
+		}
+	}
+
+	var m5Resource pulumi.Resource
+	if svc, ok := ecsServices["m5"]; ok {
+		m5Resource = svc
 	}
 
 	return &ServicesOutputs{
-		ServiceArns: serviceArns,
-		TaskRoleArn: taskRole.Arn,
-		ExecRoleArn: execRole.Arn,
+		ServiceArns:       serviceArns,
+		TaskRoleArn:       taskRole.Arn,
+		ExecRoleArn:       execRole.Arn,
+		M5ServiceResource: m5Resource,
+		Tier1Resources:    tier1Resources,
 	}, nil
+}
+
+// groupSpecsByTier partitions service specs by their startup tier.
+func groupSpecsByTier(specs []serviceSpec) map[int][]serviceSpec {
+	m := make(map[int][]serviceSpec)
+	for _, s := range specs {
+		m[s.tier] = append(m[s.tier], s)
+	}
+	return m
+}
+
+// sortedTierKeys returns tier numbers in ascending order.
+func sortedTierKeys(m map[int][]serviceSpec) []int {
+	keys := make([]int, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +411,10 @@ func NewServices(ctx *pulumi.Context, args *ServicesArgs) (*ServicesOutputs, err
 
 // newFargateService creates the Cloud Map service, task definition, and ECS
 // service for a single Fargate-based module.
+//
+// pulumiDeps are ECS service resources from a lower tier that this service
+// depends on (Pulumi deployment ordering). waitForSteady makes Pulumi block
+// until the ECS service reaches steady state (tasks healthy).
 func newFargateService(
 	ctx *pulumi.Context,
 	prefix string,
@@ -269,7 +424,9 @@ func newFargateService(
 	execRole *iam.Role,
 	taskRole *iam.Role,
 	logGroup *cloudwatch.LogGroup,
-) (pulumi.StringOutput, error) {
+	pulumiDeps []pulumi.Resource,
+	waitForSteady bool,
+) (*ecs.Service, error) {
 	resourcePrefix := fmt.Sprintf("%s-%s", prefix, spec.name)
 
 	// --- Cloud Map service ---
@@ -297,7 +454,7 @@ func newFargateService(
 		},
 	})
 	if err != nil {
-		return pulumi.StringOutput{}, fmt.Errorf("Cloud Map service %s: %w", spec.name, err)
+		return nil, fmt.Errorf("Cloud Map service %s: %w", spec.name, err)
 	}
 
 	// --- Task definition ---
@@ -321,12 +478,12 @@ func newFargateService(
 		},
 	})
 	if err != nil {
-		return pulumi.StringOutput{}, fmt.Errorf("task definition %s: %w", spec.name, err)
+		return nil, fmt.Errorf("task definition %s: %w", spec.name, err)
 	}
 
 	// --- ECS service ---
 
-	ecsSvc, err := ecs.NewService(ctx, fmt.Sprintf("svc-%s", spec.name), &ecs.ServiceArgs{
+	svcArgs := &ecs.ServiceArgs{
 		Name:           pulumi.String(resourcePrefix),
 		Cluster:        args.ClusterArn,
 		TaskDefinition: taskDef.Arn,
@@ -347,6 +504,12 @@ func newFargateService(
 		DeploymentMinimumHealthyPercent: pulumi.Int(100),
 		DeploymentMaximumPercent:        pulumi.Int(200),
 
+		// Circuit breaker: auto-rollback if new tasks fail to stabilize.
+		DeploymentCircuitBreaker: &ecs.ServiceDeploymentCircuitBreakerArgs{
+			Enable:   pulumi.Bool(true),
+			Rollback: pulumi.Bool(true),
+		},
+
 		// Enable ECS Exec for debugging via `aws ecs execute-command`.
 		EnableExecuteCommand: pulumi.Bool(true),
 
@@ -356,14 +519,36 @@ func newFargateService(
 			"Project":     pulumi.String("kaizen"),
 			"Environment": pulumi.String(args.Environment),
 			"Service":     pulumi.String(spec.name),
+			"Tier":        pulumi.Sprintf("%d", spec.tier),
 			"ManagedBy":   pulumi.String("pulumi"),
 		},
-	})
-	if err != nil {
-		return pulumi.StringOutput{}, fmt.Errorf("ECS service %s: %w", spec.name, err)
 	}
 
-	return ecsSvc.ID().ToStringOutput(), nil
+	// WaitForSteadyState blocks Pulumi until ECS tasks are running and healthy.
+	// Applied to Tier 0 and Tier 1 so downstream tiers only deploy after
+	// upstream services are truly ready (not just API-created).
+	if waitForSteady {
+		svcArgs.WaitForSteadyState = pulumi.Bool(true)
+	}
+
+	// Health-gate containers add a grace period for the init container to
+	// poll upstream dependencies before the main container's health check runs.
+	if len(spec.deps) > 0 {
+		svcArgs.HealthCheckGracePeriodSeconds = pulumi.Int(120)
+	}
+
+	// Build Pulumi resource options: DependsOn from previous tier.
+	var opts []pulumi.ResourceOption
+	if len(pulumiDeps) > 0 {
+		opts = append(opts, pulumi.DependsOn(pulumiDeps))
+	}
+
+	ecsSvc, err := ecs.NewService(ctx, fmt.Sprintf("svc-%s", spec.name), svcArgs, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("ECS service %s: %w", spec.name, err)
+	}
+
+	return ecsSvc, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +557,13 @@ func newFargateService(
 
 // buildContainerDefsJSON constructs the JSON container definitions string,
 // composing Pulumi outputs from ECR, Secrets Manager, and CloudWatch.
+//
+// For services with upstream dependencies (tier > 0), an additional
+// "health-gate" init container is prepended. The main container's dependsOn
+// ensures it waits for the gate to exit successfully before starting.
+//
+// Every service also gets an ADOT collector sidecar that receives OTLP on
+// :4317 and exports traces to X-Ray.
 func buildContainerDefsJSON(
 	spec serviceSpec,
 	args *ServicesArgs,
@@ -380,20 +572,45 @@ func buildContainerDefsJSON(
 ) pulumi.StringOutput {
 	ecrURL := args.ECRRepositoryURLs[spec.ecrKey]
 
-	return pulumi.All(
+	// Collect all Pulumi outputs we need to resolve.
+	allOutputs := []interface{}{
 		ecrURL,
 		logGroup.Name,
 		args.DatabaseSecretArn,
 		args.KafkaSecretArn,
 		args.RedisSecretArn,
 		args.AuthSecretArn,
-	).ApplyT(func(vals []interface{}) (string, error) {
+	}
+
+	// If this service has deps, we also need the healthgate ECR URL.
+	hasGate := len(spec.deps) > 0
+	if hasGate {
+		if gateURL, ok := args.ECRRepositoryURLs["healthgate"]; ok {
+			allOutputs = append(allOutputs, gateURL)
+		}
+	}
+
+	return pulumi.All(allOutputs...).ApplyT(func(vals []interface{}) (string, error) {
 		imageURL := vals[0].(string)
 		logGroupName := vals[1].(string)
 		dbSecretArn := vals[2].(string)
 		kafkaSecretArn := vals[3].(string)
 		redisSecretArn := vals[4].(string)
 		authSecretArn := vals[5].(string)
+
+		var gateImageURL string
+		if hasGate && len(vals) > 6 {
+			gateImageURL = vals[6].(string)
+		}
+
+		logConfig := logCfg{
+			LogDriver: "awslogs",
+			Options: map[string]string{
+				"awslogs-group":         logGroupName,
+				"awslogs-region":        awsRegion,
+				"awslogs-stream-prefix": spec.name,
+			},
+		}
 
 		// Port mappings.
 		ports := make([]portMap, len(spec.ports))
@@ -422,6 +639,16 @@ func buildContainerDefsJSON(
 			envVars = append(envVars, envKV{Name: k, Value: v})
 		}
 
+		// Tell the app container to send OTLP traces to the ADOT sidecar.
+		envVars = append(envVars, envKV{
+			Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
+			Value: "http://localhost:4317",
+		})
+		envVars = append(envVars, envKV{
+			Name:  "OTEL_SERVICE_NAME",
+			Value: spec.name,
+		})
+
 		// Secrets from Secrets Manager (injected by ECS agent at task start).
 		secrets := []secretRef{
 			{Name: "DATABASE_SECRET", ValueFrom: dbSecretArn},
@@ -430,21 +657,41 @@ func buildContainerDefsJSON(
 			{Name: "AUTH_SECRET", ValueFrom: authSecretArn},
 		}
 
-		def := containerDef{
-			Name:      spec.name,
-			Image:     imageURL + ":latest",
-			Essential: true,
-			PortMappings: ports,
-			LogConfiguration: logCfg{
-				LogDriver: "awslogs",
-				Options: map[string]string{
-					"awslogs-group":         logGroupName,
-					"awslogs-region":        awsRegion,
-					"awslogs-stream-prefix": spec.name,
+		// Build the container list.
+		var containers []containerDef
+
+		// Health-gate init container: polls upstream service endpoints, exits 0
+		// when all are reachable. Main container waits for SUCCESS condition.
+		if hasGate && gateImageURL != "" {
+			gateCmd := buildHealthGateCmd(spec.deps)
+			gate := containerDef{
+				Name:      "health-gate",
+				Image:     gateImageURL + ":latest",
+				Essential: false,
+				Command:   []string{"sh", "-c", gateCmd},
+				LogConfiguration: logCfg{
+					LogDriver: "awslogs",
+					Options: map[string]string{
+						"awslogs-group":         logGroupName,
+						"awslogs-region":        awsRegion,
+						"awslogs-stream-prefix": spec.name + "-health-gate",
+					},
 				},
-			},
-			Environment: envVars,
-			Secrets:     secrets,
+				Environment: []envKV{
+					{Name: "ENVIRONMENT", Value: args.Environment},
+				},
+			}
+			containers = append(containers, gate)
+		}
+
+		mainDef := containerDef{
+			Name:             spec.name,
+			Image:            imageURL + ":latest",
+			Essential:        true,
+			PortMappings:     ports,
+			LogConfiguration: logConfig,
+			Environment:      envVars,
+			Secrets:          secrets,
 			HealthCheck: &healthCheck{
 				Command:     spec.healthCmd,
 				Interval:    30,
@@ -454,12 +701,77 @@ func buildContainerDefsJSON(
 			},
 		}
 
-		b, err := json.Marshal([]containerDef{def})
+		// Chain main container to health-gate via container-level dependsOn.
+		if hasGate && gateImageURL != "" {
+			mainDef.DependsOn = []containerDependency{
+				{ContainerName: "health-gate", Condition: "SUCCESS"},
+			}
+		}
+
+		containers = append(containers, mainDef)
+
+		// ADOT collector sidecar: receives OTLP on :4317, exports to X-Ray.
+		adotDef := containerDef{
+			Name:      "aws-otel-collector",
+			Image:     "public.ecr.aws/aws-observability/aws-otel-collector:latest",
+			Essential: false,
+			PortMappings: []portMap{
+				{ContainerPort: 4317, Protocol: "tcp"},
+			},
+			LogConfiguration: logCfg{
+				LogDriver: "awslogs",
+				Options: map[string]string{
+					"awslogs-group":         logGroupName,
+					"awslogs-region":        awsRegion,
+					"awslogs-stream-prefix": spec.name + "-otel",
+				},
+			},
+			Environment: []envKV{
+				{Name: "AOT_CONFIG_CONTENT", Value: adotConfigYAML(spec.name)},
+			},
+		}
+		containers = append(containers, adotDef)
+
+		b, err := json.Marshal(containers)
 		if err != nil {
 			return "", fmt.Errorf("marshaling container defs for %s: %w", spec.name, err)
 		}
 		return string(b), nil
 	}).(pulumi.StringOutput)
+}
+
+// buildHealthGateCmd generates a shell script that polls each upstream
+// dependency endpoint until reachable. Returns a single-line sh -c argument.
+//
+// HTTP deps are checked via wget (validates the health endpoint returns 2xx).
+// TCP deps are checked via nc (validates the port accepts connections).
+func buildHealthGateCmd(deps []healthDep) string {
+	var b strings.Builder
+	b.WriteString("set -e; ")
+	for _, dep := range deps {
+		switch dep.proto {
+		case "http":
+			fmt.Fprintf(&b,
+				`echo "Waiting for %s at %s:%d%s..."; `+
+					`until wget -q --spider -T 2 http://%s:%d%s 2>/dev/null; do sleep 5; done; `+
+					`echo "%s ready"; `,
+				dep.name, dep.host, dep.port, dep.path,
+				dep.host, dep.port, dep.path,
+				dep.name,
+			)
+		default: // "tcp" — gRPC or other TCP-based services
+			fmt.Fprintf(&b,
+				`echo "Waiting for %s at %s:%d..."; `+
+					`until printf "" | nc -w 2 %s %d > /dev/null 2>&1; do sleep 5; done; `+
+					`echo "%s ready"; `,
+				dep.name, dep.host, dep.port,
+				dep.host, dep.port,
+				dep.name,
+			)
+		}
+	}
+	b.WriteString(`echo "All dependencies healthy"`)
+	return b.String()
 }
 
 // ---------------------------------------------------------------------------
@@ -540,7 +852,7 @@ func newExecutionRole(ctx *pulumi.Context, prefix string, args *ServicesArgs) (*
 
 // newTaskRole creates the ECS task role assumed by running containers.
 // Grants permissions for Cloud Map discovery, S3 data access (metrics),
-// and ECS Exec (SSM for debugging).
+// ECS Exec (SSM for debugging), and X-Ray trace export (ADOT sidecar).
 func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
 	assumeRolePolicy := `{
   "Version": "2012-10-17",
@@ -592,6 +904,15 @@ func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
 		return nil, fmt.Errorf("attaching SSM policy: %w", err)
 	}
 
+	// X-Ray: allow ADOT sidecar to push traces.
+	_, err = iam.NewRolePolicyAttachment(ctx, "ecs-task-xray", &iam.RolePolicyAttachmentArgs{
+		Role:      role.Name,
+		PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attaching X-Ray policy: %w", err)
+	}
+
 	// S3 read/write for metrics data (M3 Delta Lake, MLflow artifacts).
 	_, err = iam.NewRolePolicy(ctx, "ecs-task-s3", &iam.RolePolicyArgs{
 		Name: pulumi.Sprintf("%s-task-s3", prefix),
@@ -626,6 +947,38 @@ func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// adotConfigYAML returns the ADOT collector configuration for a given service.
+// The collector receives OTLP gRPC on port 4317 and exports traces to X-Ray.
+func adotConfigYAML(serviceName string) string {
+	return fmt.Sprintf(`receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 256
+  resource:
+    attributes:
+      - key: service.name
+        value: %s
+        action: upsert
+
+exporters:
+  awsxray:
+    region: us-east-1
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [awsxray]
+`, serviceName)
+}
+
 // logRetentionDays returns the CloudWatch log retention period based on env.
 func logRetentionDays(env string) int {
 	switch env {
@@ -636,4 +989,50 @@ func logRetentionDays(env string) int {
 	default:
 		return 14
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Exported accessors for testing
+// ---------------------------------------------------------------------------
+
+// ServiceSpec is a read-only view of a Fargate service specification.
+type ServiceSpec struct {
+	Key       string
+	Name      string
+	EcrKey    string
+	Cpu       string
+	MemoryMB  string
+	Ports     []int
+	Lang      string
+	HealthCmd []string
+}
+
+// ServiceSpecs returns the complete list of Fargate service specifications.
+// Used by E2E deploy smoke tests to validate the service topology.
+func ServiceSpecs() []ServiceSpec {
+	internal := serviceSpecs()
+	out := make([]ServiceSpec, len(internal))
+	for i, s := range internal {
+		ports := make([]int, len(s.ports))
+		copy(ports, s.ports)
+		healthCmd := make([]string, len(s.healthCmd))
+		copy(healthCmd, s.healthCmd)
+		out[i] = ServiceSpec{
+			Key:       s.key,
+			Name:      s.name,
+			EcrKey:    s.ecrKey,
+			Cpu:       s.cpu,
+			MemoryMB:  s.memoryMB,
+			Ports:     ports,
+			Lang:      s.lang,
+			HealthCmd: healthCmd,
+		}
+	}
+	return out
+}
+
+// ServiceEndpoints returns the Cloud Map DNS endpoint map for all 9 services.
+// Used by E2E deploy smoke tests to validate Cloud Map DNS resolution.
+func ServiceEndpoints() map[string]string {
+	return serviceEndpoints()
 }

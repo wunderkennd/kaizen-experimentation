@@ -1,0 +1,199 @@
+{
+  "dashboard": {
+    "uid": "kaizen-service-latency",
+    "title": "Kaizen - Service Latency",
+    "description": "p50/p95/p99 latency per service. SLO targets: M1 < 5ms, M5 < 50ms, M7 < 10ms.",
+    "tags": ["kaizen", "latency", "slo"],
+    "timezone": "utc",
+    "editable": true,
+    "refresh": "30s",
+    "time": { "from": "now-1h", "to": "now" },
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "query": "label_values(http_request_duration_seconds_bucket, service)",
+          "multi": true,
+          "includeAll": true,
+          "current": { "text": "All", "value": "$__all" },
+          "refresh": 2
+        },
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": { "text": "AMP", "value": "AMP" }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "p50 Latency by Service",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m])) by (le, service))",
+            "legendFormat": "{{service}} p50",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "pointSize": 5 },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.01 },
+                { "color": "red", "value": 0.05 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "p95 Latency by Service",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m])) by (le, service))",
+            "legendFormat": "{{service}} p95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "pointSize": 5 },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.02 },
+                { "color": "red", "value": 0.1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "p99 Latency by Service",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service=~\"$service\"}[5m])) by (le, service))",
+            "legendFormat": "{{service}} p99",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "pointSize": 5 },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.05 },
+                { "color": "red", "value": 0.2 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "SLO Compliance - M1 Assignment (< 5ms)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 0, "y": 24 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "1 - (sum(rate(http_request_duration_seconds_bucket{service=\"assignment\", le=\"0.005\"}[5m])) / sum(rate(http_request_duration_seconds_count{service=\"assignment\"}[5m])))",
+            "legendFormat": "SLO violation rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "red", "value": 0.01 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "SLO Compliance - M5 Management (< 50ms)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 8, "y": 24 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "1 - (sum(rate(http_request_duration_seconds_bucket{service=\"management\", le=\"0.050\"}[5m])) / sum(rate(http_request_duration_seconds_count{service=\"management\"}[5m])))",
+            "legendFormat": "SLO violation rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "red", "value": 0.01 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "SLO Compliance - M7 Flags (< 10ms)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 16, "y": 24 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "1 - (sum(rate(http_request_duration_seconds_bucket{service=\"flags\", le=\"0.010\"}[5m])) / sum(rate(http_request_duration_seconds_count{service=\"flags\"}[5m])))",
+            "legendFormat": "SLO violation rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "red", "value": 0.01 }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "schemaVersion": 39,
+    "version": 1
+  },
+  "overwrite": true
+}

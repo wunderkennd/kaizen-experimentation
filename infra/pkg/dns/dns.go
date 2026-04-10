@@ -18,10 +18,23 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/config"
 )
 
-// Args holds all inputs required by the DNS module.
+// Args holds all inputs required by the DNS zone and certificate module.
 type Args struct {
 	Config config.KaizenConfig
-	ALB    config.ALBOutputs
+}
+
+// AliasArgs holds inputs for creating Route 53 alias records pointing to the ALB.
+// This is separated from NewDNS to break the circular dependency:
+// DNS cert → ALB → DNS alias records.
+type AliasArgs struct {
+	// ZoneId is the Route 53 hosted zone ID (from NewDNS).
+	ZoneId pulumi.IDOutput
+	// ZoneName is the fully-qualified zone name (e.g., "kaizen.example.com").
+	ZoneName string
+	// ALBDnsName is the ALB's DNS name for alias targets.
+	ALBDnsName pulumi.StringOutput
+	// ALBZoneId is the ALB's canonical hosted zone ID for alias targets.
+	ALBZoneId pulumi.StringOutput
 }
 
 // Outputs holds all resources exported by the DNS module.
@@ -30,12 +43,12 @@ type Outputs struct {
 	CertificateArn pulumi.StringOutput
 }
 
-// NewDNS creates the Route 53 hosted zone, ACM wildcard certificate, DNS
-// validation records, and A-record aliases for the Kaizen platform.
+// NewDNS creates the Route 53 hosted zone and ACM wildcard certificate with
+// DNS validation. A-record aliases are created separately via NewDNSAliases
+// to break the circular dependency with the ALB (which needs the certificate).
 //
 // Zone: kaizen.{domain}
 // Cert: *.kaizen.{domain} (DNS-validated via Route 53)
-// A records: root → ALB, assign.kaizen.{domain} → ALB, api.kaizen.{domain} → ALB
 func NewDNS(ctx *pulumi.Context, args *Args) (*Outputs, error) {
 	zoneName := fmt.Sprintf("kaizen.%s", args.Config.Domain)
 
@@ -105,37 +118,43 @@ func NewDNS(ctx *pulumi.Context, args *Args) (*Outputs, error) {
 		return nil, fmt.Errorf("creating certificate validation waiter: %w", err)
 	}
 
-	// --- A Records (alias to ALB) ---
-	// Each record is an alias record pointing to the ALB's DNS name and hosted zone.
+	return &Outputs{
+		HostedZoneID:   zone.ID(),
+		CertificateArn: certValidation.CertificateArn,
+	}, nil
+}
+
+// NewDNSAliases creates Route 53 A-record aliases pointing to the ALB.
+// Called after the ALB is created to resolve the DNS↔ALB circular dependency.
+//
+// Records: root → ALB, assign.{zone} → ALB, api.{zone} → ALB
+func NewDNSAliases(ctx *pulumi.Context, args *AliasArgs) error {
 	aliasRecords := []struct {
-		name     string
-		dnsName  string // subdomain prefix (empty string = zone apex)
+		name    string
+		dnsName string
 	}{
-		{name: "root", dnsName: zoneName},
-		{name: "assign", dnsName: fmt.Sprintf("assign.%s", zoneName)},
-		{name: "api", dnsName: fmt.Sprintf("api.%s", zoneName)},
+		{name: "root", dnsName: args.ZoneName},
+		{name: "assign", dnsName: fmt.Sprintf("assign.%s", args.ZoneName)},
+		{name: "api", dnsName: fmt.Sprintf("api.%s", args.ZoneName)},
 	}
 
 	for _, rec := range aliasRecords {
 		_, err := route53.NewRecord(ctx, fmt.Sprintf("kaizen-alias-%s", rec.name), &route53.RecordArgs{
-			ZoneId: zone.ZoneId,
+			ZoneId: args.ZoneId.ToStringOutput(),
 			Name:   pulumi.String(rec.dnsName),
 			Type:   pulumi.String("A"),
 			Aliases: route53.RecordAliasArray{
 				&route53.RecordAliasArgs{
-					Name:                 args.ALB.ALBDNSName,
-					ZoneId:               args.ALB.ALBHostedZoneID,
+					Name:                 args.ALBDnsName,
+					ZoneId:               args.ALBZoneId,
 					EvaluateTargetHealth: pulumi.Bool(true),
 				},
 			},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("creating alias record %q: %w", rec.name, err)
+			return fmt.Errorf("creating alias record %q: %w", rec.name, err)
 		}
 	}
 
-	return &Outputs{
-		HostedZoneID:   zone.ID(),
-		CertificateArn: certValidation.CertificateArn,
-	}, nil
+	return nil
 }
