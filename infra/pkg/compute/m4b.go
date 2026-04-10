@@ -29,6 +29,11 @@ type M4bServiceArgs struct {
 	// AsgName is the Auto Scaling Group name for M4b, used as the alarm
 	// dimension. Passed from ClusterOutputs.
 	AsgName pulumi.StringOutput
+
+	// DependsOnResources lists Pulumi resources that must reach steady state
+	// before M4b operational resources are created. Typically includes the M5
+	// ECS service (M4b is logically Tier 1, depends on M5 being healthy).
+	DependsOnResources []pulumi.Resource
 }
 
 // M4bServiceOutputs holds the outputs from M4b operational resources.
@@ -71,6 +76,8 @@ func NewM4bService(ctx *pulumi.Context, args *M4bServiceArgs) (*M4bServiceOutput
 	}
 
 	// ── Cloud Map: m4b-policy.kaizen.local:50054 ──────────────────────────
+	// Cloud Map registration depends on upstream resources (M5 service)
+	// so M4b isn't discoverable until its dependencies are healthy.
 
 	serviceArn, err := newM4bCloudMapService(ctx, prefix, args, tags)
 	if err != nil {
@@ -237,6 +244,12 @@ func newM4bCloudMapService(
 	args *M4bServiceArgs,
 	tags pulumi.StringMap,
 ) (pulumi.StringOutput, error) {
+	// Build resource options including DependsOn from upstream services.
+	var cmOpts []pulumi.ResourceOption
+	if len(args.DependsOnResources) > 0 {
+		cmOpts = append(cmOpts, pulumi.DependsOn(args.DependsOnResources))
+	}
+
 	svc, err := servicediscovery.NewService(ctx, "m4b-cloud-map-service", &servicediscovery.ServiceArgs{
 		Name:        pulumi.String("m4b-policy"),
 		Description: pulumi.String("M4b Policy service — LMAX bandit evaluation (port 50054)"),
@@ -258,7 +271,7 @@ func newM4bCloudMapService(
 			FailureThreshold: pulumi.Int(1),
 		},
 		Tags: tags,
-	})
+	}, cmOpts...)
 	if err != nil {
 		return pulumi.StringOutput{}, fmt.Errorf("creating M4b Cloud Map service: %w", err)
 	}
