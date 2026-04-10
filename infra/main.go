@@ -184,6 +184,20 @@ func main() {
 		ctx.Export("ecsClusterId", clusterOutputs.ClusterId)
 		ctx.Export("ecsClusterArn", clusterOutputs.ClusterArn)
 
+		// ── 10.5. Database Migration (pre-deploy, blocks M5 service) ───────
+		migrationOutputs, err := compute.NewMigration(ctx, &compute.MigrationArgs{
+			Environment:       env,
+			ClusterArn:        clusterOutputs.ClusterArn,
+			PrivateSubnetIds:  vpcOutputs.PrivateSubnetIds,
+			SecurityGroupId:   sgResult.Groups["ecs"],
+			ECRRepositoryURL:  ecrOutputs.RepositoryURLs["management"],
+			DatabaseSecretArn: secretsOutputs.DatabaseSecretArn,
+			Region:            "us-east-1",
+		})
+		if err != nil {
+			return err
+		}
+
 		// ── 11. ECS Fargate Services ────────────────────────────────────────
 		svcOutputs, err := compute.NewServices(ctx, &compute.ServicesArgs{
 			Environment:       env,
@@ -197,6 +211,7 @@ func main() {
 			RedisSecretArn:    secretsOutputs.RedisSecretArn,
 			AuthSecretArn:     secretsOutputs.AuthSecretArn,
 			DesiredCount:      cfg.FargateMinTasks,
+			PreDeployDeps:     []pulumi.Resource{migrationOutputs.RunCommand},
 		})
 		if err != nil {
 			return err
