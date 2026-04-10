@@ -430,7 +430,17 @@ func buildContainerDefsJSON(
 			{Name: "AUTH_SECRET", ValueFrom: authSecretArn},
 		}
 
-		def := containerDef{
+		// Tell the app container to send OTLP traces to the ADOT sidecar.
+		envVars = append(envVars, envKV{
+			Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
+			Value: "http://localhost:4317",
+		})
+		envVars = append(envVars, envKV{
+			Name:  "OTEL_SERVICE_NAME",
+			Value: spec.name,
+		})
+
+		appDef := containerDef{
 			Name:      spec.name,
 			Image:     imageURL + ":latest",
 			Essential: true,
@@ -454,7 +464,29 @@ func buildContainerDefsJSON(
 			},
 		}
 
-		b, err := json.Marshal([]containerDef{def})
+		// ADOT collector sidecar: receives OTLP on :4317, exports to X-Ray.
+		adotDef := containerDef{
+			Name:      "aws-otel-collector",
+			Image:     "public.ecr.aws/aws-observability/aws-otel-collector:latest",
+			Essential: false,
+			PortMappings: []portMap{
+				{ContainerPort: 4317, Protocol: "tcp"},
+			},
+			LogConfiguration: logCfg{
+				LogDriver: "awslogs",
+				Options: map[string]string{
+					"awslogs-group":         logGroupName,
+					"awslogs-region":        awsRegion,
+					"awslogs-stream-prefix": spec.name + "-otel",
+				},
+			},
+			Environment: []envKV{
+				{Name: "AOT_CONFIG_CONTENT", Value: adotConfigYAML(spec.name)},
+			},
+			Secrets: nil,
+		}
+
+		b, err := json.Marshal([]containerDef{appDef, adotDef})
 		if err != nil {
 			return "", fmt.Errorf("marshaling container defs for %s: %w", spec.name, err)
 		}
@@ -592,6 +624,15 @@ func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
 		return nil, fmt.Errorf("attaching SSM policy: %w", err)
 	}
 
+	// X-Ray: allow ADOT sidecar to push traces.
+	_, err = iam.NewRolePolicyAttachment(ctx, "ecs-task-xray", &iam.RolePolicyAttachmentArgs{
+		Role:      role.Name,
+		PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attaching X-Ray policy: %w", err)
+	}
+
 	// S3 read/write for metrics data (M3 Delta Lake, MLflow artifacts).
 	_, err = iam.NewRolePolicy(ctx, "ecs-task-s3", &iam.RolePolicyArgs{
 		Name: pulumi.Sprintf("%s-task-s3", prefix),
@@ -625,6 +666,38 @@ func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// adotConfigYAML returns the ADOT collector configuration for a given service.
+// The collector receives OTLP gRPC on port 4317 and exports traces to X-Ray.
+func adotConfigYAML(serviceName string) string {
+	return fmt.Sprintf(`receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 256
+  resource:
+    attributes:
+      - key: service.name
+        value: %s
+        action: upsert
+
+exporters:
+  awsxray:
+    region: us-east-1
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [awsxray]
+`, serviceName)
+}
 
 // logRetentionDays returns the CloudWatch log retention period based on env.
 func logRetentionDays(env string) int {
