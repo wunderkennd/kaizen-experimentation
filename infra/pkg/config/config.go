@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiConfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -48,7 +49,9 @@ type Config struct {
 	CloudwatchRetention int
 
 	// Security
-	WafEnabled bool
+	WafEnabled           bool
+	WafBlockedCountries  []string
+	WafRateLimitPerIP    int
 }
 
 // KaizenConfig is an alias for Config. Some modules reference this type name.
@@ -90,23 +93,41 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		projectName = v
 	}
 
+	// WAF optional settings.
+	var blockedCountries []string
+	if v, err := cfg.Try("wafBlockedCountries"); err == nil && v != "" {
+		for _, c := range strings.Split(v, ",") {
+			c = strings.TrimSpace(c)
+			if c != "" {
+				blockedCountries = append(blockedCountries, c)
+			}
+		}
+	}
+
+	wafRateLimit := 1000 // default: 1000 requests per 5-minute window
+	if v, err := cfg.TryInt("wafRateLimitPerIP"); err == nil {
+		wafRateLimit = v
+	}
+
 	return &Config{
-		Project:             "kaizen",
-		Environment:         env,
-		Env:                 Environment(env),
-		Domain:              domain,
-		ProjectName:         projectName,
-		VpcCidr:             cfg.Require("vpcCidr"),
-		RdsInstanceClass:    cfg.Require("rdsInstanceClass"),
-		RdsMultiAz:          cfg.RequireBool("rdsMultiAz"),
-		MskBrokerCount:      cfg.RequireInt("mskBrokerCount"),
-		MskInstanceType:     cfg.Require("mskInstanceType"),
-		RedisNodeType:       cfg.Require("redisNodeType"),
-		M4bInstanceType:     cfg.Require("m4bInstanceType"),
-		NatGatewayCount:     cfg.RequireInt("natGatewayCount"),
-		WafEnabled:          cfg.RequireBool("wafEnabled"),
-		FargateMinTasks:     cfg.RequireInt("fargateMinTasks"),
-		CloudwatchRetention: cfg.RequireInt("cloudwatchRetentionDays"),
+		Project:              "kaizen",
+		Environment:          env,
+		Env:                  Environment(env),
+		Domain:               domain,
+		ProjectName:          projectName,
+		VpcCidr:              cfg.Require("vpcCidr"),
+		RdsInstanceClass:     cfg.Require("rdsInstanceClass"),
+		RdsMultiAz:           cfg.RequireBool("rdsMultiAz"),
+		MskBrokerCount:       cfg.RequireInt("mskBrokerCount"),
+		MskInstanceType:      cfg.Require("mskInstanceType"),
+		RedisNodeType:        cfg.Require("redisNodeType"),
+		M4bInstanceType:      cfg.Require("m4bInstanceType"),
+		NatGatewayCount:      cfg.RequireInt("natGatewayCount"),
+		WafEnabled:           cfg.RequireBool("wafEnabled"),
+		WafBlockedCountries:  blockedCountries,
+		WafRateLimitPerIP:    wafRateLimit,
+		FargateMinTasks:      cfg.RequireInt("fargateMinTasks"),
+		CloudwatchRetention:  cfg.RequireInt("cloudwatchRetentionDays"),
 	}
 }
 

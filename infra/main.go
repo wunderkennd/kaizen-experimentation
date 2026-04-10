@@ -16,6 +16,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/storage"
 	"github.com/kaizen-experimentation/infra/pkg/streaming"
+	"github.com/kaizen-experimentation/infra/pkg/waf"
 )
 
 func main() {
@@ -252,6 +253,19 @@ func main() {
 		})
 		if err != nil {
 			return err
+		}
+
+		// ── 15b. WAF (conditional on kaizen:wafEnabled) ────────────────────
+		if cfg.WafEnabled {
+			_, err = waf.New(ctx, &waf.Inputs{
+				AlbArn:           albOutputs.AlbArn,
+				Environment:      env,
+				RateLimitPerIP:   cfg.WafRateLimitPerIP,
+				BlockedCountries: cfg.WafBlockedCountries,
+			})
+			if err != nil {
+				return err
+			}
 		}
 
 		// ── 16. Autoscaling Policies ────────────────────────────────────────
