@@ -41,6 +41,10 @@ type TargetGroupOutputs struct {
 	M6UITgArn pulumi.StringOutput
 	// M7FlagsTgArn — ECS service registers tasks here.
 	M7FlagsTgArn pulumi.StringOutput
+	// M1AssignmentTgArnSuffix is the target group ARN suffix for ALBRequestCountPerTarget.
+	M1AssignmentTgArnSuffix pulumi.StringOutput
+	// M7FlagsTgArnSuffix is the target group ARN suffix for ALBRequestCountPerTarget.
+	M7FlagsTgArnSuffix pulumi.StringOutput
 }
 
 // targetGroupSpec defines a service target group configuration.
@@ -95,6 +99,7 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 	}
 
 	tgArns := make(map[string]pulumi.StringOutput, len(specs))
+	tgArnSuffixes := make(map[string]pulumi.StringOutput, len(specs))
 
 	for _, spec := range specs {
 		tg, err := newTargetGroup(ctx, prefix, spec, inputs.VpcId, tags)
@@ -102,6 +107,7 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 			return nil, err
 		}
 		tgArns[spec.name] = tg.Arn
+		tgArnSuffixes[spec.name] = tg.ArnSuffix
 	}
 
 	// --- Listener Rules ---
@@ -196,10 +202,12 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 	}
 
 	return &TargetGroupOutputs{
-		M1AssignmentTgArn: tgArns["m1-assignment"],
-		M5ManagementTgArn: tgArns["m5-management"],
-		M6UITgArn:         tgArns["m6-ui"],
-		M7FlagsTgArn:      tgArns["m7-flags"],
+		M1AssignmentTgArn:       tgArns["m1-assignment"],
+		M5ManagementTgArn:       tgArns["m5-management"],
+		M6UITgArn:               tgArns["m6-ui"],
+		M7FlagsTgArn:            tgArns["m7-flags"],
+		M1AssignmentTgArnSuffix: tgArnSuffixes["m1-assignment"],
+		M7FlagsTgArnSuffix:      tgArnSuffixes["m7-flags"],
 	}, nil
 }
 
