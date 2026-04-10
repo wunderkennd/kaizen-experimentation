@@ -626,6 +626,52 @@ func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Exported accessors for testing
+// ---------------------------------------------------------------------------
+
+// ServiceSpec is a read-only view of a Fargate service specification.
+type ServiceSpec struct {
+	Key       string
+	Name      string
+	EcrKey    string
+	Cpu       string
+	MemoryMB  string
+	Ports     []int
+	Lang      string
+	HealthCmd []string
+}
+
+// ServiceSpecs returns the complete list of Fargate service specifications.
+// Used by E2E deploy smoke tests to validate the service topology.
+func ServiceSpecs() []ServiceSpec {
+	internal := serviceSpecs()
+	out := make([]ServiceSpec, len(internal))
+	for i, s := range internal {
+		ports := make([]int, len(s.ports))
+		copy(ports, s.ports)
+		healthCmd := make([]string, len(s.healthCmd))
+		copy(healthCmd, s.healthCmd)
+		out[i] = ServiceSpec{
+			Key:       s.key,
+			Name:      s.name,
+			EcrKey:    s.ecrKey,
+			Cpu:       s.cpu,
+			MemoryMB:  s.memoryMB,
+			Ports:     ports,
+			Lang:      s.lang,
+			HealthCmd: healthCmd,
+		}
+	}
+	return out
+}
+
+// ServiceEndpoints returns the Cloud Map DNS endpoint map for all 9 services.
+// Used by E2E deploy smoke tests to validate Cloud Map DNS resolution.
+func ServiceEndpoints() map[string]string {
+	return serviceEndpoints()
+}
+
 // logRetentionDays returns the CloudWatch log retention period based on env.
 func logRetentionDays(env string) int {
 	switch env {
