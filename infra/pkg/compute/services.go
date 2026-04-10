@@ -46,6 +46,9 @@ type ServicesArgs struct {
 	AuthSecretArn     pulumi.StringOutput
 	// DesiredCount is the initial task count per service.
 	DesiredCount int
+	// PreDeployDeps lists resources that must complete before the M5
+	// management service starts (e.g., database migration task).
+	PreDeployDeps []pulumi.Resource
 }
 
 // ServicesOutputs holds the outputs from ECS service provisioning.
@@ -152,6 +155,8 @@ type containerDef struct {
 	Name             string       `json:"name"`
 	Image            string       `json:"image"`
 	Essential        bool         `json:"essential"`
+	EntryPoint       []string     `json:"entryPoint,omitempty"`
+	Command          []string     `json:"command,omitempty"`
 	PortMappings     []portMap    `json:"portMappings"`
 	LogConfiguration logCfg       `json:"logConfiguration"`
 	Environment      []envKV      `json:"environment"`
@@ -240,7 +245,11 @@ func NewServices(ctx *pulumi.Context, args *ServicesArgs) (*ServicesOutputs, err
 	serviceArns := make(map[string]pulumi.StringOutput, len(specs))
 
 	for _, spec := range specs {
-		svcArn, err := newFargateService(ctx, prefix, region.Name, spec, args, execRole, taskRole, logGroup)
+		var opts []pulumi.ResourceOption
+		if spec.key == "m5" && len(args.PreDeployDeps) > 0 {
+			opts = append(opts, pulumi.DependsOn(args.PreDeployDeps))
+		}
+		svcArn, err := newFargateService(ctx, prefix, region.Name, spec, args, execRole, taskRole, logGroup, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("creating service %s: %w", spec.name, err)
 		}
@@ -269,6 +278,7 @@ func newFargateService(
 	execRole *iam.Role,
 	taskRole *iam.Role,
 	logGroup *cloudwatch.LogGroup,
+	svcOpts ...pulumi.ResourceOption,
 ) (pulumi.StringOutput, error) {
 	resourcePrefix := fmt.Sprintf("%s-%s", prefix, spec.name)
 
@@ -358,7 +368,7 @@ func newFargateService(
 			"Service":     pulumi.String(spec.name),
 			"ManagedBy":   pulumi.String("pulumi"),
 		},
-	})
+	}, svcOpts...)
 	if err != nil {
 		return pulumi.StringOutput{}, fmt.Errorf("ECS service %s: %w", spec.name, err)
 	}

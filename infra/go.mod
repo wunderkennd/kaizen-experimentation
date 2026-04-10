@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.2
+	github.com/pulumi/pulumi-command/sdk v1.2.1
 	github.com/pulumi/pulumi-kafka/sdk/v3 v3.12.3
 	github.com/pulumi/pulumi/sdk/v3 v3.229.0
 )
