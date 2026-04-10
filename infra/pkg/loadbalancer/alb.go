@@ -40,6 +40,9 @@ type ALBOutputs struct {
 	HttpsListenerArn pulumi.StringOutput
 	// HTTP listener ARN (redirect-only, exposed for completeness).
 	HttpListenerArn pulumi.StringOutput
+	// AlbArnSuffix is the ARN suffix (e.g., "app/kaizen-dev-alb/50dc6c495c0c9188")
+	// used as the ALBFullName in autoscaling ALBRequestCountPerTarget metrics.
+	AlbArnSuffix pulumi.StringOutput
 }
 
 // NewALB creates the internet-facing Application Load Balancer with:
@@ -155,5 +158,6 @@ func NewALB(ctx *pulumi.Context, inputs *ALBInputs) (*ALBOutputs, error) {
 		AlbZoneId:        alb.ZoneId,
 		HttpsListenerArn: httpsListener.Arn,
 		HttpListenerArn:  httpListener.Arn,
+		AlbArnSuffix:     alb.ArnSuffix,
 	}, nil
 }

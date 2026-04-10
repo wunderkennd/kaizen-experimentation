@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 
@@ -25,12 +27,18 @@ func main() {
 
 		ctx.Export("environment", pulumi.String(env))
 
-		// ── 1. Network foundation ───────────────────────────────────────────
+		// =====================================================================
+		// Stage 1: Network Foundation (Infra-1)
+		// No dependencies — everything else builds on this.
+		// =====================================================================
+
+		// ── 1. VPC ──────────────────────────────────────────────────────────
 		vpcOutputs, err := network.NewVpc(ctx)
 		if err != nil {
 			return err
 		}
 
+		// ── 2. Security Groups ──────────────────────────────────────────────
 		sgResult, err := network.NewSecurityGroups(ctx, "kaizen", &network.SecurityGroupsArgs{
 			VpcId: vpcOutputs.VpcId,
 		})
@@ -38,6 +46,7 @@ func main() {
 			return err
 		}
 
+		// ── 3. Service Discovery (Cloud Map) ────────────────────────────────
 		sdOutputs, err := network.NewServiceDiscovery(ctx, &network.ServiceDiscoveryArgs{
 			VpcId: vpcOutputs.VpcId,
 		})
@@ -46,7 +55,7 @@ func main() {
 		}
 		ctx.Export("cloudMapNamespaceId", sdOutputs.NamespaceId)
 
-		// VPC endpoints for private AWS service access (S3 gateway, ECR/Logs/SM interface).
+		// ── 4. VPC Endpoints ────────────────────────────────────────────────
 		vpceOutputs, err := network.NewVpcEndpoints(ctx, &network.VpcEndpointArgs{
 			VpcId:                vpcOutputs.VpcId,
 			PrivateSubnetIds:     vpcOutputs.PrivateSubnetIds,
@@ -58,7 +67,12 @@ func main() {
 			return err
 		}
 
-		// ── 2. Storage (S3 buckets) ─────────────────────────────────────────
+		// =====================================================================
+		// Stage 2: Storage + IAM (Infra-2, partial)
+		// Depends on: VPC endpoints (S3 gateway).
+		// =====================================================================
+
+		// ── 5. S3 Buckets ───────────────────────────────────────────────────
 		storageOutputs, err := storage.NewStorage(ctx, env, &storage.StorageInputs{
 			S3VpcEndpointId: vpceOutputs.S3EndpointId,
 		})
@@ -69,7 +83,7 @@ func main() {
 		ctx.Export("mlflowBucketName", storageOutputs.MlflowBucketName)
 		ctx.Export("logsBucketName", storageOutputs.LogsBucketName)
 
-		// IAM roles for ECS tasks and CI/CD (depends on S3 bucket ARNs).
+		// ── 6. IAM Roles ────────────────────────────────────────────────────
 		iamOutputs, err := network.NewIAMRoles(ctx, &network.IAMArgs{
 			Environment:     env,
 			DataBucketArn:   storageOutputs.DataBucketArn,
@@ -78,8 +92,14 @@ func main() {
 		if err != nil {
 			return err
 		}
+		ctx.Export("taskExecutionRoleArn", iamOutputs.ExecRoleArn)
 
-		// ── 3. Cache (ElastiCache Redis) ────────────────────────────────────
+		// =====================================================================
+		// Stage 3: Data Stores (Infra-2)
+		// Depends on: VPC subnets, security groups.
+		// =====================================================================
+
+		// ── 7. ElastiCache Redis ────────────────────────────────────────────
 		redisOutputs, err := cache.NewRedis(ctx, "kaizen-redis", &cache.RedisConfig{
 			NodeType:         cfg.RedisNodeType,
 			NumCacheClusters: 2,
@@ -92,7 +112,7 @@ func main() {
 		}
 		ctx.Export("redisEndpoint", redisOutputs.RedisEndpoint)
 
-		// ── 4. Database (RDS PostgreSQL) ────────────────────────────────────
+		// ── 8. RDS PostgreSQL ───────────────────────────────────────────────
 		dbOutputs, err := database.NewRds(ctx, cfg, &database.RdsInputs{
 			SubnetIds:           vpcOutputs.PrivateSubnetIds,
 			VpcSecurityGroupIds: pulumi.StringArray{sgResult.Groups["rds"].ToStringOutput()},
@@ -102,7 +122,12 @@ func main() {
 		}
 		ctx.Export("rdsEndpoint", dbOutputs.RdsEndpoint)
 
-		// ── 5. Streaming (MSK Kafka) ────────────────────────────────────────
+		// =====================================================================
+		// Stage 4: Streaming (Infra-3)
+		// Depends on: VPC subnets, security groups.
+		// =====================================================================
+
+		// ── 9. MSK Kafka Cluster ────────────────────────────────────────────
 		mskOutputs, err := streaming.NewMskCluster(ctx, "kaizen", &streaming.MskInputs{
 			SubnetIds:        vpcOutputs.PrivateSubnetIds,
 			SecurityGroupIds: pulumi.StringArray{sgResult.Groups["msk"].ToStringOutput()},
@@ -120,8 +145,10 @@ func main() {
 			return err
 		}
 		ctx.Export("mskBootstrapBrokers", mskOutputs.MskBootstrapBrokers)
+		ctx.Export("mskClusterArn", mskOutputs.MskClusterArn)
 
-		// ── 6. Secrets (depends on RDS, MSK, Redis endpoints) ───────────────
+		// ── 10. Secrets Manager ─────────────────────────────────────────────
+		// Depends on: RDS endpoint, MSK brokers, Redis endpoint.
 		secretsOutputs, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
 			RdsEndpoint:         dbOutputs.RdsEndpoint,
 			MskBootstrapBrokers: mskOutputs.MskBootstrapBrokers,
@@ -133,7 +160,7 @@ func main() {
 		ctx.Export("databaseSecretArn", secretsOutputs.DatabaseSecretArn)
 		ctx.Export("kafkaSecretArn", secretsOutputs.KafkaSecretArn)
 
-		// ── 7. Kafka Topics (SASL_SSL auth via stack config) ────────────────
+		// ── 11. Kafka Topics ────────────────────────────────────────────────
 		kafkaCfg := config.New(ctx, "kafka")
 		_, err = streaming.NewTopics(ctx, &streaming.TopicsArgs{
 			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
@@ -145,24 +172,7 @@ func main() {
 			return err
 		}
 
-		// ── 8. Schema Registry (ECS Fargate service) ────────────────────────
-		schemaRegOutputs, err := streaming.NewSchemaRegistry(ctx, &streaming.SchemaRegistryArgs{
-			Environment:      env,
-			Region:           "us-east-1",
-			ClusterArn:       pulumi.StringOutput{}, // Placeholder — resolved after cluster creation.
-			PrivateSubnetIds: vpcOutputs.PrivateSubnetIds,
-			SecurityGroupId:  sgResult.Groups["ecs"],
-			NamespaceId:      sdOutputs.NamespaceId,
-			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
-			KafkaSecretArn:   secretsOutputs.KafkaSecretArn,
-			Tags:             kconfig.DefaultTags(env),
-		})
-		if err != nil {
-			return err
-		}
-		_ = schemaRegOutputs
-
-		// ── 9. ECR Repositories ─────────────────────────────────────────────
+		// ── 12. ECR Repositories ────────────────────────────────────────────
 		ecrOutputs, err := cicd.NewECRRepositories(ctx, env)
 		if err != nil {
 			return err
@@ -171,7 +181,12 @@ func main() {
 			ctx.Export("ecrAssignmentUrl", url)
 		}
 
-		// ── 10. Compute (ECS Cluster + M4b EC2) ────────────────────────────
+		// =====================================================================
+		// Stage 5: Compute (Infra-4)
+		// Depends on: networking, data stores, secrets, ECR.
+		// =====================================================================
+
+		// ── 13. ECS Cluster + M4b EC2 ───────────────────────────────────────
 		clusterOutputs, err := compute.NewCluster(ctx, &compute.ClusterArgs{
 			Environment:        env,
 			M4bInstanceType:    cfg.M4bInstanceType,
@@ -181,10 +196,9 @@ func main() {
 		if err != nil {
 			return err
 		}
-		ctx.Export("ecsClusterId", clusterOutputs.ClusterId)
 		ctx.Export("ecsClusterArn", clusterOutputs.ClusterArn)
 
-		// ── 11. ECS Fargate Services ────────────────────────────────────────
+		// ── 14. ECS Fargate Services ────────────────────────────────────────
 		svcOutputs, err := compute.NewServices(ctx, &compute.ServicesArgs{
 			Environment:       env,
 			ClusterArn:        clusterOutputs.ClusterArn,
@@ -202,7 +216,7 @@ func main() {
 			return err
 		}
 
-		// ── 12. M4b Operational Resources ───────────────────────────────────
+		// ── 15. M4b Operational Resources ───────────────────────────────────
 		_, err = compute.NewM4bService(ctx, &compute.M4bServiceArgs{
 			Environment:         env,
 			CloudMapNamespaceId: sdOutputs.NamespaceId,
@@ -212,7 +226,31 @@ func main() {
 			return err
 		}
 
-		// ── 13. DNS (Route 53 + ACM) ────────────────────────────────────────
+		// ── 16. Schema Registry (ECS Fargate) ───────────────────────────────
+		// Depends on: ECS cluster, MSK, secrets, Cloud Map.
+		schemaRegOutputs, err := streaming.NewSchemaRegistry(ctx, &streaming.SchemaRegistryArgs{
+			Environment:      env,
+			Region:           "us-east-1",
+			ClusterArn:       clusterOutputs.ClusterArn,
+			PrivateSubnetIds: vpcOutputs.PrivateSubnetIds,
+			SecurityGroupId:  sgResult.Groups["ecs"],
+			NamespaceId:      sdOutputs.NamespaceId,
+			BootstrapBrokers: mskOutputs.MskBootstrapBrokers,
+			KafkaSecretArn:   secretsOutputs.KafkaSecretArn,
+			Tags:             kconfig.DefaultTags(env),
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("schemaRegistryUrl", schemaRegOutputs.SchemaRegistryUrl)
+
+		// =====================================================================
+		// Stage 6: Edge + Observability (Infra-5)
+		// Depends on: networking, compute, storage.
+		// =====================================================================
+
+		// ── 17. DNS Zone + ACM Certificate ──────────────────────────────────
+		// Created before ALB because the HTTPS listener needs the certificate.
 		dnsOutputs, err := dns.NewDNS(ctx, &dns.Args{
 			Config: kconfig.KaizenConfig{
 				Domain:      cfg.Domain,
@@ -221,7 +259,6 @@ func main() {
 				Project:     cfg.Project,
 				Env:         cfg.Env,
 			},
-			ALB: kconfig.ALBOutputs{},
 		})
 		if err != nil {
 			return err
@@ -229,7 +266,7 @@ func main() {
 		ctx.Export("certificateArn", dnsOutputs.CertificateArn)
 		ctx.Export("hostedZoneId", dnsOutputs.HostedZoneID)
 
-		// ── 14. Load Balancer (ALB) ─────────────────────────────────────────
+		// ── 18. ALB ─────────────────────────────────────────────────────────
 		albOutputs, err := loadbalancer.NewALB(ctx, &loadbalancer.ALBInputs{
 			PublicSubnetIds: vpcOutputs.PublicSubnetIds,
 			SecurityGroupId: sgResult.Groups["alb"].ToStringOutput(),
@@ -243,8 +280,20 @@ func main() {
 		ctx.Export("albDnsName", albOutputs.AlbDnsName)
 		ctx.Export("albArn", albOutputs.AlbArn)
 
-		// ── 15. Target Groups + Listener Rules ──────────────────────────────
-		_, err = loadbalancer.NewTargetGroups(ctx, &loadbalancer.TargetGroupInputs{
+		// ── 19. DNS Alias Records ───────────────────────────────────────────
+		// Created after ALB to resolve the DNS↔ALB circular dependency.
+		err = dns.NewDNSAliases(ctx, &dns.AliasArgs{
+			ZoneId:     dnsOutputs.HostedZoneID,
+			ZoneName:   fmt.Sprintf("kaizen.%s", cfg.Domain),
+			ALBDnsName: albOutputs.AlbDnsName,
+			ALBZoneId:  albOutputs.AlbZoneId,
+		})
+		if err != nil {
+			return err
+		}
+
+		// ── 20. Target Groups + Listener Rules ──────────────────────────────
+		tgOutputs, err := loadbalancer.NewTargetGroups(ctx, &loadbalancer.TargetGroupInputs{
 			VpcId:            vpcOutputs.VpcId.ToStringOutput(),
 			HttpsListenerArn: albOutputs.HttpsListenerArn,
 			Domain:           cfg.Domain,
@@ -254,19 +303,19 @@ func main() {
 			return err
 		}
 
-		// ── 16. Autoscaling Policies ────────────────────────────────────────
+		// ── 21. Autoscaling Policies ────────────────────────────────────────
 		scalingArgs := compute.DefaultAutoscalingArgs(env)
 		scalingArgs.ClusterName = clusterOutputs.ClusterName
-		// ALB full name and target group full names would be wired from the ALB/TG
-		// outputs once those export FullName fields. For now, autoscaling is created
-		// without ALB-based request count metrics (CPU-based scaling still works).
+		scalingArgs.ALBFullName = albOutputs.AlbArnSuffix
+		scalingArgs.M1TargetGroupFullName = tgOutputs.M1AssignmentTgArnSuffix
+		scalingArgs.M7TargetGroupFullName = tgOutputs.M7FlagsTgArnSuffix
 		_, err = compute.NewAutoscaling(ctx, &scalingArgs)
 		if err != nil {
 			return err
 		}
 
-		// ── 17. Observability: CloudWatch Log Groups + Alarms ───────────────
-		cwOutputs, err := observability.NewCloudWatch(ctx, &observability.CloudWatchArgs{
+		// ── 22. CloudWatch Log Groups + Alarms ──────────────────────────────
+		_, err = observability.NewCloudWatch(ctx, &observability.CloudWatchArgs{
 			Environment:             env,
 			CloudwatchRetention:     cfg.CloudwatchRetention,
 			RdsInstanceId:           dbOutputs.RdsInstanceId,
@@ -278,8 +327,8 @@ func main() {
 			return err
 		}
 
-		// ── 18. Observability: AMP/AMG Workspaces ───────────────────────────
-		ampOutputs, err := observability.New(ctx, &observability.Args{
+		// ── 23. AMP/AMG Observability Workspaces ────────────────────────────
+		_, err = observability.New(ctx, &observability.Args{
 			Environment:    env,
 			EcsClusterName: clusterOutputs.ClusterName,
 			Tags:           kconfig.DefaultTags(env),
@@ -288,11 +337,15 @@ func main() {
 			return err
 		}
 
-		// Suppress unused variable warnings.
-		_ = iamOutputs
-		_ = svcOutputs
-		_ = cwOutputs
-		_ = ampOutputs
+		// =====================================================================
+		// Service URL Exports
+		// =====================================================================
+
+		for key, arn := range svcOutputs.ServiceArns {
+			ctx.Export(fmt.Sprintf("serviceArn_%s", key), arn)
+		}
+		ctx.Export("taskRoleArn", svcOutputs.TaskRoleArn)
+		ctx.Export("execRoleArn", svcOutputs.ExecRoleArn)
 
 		return nil
 	})
