@@ -184,7 +184,16 @@ func main() {
 		ctx.Export("ecsClusterId", clusterOutputs.ClusterId)
 		ctx.Export("ecsClusterArn", clusterOutputs.ClusterArn)
 
-		// ── 11. ECS Fargate Services ────────────────────────────────────────
+		// ── 11. ECS Fargate Services (tiered startup ordering) ──────────────
+		//
+		// Service dependency graph:
+		//   Tier 0: M5 (foundation — owns PG schema via migration)
+		//   Tier 1: M1, M2, M2-Orch (core — depend on M5 healthy)
+		//           M4b is logically Tier 1 but EC2-based (section 12)
+		//   Tier 2: M3, M4a, M6, M7 (dependent — after Tier 1 + M4b)
+		//
+		// Pulumi DependsOn + WaitForSteadyState enforce deployment ordering.
+		// Health-gate init containers enforce runtime ordering via polling.
 		svcOutputs, err := compute.NewServices(ctx, &compute.ServicesArgs{
 			Environment:       env,
 			ClusterArn:        clusterOutputs.ClusterArn,
@@ -202,11 +211,15 @@ func main() {
 			return err
 		}
 
-		// ── 12. M4b Operational Resources ───────────────────────────────────
+		// ── 12. M4b Operational Resources (Tier 1 — depends on M5) ──────────
+		// M4b is logically Tier 1: it starts after M5 is healthy.
+		// Pulumi DependsOn ensures M4b ops are created only after M5's ECS
+		// service reaches steady state.
 		_, err = compute.NewM4bService(ctx, &compute.M4bServiceArgs{
 			Environment:         env,
 			CloudMapNamespaceId: sdOutputs.NamespaceId,
 			AsgName:             clusterOutputs.M4bAsgName,
+			DependsOnResources:  []pulumi.Resource{svcOutputs.M5ServiceResource},
 		})
 		if err != nil {
 			return err

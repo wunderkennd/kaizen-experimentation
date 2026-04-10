@@ -30,6 +30,13 @@ var ServiceNames = []string{
 	"flags",
 }
 
+// UtilityImageNames lists infrastructure utility images that need ECR
+// repositories. These are not application services — they support service
+// orchestration (e.g., health-gate init containers for startup ordering).
+var UtilityImageNames = []string{
+	"healthgate",
+}
+
 // lifecyclePolicy defines the ECR lifecycle rules:
 //   - Rule 1: expire untagged images after 7 days
 //   - Rule 2: keep only the last 10 tagged images
@@ -67,10 +74,11 @@ func NewECRRepositories(ctx *pulumi.Context, env string) (*ECROutputs, error) {
 		return nil, fmt.Errorf("building ECR lifecycle policy: %w", err)
 	}
 
-	urls := make(map[string]pulumi.StringOutput, len(ServiceNames))
-	arns := make(map[string]pulumi.StringOutput, len(ServiceNames))
+	allImages := append(ServiceNames, UtilityImageNames...)
+	urls := make(map[string]pulumi.StringOutput, len(allImages))
+	arns := make(map[string]pulumi.StringOutput, len(allImages))
 
-	for _, svc := range ServiceNames {
+	for _, svc := range allImages {
 		repoName := fmt.Sprintf("kaizen-%s", svc)
 		resourceName := fmt.Sprintf("ecr-%s", svc)
 
