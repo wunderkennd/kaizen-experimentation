@@ -121,7 +121,14 @@ function FlagDetailContent() {
           </div>
           <div>
             <dt className="font-medium text-gray-500">Default Value</dt>
-            <dd className="text-gray-900"><code className="text-xs">{flag.defaultValue}</code></dd>
+            <dd className="flex items-center gap-2 text-gray-900">
+              <code className="text-xs">{flag.defaultValue}</code>
+              <CopyButton
+                value={flag.defaultValue}
+                label="Copy default value"
+                successMessage="Default value copied to clipboard"
+              />
+            </dd>
           </div>
           <div>
             <dt className="font-medium text-gray-500">Rollout Percentage</dt>
@@ -141,7 +148,14 @@ function FlagDetailContent() {
           {flag.targetingRuleId && (
             <div>
               <dt className="font-medium text-gray-500">Targeting Rule</dt>
-              <dd className="text-gray-900"><code className="text-xs">{flag.targetingRuleId}</code></dd>
+              <dd className="flex items-center gap-2 text-gray-900">
+                <code className="text-xs">{flag.targetingRuleId}</code>
+                <CopyButton
+                  value={flag.targetingRuleId}
+                  label="Copy targeting rule ID"
+                  successMessage="Targeting rule ID copied to clipboard"
+                />
+              </dd>
             </div>
           )}
         </dl>
@@ -172,7 +186,16 @@ function FlagDetailContent() {
                         />
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm"><code>{v.value}</code></td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <code>{v.value}</code>
+                        <CopyButton
+                          value={v.value}
+                          label={`Copy variant value ${v.value}`}
+                          successMessage="Variant value copied to clipboard"
+                        />
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm">{(v.trafficFraction * 100).toFixed(0)}%</td>
                   </tr>
                 ))}
