@@ -7,6 +7,7 @@ import FlagListPage from '@/app/flags/page';
 import FlagDetailPage from '@/app/flags/[id]/page';
 import CreateFlagPage from '@/app/flags/new/page';
 import EditFlagPage from '@/app/flags/[id]/edit/page';
+import { NavHeader } from '@/components/nav-header';
 import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/lib/toast-context';
 import type { AuthUser } from '@/lib/auth-context';
@@ -36,14 +37,22 @@ vi.mock('next/link', () => ({
 
 describe('Flag List Page', () => {
   async function renderAndWait() {
-    render(<FlagListPage />);
+    render(
+      <AuthProvider>
+        <FlagListPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
     });
   }
 
   it('shows loading spinner initially', () => {
-    render(<FlagListPage />);
+    render(
+      <AuthProvider>
+        <FlagListPage />
+      </AuthProvider>,
+    );
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -64,11 +73,16 @@ describe('Flag List Page', () => {
       ),
     );
 
-    render(<FlagListPage />);
+    render(
+      <AuthProvider>
+        <FlagListPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });
     expect(screen.getByText('No feature flags found.')).toBeInTheDocument();
+    expect(screen.getByText('Create your first feature flag')).toBeInTheDocument();
   });
 
   it('shows RetryableError on 500 and retries', async () => {
@@ -78,7 +92,11 @@ describe('Flag List Page', () => {
       ),
     );
 
-    render(<FlagListPage />);
+    render(
+      <AuthProvider>
+        <FlagListPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
@@ -165,8 +183,17 @@ describe('Flag List Page', () => {
     });
   });
 
+
   it('has Flags nav link pointing to /flags', async () => {
-    await renderAndWait();
+    render(
+      <AuthProvider>
+        <NavHeader />
+        <FlagListPage />
+      </AuthProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
+    });
     const navLink = screen.getByTestId('nav-flags');
     expect(navLink).toHaveAttribute('href', '/flags');
     expect(navLink).toHaveTextContent('Flags');
@@ -192,9 +219,11 @@ describe('Flag Detail Page', () => {
 
   async function renderAndWait() {
     render(
-      <ToastProvider>
-        <FlagDetailPage />
-      </ToastProvider>,
+      <AuthProvider>
+        <ToastProvider>
+          <FlagDetailPage />
+        </ToastProvider>
+      </AuthProvider>,
     );
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toBeInTheDocument();
@@ -203,9 +232,11 @@ describe('Flag Detail Page', () => {
 
   it('shows loading spinner initially', () => {
     render(
-      <ToastProvider>
-        <FlagDetailPage />
-      </ToastProvider>,
+      <AuthProvider>
+        <ToastProvider>
+          <FlagDetailPage />
+        </ToastProvider>
+      </AuthProvider>,
     );
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
@@ -235,9 +266,11 @@ describe('Flag Detail Page', () => {
   it('renders 404 error for nonexistent flag', async () => {
     mockFlagId = 'nonexistent-flag';
     render(
-      <ToastProvider>
-        <FlagDetailPage />
-      </ToastProvider>,
+      <AuthProvider>
+        <ToastProvider>
+          <FlagDetailPage />
+        </ToastProvider>
+      </AuthProvider>,
     );
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
@@ -247,9 +280,11 @@ describe('Flag Detail Page', () => {
   it('renders variants table for multi-variant flag', async () => {
     mockFlagId = 'flag-string-ab';
     render(
-      <ToastProvider>
-        <FlagDetailPage />
-      </ToastProvider>,
+      <AuthProvider>
+        <ToastProvider>
+          <FlagDetailPage />
+        </ToastProvider>
+      </AuthProvider>,
     );
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toHaveTextContent('checkout_flow_variant');
@@ -331,7 +366,11 @@ describe('Create Flag Page', () => {
   });
 
   it('renders the create flag form', () => {
-    render(<CreateFlagPage />);
+    render(
+      <AuthProvider>
+        <CreateFlagPage />
+      </AuthProvider>,
+    );
 
     expect(screen.getByRole('heading', { name: 'Create Feature Flag' })).toBeInTheDocument();
     expect(screen.getByTestId('flag-name-input')).toBeInTheDocument();
@@ -344,12 +383,20 @@ describe('Create Flag Page', () => {
   });
 
   it('submit is disabled when name is empty', () => {
-    render(<CreateFlagPage />);
+    render(
+      <AuthProvider>
+        <CreateFlagPage />
+      </AuthProvider>,
+    );
     expect(screen.getByTestId('create-submit')).toBeDisabled();
   });
 
   it('creates a flag and redirects to detail page', async () => {
-    render(<CreateFlagPage />);
+    render(
+      <AuthProvider>
+        <CreateFlagPage />
+      </AuthProvider>,
+    );
     const user = userEvent.setup();
 
     await user.type(screen.getByTestId('flag-name-input'), 'test_new_flag');
@@ -367,7 +414,11 @@ describe('Create Flag Page', () => {
       ),
     );
 
-    render(<CreateFlagPage />);
+    render(
+      <AuthProvider>
+        <CreateFlagPage />
+      </AuthProvider>,
+    );
     const user = userEvent.setup();
 
     await user.type(screen.getByTestId('flag-name-input'), 'fail_flag');
@@ -379,13 +430,21 @@ describe('Create Flag Page', () => {
   });
 
   it('has cancel link back to /flags', () => {
-    render(<CreateFlagPage />);
+    render(
+      <AuthProvider>
+        <CreateFlagPage />
+      </AuthProvider>,
+    );
     const cancelLink = screen.getByText('Cancel').closest('a');
     expect(cancelLink).toHaveAttribute('href', '/flags');
   });
 
   it('renders all flag type options', () => {
-    render(<CreateFlagPage />);
+    render(
+      <AuthProvider>
+        <CreateFlagPage />
+      </AuthProvider>,
+    );
     const select = screen.getByTestId('flag-type-select');
     const options = within(select).getAllByRole('option');
     expect(options.map((o) => o.textContent)).toEqual(['BOOLEAN', 'STRING', 'NUMERIC', 'JSON']);
@@ -401,14 +460,22 @@ describe('Edit Flag Page', () => {
   });
 
   async function renderAndWait() {
-    render(<EditFlagPage />);
+    render(
+      <AuthProvider>
+        <EditFlagPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('edit-flag-form')).toBeInTheDocument();
     });
   }
 
   it('shows loading spinner initially', () => {
-    render(<EditFlagPage />);
+    render(
+      <AuthProvider>
+        <EditFlagPage />
+      </AuthProvider>,
+    );
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -455,7 +522,11 @@ describe('Edit Flag Page', () => {
 
   it('shows 404 error for nonexistent flag', async () => {
     mockFlagId = 'nonexistent-flag';
-    render(<EditFlagPage />);
+    render(
+      <AuthProvider>
+        <EditFlagPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
