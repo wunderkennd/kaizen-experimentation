@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { FlagType } from '@/lib/types';
 import { createFlag } from '@/lib/api';
-import { AuthProvider, useAuth } from '@/lib/auth-context';
-import { NavHeader } from '@/components/nav-header';
+import { useAuth } from '@/lib/auth-context';
 
 const FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
 
@@ -172,14 +171,5 @@ function CreateFlagContent() {
 }
 
 export default function CreateFlagPage() {
-  return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <NavHeader />
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <CreateFlagContent />
-        </main>
-      </div>
-    </AuthProvider>
-  );
+  return <CreateFlagContent />;
 }

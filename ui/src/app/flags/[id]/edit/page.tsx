@@ -6,8 +6,7 @@ import Link from 'next/link';
 import type { Flag, FlagType } from '@/lib/types';
 import { getFlag, updateFlag } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
-import { AuthProvider, useAuth } from '@/lib/auth-context';
-import { NavHeader } from '@/components/nav-header';
+import { useAuth } from '@/lib/auth-context';
 
 const FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
 
@@ -213,14 +212,5 @@ function EditFlagContent() {
 }
 
 export default function EditFlagPage() {
-  return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <NavHeader />
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <EditFlagContent />
-        </main>
-      </div>
-    </AuthProvider>
-  );
+  return <EditFlagContent />;
 }
