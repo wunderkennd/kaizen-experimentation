@@ -44,3 +44,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-05-22 - Standardized Search UI Pattern
 **Learning:** Using a consistent visual pattern for search inputs (magnifying glass icon + inset text) creates a predictable experience for users scanning filtered lists. Achieving precise vertical alignment between the absolute-positioned icon and the input text requires consistent vertical padding (e.g., `py-1.5` or `py-2`) depending on the line height.
 **Action:** Always wrap search inputs in a `relative` container with an absolute-positioned magnifying glass SVG. Use `pl-9` to clear the icon and ensure `pointer-events-none` on the icon to avoid interfering with input focus.
+
+## 2026-05-25 - Standardized Search and Empty States
+**Learning:** Consistency in search UI (icon positioning and padding) and actionable empty states (CTAs and clear-filters) significantly reduces user friction when navigating large datasets like feature flags or audit logs. Decorative icons should always be hidden from screen readers using `aria-hidden="true"`.
+**Action:** Apply the `relative` container with `pl-9` padding and `aria-hidden` SVG pattern to all search inputs. Always provide a way to reset filters in empty result states.

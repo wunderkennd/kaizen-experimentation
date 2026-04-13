@@ -66,6 +66,17 @@ function FlagListContent() {
     return (
       <div className="py-12 text-center" data-testid="empty-state">
         <p className="text-sm text-gray-500">No feature flags found.</p>
+        {canAtLeast('experimenter') && (
+          <div className="mt-6">
+            <Link
+              href="/flags/new"
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              data-testid="create-first-flag"
+            >
+              Create your first feature flag
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
@@ -106,7 +117,7 @@ function FlagListContent() {
             placeholder="Search by name or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             data-testid="flag-search"
             aria-label="Search flags"
           />
@@ -116,6 +127,12 @@ function FlagListContent() {
       {filtered.length === 0 ? (
         <div className="py-12 text-center" data-testid="no-filter-matches">
           <p className="text-sm text-gray-500">No flags match your search.</p>
+          <button
+            onClick={() => setSearch('')}
+            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+          >
+            Clear search
+          </button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
