@@ -48,3 +48,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-06-15 - Actionable Empty States
 **Learning:** A blank screen or a simple "No items found" message can be a dead-end for users. Providing a direct "Call to Action" (CTA) link in empty states reduces friction and guides users toward the next logical step in their workflow, provided they have the necessary permissions.
 **Action:** Always include a primary action link or button in empty state components for list pages. Ensure the visibility of this CTA is gated by appropriate user permissions to maintain RBAC consistency.
+
+## 2026-05-25 - Standardized Search and Empty States
+**Learning:** Consistency in search UI (icon positioning and padding) and actionable empty states (CTAs and clear-filters) significantly reduces user friction when navigating large datasets like feature flags or audit logs. Decorative icons should always be hidden from screen readers using `aria-hidden="true"`.
+**Action:** Apply the `relative` container with `pl-9` padding and `aria-hidden` SVG pattern to all search inputs. Always provide a way to reset filters in empty result states.
