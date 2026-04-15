@@ -135,6 +135,36 @@ describe('Flag List Page', () => {
     expect(screen.getByTestId('no-filter-matches')).toBeInTheDocument();
   });
 
+  it('clears search when "Clear filters" button in empty state is clicked', async () => {
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByTestId('flag-search'), 'zzzznonexistent');
+    expect(screen.getByTestId('no-filter-matches')).toBeInTheDocument();
+
+    // Use test ID because there's also a "Clear filters" button in the toolbar
+    const clearBtn = within(screen.getByTestId('no-filter-matches')).getByRole('button', { name: /clear filters/i });
+    await user.click(clearBtn);
+
+    expect(screen.getByTestId('flag-search')).toHaveValue('');
+    expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+  });
+
+  it('clears search when "Clear filters" button in toolbar is clicked', async () => {
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByTestId('flag-search'), 'dark_mode');
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('1');
+
+    const clearBtn = screen.getByTestId('clear-search-toolbar');
+    await user.click(clearBtn);
+
+    expect(screen.getByTestId('flag-search')).toHaveValue('');
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+  });
+
   it('renders correct type badge colors', async () => {
     await renderAndWait();
 

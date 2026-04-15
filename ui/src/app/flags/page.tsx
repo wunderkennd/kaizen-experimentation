@@ -92,7 +92,7 @@ function FlagListContent() {
         {canAtLeast('experimenter') && (
           <Link
             href="/flags/new"
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
             data-testid="new-flag-button"
           >
             New Flag
@@ -121,6 +121,15 @@ function FlagListContent() {
             aria-label="Search flags"
           />
         </div>
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            data-testid="clear-search-toolbar"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -130,7 +139,7 @@ function FlagListContent() {
             onClick={() => setSearch('')}
             className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
           >
-            Clear search
+            Clear filters
           </button>
         </div>
       ) : (
