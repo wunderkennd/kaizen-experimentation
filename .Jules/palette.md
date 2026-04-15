@@ -44,3 +44,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-05-22 - Standardized Search UI Pattern
 **Learning:** Using a consistent visual pattern for search inputs (magnifying glass icon + inset text) creates a predictable experience for users scanning filtered lists. Achieving precise vertical alignment between the absolute-positioned icon and the input text requires consistent vertical padding (e.g., `py-1.5` or `py-2`) depending on the line height.
 **Action:** Always wrap search inputs in a `relative` container with an absolute-positioned magnifying glass SVG. Use `pl-9` to clear the icon and ensure `pointer-events-none` on the icon to avoid interfering with input focus.
+
+## 2026-06-15 - Actionable Empty States
+**Learning:** A blank screen or a simple "No items found" message can be a dead-end for users. Providing a direct "Call to Action" (CTA) link in empty states reduces friction and guides users toward the next logical step in their workflow, provided they have the necessary permissions.
+**Action:** Always include a primary action link or button in empty state components for list pages. Ensure the visibility of this CTA is gated by appropriate user permissions to maintain RBAC consistency.

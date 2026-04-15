@@ -5,8 +5,7 @@ import Link from 'next/link';
 import type { Flag, FlagType } from '@/lib/types';
 import { listFlags } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
-import { AuthProvider, useAuth } from '@/lib/auth-context';
-import { NavHeader } from '@/components/nav-header';
+import { useAuth } from '@/lib/auth-context';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -66,6 +65,16 @@ function FlagListContent() {
     return (
       <div className="py-12 text-center" data-testid="empty-state">
         <p className="text-sm text-gray-500">No feature flags found.</p>
+        {canAtLeast('experimenter') && (
+          <div className="mt-4">
+            <Link
+              href="/flags/new"
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Create your first feature flag
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
@@ -106,7 +115,7 @@ function FlagListContent() {
             placeholder="Search by name or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             data-testid="flag-search"
             aria-label="Search flags"
           />
@@ -168,14 +177,5 @@ function FlagListContent() {
 }
 
 export default function FlagListPage() {
-  return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <NavHeader />
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <FlagListContent />
-        </main>
-      </div>
-    </AuthProvider>
-  );
+  return <FlagListContent />;
 }
