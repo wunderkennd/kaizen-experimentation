@@ -307,7 +307,7 @@ func newLogsBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.
 func applyVpcEndpointPolicy(ctx *pulumi.Context, prefix string, bucket *s3.BucketV2, vpceId pulumi.IDOutput) error {
 	policyJSON := pulumi.All(bucket.Arn, vpceId).ApplyT(func(args []interface{}) string {
 		bucketArn := args[0].(string)
-		endpointId := args[1].(string)
+		endpointId := fmt.Sprintf("%v", args[1])
 		return fmt.Sprintf(`{
   "Version": "2012-10-17",
   "Statement": [{
