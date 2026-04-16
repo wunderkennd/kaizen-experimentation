@@ -23,7 +23,7 @@ import (
 
 // Deploy is the main Pulumi program, exported for testability via the mock framework.
 func Deploy(ctx *pulumi.Context) error {
-cfg := kconfig.LoadConfig(ctx)
+	cfg := kconfig.LoadConfig(ctx)
 	env := cfg.Environment
 
 	ctx.Export("environment", pulumi.String(env))
