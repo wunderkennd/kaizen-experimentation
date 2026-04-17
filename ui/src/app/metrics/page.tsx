@@ -226,6 +226,12 @@ function MetricBrowserContent() {
     return result;
   }, [metrics, typeFilter, search]);
 
+  const hasActiveFilters = search !== '' || typeFilter !== '';
+  const clearFilters = () => {
+    setSearch('');
+    setTypeFilter('');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
@@ -272,7 +278,7 @@ function MetricBrowserContent() {
             placeholder="Search by name, ID, or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             data-testid="metric-search"
             aria-label="Search metrics"
           />
@@ -280,7 +286,7 @@ function MetricBrowserContent() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as MetricType | '')}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           data-testid="type-filter"
           aria-label="Filter by metric type"
         >
@@ -289,11 +295,26 @@ function MetricBrowserContent() {
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            data-testid="clear-search-toolbar"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
         <div className="py-12 text-center" data-testid="no-filter-matches">
           <p className="text-sm text-gray-500">No metrics match your filters.</p>
+          <button
+            onClick={clearFilters}
+            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
