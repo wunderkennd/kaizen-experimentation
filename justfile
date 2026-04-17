@@ -146,7 +146,7 @@ deps-ts:
 # ==============================================================================
 
 # Run all test suites
-test: test-rust test-go test-ts test-hash
+test: test-rust test-go test-ts test-hash test-infra
     @echo ""
     @echo "  All tests passed."
 
@@ -189,6 +189,16 @@ test-crate crate:
 test-bootstrap-coverage:
     @echo "  Running bootstrap coverage validation (release mode)..."
     {{ cargo }} test --release -p experimentation-stats --test bootstrap_coverage -- --ignored --nocapture
+
+# Run infrastructure unit and mock tests (no AWS credentials needed)
+test-infra:
+    @echo "  Running infra tests..."
+    cd infra && {{ go }} test -race -count=1 ./pkg/... ./test/...
+
+# Run infra preview against real AWS (requires AWS credentials)
+test-infra-preview:
+    @echo "  Running infra preview tests..."
+    cd infra && {{ go }} test -race -count=1 -tags=preview -timeout=5m ./test/...
 
 # ==============================================================================
 # Linting
@@ -405,6 +415,198 @@ chaos-framework:
 # Run chaos framework for specific services
 chaos-framework-services services:
     bash scripts/chaos_e2e_framework.sh --services {{ services }}
+
+# ==============================================================================
+# Local Services
+# ==============================================================================
+#
+# Run individual services or the full platform locally.
+# Prerequisites: `just dev` (starts Postgres, Kafka, Redis, Schema Registry).
+#
+# Startup order (respects dependency graph):
+#   Tier 0: M5 (Management) — owns PG schema, config hub
+#   Tier 1: M1, M2, M4b, M7 — depend on M5 and/or Kafka
+#   Tier 2: M3, M4a — depend on Tier 1 services
+#   Tier 3: M6 (UI) — connects to M5
+#
+
+# Common env vars for local development
+db_url       := env("DATABASE_URL", "postgresql://experimentation:localdev@localhost:5432/experimentation?sslmode=disable")
+kafka_broker := env("KAFKA_BROKERS", "localhost:9092")
+
+# --- Individual service recipes ---
+
+# Run M5 Management service (Go — config hub, CRUD, lifecycle)
+run-m5:
+    @echo "  Starting M5 Management (port 50055)..."
+    cd {{ services_dir }} && \
+        PORT=50055 \
+        METRICS_PORT=50060 \
+        DATABASE_URL={{ db_url }} \
+        KAFKA_BROKERS={{ kafka_broker }} \
+        DISABLE_AUTH=true \
+        {{ go }} run ./management/cmd/
+
+# Run M1 Assignment service (Rust — variant allocation)
+run-m1:
+    @echo "  Starting M1 Assignment (port 50051)..."
+    GRPC_ADDR=0.0.0.0:50051 \
+    HTTP_ADDR=0.0.0.0:8080 \
+    M5_ADDR=http://localhost:50055 \
+    {{ cargo }} run --package experimentation-assignment
+
+# Run M2 Pipeline service (Rust — event ingestion + Kafka)
+run-m2:
+    @echo "  Starting M2 Pipeline (port 50052)..."
+    PORT=50052 \
+    METRICS_PORT=9091 \
+    KAFKA_BROKERS={{ kafka_broker }} \
+    BUFFER_DIR=/tmp/experimentation-pipeline-buffer \
+    {{ cargo }} run --package experimentation-pipeline
+
+# Run M3 Metrics service (Go — Spark SQL orchestration)
+run-m3:
+    @echo "  Starting M3 Metrics (port 50056)..."
+    cd {{ services_dir }} && \
+        PORT=50056 \
+        METRICS_PORT=50059 \
+        POSTGRES_URL={{ db_url }} \
+        KAFKA_BROKERS={{ kafka_broker }} \
+        {{ go }} run ./metrics/cmd/
+
+# Run M4a Analysis service (Rust — statistical computation)
+run-m4a:
+    @echo "  Starting M4a Analysis (port 50053)..."
+    ANALYSIS_GRPC_ADDR=[::1]:50053 \
+    DELTA_LAKE_PATH=/tmp/delta \
+    DATABASE_URL={{ db_url }} \
+    {{ cargo }} run --package experimentation-analysis
+
+# Run M4b Policy service (Rust — bandit engine, LMAX core)
+run-m4b:
+    @echo "  Starting M4b Policy (port 50054)..."
+    POLICY_GRPC_ADDR=[::1]:50054 \
+    POLICY_ROCKSDB_PATH=/tmp/experimentation-policy-rocksdb \
+    KAFKA_BROKERS={{ kafka_broker }} \
+    KAFKA_GROUP_ID=bandit-policy-service \
+    KAFKA_REWARD_TOPIC=reward_events \
+    {{ cargo }} run --package experimentation-policy
+
+# Run M6 UI (TypeScript/Next.js — web dashboard)
+run-m6:
+    @echo "  Starting M6 UI (port 3000)..."
+    cd {{ ui_dir }} && {{ npm }} run dev
+
+# Run M7 Flags service (Rust — feature flags + percentage rollout)
+run-m7:
+    @echo "  Starting M7 Flags (port 50057)..."
+    DATABASE_URL={{ db_url }} \
+    FLAGS_GRPC_ADDR=[::]:50057 \
+    FLAGS_ADMIN_ADDR=[::]:9090 \
+    M5_ADDR=http://localhost:50055 \
+    KAFKA_BROKERS={{ kafka_broker }} \
+    FLAGS_KAFKA_ENABLED=false \
+    {{ cargo }} run --package experimentation-flags
+
+# Run M2-Orch Orchestration service (Go — metrics pipeline orchestration)
+run-m2-orch:
+    @echo "  Starting M2-Orch Orchestration (port 50058)..."
+    cd {{ services_dir }} && \
+        PORT=50058 \
+        POSTGRES_URL={{ db_url }} \
+        {{ go }} run ./orchestration/cmd/
+
+# --- Combined recipe ---
+
+# Run all services locally (requires `just dev` for infra)
+run-all: _check-infra
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'echo "  Stopping all services..."; kill $(jobs -p) 2>/dev/null; wait' EXIT INT TERM
+
+    echo "============================================"
+    echo "  Starting all Kaizen services"
+    echo "============================================"
+    echo ""
+
+    # Tier 0: M5 Management (config hub, must be first)
+    echo "  [Tier 0] M5 Management..."
+    cd services && \
+        PORT=50055 METRICS_PORT=50060 \
+        DATABASE_URL="{{ db_url }}" \
+        KAFKA_BROKERS="{{ kafka_broker }}" \
+        DISABLE_AUTH=true \
+        go run ./management/cmd/ &
+    sleep 3
+
+    # Tier 1: Core services (depend on M5 / Kafka)
+    echo "  [Tier 1] M1 Assignment, M2 Pipeline, M4b Policy, M7 Flags..."
+    GRPC_ADDR=0.0.0.0:50051 HTTP_ADDR=0.0.0.0:8080 \
+        M5_ADDR=http://localhost:50055 \
+        cargo run --package experimentation-assignment &
+
+    PORT=50052 METRICS_PORT=9091 \
+        KAFKA_BROKERS="{{ kafka_broker }}" \
+        BUFFER_DIR=/tmp/experimentation-pipeline-buffer \
+        cargo run --package experimentation-pipeline &
+
+    POLICY_GRPC_ADDR=[::1]:50054 \
+        POLICY_ROCKSDB_PATH=/tmp/experimentation-policy-rocksdb \
+        KAFKA_BROKERS="{{ kafka_broker }}" \
+        KAFKA_GROUP_ID=bandit-policy-service \
+        KAFKA_REWARD_TOPIC=reward_events \
+        cargo run --package experimentation-policy &
+
+    DATABASE_URL="{{ db_url }}" \
+        FLAGS_GRPC_ADDR=[::]:50057 FLAGS_ADMIN_ADDR=[::]:9090 \
+        M5_ADDR=http://localhost:50055 \
+        KAFKA_BROKERS="{{ kafka_broker }}" FLAGS_KAFKA_ENABLED=false \
+        cargo run --package experimentation-flags &
+    sleep 3
+
+    # Tier 2: Dependent services
+    echo "  [Tier 2] M3 Metrics, M4a Analysis, M2-Orch..."
+    cd services && \
+        PORT=50056 METRICS_PORT=50059 \
+        POSTGRES_URL="{{ db_url }}" \
+        KAFKA_BROKERS="{{ kafka_broker }}" \
+        go run ./metrics/cmd/ &
+
+    ANALYSIS_GRPC_ADDR=[::1]:50053 \
+        DELTA_LAKE_PATH=/tmp/delta \
+        DATABASE_URL="{{ db_url }}" \
+        cargo run --package experimentation-analysis &
+
+    cd services && \
+        PORT=50058 POSTGRES_URL="{{ db_url }}" \
+        go run ./orchestration/cmd/ &
+    sleep 2
+
+    # Tier 3: UI
+    echo "  [Tier 3] M6 UI..."
+    cd ui && npm run dev &
+
+    echo ""
+    echo "============================================"
+    echo "  All services starting. Ports:"
+    echo "    M1  Assignment:   localhost:50051 (gRPC) / localhost:8080 (HTTP)"
+    echo "    M2  Pipeline:     localhost:50052"
+    echo "    M2  Orchestration:localhost:50058"
+    echo "    M3  Metrics:      localhost:50056"
+    echo "    M4a Analysis:     localhost:50053"
+    echo "    M4b Policy:       localhost:50054"
+    echo "    M5  Management:   localhost:50055"
+    echo "    M6  UI:           localhost:3000"
+    echo "    M7  Flags:        localhost:50057"
+    echo "============================================"
+    echo "  Press Ctrl+C to stop all services."
+    echo ""
+    wait
+
+# (internal) Verify infra is running before starting services
+_check-infra:
+    @{{ docker }} ps 2>/dev/null | grep -q postgres \
+        || { echo "  Error: Local infra not running. Run 'just dev' first."; exit 1; }
 
 # ==============================================================================
 # Convenience
