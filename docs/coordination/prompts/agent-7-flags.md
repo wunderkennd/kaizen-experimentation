@@ -13,7 +13,7 @@ Before starting any work, read these files:
 1. `docs/onboarding/agent-7-flags.md` — Your complete onboarding guide
 2. `docs/design/design_doc_v5.md` — Sections 11 (M7 spec), 2.6 (SDK provider abstraction)
 3. `docs/coordination/status.md` — Current project status
-4. `adrs/007-sdk-provider-abstraction.md`, `adrs/010-connectrpc.md`
+4. `docs/adrs/007-sdk-provider-abstraction.md`, `docs/adrs/010-connectrpc.md`
 5. `proto/experimentation/flags/v1/flags_service.proto`
 
 ## The Key Capability: Flags → Experiments

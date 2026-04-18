@@ -13,7 +13,7 @@ Before starting any work, read these files:
 1. `docs/onboarding/agent-5-management.md` — Your complete onboarding guide
 2. `docs/design/design_doc_v5.md` — Sections 9 (M5 spec), 2.5 (component state machine), 2.9 (bucket reuse), 2.10 (guardrails auto-pause)
 3. `docs/coordination/status.md` — Current project status
-4. `adrs/005-component-state-machine.md`, `adrs/008-auto-pause-guardrails.md`, `adrs/009-bucket-reuse.md`
+4. `docs/adrs/005-component-state-machine.md`, `docs/adrs/008-auto-pause-guardrails.md`, `docs/adrs/009-bucket-reuse.md`
 5. `proto/experimentation/management/v1/management_service.proto`
 6. `sql/migrations/001_schema.sql` — You own: experiments, variants, layers, layer_allocations, guardrail_configs, targeting_rules, metric_definitions, surrogate_models, audit_trail
 7. `docs/design/state_machine.mermaid` — The lifecycle you enforce

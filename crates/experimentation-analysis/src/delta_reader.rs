@@ -791,7 +791,7 @@ pub async fn read_synthetic_control_panel(
     // Build donor series: concatenate each donor's pre + post, paired with its ID.
     let donors: Vec<(String, Vec<f64>)> = donor_ids
         .into_iter()
-        .zip(donor_pre.into_iter().zip(donor_post.into_iter()))
+        .zip(donor_pre.into_iter().zip(donor_post))
         .map(|(id, (mut pre, post))| {
             pre.extend(post);
             (id, pre)

@@ -342,13 +342,9 @@ fn apply_type_config(exp: &mut Experiment, f: &Flag) -> Result<(), Status> {
     let exp_type = ExperimentType::try_from(exp.r#type).unwrap_or(ExperimentType::Unspecified);
 
     match exp_type {
-        ExperimentType::Ab
-        | ExperimentType::Multivariate
-        | ExperimentType::PlaybackQoe
-        | ExperimentType::CumulativeHoldout => {
-            if exp_type == ExperimentType::CumulativeHoldout {
-                exp.is_cumulative_holdout = true;
-            }
+        ExperimentType::Ab | ExperimentType::Multivariate | ExperimentType::PlaybackQoe => {}
+        ExperimentType::CumulativeHoldout => {
+            exp.is_cumulative_holdout = true;
         }
 
         ExperimentType::Interleaving => {

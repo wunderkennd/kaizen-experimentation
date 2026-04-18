@@ -13,7 +13,7 @@ Before starting any work, read these files:
 1. `docs/onboarding/agent-4-analysis-bandit.md` — Your complete onboarding guide
 2. `docs/design/design_doc_v5.md` — Sections 7 (M4a), 8 (M4b), 2.1 (crate layering), 2.2 (crash-only), 2.3 (LMAX threading), 2.8 (GST alongside mSPRT)
 3. `docs/coordination/status.md` — Current project status
-4. `adrs/002-lmax-bandit-core.md`, `adrs/003-rocksdb-policy-state.md`, `adrs/004-gst-alongside-msprt.md`
+4. `docs/adrs/002-lmax-bandit-core.md`, `docs/adrs/003-rocksdb-policy-state.md`, `docs/adrs/004-gst-alongside-msprt.md`
 5. `proto/experimentation/analysis/v1/analysis_service.proto`, `proto/experimentation/bandit/v1/bandit_service.proto`
 
 ## You Own Two Services With Different Runtime Profiles
