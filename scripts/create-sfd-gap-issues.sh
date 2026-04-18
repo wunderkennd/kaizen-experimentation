@@ -76,7 +76,7 @@ echo "  ✓ ADR-027: M5/M6 integration"
 gh issue create --repo "$REPO" \
   --milestone "$MS" \
   --title "Heartbeat Sessionization — 10s Heartbeat to PlaybackMetrics Aggregation" \
-  --label "P1,agent-2" \
+  --label "P1,agent-2,cluster-a" \
   --body "$(cat docs/issues/heartbeat-sessionization.md 2>/dev/null || cat /mnt/user-data/outputs/issues/heartbeat-sessionization.md 2>/dev/null || echo 'See docs/issues/heartbeat-sessionization.md for full spec')"
 echo "  ✓ Heartbeat Sessionization"
 
