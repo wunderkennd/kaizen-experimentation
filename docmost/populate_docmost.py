@@ -165,15 +165,15 @@ def populate_modules_space(space_id, headers):
 
 def populate_adrs_space(space_id, headers):
     """Populate ADR space with architecture decision records."""
-    adr_readme = read_file("adrs/README.md")
+    adr_readme = read_file("docs/adrs/README.md")
     create_page(space_id, "ADR Overview", adr_readme, headers)
 
     adr_files = sorted([
-        f for f in os.listdir(os.path.join(REPO_ROOT, "adrs"))
+        f for f in os.listdir(os.path.join(REPO_ROOT, "docs/adrs"))
         if f.endswith(".md") and f != "README.md"
     ])
     for adr_file in adr_files:
-        content = read_file(f"adrs/{adr_file}")
+        content = read_file(f"docs/adrs/{adr_file}")
         title = adr_file.replace(".md", "").replace("-", " ").title()
         for line in content.split("\n"):
             if line.startswith("# "):

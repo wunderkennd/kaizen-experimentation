@@ -40,7 +40,7 @@ experimentation-platform/
 ├── sql/                            # PostgreSQL migrations
 ├── delta/                          # Delta Lake table definitions
 ├── kafka/                          # Topic configurations
-├── adrs/                           # Architecture Decision Records
+├── docs/adrs/                      # Architecture Decision Records
 ├── scripts/                        # CI/CD scripts
 └── .github/workflows/              # GitHub Actions
 ```

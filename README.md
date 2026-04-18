@@ -173,7 +173,7 @@ kaizen/
 │
 ├── docs/
 │   ├── design/design_doc_v7.0.md
-│   ├── adrs/                          # 25 ADRs (001–025)
+│   ├── adrs/                          # ADRs 001–010, 014–026
 │   ├── coordination/                  # Sprint plan, playbook
 │   └── guides/                        # Developer guides
 │
