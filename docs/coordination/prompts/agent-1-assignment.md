@@ -13,7 +13,7 @@ You are working in the `experimentation-platform` repository. Before starting an
 1. `docs/onboarding/agent-1-assignment.md` — Your complete onboarding guide with phase-by-phase deliverables and acceptance criteria
 2. `docs/design/design_doc_v5.md` — Sections 4 (M1 spec), 2.1 (crate layering), 2.6 (SDK provider), 2.9 (bucket reuse)
 3. `docs/coordination/status.md` — Current project status and your dependencies
-4. `adrs/006-cargo-workspace.md`, `adrs/007-sdk-provider-abstraction.md`, `adrs/009-bucket-reuse.md`
+4. `docs/adrs/006-cargo-workspace.md`, `docs/adrs/007-sdk-provider-abstraction.md`, `docs/adrs/009-bucket-reuse.md`
 
 ## What You Own (read-write)
 

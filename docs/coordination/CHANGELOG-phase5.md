@@ -443,7 +443,7 @@ The following items are scoped for later Phase 5 sprints and are **not yet imple
 
 ## References
 
-- Phase 5 ADR index: `adrs/README.md`
+- Phase 5 ADR index: `docs/adrs/README.md`
 - Sprint prompts: `docs/coordination/sprint-prompts.md`
 - Coordinator playbook: `docs/coordination/phase5-playbook.md`
 - Phase 5 implementation plan: `docs/coordination/phase5-implementation-plan.md`
