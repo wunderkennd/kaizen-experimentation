@@ -31,6 +31,8 @@ This directory contains the architectural decisions that shaped the experimentat
 | [023](023-synthetic-control-methods.md) | Synthetic control methods for quasi-experimental evaluation | **Proposed** | M4a, M3, M5, M6 |
 | [024](024-m7-rust-port.md) | Port M7 Feature Flag Service from Go to Rust | **Proposed** | M7, CI, SDKs |
 | [025](025-m5-conditional-rust-port.md) | Conditional port of M5 Management Service from Go to Rust | **Proposed (conditional)** | M5 |
+| [026](026-custom-metrics-layer.md) | Custom metrics definition layer (composite, derived, joined metrics beyond the 6 built-in types) | **Proposed** | M5, M3, M4a |
+| [027](027-tost-equivalence-testing.md) | Two One-Sided Tests (TOST) for proving statistical equivalence in infrastructure migrations | **Proposed** | M4a, M5, M6 |
 
 ## Proposed ADR Clusters
 
