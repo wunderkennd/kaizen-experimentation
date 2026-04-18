@@ -204,4 +204,36 @@ describe('Metric Browser Page', () => {
     expect(screen.getByTestId('direction-watch_time_minutes')).toHaveTextContent('↑ higher is better');
   });
 
+  it('shows and uses clear filters button', async () => {
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByTestId('metric-search');
+    const typeFilter = screen.getByTestId('type-filter');
+
+    // Initially no clear filters button
+    expect(screen.queryByTestId('clear-filters-toolbar')).not.toBeInTheDocument();
+
+    // Type in search
+    await user.type(searchInput, 'Rebuffer');
+    const clearBtn = screen.getByTestId('clear-filters-toolbar');
+    expect(clearBtn).toBeInTheDocument();
+
+    // Clear via toolbar button
+    await user.click(clearBtn);
+    expect(searchInput).toHaveValue('');
+    expect(screen.queryByTestId('clear-filters-toolbar')).not.toBeInTheDocument();
+
+    // Trigger "no matches" empty state
+    await user.type(searchInput, 'NonExistentMetricName123');
+    expect(screen.getByTestId('no-filter-matches')).toBeInTheDocument();
+    const clearEmptyBtn = screen.getByTestId('clear-filters-empty');
+    expect(clearEmptyBtn).toBeInTheDocument();
+
+    // Clear via empty state button
+    await user.click(clearEmptyBtn);
+    expect(searchInput).toHaveValue('');
+    expect(screen.queryByTestId('no-filter-matches')).not.toBeInTheDocument();
+  });
+
 });
