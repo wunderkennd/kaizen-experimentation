@@ -57,3 +57,17 @@ If blocked, add the `blocked` label and comment explaining the blocker.
 - M5 ↔ M6: Meta-experiment config rendering
 - M5 ↔ M1: Switchback/META config in StreamConfigUpdates
 - M5 ↔ M3: MLRATE STARTING trigger
+
+## Sprint 5.1 + 5.6 Add-On Work (post-Phase-5)
+
+ADR-027 (TOST) and ADR-026 (Custom Metrics) added M5 validation work post-Phase-5.
+
+### Sprint 5.1: Measurement Foundations
+- **[#423](https://github.com/wunderkennd/kaizen-experimentation/issues/423) ADR-027 TOST — M5 Validation** — co-owned with Agent-6. Validate `EquivalenceTestConfig` at experiment creation: `delta > 0`, `delta_relative` requires MEAN/RATIO metric, power warning on insufficient sample size. Conclusion logic switches from "reject H₀ → ship" to "equivalence established → safe to migrate." Spec: [`docs/adrs/027-tost-equivalence-testing.md`](../../docs/adrs/027-tost-equivalence-testing.md) Section 5.
+
+### Sprint 5.6: Metric Definition Layer (ADR-026)
+- **[#433](https://github.com/wunderkennd/kaizen-experimentation/issues/433) Phase 1: M5 validation for new structured types** — sole owner. Validate `FILTERED_MEAN` (filter parses), `COMPOSITE` (operands resolve, no cycles), `WINDOWED_COUNT` (window > 0, anchor event exists).
+- **[#436](https://github.com/wunderkennd/kaizen-experimentation/issues/436) Phase 2: M5 MetricQL validation** — co-owned with Agent-6. M5 validation accepts MetricQL strings, runs through parser + semantic checker before persistence.
+- **[#437](https://github.com/wunderkennd/kaizen-experimentation/issues/437) Phase 3: deprecation logic** — co-owned with Agent-3/Agent-6. `CreateMetric`/`UpdateMetric` emit deprecation warnings on CUSTOM type.
+
+Find them with `gh issue list --label "agent-5,sprint-5.1" --state open` and `--label "agent-5,sprint-5.6"`.

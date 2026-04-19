@@ -35,3 +35,13 @@ If blocked, add the `blocked` label and comment explaining the blocker.
 
 ## Contract Tests to Write
 - M2 ↔ M3: ModelRetrainingEvent Kafka roundtrip (serialization, deserialization, field coverage)
+
+## Sprint 5.1 Add-On Work (post-Phase-5)
+
+The SFD gap analysis added two new Sprint 5.1 items to your queue. Both extend the M2 ingestion pipeline.
+
+### Sprint 5.1: Measurement Foundations
+- **[#424](https://github.com/wunderkennd/kaizen-experimentation/issues/424) Heartbeat Sessionization** — sole owner. Add `HeartbeatEvent` proto, `heartbeat_events` Kafka topic (128 partitions), and `HeartbeatSessionizer` in `crates/experimentation-ingest/`. Aggregate 10-second heartbeats into the existing `PlaybackMetrics` `QoEEvent` shape. Spec: [`docs/issues/heartbeat-sessionization.md`](../../docs/issues/heartbeat-sessionization.md). Cluster A.
+- **[#425](https://github.com/wunderkennd/kaizen-experimentation/issues/425) EBVS Detection** — classification logic in the `HeartbeatSessionizer` (you OR the client sets `ebvs_detected: bool`). Spec: [`docs/issues/ebvs-detection.md`](../../docs/issues/ebvs-detection.md). Multi-agent (Agent-3, -4, -6 own the rest).
+
+Find them with `gh issue list --label "agent-2,sprint-5.1" --state open`.
