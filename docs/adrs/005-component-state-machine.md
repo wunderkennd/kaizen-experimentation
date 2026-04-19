@@ -1,10 +1,9 @@
 # ADR-005: Component State Machine with Transitional States
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 NautilusTrader defines both stable and transitional states for all components, preventing race conditions during state changes. Our experiment lifecycle has a gap: between "start experiment" and "experiment is running," several asynchronous validations must complete (config validation, bandit warm-up, metric availability check, segment power check). Similarly, between "conclude experiment" and "results available," final analysis must complete. Without transitional states, clients can observe inconsistent states.

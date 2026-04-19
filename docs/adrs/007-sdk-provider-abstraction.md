@@ -1,10 +1,9 @@
 # ADR-007: SDK Provider Abstraction with Fallback Chain
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 GrowthBook users learned to wrap the SDK in a provider abstraction so the underlying platform can be swapped without changing call sites. Our SDKs must work across web, iOS, Android, and server environments with varying network reliability. Mobile clients in particular cannot depend on the Assignment Service being reachable.

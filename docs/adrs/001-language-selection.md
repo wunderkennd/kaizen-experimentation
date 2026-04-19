@@ -1,10 +1,9 @@
 # ADR-001: Language Selection — Rust for Hot Paths, Go for Orchestration, TypeScript for UI Only
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 The platform requires three categories of work: low-latency request handling and numerical computation (assignment, analysis, bandit policy, event ingestion), orchestration and CRUD (experiment management, metric job scheduling, feature flags), and browser-rendered visualization (dashboards, charts). We need to select languages that match each workload's characteristics.

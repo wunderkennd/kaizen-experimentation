@@ -1,10 +1,9 @@
 # ADR-003: RocksDB for Bandit Policy State (Crash-Only Design)
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 The Bandit Policy Service (M4b) needs durable state for crash recovery. The crash-only design principle (from NautilusTrader) requires that the recovery path and the startup path are identical: load last snapshot, replay events from Kafka. State must be persisted on every reward update as a side effect of normal operation — no separate "save on shutdown" path.

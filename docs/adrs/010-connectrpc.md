@@ -1,10 +1,9 @@
 # ADR-010: ConnectRPC as the RPC Framework
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 We need an RPC framework that works across Go (M3, M5, M7), Rust (M1, M2, M4a, M4b), and TypeScript (M6 UI). The framework must support streaming (M1 config updates), unary RPCs (most operations), and browser clients (M6 dashboard).
