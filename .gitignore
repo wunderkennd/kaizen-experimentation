@@ -70,5 +70,5 @@ Thumbs.db
 tsconfig.tsbuildinfo
 
 # Legacy status files (replaced by GitHub Issues)
-docs/coordination/status/
+docs/coordination/status/*
 !docs/coordination/status/README.md
