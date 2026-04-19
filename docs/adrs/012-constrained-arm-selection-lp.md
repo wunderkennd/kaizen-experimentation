@@ -1,6 +1,6 @@
 # ADR-012: Constrained Arm Selection via Linear Programming
 
-**Status**: Accepted (In Progress)
+**Status**: Accepted and Implemented
 **Date**: 2026-03-24
 **Deciders**: Agent-4 (M4b Bandit Policy)
 **Cluster**: A — Multi-Stakeholder Optimization

@@ -1,6 +1,6 @@
 # ADR-023: Synthetic Control Methods for Quasi-Experimental Evaluation
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-4 (Analysis) / Agent-3 (Metrics)
 - **Supersedes**: None (new analysis capability)

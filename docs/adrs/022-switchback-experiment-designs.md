@@ -1,6 +1,6 @@
 # ADR-022: Switchback Experiment Designs for Interference-Prone Treatments
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-4 (Analysis) / Agent-1 (Assignment)
 - **Supersedes**: None (new experiment type)

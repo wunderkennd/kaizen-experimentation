@@ -1,6 +1,6 @@
 # ADR-021: Feedback Loop Interference Detection and Mitigation
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-3 (Metrics) / Agent-4 (Analysis)
 - **Supersedes**: None (extends existing interference detection: JSD, Jaccard, Gini)
