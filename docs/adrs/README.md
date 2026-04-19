@@ -38,22 +38,24 @@ This directory contains the architectural decisions that shaped the experimentat
 
 The 15 proposed ADRs (011–025) group into six clusters. Clusters A–E correspond to the 2024–2026 Gap Analysis capability themes. Cluster F addresses language boundary simplification motivated by the expanding Go→Rust computation surface in Clusters B and E.
 
+**Status legend in diagrams**: ✓ shipped · ⏳ in flight · ⬜ planned/proposed
+
 ### Cluster A: Multi-Stakeholder Optimization (011–014)
 
 Enables Kaizen to balance subscriber engagement, content provider fairness, and platform economics.
 
 ```
-ADR-014 (Provider Metrics)          ADR-011 (Multi-Objective Reward)
-    │  measurement foundation            │  reward composition
-    │                                    │
-    ├──────────────┐    ┌────────────────┤
-    │              ▼    ▼                │
-    │        ADR-012 (LP Constraints)    │
-    │              │                     │
-    │              ▼                     │
-    │        ADR-013 (Meta-Experiments)  │
-    │              │                     │
-    └──────────────┘                     │
+ADR-014 ✓ (Provider Metrics)         ADR-011 ✓ (Multi-Objective Reward)
+    │  measurement foundation             │  reward composition
+    │                                     │
+    ├──────────────┐    ┌─────────────────┤
+    │              ▼    ▼                 │
+    │        ADR-012 ⏳ (LP Constraints)  │
+    │              │                      │
+    │              ▼                      │
+    │        ADR-013 ⬜ (Meta-Experiments) │
+    │              │                      │
+    └──────────────┘                      │
 ```
 
 **Implementation order**: ADR-014 → ADR-011 (parallel) → ADR-012 → ADR-013
@@ -63,12 +65,12 @@ ADR-014 (Provider Metrics)          ADR-011 (Multi-Objective Reward)
 Closes the core inference gaps — sequential variance reduction, e-value framework, adaptive power.
 
 ```
-ADR-015 (AVLM / Sequential CUPED)
+ADR-015 ✓ (AVLM / Sequential CUPED)
     │  regression-adjusted CIs
     │
     ├──────────────────────────────────────┐
     ▼                                      ▼
-ADR-020 (Adaptive Sample Size)      ADR-018 (E-Values / Online FDR)
+ADR-020 ⬜ (Adaptive Sample Size)    ADR-018 ⬜ (E-Values / Online FDR)
     uses AVLM variance estimate          parallel inference track
 ```
 
@@ -79,7 +81,7 @@ ADR-020 (Adaptive Sample Size)      ADR-018 (E-Values / Online FDR)
 Extends bandits to combinatorial slate actions and corrects the surrogate paradigm for continual treatments.
 
 ```
-ADR-016 (Slate Bandits)            ADR-017 (Offline RL / Surrogates)
+ADR-016 ⬜ (Slate Bandits)          ADR-017 ⬜ (Offline RL / Surrogates)
     extends ADR-002 LMAX               corrects surrogate calibration
     complements ADR-011/012            standalone, foundational
 ```
@@ -91,7 +93,7 @@ ADR-016 (Slate Bandits)            ADR-017 (Offline RL / Surrogates)
 Enables experimentation on interventions that cannot be user-level randomized.
 
 ```
-ADR-022 (Switchback)               ADR-023 (Synthetic Control)
+ADR-022 ⬜ (Switchback)             ADR-023 ⬜ (Synthetic Control)
     temporal randomization              observational counterfactual
     new experiment type                 new experiment type
 ```
@@ -103,10 +105,10 @@ ADR-022 (Switchback)               ADR-023 (Synthetic Control)
 Portfolio-level optimization and feedback loop detection.
 
 ```
-ADR-019 (Portfolio Optimization)
+ADR-019 ⬜ (Portfolio Optimization)
     │  depends on ADR-017 (annualization), ADR-018 (FDR)
     │
-ADR-021 (Feedback Loop Interference)
+ADR-021 ⬜ (Feedback Loop Interference)
     │  extends existing interference detection
     │  standalone
 ```
@@ -118,11 +120,11 @@ ADR-021 (Feedback Loop Interference)
 Eliminates the Go→Rust FFI boundary and simplifies the build toolchain. ADR-024 is unconditional; ADR-025 triggers only when the statistical computation surface in M5 exceeds what Go→M4a RPCs can efficiently support.
 
 ```
-ADR-024 (M7 Rust Port)
+ADR-024 ✓ (M7 Rust Port)
     │  unconditional — eliminates experimentation-ffi crate
     │  deletes CGo bridge, cbindgen, 10K-vector parity test
     │
-ADR-025 (M5 Conditional Rust Port)
+ADR-025 ⬜ (M5 Conditional Rust Port)
     │  trigger: >= 3 of {ADR-015 P2, ADR-018, ADR-019, ADR-020, ADR-021}
     │  enables direct experimentation-stats import (no RPC for power/e-value/etc)
     │
