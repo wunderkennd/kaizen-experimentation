@@ -87,8 +87,22 @@ export default function ExperimentListPage() {
 
   if (experiments.length === 0) {
     return (
-      <div className="py-12 text-center">
-        <p className="text-sm text-gray-500">No experiments yet. Create your first experiment to get started.</p>
+      <div>
+        <h1 className="mb-6 text-2xl font-bold text-gray-900">Experiments</h1>
+        <div className="py-12 text-center" data-testid="empty-state">
+          <p className="text-sm text-gray-500">No experiments yet.</p>
+          {canCreate && (
+            <div className="mt-6">
+              <Link
+                href="/experiments/new"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                data-testid="create-first-experiment"
+              >
+                Create your first experiment
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
