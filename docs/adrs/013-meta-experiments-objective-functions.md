@@ -83,11 +83,23 @@ Treatment effect estimation for the primary metric uses two-level IPW:
 weight = 1 / (P(variant) × P(arm | variant))
 ```
 
+The variance estimator under two-stage IPW is non-trivial; M4a uses the influence-function-based estimator described in Wager & Athey (2018, JASA) to handle the compound randomization. For variants where the bandit assignment probability `P(arm | variant)` collapses to near-zero on some arms, the IPW weight is clipped at the 99th percentile to prevent variance explosion (a standard practice for off-policy evaluation).
+
 M4a's `RunAnalysis` for META experiments computes:
 - **Cross-variant business outcome comparison**: treatment effects on the primary metric (retention, LTV) between meta-variants. This is the key output.
 - **Per-variant bandit efficiency**: convergence speed, cumulative regret, arm concentration.
 - **Per-variant ecosystem health**: provider fairness metrics (from ADR-014) under each configuration.
 - **Pareto frontier visualization**: for 3+ variants, scatter plot of (engagement, diversity) with dominated region shading.
+
+### Multiple-Comparison Handling
+
+A meta-experiment with K ≥ 3 variants produces K(K-1)/2 pairwise comparisons on the primary metric. Without correction, the family-wise error rate inflates linearly with K.
+
+Two approaches are supported:
+- **Default (interim)**: Bonferroni adjustment on the K-1 comparisons against a designated control variant. Conservative but simple.
+- **Once ADR-018 ships**: e-value framework with online FDR control (Ramdas/Wang). Handles arbitrary stopping and gives anytime-valid inference, which composes cleanly with the meta-experiment's typical 4–8 week duration.
+
+M4a will surface both raw and adjusted p-values so reviewers can verify either approach. The choice is configurable via `MetaExperimentConfig.multiple_comparison_method`.
 
 ---
 
@@ -151,7 +163,7 @@ When `experiment_type == META`, `StartExperiment` validates:
 3. Each variant's `reward_objectives` weights sum to 1.0 (±1e-6)
 4. Each variant's `metric_ids` resolve to existing metric definitions
 5. All referenced metric_ids have `aggregation_level = USER`
-6. The experiment's `primary_metric_id` is NOT present in any variant's `reward_objectives` (warn, not block — in case the user intentionally wants this)
+6. The experiment's `primary_metric_id` MUST NOT be present in any variant's `reward_objectives`. Reject — a circular metric (primary metric is also a reward objective) produces tautological results: each variant's bandit is literally optimizing for what the meta-experiment is measuring, so cross-variant differences reflect bandit convergence rate rather than the value of the underlying objective configuration. To override this for an explicit research purpose, the experiment owner must set `MetaExperimentConfig.allow_circular_metric = true` (a future flag; not yet implemented).
 7. If LP constraints are specified per variant, constraint consistency is validated (floors don't sum to >1.0)
 
 ### M1 Assignment Changes
@@ -189,7 +201,7 @@ On `SelectArm(experiment_id, variant_id, context)`:
 - **Business outcome comparison**: Primary metric treatment effects between variants (forest plot)
 - **Ecosystem health comparison**: Provider fairness metrics per variant (from ADR-014)
 - **Bandit efficiency per variant**: Convergence curves, cumulative regret, arm concentration
-- **Pareto frontier visualization** (3+ variants): D3 scatter plot with engagement vs. diversity axes, dominated region shading, variant labels
+- **Pareto frontier visualization** (3+ variants): D3 scatter plot of two user-selected metrics (configurable per meta-experiment) with dominated region shading and variant labels. The axis selection defaults to the first two reward objectives shared across all variants; users can change axes interactively to explore other objective trade-offs.
 
 ### M6 UI — Create Experiment Form
 
