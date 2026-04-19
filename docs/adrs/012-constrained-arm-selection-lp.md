@@ -35,6 +35,8 @@ subject to:
   Σⱼ aⱼᵢ · qᵢ ≥ bⱼ         ∀j ∈ G        (general linear constraints)
 ```
 
+Each `GlobalConstraint` proto message corresponds to one row j of the constraint matrix; its `coefficients` map provides aⱼᵢ for each arm i, and `rhs` is bⱼ. The `GlobalConstraint.label` field is human-readable and used only for diagnostics (M6 surfaces, infeasibility logs).
+
 ### Constraint Types
 
 **Per-arm constraints** (`ArmConstraint`): Floor and/or ceiling on individual arm selection probabilities. Use case: provider minimum impression guarantee, maximum arm concentration limit.
@@ -51,9 +53,11 @@ subject to:
 
 Per-arm constraints express *selection probability* requirements, but business constraints are typically about *population-level impression counts*. The solver maintains running impression counts per arm with EMA decay (α = 0.01) on the LMAX thread. These running counts feed into the constraint satisfaction check: if arm `i`'s running impression share is already above its floor, the constraint is slack and does not distort **q**.
 
+The `α = 0.01` rate gives an effective half-life of roughly 70 selections, balancing constraint responsiveness (fast enough to react to policy shifts) against noise-induced oscillation. This is a tunable per-experiment parameter; future work may auto-calibrate it from the experiment's expected traffic rate.
+
 ### Feasibility Handling
 
-If the constraint polytope is empty (conflicting constraints make simultaneous satisfaction impossible), the solver returns `CONSTRAINT_INFEASIBLE` and falls back to the raw probabilities **p**. This is logged as a warning and surfaced to the experiment owner via M6. Common cause: floor constraints that sum to >1.0.
+If the constraint polytope is empty (conflicting constraints make simultaneous satisfaction impossible), the solver returns `CONSTRAINT_INFEASIBLE` and falls back to the raw probabilities **p**. Infeasibility is logged as a warning event and surfaced in M6 via the `ConstraintStatusTable` component (PR from Agent-6, work/fancy-koala) — the table renders a `CONSTRAINT INFEASIBLE` red badge on the affected experiment with a tooltip listing which specific constraints conflict (e.g., "floor constraints sum to 1.15 > 1.0"). Common cause: floor constraints that sum to >1.0.
 
 ### IPW Validity
 

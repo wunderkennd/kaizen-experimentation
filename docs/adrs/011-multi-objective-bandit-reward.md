@@ -72,6 +72,8 @@ metric_values = {metric_1: r_1, ..., metric_k: r_k}
 
 The `sigmoid()` mapping converts the composed real-valued reward to (0, 1) for Beta-Bernoulli posterior compatibility. Composer and normalizer state are persisted in RocksDB alongside posterior parameters via the existing snapshot mechanism, surviving crashes and restarts.
 
+The `sigmoid()` mapping is required only for Beta-Bernoulli posteriors, which expect rewards in (0, 1). Future Thompson Sampling variants using Gaussian posteriors would not require this mapping; the composer's output could be passed directly. The mapping is conditional on the policy's posterior type, not a universal requirement.
+
 ### State Growth
 
 For a typical multi-objective experiment with 3 objectives and 10 arms, the composer adds ~200 bytes of state per metric per experiment. At 100 concurrent experiments, total additional RocksDB snapshot overhead is ~60KB — negligible relative to existing posterior state.
@@ -97,6 +99,10 @@ For a typical multi-objective experiment with 3 objectives and 10 arms, the comp
 ---
 
 ## Implementation Details
+
+### Default Behavior
+
+When `BanditConfig.reward_objectives` is empty, the existing scalar reward path is used and `composition_method` is ignored. Single-objective experiments are not affected by this ADR — they continue to use the pre-existing `Posterior::update(scalar_reward)` flow without modification.
 
 ### Proto Schema
 
