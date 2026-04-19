@@ -41,7 +41,7 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
   return (
     <>
       <tr
-        className="cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+        className="cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
         onClick={() => setExpanded(!expanded)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
