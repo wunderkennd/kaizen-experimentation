@@ -1,10 +1,9 @@
 # ADR-004: Group Sequential Tests Alongside mSPRT
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 The platform already supports mSPRT (always-valid inference with arbitrary peeking). Spotify Confidence offers both always-valid approaches and group sequential tests (GSTs), reasoning that GSTs are more powerful when teams can pre-commit to a fixed analysis schedule. Our platform serves teams with different monitoring patterns.

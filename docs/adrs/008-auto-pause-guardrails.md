@@ -1,10 +1,9 @@
 # ADR-008: Auto-Pause as Default Guardrail Behavior
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 Spotify developers roll back approximately 42% of experiments to prevent business metric regressions. This indicates that guardrail breaches are common and that fast automated response is critical. The question is whether guardrail breaches should alert (human decides) or auto-pause (machine acts, human overrides).

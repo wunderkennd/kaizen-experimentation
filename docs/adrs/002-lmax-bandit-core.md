@@ -1,10 +1,9 @@
 # ADR-002: LMAX-Inspired Single-Threaded Policy Core for Bandit Service
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 The Bandit Policy Service (M4b) maintains mutable state: posterior parameters (Thompson Sampling), Cholesky decompositions (LinUCB), and neural network weights (Neural Contextual). This state is read on every SelectArm request (~10K rps) and mutated on every RewardEvent (~5K rps). Concurrent access to this state is the core design challenge.

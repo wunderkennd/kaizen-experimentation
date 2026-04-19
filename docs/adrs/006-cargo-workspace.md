@@ -1,10 +1,9 @@
 # ADR-006: Cargo Workspace with Crate Layering
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 NautilusTrader organizes its Rust codebase into focused crates with explicit dependency boundaries and feature flags gating optional functionality. Our platform has four Rust service binaries that share significant domain logic (hashing, statistics, bandit algorithms). Without shared crates, we'd either duplicate code or create monolithic binaries.

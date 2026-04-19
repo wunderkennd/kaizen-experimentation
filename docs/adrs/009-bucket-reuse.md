@@ -1,10 +1,9 @@
 # ADR-009: Automated Bucket Reuse with Cooldown Period
 
-## Status
-Accepted
+**Status**: Accepted
+**Date**: 2026-03-03
 
-## Date
-2026-03-03
+---
 
 ## Context
 Spotify builds bucket reuse directly into their platform to prevent traffic exhaustion at high experiment volume. Without bucket reuse, a platform running 100+ experiments per quarter on a 10,000-bucket layer would exhaust its hash space within 2-3 quarters. Manual bucket management is operationally burdensome.
