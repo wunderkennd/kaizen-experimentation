@@ -1,39 +1,86 @@
 # ADR-NNN: [Short Title]
 
-- **Status**: Proposed | Accepted | Deprecated | Superseded
-- **Date**: YYYY-MM-DD
-- **Author**: [Agent-N / Name]
-- **Supersedes**: (if applicable)
+**Status**: Proposed <!-- Proposed | Accepted | Accepted (In Progress) | Accepted (Planned — Sprint X.Y) | Accepted and Implemented | Deprecated | Superseded -->
+**Date**: YYYY-MM-DD
+**Deciders**: Agent-N ([Module or role])
+**Cluster**: [A–F] — [Cluster name, if applicable]
+
+---
 
 ## Context
 
-What is the issue that we're seeing that motivates this decision or change?
+What gap, requirement, or problem motivates this decision? Ground in research and prior art where applicable.
+
+---
 
 ## Decision
 
-What is the change that we're proposing and/or doing?
+What is the change we're proposing? Break into subsections by topic (design, schema, integration) where useful.
+
+---
 
 ## Consequences
 
-### Positive
+### Benefits
 
-- What becomes easier or possible as a result of this change?
+1. What becomes easier or possible as a result?
 
-### Negative
+### Trade-offs
 
-- What becomes more difficult as a result of this change?
+1. What becomes more difficult, expensive, or constrained?
 
-### Risks
+---
 
-- What could go wrong?
+## Implementation Details
 
-## Alternatives Considered
+### Proto Schema
 
-| Alternative | Pros | Cons | Why rejected |
-|-------------|------|------|--------------|
-| Option A    |      |      |              |
-| Option B    |      |      |              |
+```protobuf
+// Schema changes, if any
+```
+
+### Crate Layout / Public API
+
+Describe the module structure and key types.
+
+### Integration
+
+How this interacts with existing modules (M1, M4b, etc.).
+
+---
+
+## Validation
+
+### Unit Tests / Proptest Invariants
+
+- Key correctness properties to verify.
+
+### Golden-File Tests
+
+- Reference implementation and precision target (e.g., R `TOSTER` package to 6 decimals).
+
+### Integration / Contract Tests
+
+- Cross-module behavior.
+
+---
+
+## Dependencies
+
+- **ADR-XXX** ([Short name]): [relationship]
+- **Enables ADR-YYY**: [what this unlocks]
+
+---
+
+## Rejected Alternatives
+
+| Alternative | Reason Rejected |
+|-------------|-----------------|
+|             |                 |
+
+---
 
 ## References
 
-- Links to relevant design docs, external references, prior art
+- Citations to papers, blog posts, prior art
+- Links to other ADRs, design docs, or issues
