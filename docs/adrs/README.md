@@ -16,11 +16,11 @@ This directory contains the architectural decisions that shaped the experimentat
 | [008](008-auto-pause-guardrails.md) | Auto-pause as default guardrail behavior | Accepted | M3, M5 |
 | [009](009-bucket-reuse.md) | Automated bucket reuse with 24h cooldown | Accepted | M1, M5 |
 | [010](010-connectrpc.md) | ConnectRPC for Go, tonic for Rust, shared proto contracts | Accepted | All modules |
-| [011](011-multi-objective-bandit-reward.md) | Multi-objective reward composition for bandit policies | **Proposed** | M4b, M5, M6 |
-| [012](012-constrained-arm-selection-lp.md) | Constrained arm selection via LP post-processing layer | **Proposed** | M4b, M1, M5, M6 |
-| [013](013-meta-experiments-objective-functions.md) | Meta-experiments on objective function parameters | **Proposed** | M1, M4a, M4b, M5, M6 |
-| [014](014-provider-side-metrics.md) | Provider-side metrics as first-class experiment measures | **Proposed** | M3, M4a, M5, M6 |
-| [015](015-anytime-valid-regression-adjustment.md) | Anytime-valid regression adjustment (sequential CUPED) | **Proposed** | M4a, M3, M5, M6 |
+| [011](011-multi-objective-bandit-reward.md) | Multi-objective reward composition for bandit policies | **Accepted and Implemented** | M4b, M5, M6 |
+| [012](012-constrained-arm-selection-lp.md) | Constrained arm selection via LP post-processing layer | **Accepted (In Progress)** | M4b, M1, M5, M6 |
+| [013](013-meta-experiments-objective-functions.md) | Meta-experiments on objective function parameters | **Accepted (Planned — Sprint 5.4)** | M1, M4a, M4b, M5, M6 |
+| [014](014-provider-side-metrics.md) | Provider-side metrics as first-class experiment measures | **Accepted** | M3, M4a, M5, M6 |
+| [015](015-anytime-valid-regression-adjustment.md) | Anytime-valid regression adjustment (sequential CUPED) | **Accepted** | M4a, M3, M5, M6 |
 | [016](016-slate-bandit-optimization.md) | Slate-level bandit optimization and off-policy evaluation | **Proposed** | M4b, M4a, M1 |
 | [017](017-offline-rl-long-term-effects.md) | Offline RL for long-term causal effect estimation | **Proposed** | M4a, M3 |
 | [018](018-e-value-framework-online-fdr.md) | E-value framework and online FDR control | **Proposed** | M4a, M4b, M5 |
@@ -29,7 +29,7 @@ This directory contains the architectural decisions that shaped the experimentat
 | [021](021-feedback-loop-interference.md) | Feedback loop interference detection and mitigation | **Proposed** | M4a, M2, M3, M5, M6 |
 | [022](022-switchback-experiment-designs.md) | Switchback experiment designs for interference-prone treatments | **Proposed** | M1, M4a, M5, M6 |
 | [023](023-synthetic-control-methods.md) | Synthetic control methods for quasi-experimental evaluation | **Proposed** | M4a, M3, M5, M6 |
-| [024](024-m7-rust-port.md) | Port M7 Feature Flag Service from Go to Rust | **Proposed** | M7, CI, SDKs |
+| [024](024-m7-rust-port.md) | Port M7 Feature Flag Service from Go to Rust | **Accepted and Implemented** | M7, CI, SDKs |
 | [025](025-m5-conditional-rust-port.md) | Conditional port of M5 Management Service from Go to Rust | **Proposed (conditional)** | M5 |
 | [026](026-custom-metrics-layer.md) | Custom metrics definition layer (composite, derived, joined metrics beyond the 6 built-in types) | **Proposed** | M5, M3, M4a |
 | [027](027-tost-equivalence-testing.md) | Two One-Sided Tests (TOST) for proving statistical equivalence in infrastructure migrations | **Proposed** | M4a, M5, M6 |
