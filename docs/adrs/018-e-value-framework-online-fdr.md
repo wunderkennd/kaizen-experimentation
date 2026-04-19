@@ -1,6 +1,6 @@
 # ADR-018: E-Value Framework and Online FDR Control
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-4 (Analysis)
 - **Supersedes**: Partially supersedes BH-FDR correction in `experimentation-stats` for concurrent experiment programs

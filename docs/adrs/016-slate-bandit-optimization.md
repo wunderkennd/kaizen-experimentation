@@ -1,6 +1,6 @@
 # ADR-016: Slate-Level Bandit Optimization and Off-Policy Evaluation
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-4 (Bandit) / Agent-1 (Assignment)
 - **Supersedes**: None (extends ADR-002 LMAX core; complements existing interleaving in M1)

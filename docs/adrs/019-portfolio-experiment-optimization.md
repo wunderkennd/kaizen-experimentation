@@ -1,6 +1,6 @@
 # ADR-019: Portfolio-Level Experiment Program Optimization
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-5 (Management) / Platform Architecture
 - **Supersedes**: None

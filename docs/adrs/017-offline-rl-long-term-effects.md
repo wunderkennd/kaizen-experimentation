@@ -1,6 +1,6 @@
 # ADR-017: Offline Reinforcement Learning for Long-Term Causal Effect Estimation
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-4 (Analysis) / Agent-3 (Metrics)
 - **Supersedes**: None (corrects a theoretical limitation of the existing surrogate metric framework)

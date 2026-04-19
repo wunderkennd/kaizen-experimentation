@@ -1,6 +1,6 @@
 # ADR-020: Adaptive Sample Size Recalculation via Promising-Zone Designs
 
-- **Status**: Proposed
+**Status**: Accepted and Implemented
 - **Date**: 2026-03-19
 - **Author**: Agent-4 (Analysis) / Agent-5 (Management)
 - **Supersedes**: None (extends existing power analysis and GST framework)

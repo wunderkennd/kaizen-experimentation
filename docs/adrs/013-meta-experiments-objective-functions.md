@@ -1,6 +1,6 @@
 # ADR-013: Meta-Experiments on Objective Functions
 
-**Status**: Accepted (Planned — Sprint 5.4)
+**Status**: Accepted and Implemented
 **Date**: 2026-03-24
 **Deciders**: Agent-1 (M1 Assignment), Agent-4 (M4b Bandit Policy), Agent-5 (M5 Management)
 **Cluster**: A — Multi-Stakeholder Optimization
