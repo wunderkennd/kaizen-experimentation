@@ -73,3 +73,16 @@ If a dependency blocks you, add the `blocked` label to your Issue and comment wi
 3. **P2**: ADR-011 (multi-objective), ADR-020 (adaptive N)
 4. **P3**: ADR-012 (LP constraints), ADR-022 (switchback), ADR-023 (SCM), ADR-016 (slate bandits)
 5. **P4**: ADR-017 P2 (ORL/MDP), ADR-018 P3 (MAD)
+
+## Sprint 5.1 + 5.6 Add-On Work (post-Phase-5)
+
+ADR-027 (TOST Equivalence Testing) and ADR-026 (Custom Metrics Layer) joined your queue post-Phase-5. ADR-027 in particular is a fresh statistical method that lives alongside the original 10 ADRs in `experimentation-stats`.
+
+### Sprint 5.1: Measurement Foundations
+- **[#422](https://github.com/wunderkennd/kaizen-experimentation/issues/422) ADR-027 TOST Core** — sole owner. New `tost.rs` module: `tost_equivalence_test()` (Welch's-t internals), `tost_cuped_equivalence_test()` (CUPED composition), `tost_sample_size()` (power analysis). Golden files vs R `TOSTER` to 6 decimal places. Proto extensions: `EquivalenceTestConfig`. Spec: [`docs/adrs/027-tost-equivalence-testing.md`](../../docs/adrs/027-tost-equivalence-testing.md).
+- **[#425](https://github.com/wunderkennd/kaizen-experimentation/issues/425) EBVS Detection** — own the proto change only (`ebvs_detected: bool` field 9 on `PlaybackMetrics`). Other agents own classification, SQL, UI.
+
+### Sprint 5.6: Metric Definition Layer (ADR-026)
+- **[#432](https://github.com/wunderkennd/kaizen-experimentation/issues/432) Phase 1: Structured proto types + M3 templates** — co-owned with Agent-3. You own the proto schema additions: `FILTERED_MEAN`, `COMPOSITE`, `WINDOWED_COUNT` enum values + per-type config messages. Agent-3 owns the SQL templates.
+
+Find them with `gh issue list --label "agent-4,sprint-5.1" --state open` and `--label "agent-4,sprint-5.6"`.

@@ -51,3 +51,17 @@ If blocked, add the `blocked` label and comment explaining the blocker.
 - M3 ↔ M4a: Provider metric wire-format (MetricStakeholder, experiment_level_metrics schema)
 - M3 ↔ M2: ModelRetrainingEvent Kafka roundtrip
 - M3 ↔ M5: MLRATE trigger during STARTING lifecycle
+
+## Sprint 5.1 + 5.6 Add-On Work (post-Phase-5)
+
+Two new ADRs (026, 027) and the SFD gap items extend your queue beyond the original Phase 5 plan.
+
+### Sprint 5.1: Measurement Foundations
+- **[#425](https://github.com/wunderkennd/kaizen-experimentation/issues/425) EBVS Detection** — add `ebvs_rate.sql.tmpl` to M3 templates and register EBVS rate as a platform-level metric definition (type: PROPORTION). Spec: [`docs/issues/ebvs-detection.md`](../../docs/issues/ebvs-detection.md).
+
+### Sprint 5.6: Metric Definition Layer (ADR-026)
+- **[#432](https://github.com/wunderkennd/kaizen-experimentation/issues/432) Phase 1: Structured proto types + M3 templates** — co-owned with Agent-4 (proto). You own the Spark SQL templates: `filtered_mean.sql.tmpl`, `composite.sql.tmpl`, `windowed_count.sql.tmpl`. Spec: [`docs/adrs/026-custom-metrics-layer.md`](../../docs/adrs/026-custom-metrics-layer.md).
+- **[#435](https://github.com/wunderkennd/kaizen-experimentation/issues/435) Phase 2: MetricQL parser + AST + Spark SQL compiler** — sole owner. Build the MetricQL grammar, parser, AST, and compiler with `@metric_ref` semantics + cycle detection.
+- **[#437](https://github.com/wunderkennd/kaizen-experimentation/issues/437) Phase 3: CUSTOM migration tooling** — co-owned with Agent-5/Agent-6. You build the migration scanner/classifier and the side-by-side shadow runner.
+
+Find them with `gh issue list --label "agent-3,sprint-5.1" --state open` and `--label "agent-3,sprint-5.6"`.

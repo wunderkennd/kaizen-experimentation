@@ -55,3 +55,18 @@ If blocked, add the `blocked` label and comment explaining the blocker.
 - M6 ↔ M5: Meta-experiment config rendering
 - M6 ↔ M5: Adaptive N zone badge rendering
 - M6 ↔ M3: Provider metric wire-format
+
+## Sprint 5.1 + 5.6 Add-On Work (post-Phase-5)
+
+ADR-027 (TOST) and ADR-026 (Custom Metrics) added new UI work post-Phase-5, plus the EBVS dashboard panel.
+
+### Sprint 5.1: Measurement Foundations
+- **[#423](https://github.com/wunderkennd/kaizen-experimentation/issues/423) ADR-027 TOST — M6 Equivalence Results View** — co-owned with Agent-5. Render the (1−2α) CI against the [−δ, +δ] equivalence margin (shaded). Green/Yellow/Red badge for Equivalent / Inconclusive / Not Equivalent. Power indicator at current sample size. Spec: [`docs/adrs/027-tost-equivalence-testing.md`](../../docs/adrs/027-tost-equivalence-testing.md) Section 6.
+- **[#425](https://github.com/wunderkennd/kaizen-experimentation/issues/425) EBVS Detection** — add EBVS rate time-series panel to the QoE dashboard. Make EBVS rate available as a guardrail metric in the experiment creation form. Spec: [`docs/issues/ebvs-detection.md`](../../docs/issues/ebvs-detection.md).
+
+### Sprint 5.6: Metric Definition Layer (ADR-026)
+- **[#434](https://github.com/wunderkennd/kaizen-experimentation/issues/434) Phase 1: M6 UI for new structured metric types** — sole owner. Metric creation form gains FILTERED_MEAN (WHERE editor + value column), COMPOSITE (multi-select + operator), WINDOWED_COUNT (anchor + window) controls. Live validation via M5.
+- **[#436](https://github.com/wunderkennd/kaizen-experimentation/issues/436) Phase 2: M6 MetricQL expression editor** — co-owned with Agent-5. Monaco-based editor with MetricQL syntax highlighting, `@metric_` autocomplete, inline diagnostics, dry-run preview.
+- **[#437](https://github.com/wunderkennd/kaizen-experimentation/issues/437) Phase 3: UI removal** — co-owned with Agent-3/Agent-5. Hide CUSTOM option from metric creation form after sunset window.
+
+Find them with `gh issue list --label "agent-6,sprint-5.1" --state open` and `--label "agent-6,sprint-5.6"`.
