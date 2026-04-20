@@ -736,6 +736,7 @@ mod tests {
                 peak_resolution_height: 1080,
                 startup_failure_rate: 0.0,
                 playback_duration_ms: 60000,
+                ebvs_detected: false,
             }),
             timestamp: now_proto(),
             ..Default::default()

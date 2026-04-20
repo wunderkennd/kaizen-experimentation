@@ -93,6 +93,7 @@ fn valid_qoe_event() -> QoEEvent {
             peak_resolution_height: 1080,
             startup_failure_rate: 0.0,
             playback_duration_ms: 60_000,
+            ebvs_detected: false,
         }),
         cdn_provider: "akamai".into(),
         abr_algorithm: "buffer-based-v2".into(),
@@ -358,6 +359,7 @@ fn bench_full_ingest_qoe(c: &mut Criterion) {
                     peak_resolution_height: 1080,
                     startup_failure_rate: 0.0,
                     playback_duration_ms: 60_000,
+                    ebvs_detected: false,
                 }),
                 timestamp: now_proto(),
                 ..Default::default()
