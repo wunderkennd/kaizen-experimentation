@@ -83,6 +83,9 @@ func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) {
 func (r *SQLRenderer) RenderCupedCovariate(p TemplateParams) (string, error)  { return r.Render("cuped_covariate.sql.tmpl", p) }
 func (r *SQLRenderer) RenderGuardrailMetric(p TemplateParams) (string, error) { return r.Render("guardrail_metric.sql.tmpl", p) }
 func (r *SQLRenderer) RenderQoEMetric(p TemplateParams) (string, error)      { return r.Render("qoe_metric.sql.tmpl", p) }
+// RenderEBVSRate renders the EBVS (Exit Before Video Start) rate as a per-user
+// PROPORTION metric (Issue #425). Reads from delta.qoe_events.ebvs_detected.
+func (r *SQLRenderer) RenderEBVSRate(p TemplateParams) (string, error)       { return r.Render("ebvs_rate.sql.tmpl", p) }
 func (r *SQLRenderer) RenderContentConsumption(p TemplateParams) (string, error) { return r.Render("content_consumption.sql.tmpl", p) }
 func (r *SQLRenderer) RenderDailyTreatmentEffect(p TemplateParams) (string, error) { return r.Render("daily_treatment_effect.sql.tmpl", p) }
 func (r *SQLRenderer) RenderLifecycleMean(p TemplateParams) (string, error)  { return r.Render("lifecycle_mean.sql.tmpl", p) }
