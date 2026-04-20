@@ -872,8 +872,11 @@ beads-hooks-install:
     touch "$HOOK"
     chmod +x "$HOOK"
     REPO_ROOT=$(git rev-parse --show-toplevel)
+    # Add shebang if file is empty (brand-new hook)
+    if [ ! -s "$HOOK" ]; then
+      printf '#!/bin/sh\n' > "$HOOK"
+    fi
     {
-      printf '\n%s\n' "$MARKER"
       printf '%s\n' "# Auto-close beads whose linked GH Issue has closed on GitHub"
       printf '%s\n' "if [ -x \"$REPO_ROOT/scripts/beads-close-sync.sh\" ]; then"
       printf '%s\n' "  \"$REPO_ROOT/scripts/beads-close-sync.sh\" >/dev/null 2>&1 || true"
