@@ -712,5 +712,80 @@ mod tests {
             let n_large = tost_sample_size(&cfg_large).unwrap();
             prop_assert!(n_small >= n_large, "n({delta_small}) < n({delta_large})");
         }
+
+        /// ADR-027 §7 invariant (CUPED path): equivalent==true ⟺ (1−2α) CI ⊂ (−δ, +δ).
+        /// Mirrors `prop_ci_matches_equivalence` for `tost_cuped_equivalence_test`.
+        /// Also verifies p-values in [0, 1] and `p_tost = max(p_lower, p_upper)`.
+        #[test]
+        fn prop_cuped_ci_matches_equivalence(
+            n in 10usize..60usize,
+            shift in -1.5f64..1.5f64,
+            delta in 0.2f64..2.0f64,
+            beta in 0.5f64..2.0f64,
+        ) {
+            // Y = β·X + bounded deterministic jitter — high but imperfect ρ(X, Y).
+            // Same jitter in both arms so within-arm slopes match pooled slope
+            // (homogeneity condition under which CUPED SE ≤ raw SE is guaranteed).
+            let control_x: Vec<f64> = (0..n).map(|i| 0.1 * i as f64).collect();
+            let control_y: Vec<f64> = control_x
+                .iter()
+                .map(|&x| beta * x + 0.1 * (x * 7.3).sin())
+                .collect();
+            let treatment_x: Vec<f64> = (0..n).map(|i| 0.1 * i as f64).collect();
+            let treatment_y: Vec<f64> = treatment_x
+                .iter()
+                .map(|&x| beta * x + shift + 0.1 * (x * 7.3).sin())
+                .collect();
+            let cfg = TostConfig::new(delta);
+            if let Ok(r) = tost_cuped_equivalence_test(
+                &control_y, &treatment_y, &control_x, &treatment_x, &cfg,
+            ) {
+                prop_assert!((0.0..=1.0).contains(&r.p_lower));
+                prop_assert!((0.0..=1.0).contains(&r.p_upper));
+                prop_assert!((0.0..=1.0).contains(&r.p_tost));
+                prop_assert!(r.p_tost >= r.p_lower - 1e-12);
+                prop_assert!(r.p_tost >= r.p_upper - 1e-12);
+                let ci_inside = r.ci_lower > -cfg.delta && r.ci_upper < cfg.delta;
+                prop_assert_eq!(r.equivalent, ci_inside);
+            }
+        }
+
+        /// ADR-027 §2 motivates CUPED as variance reduction. Under the
+        /// homogeneous-slope regime (same X-Y relationship across arms), the
+        /// pooled-θ CUPED SE is guaranteed ≤ the raw Welch SE: within-arm
+        /// adjusted variance equals var_k(Y) · (1 − ρ_k²). We assert this
+        /// inequality with a small floating-point slack.
+        #[test]
+        fn prop_cuped_se_leq_raw_when_correlated(
+            n in 50usize..200usize,
+            shift in -0.1f64..0.1f64,
+            beta in 1.0f64..3.0f64,
+        ) {
+            // Y = β·X + very small jitter → |ρ(X, Y)| ≈ 1. Shared jitter keeps
+            // the per-arm slope equal to the pooled slope (CUPED homogeneity).
+            let control_x: Vec<f64> = (0..n).map(|i| 0.1 * i as f64).collect();
+            let control_y: Vec<f64> = control_x
+                .iter()
+                .map(|&x| beta * x + 0.02 * (x * 11.7).sin())
+                .collect();
+            let treatment_x: Vec<f64> = (0..n).map(|i| 0.1 * i as f64).collect();
+            let treatment_y: Vec<f64> = treatment_x
+                .iter()
+                .map(|&x| beta * x + shift + 0.02 * (x * 11.7).sin())
+                .collect();
+            let cfg = TostConfig::new(1.0);
+            let raw = tost_equivalence_test(&control_y, &treatment_y, &cfg);
+            let cuped = tost_cuped_equivalence_test(
+                &control_y, &treatment_y, &control_x, &treatment_x, &cfg,
+            );
+            if let (Ok(raw), Ok(cuped)) = (raw, cuped) {
+                prop_assert!(
+                    cuped.std_error <= raw.std_error + 1e-9,
+                    "CUPED SE {} must be ≤ raw SE {} when ρ(X,Y) ≈ 1",
+                    cuped.std_error,
+                    raw.std_error
+                );
+            }
+        }
     }
 }
