@@ -3,7 +3,8 @@
 use chrono::{DateTime, Duration, Utc};
 use experimentation_core::error::{assert_finite, Error, Result};
 use experimentation_proto::common::{
-    ExposureEvent, MetricEvent, ModelRetrainingEvent, PlaybackMetrics, QoEEvent, RewardEvent,
+    ExposureEvent, HeartbeatEvent, MetricEvent, ModelRetrainingEvent, PlaybackMetrics, QoEEvent,
+    RewardEvent,
 };
 
 /// Validate that a timestamp is within ±24 hours of server time.
@@ -185,6 +186,41 @@ fn require_retraining_timestamp(
             ts.seconds, ts.nanos
         ))
     })
+}
+
+/// Validate a HeartbeatEvent: required fields + timestamp + finite buffer health + numeric bounds.
+///
+/// Heartbeats feed the server-side `HeartbeatSessionizer` which aggregates them
+/// into `QoEEvent`s. Upper bounds mirror `PlaybackMetrics` for per-heartbeat
+/// observations (bitrate ≤ 200_000 kbps, resolution ≤ 8640) so a single noisy
+/// client heartbeat cannot produce an aggregate that later fails QoE validation.
+pub fn validate_heartbeat_event(event: &HeartbeatEvent) -> Result<()> {
+    validate_required(&event.user_id, "user_id")?;
+    validate_required(&event.device_id, "device_id")?;
+    validate_required(&event.content_id, "content_id")?;
+    require_timestamp(&event.timestamp, "timestamp")?;
+
+    assert_finite(event.buffer_health_seconds, "HeartbeatEvent.buffer_health_seconds");
+    if event.buffer_health_seconds < 0.0 {
+        return Err(Error::Validation(format!(
+            "buffer_health_seconds must be >= 0, got {}",
+            event.buffer_health_seconds
+        )));
+    }
+    if event.current_bitrate_kbps < 0 || event.current_bitrate_kbps > 200_000 {
+        return Err(Error::Validation(format!(
+            "current_bitrate_kbps must be in [0, 200000], got {}",
+            event.current_bitrate_kbps
+        )));
+    }
+    if event.current_resolution_height < 0 || event.current_resolution_height > 8640 {
+        return Err(Error::Validation(format!(
+            "current_resolution_height must be in [0, 8640], got {}",
+            event.current_resolution_height
+        )));
+    }
+
+    Ok(())
 }
 
 /// Validate a QoEEvent: required fields + timestamp + playback metrics.
@@ -750,5 +786,92 @@ mod tests {
         assert!(err
             .to_string()
             .contains("algorithm_id) must not be empty"));
+    }
+
+    // --- HeartbeatEvent tests ---
+
+    fn valid_heartbeat() -> HeartbeatEvent {
+        HeartbeatEvent {
+            user_id: "user-1".into(),
+            session_id: "sess-1".into(),
+            device_id: "device-1".into(),
+            timestamp: now_proto(),
+            current_bitrate_kbps: 5000,
+            current_resolution_height: 1080,
+            buffer_health_seconds: 5.0,
+            is_rebuffering: false,
+            is_startup: false,
+            content_id: "movie-1".into(),
+            variant_id: "control".into(),
+        }
+    }
+
+    #[test]
+    fn test_valid_heartbeat_accepted() {
+        assert!(validate_heartbeat_event(&valid_heartbeat()).is_ok());
+    }
+
+    #[test]
+    fn test_heartbeat_missing_user_id() {
+        let mut e = valid_heartbeat();
+        e.user_id = String::new();
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("user_id is required"));
+    }
+
+    #[test]
+    fn test_heartbeat_missing_device_id() {
+        let mut e = valid_heartbeat();
+        e.device_id = String::new();
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("device_id is required"));
+    }
+
+    #[test]
+    fn test_heartbeat_missing_content_id() {
+        let mut e = valid_heartbeat();
+        e.content_id = String::new();
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("content_id is required"));
+    }
+
+    #[test]
+    fn test_heartbeat_missing_timestamp() {
+        let mut e = valid_heartbeat();
+        e.timestamp = None;
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("timestamp is required"));
+    }
+
+    #[test]
+    fn test_heartbeat_negative_buffer_health_rejected() {
+        let mut e = valid_heartbeat();
+        e.buffer_health_seconds = -1.0;
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("buffer_health_seconds"));
+    }
+
+    #[test]
+    fn test_heartbeat_bitrate_out_of_range_rejected() {
+        let mut e = valid_heartbeat();
+        e.current_bitrate_kbps = 300_000;
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("current_bitrate_kbps"));
+    }
+
+    #[test]
+    fn test_heartbeat_resolution_out_of_range_rejected() {
+        let mut e = valid_heartbeat();
+        e.current_resolution_height = 9000;
+        let err = validate_heartbeat_event(&e).unwrap_err();
+        assert!(err.to_string().contains("current_resolution_height"));
+    }
+
+    #[test]
+    #[should_panic(expected = "FAIL-FAST")]
+    fn test_heartbeat_nan_buffer_health_panics() {
+        let mut e = valid_heartbeat();
+        e.buffer_health_seconds = f64::NAN;
+        let _ = validate_heartbeat_event(&e);
     }
 }
