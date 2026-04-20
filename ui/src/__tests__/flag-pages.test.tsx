@@ -357,6 +357,30 @@ describe('Flag Detail Page', () => {
     });
   });
 
+  it('shows loading spinner during promotion', async () => {
+    // Delay the response to catch the loading state
+    server.use(
+      http.post(`${FLAGS_SVC}/PromoteToExperiment`, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json({ experimentId: 'exp-123' });
+      }),
+    );
+
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('promote-button'));
+    await user.type(screen.getByTestId('promote-metric-id'), 'click_through_rate');
+    await user.click(screen.getByTestId('promote-submit'));
+
+    expect(screen.getByTestId('promote-spinner')).toBeInTheDocument();
+    expect(screen.getByTestId('promote-submit')).toBeDisabled();
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/experiments/'));
+    });
+  });
+
   it('shows promote error on failure', async () => {
     server.use(
       http.post(`${FLAGS_SVC}/PromoteToExperiment`, () =>

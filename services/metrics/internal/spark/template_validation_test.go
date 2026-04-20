@@ -148,6 +148,16 @@ func allTemplateSpecs() []templateSpec {
 			absent: []string{"delta.metric_events"}, // QoE reads from qoe_events, not metric_events
 		},
 		{
+			name:   "ebvs_rate",
+			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderEBVSRate(p) },
+			contains: []string{
+				"delta.qoe_events", "ebvs_detected",
+				"CASE WHEN qoe_sessions.ebvs_detected THEN 1 ELSE 0 END",
+				"NULLIF(COUNT(*), 0)",
+			},
+			absent: []string{"delta.metric_events"}, // EBVS rate reads from qoe_events
+		},
+		{
 			name:   "lifecycle_mean",
 			render: func(r *SQLRenderer, p TemplateParams) (string, error) { return r.RenderLifecycleMean(p) },
 			contains: []string{
@@ -516,8 +526,9 @@ func TestTemplateValidation_PercentileValues(t *testing.T) {
 // catch any new templates that are added without validation coverage.
 func TestTemplateValidation_TemplateCount(t *testing.T) {
 	specs := allTemplateSpecs()
-	// 27 renderable templates: 17 original + 10 provider-side metrics from ADR-014.
+	// 28 renderable templates: 17 original + 10 provider-side metrics from ADR-014
+	// + 1 EBVS rate (Issue #425).
 	// (exposure_join is a sub-template, not directly rendered.)
-	assert.Equal(t, 27, len(specs),
-		"allTemplateSpecs should cover all 27 renderable templates; if you added a new template, add it to allTemplateSpecs()")
+	assert.Equal(t, 28, len(specs),
+		"allTemplateSpecs should cover all 28 renderable templates; if you added a new template, add it to allTemplateSpecs()")
 }

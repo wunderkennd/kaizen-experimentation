@@ -447,6 +447,7 @@ mod tests {
             peak_resolution_height: 1080,
             startup_failure_rate: 0.0,
             playback_duration_ms: 60000,
+            ebvs_detected: false,
         }
     }
 
@@ -747,6 +748,7 @@ mod tests {
             peak_resolution_height: 8640,
             startup_failure_rate: 1.0,
             playback_duration_ms: 86_400_000,
+            ebvs_detected: false,
         };
         assert!(validate_playback_metrics(&m).is_ok());
     }
