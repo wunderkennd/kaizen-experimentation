@@ -719,6 +719,11 @@ morning:
     echo "--- Pulling latest main ---"
     git checkout main 2>/dev/null && git pull origin main 2>/dev/null
     echo ""
+    if bd list --all --json >/dev/null 2>&1; then
+      echo "--- Close-syncing beads (mirroring GH Issue closures) ---"
+      just beads-close-sync 2>/dev/null || true
+      echo ""
+    fi
     echo "Next steps:"
     echo "  just autonomous-stop     # stop overnight workers"
     echo "  just interactive         # start Gas Town for the day"
@@ -731,6 +736,9 @@ evening sprint_num:
     echo "=== Evening Handoff ==="
     (cd "$(eval echo {{kaizen_repo}})" && gt down 2>/dev/null) || true
     git checkout main && git pull origin main
+    if bd list --all --json >/dev/null 2>&1; then
+      just beads-sync {{sprint_num}} || echo "⚠ beads-sync failed; continuing with autonomous-sprint"
+    fi
     just autonomous-sprint {{sprint_num}}
     echo ""
     echo "Workers running. Detach with Ctrl-b d. Check tomorrow with 'just morning'."
@@ -777,6 +785,106 @@ work-on issue:
     echo "$TASK" | head -3
     echo "..."
     multiclaude worker create "$TASK. Branch: use the agent-N/feat/adr-XXX naming convention. PR must include 'Closes #{{issue}}'."
+
+# --- Beads (GitHub Issues ↔ Gas Town projection) ---
+# GitHub Issues remain the source of truth. Beads are a read-side projection
+# into Gas Town so `gt sling`, `gt convoy`, and `gt ready` have work to see.
+# Forward sync is explicit (pre-dispatch); close-sync runs in `just morning`.
+
+# One-time setup: initialize .beads/ with kz- prefix
+beads-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -d .beads ]; then
+      echo "✓ .beads/ already initialized"
+      exit 0
+    fi
+    if ! command -v bd >/dev/null 2>&1; then
+      echo "✗ bd not installed. Run: go install github.com/steveyegge/beads/cmd/bd@latest" >&2
+      exit 1
+    fi
+    echo "=== Initializing beads tracker (prefix: kz) ==="
+    bd init --prefix kz --skip-agents --skip-hooks
+    echo ""
+    echo "Next:"
+    echo "  just beads-sync 5.1    # materialize open Sprint 5.1 Issues as beads"
+    echo "  just beads-sync 5.6    # materialize open Sprint 5.6 Issues as beads"
+
+# Forward-sync: materialize open GH Issues in a sprint as beads (idempotent)
+beads-sync sprint_num:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{sprint_num}}" in
+      0|5.0) LABEL="sprint-5.0" ;;
+      1|5.1) LABEL="sprint-5.1" ;;
+      2|5.2) LABEL="sprint-5.2" ;;
+      3|5.3) LABEL="sprint-5.3" ;;
+      4|5.4) LABEL="sprint-5.4" ;;
+      5|5.5) LABEL="sprint-5.5" ;;
+      6|5.6) LABEL="sprint-5.6" ;;
+      all)   LABEL="--all" ;;
+      *) echo "Unknown sprint: {{sprint_num}} (use 0-6, 5.0-5.6, or 'all')"; exit 1 ;;
+    esac
+    bash scripts/beads-sync.sh "$LABEL"
+
+# Close-sync: close beads whose linked GH Issue has been closed
+beads-close-sync:
+    @bash scripts/beads-close-sync.sh
+
+# Show mirrored beads with current status
+beads-status:
+    #!/usr/bin/env bash
+    if ! bd list --all --json >/dev/null 2>&1; then
+      echo "(beads not initialized — run 'just beads-init')"
+      exit 0
+    fi
+    echo "status	bead_id	gh_ref	title"
+    bd list --all --json 2>/dev/null \
+      | jq -r '.[]
+          | select(.external_ref != null)
+          | select(.external_ref | startswith("gh-"))
+          | "\(.status)\t\(.id)\t\(.external_ref)\t\(.title)"' \
+      | sort
+
+# Export beads to git-tracked .beads/issues.jsonl for team sharing
+beads-export:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    GIT_COMMON=$(git rev-parse --git-common-dir)
+    BEADS_ROOT="$(cd "$(dirname "$GIT_COMMON")" && pwd)/.beads"
+    bd export -o "$BEADS_ROOT/issues.jsonl"
+    echo "✓ Exported to $BEADS_ROOT/issues.jsonl — commit to share with the team"
+
+# Install a local post-merge git hook that runs beads-close-sync after git pull
+# (Local only — not shared via git. Run this once per worktree if you want
+# automatic close-sync on every pull. Otherwise `just morning` covers it.)
+beads-hooks-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    HOOK_DIR="$(git rev-parse --git-path hooks)"
+    HOOK="$HOOK_DIR/post-merge"
+    MARKER="# BEGIN beads-close-sync"
+    if [ -f "$HOOK" ] && grep -qF "$MARKER" "$HOOK"; then
+      echo "✓ post-merge hook already installed"
+      exit 0
+    fi
+    mkdir -p "$HOOK_DIR"
+    touch "$HOOK"
+    chmod +x "$HOOK"
+    REPO_ROOT=$(git rev-parse --show-toplevel)
+    # Add shebang if file is empty (brand-new hook)
+    if [ ! -s "$HOOK" ]; then
+      printf '#!/bin/sh\n' > "$HOOK"
+    fi
+    {
+      printf '%s\n' "# Auto-close beads whose linked GH Issue has closed on GitHub"
+      printf '%s\n' "if [ -x \"$REPO_ROOT/scripts/beads-close-sync.sh\" ]; then"
+      printf '%s\n' "  \"$REPO_ROOT/scripts/beads-close-sync.sh\" >/dev/null 2>&1 || true"
+      printf '%s\n' "fi"
+      printf '%s\n' "# END beads-close-sync"
+    } >> "$HOOK"
+    echo "✓ Installed post-merge hook at $HOOK"
+    echo "  It runs scripts/beads-close-sync.sh silently after every git pull."
 
 # --- Interactive Mode (Gas Town) ---
 

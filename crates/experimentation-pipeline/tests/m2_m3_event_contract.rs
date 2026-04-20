@@ -115,6 +115,7 @@ fn make_qoe_event(
             peak_resolution_height: 1080,
             startup_failure_rate: 0.0,
             playback_duration_ms: 3_600_000,
+            ebvs_detected: false,
         }),
         cdn_provider: "akamai".into(),
         abr_algorithm: "buffer-based-v2".into(),
@@ -611,6 +612,7 @@ fn test_qoe_playback_metrics_zero_values() {
             peak_resolution_height: 0,
             startup_failure_rate: 0.0,
             playback_duration_ms: 0,
+            ebvs_detected: false,
         }),
         ..Default::default()
     };

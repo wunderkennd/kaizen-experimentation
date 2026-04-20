@@ -182,6 +182,27 @@ func TestRenderQoEMetric_ContainsKeyFields(t *testing.T) {
 	assert.NotContains(t, sql, "delta.metric_events", "QoE metric should NOT read from metric_events")
 }
 
+func TestRenderEBVSRate(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	p := testParams
+	p.MetricID = "ebvs_rate"
+	sql, err := r.RenderEBVSRate(p)
+	require.NoError(t, err)
+	assert.Equal(t, readGolden(t, "ebvs_rate_expected.sql"), sql)
+}
+
+func TestRenderEBVSRate_ContainsKeyFields(t *testing.T) {
+	r, _ := NewSQLRenderer()
+	p := TemplateParams{ExperimentID: "test-exp-ebvs", MetricID: "ebvs_rate", ComputationDate: "2024-06-01"}
+	sql, _ := r.RenderEBVSRate(p)
+	assert.Contains(t, sql, "delta.qoe_events")
+	assert.Contains(t, sql, "ebvs_detected")
+	assert.Contains(t, sql, "CASE WHEN qoe_sessions.ebvs_detected THEN 1 ELSE 0 END")
+	assert.Contains(t, sql, "NULLIF(COUNT(*), 0)", "denominator must guard against zero-session variants")
+	assert.NotContains(t, sql, "delta.metric_events", "EBVS rate reads qoe_events, not metric_events")
+}
+
 func TestRenderContentConsumption(t *testing.T) {
 	r, err := NewSQLRenderer()
 	require.NoError(t, err)

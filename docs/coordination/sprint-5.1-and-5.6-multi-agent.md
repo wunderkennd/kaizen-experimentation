@@ -65,9 +65,62 @@ Best for: **complex deals you want to steer in real time** — e.g., ambiguous d
 ### Daily rhythm
 ```
 morning  → just morning           # Triage overnight Multiclaude runs + open PRs
+                                   #   └ also close-syncs beads whose GH Issue closed
 work     → just interactive       # Gas Town for the day
 evening  → just evening 5.1       # Hand off to Multiclaude for overnight
+                                   #   └ also forward-syncs sprint Issues into beads
 ```
+
+---
+
+## Beads ↔ GitHub Issues sync
+
+GitHub Issues remain the **source of truth** for humans, Multiclaude, and CI. Gas Town requires its own work unit (beads) for `gt sling`, `gt convoy list`, `gt ready`, and the merge queue. We bridge the two with a **one-way projection**: open Issues → beads. Each bead carries `external_ref = "gh-<N>"` so it knows which Issue it mirrors.
+
+### One-time setup
+```bash
+just beads-init                   # creates the Dolt-backed tracker at <repo>/.beads/
+```
+
+### Before dispatching to Gas Town
+```bash
+just beads-sync 5.1               # materialize open Sprint 5.1 Issues as beads (idempotent)
+just beads-sync 5.6               # same for 5.6
+just beads-status                 # show linked beads + their current status
+```
+`just evening <sprint>` calls `beads-sync` automatically before launching autonomous workers, so you don't need to sync manually in the overnight flow.
+
+### Closing the loop
+When a PR merges with `Closes #N`, GitHub auto-closes Issue #N. The bead is closed by **close-sync**, which detects GH state changes and mirrors them:
+
+```bash
+just beads-close-sync             # manual
+# or:
+just morning                      # runs close-sync automatically
+# or:
+just beads-hooks-install          # installs a local git post-merge hook (per-worktree, opt-in)
+```
+
+**No outbound writes to GitHub.** The PR's `Closes #N` already records the outcome on the Issue. Adding bead-ID comments would be noise. Beads are a read-side projection; GitHub is authoritative.
+
+### Sharing beads with teammates
+Local beads live in a Dolt DB (not git-tracked). The portable form is `.beads/issues.jsonl`, auto-exported after each sync.
+
+```bash
+git add .beads/issues.jsonl && git commit
+# teammates:
+git pull && bd import             # ingest JSONL into their local Dolt DB
+```
+
+### Using beads inside Gas Town
+Once synced, standard `gt` commands work:
+```bash
+gt ready                          # what's unblocked across town?
+gt sling kz-1o7 kaizen            # dispatch Agent-4 onto TOST core (#422)
+gt convoy list                    # see auto-created convoys
+bd dep add kz-60o blocks kz-1o7   # record "TOST core blocks M5 validation"
+```
+The `kz-<hash>` IDs are stable bead names; the `gh-<N>` external ref gives you the round-trip to GitHub.
 
 ---
 

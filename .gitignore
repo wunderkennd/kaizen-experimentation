@@ -72,3 +72,11 @@ tsconfig.tsbuildinfo
 # Legacy status files (replaced by GitHub Issues)
 docs/coordination/status/*
 !docs/coordination/status/README.md
+
+# ============================================
+# Beads (Gas Town ↔ GitHub Issues projection)
+# ============================================
+# `bd init` writes its own .beads/.gitignore that excludes the Dolt DB,
+# runtime locks, and logs. The portable export .beads/issues.jsonl is NOT
+# ignored there — commit it intentionally via `just beads-export` so teammates
+# can `bd import` after `git pull`.

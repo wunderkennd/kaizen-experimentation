@@ -1898,6 +1898,7 @@ dependencies = [
  "prost 0.13.5",
  "prost-types",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

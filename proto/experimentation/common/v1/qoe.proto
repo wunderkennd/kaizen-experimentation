@@ -25,6 +25,13 @@ message PlaybackMetrics {
   double startup_failure_rate = 7;
   // Total playback duration in milliseconds.
   int64 playback_duration_ms = 8;
+  // True if the session ended before video playback began (Exit Before Video Start).
+  // Classification: playback_duration_ms == 0 AND
+  //   (time_to_first_frame_ms == 0 — never reached first frame, OR
+  //    time_to_first_frame_ms exceeds the configured EBVS threshold, default 10_000ms).
+  // Distinct from startup_failure_rate (player crash) — EBVS is user-voluntary exit
+  // during a slow start. Set by the client SDK or the HeartbeatSessionizer (#424).
+  bool ebvs_detected = 9;
 }
 
 // QoEEvent is published to the qoe_events Kafka topic.
@@ -42,4 +49,30 @@ message QoEEvent {
   // Encoding profile applied (for encoding experiments).
   string encoding_profile = 8;
   google.protobuf.Timestamp timestamp = 9;
+}
+
+// HeartbeatEvent is published to the heartbeat_events Kafka topic every
+// ~10 seconds by clients during active playback. The M2 HeartbeatSessionizer
+// buffers these heartbeats keyed by (user_id, device_id, content_id), detects
+// session boundaries via inactivity gap, and emits aggregated QoEEvents to the
+// qoe_events topic. Moving sessionization server-side removes per-platform
+// SDK complexity and recovers partial sessions when clients crash mid-stream.
+message HeartbeatEvent {
+  string user_id = 1;
+  // Client-generated session ID (best-effort — server re-derives session
+  // boundaries via the inactivity gap).
+  string session_id = 2;
+  string device_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  int32 current_bitrate_kbps = 5;
+  int32 current_resolution_height = 6;
+  // Seconds of video buffered ahead of the playhead.
+  double buffer_health_seconds = 7;
+  // True if playback is stalled (buffer underrun).
+  bool is_rebuffering = 8;
+  // True if Time-To-First-Frame has not yet occurred for this session.
+  bool is_startup = 9;
+  string content_id = 10;
+  // Experiment variant if the user is assigned; empty otherwise.
+  string variant_id = 11;
 }
