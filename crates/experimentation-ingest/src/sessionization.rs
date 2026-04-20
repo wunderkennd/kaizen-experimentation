@@ -19,6 +19,7 @@ use experimentation_proto::common::{HeartbeatEvent, PlaybackMetrics, QoEEvent};
 use prost_types::Timestamp;
 use tracing::{debug, warn};
 
+use crate::classification::{set_ebvs_detected, EBVS_DEFAULT_THRESHOLD_MS};
 use crate::validation::{require_timestamp, validate_heartbeat_event};
 
 /// Default inactivity gap after which a session is considered closed.
@@ -198,7 +199,7 @@ impl SessionState {
 
         // Clamp all fields into PlaybackMetrics-valid ranges to guarantee the
         // emitted QoEEvent passes downstream validation even for noisy clients.
-        let metrics = PlaybackMetrics {
+        let mut metrics = PlaybackMetrics {
             time_to_first_frame_ms: ttff_ms,
             rebuffer_count: self.rebuffer_transitions.clamp(0, MAX_REBUFFER_COUNT),
             rebuffer_ratio,
@@ -209,7 +210,9 @@ impl SessionState {
                 .clamp(0, MAX_PEAK_RESOLUTION_HEIGHT),
             startup_failure_rate,
             playback_duration_ms: playback_duration_ms.min(MAX_PLAYBACK_DURATION_MS),
+            ebvs_detected: false,
         };
+        set_ebvs_detected(&mut metrics, EBVS_DEFAULT_THRESHOLD_MS);
 
         // `session_id` on the emitted event prefers the client-supplied value —
         // downstream joins often key off it. Fall back to a deterministic
