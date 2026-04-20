@@ -54,6 +54,32 @@ message RunAnalysisRequest {
   // ADR-020: Adaptive sample size configuration. When set, M4a runs an interim
   // analysis and returns zone classification and recommended_n_per_arm.
   experimentation.common.v1.AdaptiveSampleSizeConfig adaptive_sample_size_config = 5;
+  // ADR-027: TOST equivalence testing configuration. When set, M4a runs the
+  // Two One-Sided Tests procedure on the primary metric in addition to (or
+  // instead of) the standard superiority test. Result fields live on the
+  // MetricResult message. When unset, no equivalence test is performed.
+  EquivalenceTestConfig equivalence_test = 6;
+}
+
+// ADR-027: TOST equivalence test configuration.
+// Drives the Two One-Sided Tests procedure for proving a treatment is
+// *equivalent* to control within ±delta (in the metric's natural units).
+// Used by M4a for infrastructure migration experiments where the business
+// question is "safe to ship" rather than "better than control."
+message EquivalenceTestConfig {
+  // Equivalence margin in the metric's natural units. Must be > 0.
+  // Treatment is declared equivalent if the effect lies within [-delta, +delta].
+  double delta = 1;
+  // Optional: express delta as a fraction of the control mean
+  // (e.g., 0.02 = "within 2% of control"). When set, M4a recomputes delta
+  // at analysis time as `delta_relative * control_mean` and uses that in
+  // place of the absolute value above. Only meaningful for MEAN / RATIO metrics.
+  optional double delta_relative = 2;
+  // Per-side significance level. Typical value 0.05 yields a 90% TOST CI.
+  // Each one-sided test is performed at this α; equivalence is declared iff
+  // both tests reject, which is equivalent to the (1 - 2α) CI lying entirely
+  // within (-delta, +delta).
+  double alpha = 3;
 }
 message GetAnalysisResultRequest { string experiment_id = 1; }
 message GetInterleavingAnalysisRequest { string experiment_id = 1; }
