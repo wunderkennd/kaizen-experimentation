@@ -521,7 +521,7 @@ mod tests {
         let x = vec![1.0, 1.0, 1.0, 1.0];
         let cfg = TostConfig::new(0.5);
         let err = tost_equivalence_test(&x, &x, &cfg).unwrap_err();
-        matches!(err, Error::Numerical(_));
+        assert!(matches!(err, Error::Numerical(_)), "expected Numerical error, got {err:?}");
     }
 
     #[test]
