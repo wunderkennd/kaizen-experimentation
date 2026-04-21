@@ -1,0 +1,46 @@
+{
+  "test_name": "narrow_margin_equivalence",
+  "r_command": "library(TOSTER); control <- c(10.0, 10.2, 9.8, 10.3, 9.7, 10.1, 9.9, 10.4, 9.6, 10.5); treatment <- c(10.5, 10.7, 10.3, 10.8, 10.2, 10.6, 10.4, 10.9, 10.1, 11.0); t_TOST(x=treatment, y=control, eqb=0.8, alpha=0.05, var.equal=FALSE)",
+  "mode": "tost",
+  "control": [
+    10.0,
+    10.2,
+    9.8,
+    10.3,
+    9.7,
+    10.1,
+    9.9,
+    10.4,
+    9.6,
+    10.5
+  ],
+  "treatment": [
+    10.5,
+    10.7,
+    10.3,
+    10.8,
+    10.2,
+    10.6,
+    10.4,
+    10.9,
+    10.1,
+    11.0
+  ],
+  "control_x": [],
+  "treatment_x": [],
+  "delta": 0.8,
+  "alpha": 0.05,
+  "expected": {
+    "point_estimate": 0.5,
+    "std_error": 0.13540064007726607,
+    "df": 18.0,
+    "p_lower": 8.32317659238413e-9,
+    "p_upper": 0.01992250478801194,
+    "p_tost": 0.01992250478801194,
+    "ci_lower": 0.26520667772929885,
+    "ci_upper": 0.7347933222707012,
+    "equivalent": true,
+    "control_mean": 10.05,
+    "treatment_mean": 10.55
+  }
+}
