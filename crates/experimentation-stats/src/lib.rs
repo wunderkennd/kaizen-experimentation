@@ -27,6 +27,7 @@
 //! - `clustering` — Clustered standard errors for session-level experiments
 //! - `switchback` — Switchback experiment analysis: HAC SE, randomization inference, carryover diagnostic (ADR-022)
 //! - `portfolio` — Portfolio power analysis: optimal alpha, annualized impact, traffic allocation (ADR-019)
+//! - `tost` — TOST equivalence testing with Welch internals, CUPED composition, and power analysis (ADR-027)
 
 pub mod adaptive_n;
 pub mod switchback;
@@ -50,6 +51,7 @@ pub mod sequential;
 pub mod srm;
 pub mod surrogate;
 pub mod synthetic_control;
+pub mod tost;
 pub mod ttest;
 // Stubs — implement in Phase 3:
 // pub mod delta_method;

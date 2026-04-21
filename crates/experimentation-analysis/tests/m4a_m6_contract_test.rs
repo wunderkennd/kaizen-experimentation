@@ -1626,7 +1626,7 @@ async fn test_evalue_grow_populated_with_msprt_method() {
             sequential_method: 1,
             tau_sq: 0.0,
             cuped_covariate_metric_id: String::new(),
-            adaptive_sample_size_config: None,
+            ..Default::default()
         }))
         .await
         .expect("RunAnalysis with MSPRT should succeed");
@@ -1693,7 +1693,7 @@ async fn test_evalue_not_populated_without_msprt() {
             sequential_method: 0,
             tau_sq: 0.0,
             cuped_covariate_metric_id: String::new(),
-            adaptive_sample_size_config: None,
+            ..Default::default()
         }))
         .await
         .expect("RunAnalysis with no sequential method should succeed");
