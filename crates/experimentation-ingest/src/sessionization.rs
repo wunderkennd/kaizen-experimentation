@@ -19,7 +19,6 @@ use experimentation_proto::common::{HeartbeatEvent, PlaybackMetrics, QoEEvent};
 use prost_types::Timestamp;
 use tracing::{debug, warn};
 
-use crate::classification::{set_ebvs_detected, EBVS_DEFAULT_THRESHOLD_MS};
 use crate::validation::{require_timestamp, validate_heartbeat_event};
 
 /// Default inactivity gap after which a session is considered closed.
@@ -197,9 +196,26 @@ impl SessionState {
 
         let startup_failure_rate = if self.startup_completed { 0.0 } else { 1.0 };
 
-        // Clamp all fields into PlaybackMetrics-valid ranges to guarantee the
-        // emitted QoEEvent passes downstream validation even for noisy clients.
-        let mut metrics = PlaybackMetrics {
+        // Server-side, `startup_completed` is the authoritative EBVS signal:
+        // EBVS ⟺ the player never reported a non-startup heartbeat. The TTFF
+        // threshold used by `classify_ebvs` exists for client-aggregated events
+        // where `startup_completed` is unobservable; we have richer state here.
+        //
+        // Using `classify_ebvs(ttff_ms, playback_duration_ms, …)` would be wrong
+        // in two ways:
+        //   1. False positive — a session that opens with `is_startup=false`
+        //      and closes on a single heartbeat has `ttff_ms=0` (because
+        //      `first_frame_timestamp == first_timestamp`) and
+        //      `playback_duration_ms=0`. `classify_ebvs(0, 0, …)` returns
+        //      `true`, but the player definitively rendered a frame.
+        //   2. False negative — a multi-heartbeat session that never leaves
+        //      startup has `ttff_ms=0` but `playback_duration_ms>0` (session
+        //      span). `classify_ebvs(0, >0, …)` returns `false` due to its
+        //      early-out, yet first frame was never reached.
+        //
+        // Clamp all numeric fields into `PlaybackMetrics`-valid ranges so the
+        // emitted `QoEEvent` passes downstream validation even for noisy clients.
+        let metrics = PlaybackMetrics {
             time_to_first_frame_ms: ttff_ms,
             rebuffer_count: self.rebuffer_transitions.clamp(0, MAX_REBUFFER_COUNT),
             rebuffer_ratio,
@@ -210,9 +226,8 @@ impl SessionState {
                 .clamp(0, MAX_PEAK_RESOLUTION_HEIGHT),
             startup_failure_rate,
             playback_duration_ms: playback_duration_ms.min(MAX_PLAYBACK_DURATION_MS),
-            ebvs_detected: false,
+            ebvs_detected: !self.startup_completed,
         };
-        set_ebvs_detected(&mut metrics, EBVS_DEFAULT_THRESHOLD_MS);
 
         // `session_id` on the emitted event prefers the client-supplied value —
         // downstream joins often key off it. Fall back to a deterministic
@@ -735,5 +750,67 @@ mod tests {
         assert_eq!(drained.len(), 1);
         let m2 = drained[0].metrics.clone().unwrap();
         assert_eq!(m2.avg_bitrate_kbps, 4000);
+    }
+
+    // ── EBVS classification on emitted sessions ─────────────────────────
+
+    #[test]
+    fn single_non_startup_heartbeat_is_not_ebvs() {
+        // Regression for the false-positive bug: a session opened with
+        // `is_startup=false` and drained on a single heartbeat produces
+        // `ttff_ms=0` (because `first_frame_timestamp == first_timestamp`)
+        // and `playback_duration_ms=0`. The naive TTFF-threshold classifier
+        // would flag this as EBVS, but the player definitively rendered a
+        // frame — it's a short-play, not EBVS.
+        let mut s = HeartbeatSessionizer::default();
+        s.ingest(base_heartbeat(0)).unwrap(); // is_startup=false by default
+        let events = s.drain();
+        let m = events[0].metrics.clone().unwrap();
+        assert_eq!(m.time_to_first_frame_ms, 0);
+        assert_eq!(m.playback_duration_ms, 0);
+        assert!(!m.ebvs_detected, "single non-startup heartbeat must not be EBVS");
+    }
+
+    #[test]
+    fn multi_heartbeat_startup_only_session_is_ebvs() {
+        // Regression for the false-negative bug: every heartbeat has
+        // `is_startup=true`, so `first_frame_timestamp=None` and
+        // `ttff_ms=0`. But the session spans >0 ms, so a classifier keyed
+        // on `(ttff_ms, playback_duration_ms)` returns `false` because
+        // `playback_duration_ms>0` short-circuits EBVS. The player never
+        // reached first frame — this IS EBVS.
+        let mut s = HeartbeatSessionizer::default();
+        for i in 0..4 {
+            let mut hb = base_heartbeat(i * 10);
+            hb.is_startup = true;
+            s.ingest(hb).unwrap();
+        }
+        let events = s.drain();
+        let m = events[0].metrics.clone().unwrap();
+        assert_eq!(m.time_to_first_frame_ms, 0);
+        assert_eq!(m.startup_failure_rate, 1.0);
+        assert!(m.playback_duration_ms > 0, "session span > 0");
+        assert!(m.ebvs_detected, "startup-only session must be EBVS");
+    }
+
+    #[test]
+    fn normal_playback_session_is_not_ebvs() {
+        // Baseline: startup eventually completes and real heartbeats follow.
+        // Not EBVS regardless of TTFF.
+        let mut s = HeartbeatSessionizer::default();
+        let mut startup = base_heartbeat(0);
+        startup.is_startup = true;
+        s.ingest(startup).unwrap();
+        // First frame at t=5s, then continuing playback.
+        for i in 0..4 {
+            let mut hb = base_heartbeat(5 + (i * 10));
+            hb.is_startup = false;
+            s.ingest(hb).unwrap();
+        }
+        let events = s.drain();
+        let m = events[0].metrics.clone().unwrap();
+        assert!(m.time_to_first_frame_ms > 0);
+        assert!(m.playback_duration_ms > 0);
+        assert!(!m.ebvs_detected, "normal playback must not be EBVS");
     }
 }
