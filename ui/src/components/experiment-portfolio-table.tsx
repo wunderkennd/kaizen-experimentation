@@ -45,20 +45,20 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
   const sorted = sortExperiments(experiments, sortKey, sortDir);
 
   function SortIndicator({ col }: { col: SortKey }) {
-    if (col !== sortKey) return <span className="ml-1 text-gray-300">↕</span>;
+    if (col !== sortKey) return <span className="ml-1 text-gray-300 transition-colors group-hover:text-gray-400" aria-hidden="true">↕</span>;
     return (
-      <span className="ml-1 text-indigo-600" aria-hidden="true">
+      <span className="ml-1 text-indigo-600 font-bold" aria-hidden="true">
         {sortDir === 'asc' ? '↑' : '↓'}
       </span>
     );
   }
 
-  function thProps(col: SortKey, label: string, align: 'left' | 'right' = 'left') {
+  function thProps(col: SortKey, align: 'left' | 'right' = 'left') {
+    const isActive = col === sortKey;
     return {
       scope: 'col' as const,
-      className: `cursor-pointer select-none py-3 text-xs font-medium uppercase tracking-wide text-gray-500 hover:text-gray-700 ${align === 'right' ? 'text-right pr-4' : 'pl-4 pr-3'}`,
-      onClick: () => handleSort(col),
-      'aria-sort': (col === sortKey
+      className: `py-3 text-xs font-medium uppercase tracking-wide text-gray-500 ${align === 'right' ? 'text-right pr-4' : 'pl-4 pr-3'}`,
+      'aria-sort': (isActive
         ? sortDir === 'asc' ? 'ascending' : 'descending'
         : 'none') as React.AriaAttributes['aria-sort'],
     };
@@ -77,20 +77,50 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th {...thProps('name', 'Experiment')}>
-              Experiment <SortIndicator col="name" />
+            <th {...thProps('name')}>
+              <button
+                type="button"
+                onClick={() => handleSort('name')}
+                className="group inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+              >
+                Experiment <SortIndicator col="name" />
+              </button>
             </th>
-            <th {...thProps('effectSize', 'Effect Size', 'right')}>
-              Effect Size <SortIndicator col="effectSize" />
+            <th {...thProps('effectSize', 'right')}>
+              <button
+                type="button"
+                onClick={() => handleSort('effectSize')}
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+              >
+                Effect Size <SortIndicator col="effectSize" />
+              </button>
             </th>
-            <th {...thProps('variance', 'Variance', 'right')}>
-              Variance <SortIndicator col="variance" />
+            <th {...thProps('variance', 'right')}>
+              <button
+                type="button"
+                onClick={() => handleSort('variance')}
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+              >
+                Variance <SortIndicator col="variance" />
+              </button>
             </th>
-            <th {...thProps('allocatedTrafficPct', 'Traffic %', 'right')}>
-              Traffic % <SortIndicator col="allocatedTrafficPct" />
+            <th {...thProps('allocatedTrafficPct', 'right')}>
+              <button
+                type="button"
+                onClick={() => handleSort('allocatedTrafficPct')}
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+              >
+                Traffic % <SortIndicator col="allocatedTrafficPct" />
+              </button>
             </th>
-            <th {...thProps('priorityScore', 'Priority Score', 'right')}>
-              Priority Score <SortIndicator col="priorityScore" />
+            <th {...thProps('priorityScore', 'right')}>
+              <button
+                type="button"
+                onClick={() => handleSort('priorityScore')}
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+              >
+                Priority Score <SortIndicator col="priorityScore" />
+              </button>
             </th>
             <th scope="col" className="py-3 pr-4 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
               Conflicts
