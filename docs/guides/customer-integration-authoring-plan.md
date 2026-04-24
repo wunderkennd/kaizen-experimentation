@@ -123,7 +123,12 @@ One file per agent per wave — eliminates merge conflicts inside waves.
 - Fallback / offline behavior documented
 - Installation instructions cite the actual package registry path used by the SDK
 
-**Consolidation**: single consolidation PR merges all 7 chapter PRs once each passes CI.
+**PR strategy**: one PR per SDK chapter. Each worktree-isolated agent opens its own draft PR against `main`. PRs merge independently as they pass CI and receive module-owner review. No consolidation PR — chapters land incrementally so that a stalled chapter does not block the others.
+
+**Preconditions specific to individual chapters** (must be resolved before the chapter's agent launches):
+- §6.1 Web — Web SDK framework scope confirmed (vanilla TS vs. React wrapper). See tracking issue from Wave 1 inconsistency #4.
+- §6.6 gRPC direct — M2 port labels (50052 vs. 50058) confirmed. See tracking issue from Wave 1 inconsistency #1.
+- §6 all — M7 runtime state (Go vs. Rust today) confirmed. See tracking issue from Wave 1 inconsistency #2.
 
 ---
 
@@ -245,12 +250,24 @@ No wave modifies files owned by a different wave. The outline file itself is onl
 
 - [x] Outline merged (`customer-integration-outline.md`, PR #448)
 - [x] Implementation plan drafted (this document)
-- [ ] Wave 1 launched
-- [ ] Wave 1 merged
-- [ ] Wave 2 launched (parallel, 7 agents)
+- [x] Wave 1 launched
+- [x] Wave 1 merged (PR #449)
+- [ ] Wave 1 inconsistencies resolved by module owners (tracking issues filed — see below)
+- [ ] Wave 2 launched (parallel, 7 agents, one PR per chapter)
 - [ ] Wave 3 launched (parallel, 7 agents)
 - [ ] Wave 4 launched (parallel, ~5 agents)
 - [ ] Wave 5 editorial pass
 - [ ] Guide published as the `integration/` landing section
 
 Status is updated by the coordinating session after each wave completes.
+
+### Open blockers before Wave 2
+
+Wave 2 is paused pending resolution of four source-material inconsistencies surfaced during Wave 1. Each has a tracking issue; the SDK-chapter agents cannot produce accurate content until the underlying source-of-truth is confirmed:
+
+| # | Blocker | Tracking issue | Owner | Blocks |
+| --- | --- | --- | --- | --- |
+| 1 | M2 port split labeling (ingest vs. orch on 50052 vs. 50058) | [#450](https://github.com/wunderkennd/kaizen-experimentation/issues/450) | Agent-2 | §6.6, §9 |
+| 2 | M7 runtime state (Go vs. Rust today) | [#451](https://github.com/wunderkennd/kaizen-experimentation/issues/451) | Agent-7 | §6 all, §8 |
+| 3 | `PromoteToExperiment` RPC direction | [#452](https://github.com/wunderkennd/kaizen-experimentation/issues/452) | Agent-5 / Agent-7 | §8 |
+| 4 | Web SDK framework scope (vanilla TS vs. React) | [#453](https://github.com/wunderkennd/kaizen-experimentation/issues/453) | Agent-6 | §6.1 |
