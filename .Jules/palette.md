@@ -41,6 +41,10 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Learning:** Interactive table rows that toggle visibility of details must be explicitly marked as buttons and support keyboard navigation. Without `role="button"` and `onKeyDown` handlers for Enter/Space, these features remain "mouse-only" and inaccessible to screen reader or keyboard-only users.
 **Action:** Always add `role="button"`, `tabIndex={0}`, `aria-expanded`, and keyboard handlers to custom interactive containers that lack native button semantics. Use `focus-within` with a ring to provide clear focus indicators.
 
+## 2026-05-21 - Keyboard Accessibility for Sortable Headers
+**Learning:** Table headers used for sorting must be semantic and keyboard-accessible. Moving click handlers from the `<th>` to an internal `<button>` ensures they are in the tab order and provide standard focus indicators.
+**Action:** Always wrap sortable header content in a `<button>` within the `<th>`. Use `aria-sort` on the `<th>` to communicate state, and ensure decorative sort icons are hidden from screen readers.
+
 ## 2026-05-22 - Standardized Search UI Pattern
 **Learning:** Using a consistent visual pattern for search inputs (magnifying glass icon + inset text) creates a predictable experience for users scanning filtered lists. Achieving precise vertical alignment between the absolute-positioned icon and the input text requires consistent vertical padding (e.g., `py-1.5` or `py-2`) depending on the line height.
 **Action:** Always wrap search inputs in a `relative` container with an absolute-positioned magnifying glass SVG. Use `pl-9` to clear the icon and ensure `pointer-events-none` on the icon to avoid interfering with input focus.
