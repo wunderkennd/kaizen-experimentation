@@ -46,7 +46,9 @@
   - 2.1.1 Experiment, Variant, Treatment, Holdout
   - 2.1.2 Assignment Unit (user, device, session, account, household)
   - 2.1.3 Metric, Guardrail, Decision Criterion
-  - 2.1.4 Feature Flag vs. Experiment (and when a flag graduates)
+  - 2.1.4 Feature Flag vs. Experiment
+    - Caller-driven promotion: `PromoteToExperiment` RPC (flag → experiment)
+    - System-driven graduation: M7 reconciler updates the flag once a promoted experiment concludes (experiment → permanent flag state). Not a separate RPC.
 - 2.2 Lifecycle states
   - `draft` → `review` → `running` → `analyzing` → `decided` → `archived`
 - 2.3 Bucketing model
@@ -107,10 +109,14 @@
 
 Each SDK chapter follows the same template: install → initialize → assign → expose → flag → shutdown → troubleshoot.
 
-- 6.1 Web SDK (TypeScript / React)
+- 6.1 Web SDK (TypeScript)
+  - `@experimentation/sdk-web` is framework-agnostic; React is not a dependency.
   - Client-side vs. SSR assignment
   - Hydration safety, flicker mitigation
   - Bundle size and lazy evaluation
+  - Appendix: React integration patterns
+    - Direct gRPC-web (the M6 pattern, via `@connectrpc/connect-web`)
+    - Custom `useExperimentVariant()` hook wrapping `ExperimentClient`
 - 6.2 iOS SDK (Swift)
   - App launch path, cold-start budget
   - Backgrounding, offline queue
@@ -161,7 +167,9 @@ Each SDK chapter follows the same template: install → initialize → assign �
 - 8.3 Percentage rollouts and sticky bucketing
 - 8.4 Targeting rules and rule order
 - 8.5 Kill switches and emergency rollback
-- 8.6 Graduating a flag from experiment to permanent
+- 8.6 Graduating an experiment-backed flag to its permanent state
+  - Triggered automatically by the M7 reconciler when the promoted experiment concludes — no caller-driven `GraduateToFlag` RPC exists.
+  - What the reconciler writes back onto the flag row, and how to observe it.
 - 8.7 Flag hygiene and stale-flag reports
 
 ---
