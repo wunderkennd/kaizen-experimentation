@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Test Coverage Improvement Plan — GitHub Issues Bootstrap
 #
-# Creates 5 milestones, 6 new labels, and 31 issues from the spec at
+# Creates 5 milestones, 6 new labels, and 28 issues from the spec at
 # docs/coordination/test-coverage-improvement-plan.md.
 #
 # Run once. Idempotent: re-runs skip already-created milestones/labels and
@@ -182,7 +182,7 @@ tc_issue "TC-404" 4 "P1" 2 "S" "TC-003"             "tc-404-coverage-gates"     
 echo ""
 echo "=== Done ==="
 echo ""
-echo "Created 5 milestones, 6 labels, 31 issues (if not already present)."
+echo "Created 5 milestones, 6 labels, 28 issues (if not already present)."
 echo ""
 echo "Next steps:"
 echo ""
@@ -198,5 +198,6 @@ echo "     just evening tc.2   # Agents 1, 4, 5, 7 in parallel"
 echo "     just evening tc.3   # Parallel pairs"
 echo "     just evening tc.4   # Agents 5, 6"
 echo ""
-echo "  4. Track progress:"
-echo "     docs/coordination/test-coverage-status.md"
+echo "  4. Track progress (per CLAUDE.md, GitHub Issues are the source of truth):"
+echo "     gh issue list --label test-coverage --state all --limit 50"
+echo "     gh pr list --label test-coverage --state all --limit 50"

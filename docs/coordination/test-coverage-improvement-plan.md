@@ -43,7 +43,7 @@ CLAUDE.md rule violations:
 | **TC.3** | Cross-module contract backfill (5 missing pair suites + SDK hash parity) | TC.0; some tasks need TC.2 | Parallel pairs |
 | **TC.4** | UI E2E + SQL migration tests + ongoing hygiene | TC.0 | Parallel across Agents 5, 6 |
 
-Total: **31 tasks**, 8 weeks calendar time at ~3 agent-weeks of effort per sprint slot.
+Total: **28 tasks**, 8 weeks calendar time at ~3 agent-weeks of effort per sprint slot.
 
 ---
 
@@ -1209,7 +1209,7 @@ Consumer reviewer (author): Agent-Y
 | TC.2 | 5 | 19 | 2 weeks (4 agents in parallel) |
 | TC.3 | 6 | 17 | 1.5 weeks (parallel pairs) |
 | TC.4 | 4 | 13 | 1.5 weeks |
-| **Total** | **31** | **79 agent-days** | **~8 weeks** |
+| **Total** | **28** | **79 agent-days** | **~8 weeks** |
 
 ---
 
@@ -1217,7 +1217,7 @@ Consumer reviewer (author): Agent-Y
 
 This plan is **complete** when all of the following are true:
 
-1. All 31 task PRs merged to `main`.
+1. All 28 task PRs merged to `main`.
 2. Codecov dashboard shows: Rust ≥ 75% overall, Go ≥ 80%, TypeScript ≥ 65%.
 3. `rg '#\[ignore' crates/` returns ≤ 5 matches (down from 33), each with a justification comment.
 4. CLAUDE.md "10 pair integration suites" claim verifiable with one `find` command.
