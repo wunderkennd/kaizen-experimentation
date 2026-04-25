@@ -6,8 +6,8 @@ import "experimentation/common/v1/experiment.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/flags/v1;flagsv1";
 
-// FeatureFlagService is implemented in Go (M7).
-// Uses experimentation-hash Rust library via CGo for deterministic evaluation
+// FeatureFlagService is implemented in Rust (M7, ADR-024).
+// Uses the experimentation-hash crate directly for deterministic evaluation
 // identical to M1 Assignment Service. No statistical computation.
 service FeatureFlagService {
   rpc CreateFlag(CreateFlagRequest) returns (Flag);
