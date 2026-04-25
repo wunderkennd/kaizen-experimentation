@@ -574,6 +574,28 @@ describe('Edit Flag Page', () => {
     });
   });
 
+  it('shows loading spinner during flag update', async () => {
+    // Delay the response to catch the loading state
+    server.use(
+      http.post(`${FLAGS_SVC}/UpdateFlag`, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json({ flagId: mockFlagId, name: 'updated' });
+      }),
+    );
+
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('edit-submit'));
+
+    expect(screen.getByTestId('edit-spinner')).toBeInTheDocument();
+    expect(screen.getByTestId('edit-submit')).toBeDisabled();
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(`/flags/${mockFlagId}`);
+    });
+  });
+
   it('shows 404 error for nonexistent flag', async () => {
     mockFlagId = 'nonexistent-flag';
     render(
