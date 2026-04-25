@@ -941,7 +941,12 @@ autonomous-sprint sprint_num:
       I.0) LABEL="sprint-I.0"; MS="Sprint I.0: Scaffold + Foundation" ;;
       I.1) LABEL="sprint-I.1"; MS="Sprint I.1: Services + Wiring" ;;
       I.2) LABEL="sprint-I.2"; MS="Sprint I.2: Integration + Hardening" ;;
-      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, or I.0-I.2."; exit 1 ;;
+      tc.0) LABEL="sprint-tc-0"; MS="TC.0: Foundations" ;;
+      tc.1) LABEL="sprint-tc-1"; MS="TC.1: Statistical Goldens" ;;
+      tc.2) LABEL="sprint-tc-2"; MS="TC.2: Service Binaries" ;;
+      tc.3) LABEL="sprint-tc-3"; MS="TC.3: Contract Backfill" ;;
+      tc.4) LABEL="sprint-tc-4"; MS="TC.4: UI E2E + Hygiene" ;;
+      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, I.0-I.2, or tc.0-tc.4."; exit 1 ;;
     esac
     echo "=== Launching workers for: $MS ==="
     # Query by label first (always present), fall back to milestone
@@ -962,9 +967,14 @@ autonomous-sprint sprint_num:
       # Fetch full issue body separately to avoid newline parsing issues
       body=$(gh issue view "$num" --json body -q '.body' 2>/dev/null | head -50)
       echo "  → Issue #$num: $title"
-      # Use infra-N branch naming for IaC sprints, agent-N for Phase 5
+      # Branch convention varies by sprint type:
+      #   IaC sprints  → infra-N/feat/description
+      #   Test cov     → agent-N/test/tc-NNN-slug
+      #   Phase 5/etc. → agent-N/feat/adr-XXX-description
       if [[ "$LABEL" == sprint-I.* ]]; then
         BRANCH_HINT="Branch: use infra-N/feat/description naming."
+      elif [[ "$LABEL" == sprint-tc-* ]]; then
+        BRANCH_HINT="Branch: use agent-N/test/tc-NNN-slug naming (see test-coverage-improvement-plan.md spec for the exact slug)."
       else
         BRANCH_HINT="Branch: use agent-N/feat/adr-XXX naming."
       fi
