@@ -14,7 +14,7 @@ Full-stack SVOD experimentation platform. 7 modules, 3 languages (Rust/Go/TypeSc
 | Module | Language | Owner | Port | Purpose |
 | --- | --- | --- | --- | --- |
 | M1 Assignment | Rust | Agent-1 | 50051 | Variant allocation, interleaving, bandit arm delegation, SDKs |
-| M2 Pipeline | Rust+Go | Agent-2 | 50052/50058 | Event validation/dedup/Kafka (Rust), orchestration (Go) |
+| M2 Pipeline | Rust+Go | Agent-2 | 50052 (ingest) / 50058 (orch) | Event validation/dedup/Kafka (Rust ingest), orchestration (Go) |
 | M3 Metrics | Go | Agent-3 | 50056 | Spark SQL orchestration, metric computation, Delta Lake |
 | M4a Analysis | Rust | Agent-4 | 50053 | All statistical computation (experimentation-stats crate) |
 | M4b Bandit | Rust | Agent-4 | 50054 | Thompson, LinUCB, Neural (Candle), LMAX single-thread core |
