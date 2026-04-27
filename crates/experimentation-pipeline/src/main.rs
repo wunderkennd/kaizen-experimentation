@@ -23,8 +23,31 @@ use crate::kafka::{EventProducer, KafkaConfig};
 use crate::metrics::PipelineMetrics;
 use crate::service::IngestionServiceImpl;
 
+/// Default gRPC port for the M2 ingest service. Owned by M2 per `CLAUDE.md`.
+/// Must not collide with M1 Assignment (50051).
+const DEFAULT_PORT: &str = "50052";
+
 fn env_or(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for #460: the M2 Pipeline default port must not collide
+    /// with M1 Assignment, which owns 50051. Per `CLAUDE.md`, the M2 ingest
+    /// service owns 50052. The previous default — `"50051"` — meant any
+    /// deployment that did not explicitly set `PORT` would race M1 for the
+    /// port. Local dev was fine only because `justfile` overrides `PORT=50052`.
+    #[test]
+    fn default_port_does_not_collide_with_m1_assignment() {
+        let port: u16 = DEFAULT_PORT.parse().expect("DEFAULT_PORT must be a valid u16");
+        const M1_ASSIGNMENT_PORT: u16 = 50051;
+        const M2_INGEST_PORT: u16 = 50052;
+        assert_ne!(port, M1_ASSIGNMENT_PORT, "M2 default collides with M1 Assignment");
+        assert_eq!(port, M2_INGEST_PORT, "M2 default must be 50052 per CLAUDE.md");
+    }
 }
 
 /// Serve Prometheus metrics + health check endpoints on a separate HTTP endpoint.
@@ -87,7 +110,7 @@ async fn main() {
     // Tracing: JSON format with thread IDs, file/line numbers, env-filterable
     experimentation_core::telemetry::init_tracing("experimentation-pipeline");
 
-    let port: u16 = env_or("PORT", "50051").parse().expect("PORT must be u16");
+    let port: u16 = env_or("PORT", DEFAULT_PORT).parse().expect("PORT must be u16");
     let metrics_port: u16 = env_or("METRICS_PORT", "9090")
         .parse()
         .expect("METRICS_PORT must be u16");
