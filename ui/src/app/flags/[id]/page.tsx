@@ -8,6 +8,7 @@ import { getFlag, promoteToExperiment } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
 import { CopyButton } from '@/components/copy-button';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -76,11 +77,10 @@ function FlagDetailContent() {
 
   return (
     <div>
-      <div className="mb-2">
-        <Link href="/flags" className="text-sm text-indigo-600 hover:text-indigo-800" data-testid="back-link">
-          &larr; Back to Flags
-        </Link>
-      </div>
+      <Breadcrumb items={[
+        { label: 'Flags', href: '/flags' },
+        { label: flag.name },
+      ]} />
 
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-2xl font-bold text-gray-900" data-testid="flag-name">{flag.name}</h1>

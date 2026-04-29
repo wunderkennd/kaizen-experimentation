@@ -7,6 +7,7 @@ import type { Flag, FlagType } from '@/lib/types';
 import { getFlag, updateFlag } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
 
@@ -97,11 +98,11 @@ function EditFlagContent() {
 
   return (
     <div>
-      <div className="mb-2">
-        <Link href={`/flags/${flagId}`} className="text-sm text-indigo-600 hover:text-indigo-800" data-testid="back-link">
-          &larr; Back to {flag.name}
-        </Link>
-      </div>
+      <Breadcrumb items={[
+        { label: 'Flags', href: '/flags' },
+        { label: flag.name, href: `/flags/${flagId}` },
+        { label: 'Edit' },
+      ]} />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Edit Flag</h1>
 

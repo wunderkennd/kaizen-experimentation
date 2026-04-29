@@ -37,6 +37,14 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Learning:** Even if an audit entry doesn't have "changed values", users still benefit from row expansion to access the Experiment ID and other metadata without leaving the page.
 **Action:** Design tables such that all rows are interactive/expandable if they contain hidden technical identifiers that are useful for developer workflows.
 
+## 2026-06-25 - Standardizing Navigation with Breadcrumbs
+**Learning:** Manual "Back" links are inconsistent and can be brittle. A standardized `Breadcrumb` component provides a predictable navigation path and improves spatial awareness. Adding a `data-testid="back-link"` to the parent item in the breadcrumb trail ensures compatibility with legacy tests while promoting a modern navigation pattern.
+**Action:** Replace manual "Back" links with the `Breadcrumb` component. Ensure the parent item includes the `back-link` test ID for automation.
+
+## 2026-06-26 - Informative Permission Gating
+**Learning:** Hiding primary action buttons (like "New Flag") when a user lacks permissions can be confusing, as it leaves the user wondering why the feature is missing. Showing a disabled button with a descriptive tooltip (e.g., "Requires Experimenter role") provides better affordance and educates the user on RBAC requirements.
+**Action:** Prefer showing a disabled button with an explanatory tooltip over hiding it entirely for permission-gated actions. Ensure defensive checks are in place for the `user` object when generating tooltip messages.
+
 ## 2026-04-15 - Keyboard Accessibility for Expandable Rows
 **Learning:** Interactive table rows that toggle visibility of details must be explicitly marked as buttons and support keyboard navigation. Without `role="button"` and `onKeyDown` handlers for Enter/Space, these features remain "mouse-only" and inaccessible to screen reader or keyboard-only users.
 **Action:** Always add `role="button"`, `tabIndex={0}`, `aria-expanded`, and keyboard handlers to custom interactive containers that lack native button semantics. Use `focus-within` with a ring to provide clear focus indicators.

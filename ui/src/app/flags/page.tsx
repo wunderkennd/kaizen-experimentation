@@ -6,6 +6,7 @@ import type { Flag, FlagType } from '@/lib/types';
 import { listFlags } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -15,7 +16,7 @@ const FLAG_TYPE_BADGE: Record<FlagType, string> = {
 };
 
 function FlagListContent() {
-  const { canAtLeast } = useAuth();
+  const { canAtLeast, user } = useAuth();
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +90,7 @@ function FlagListContent() {
             {filtered.length}
           </span>
         </div>
-        {canAtLeast('experimenter') && (
+        {canAtLeast('experimenter') ? (
           <Link
             href="/flags/new"
             className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
@@ -97,6 +98,14 @@ function FlagListContent() {
           >
             New Flag
           </Link>
+        ) : (
+          <span
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            title={`Requires Experimenter role (you are ${user ? ROLE_LABELS[user.role] : 'Unknown'})`}
+            data-testid="new-flag-disabled"
+          >
+            New Flag
+          </span>
         )}
       </div>
 
