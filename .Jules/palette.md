@@ -65,6 +65,10 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Learning:** Promoting a feature flag to an experiment involves a network request and a navigation transition. Providing a loading spinner in the "Promote" button and disabling it during the process prevents duplicate submissions and gives clear feedback to the user.
 **Action:** Always implement a loading state (spinner + disabled state) for primary action buttons that trigger resource promotion or major state transitions outside of modals.
 
+## 2026-05-01 - Standardizing Breadcrumb Navigation
+**Learning:** Manual "Back" links (e.g., "Back to Flags") are inconsistent and don't scale as the application's hierarchy grows. A standardized `Breadcrumb` component provides a predictable spatial map for users, especially when navigating into nested resource edits. Ensuring these breadcrumbs maintain legacy `data-testid="back-link"` support on the parent item prevents breakage of existing navigation tests.
+**Action:** Use the `Breadcrumb` component for all detail and edit pages. Always include the full hierarchy (e.g., Home > Resource > Item > Action) to orient the user.
+
 ## 2026-06-20 - Loading Feedback for Resource Updates
 **Learning:** For forms that update resources (like Edit Flag), providing a loading spinner in the "Save" button is as important as in creation or promotion flows. It signals that the system is processing the update and prevents redundant save attempts during network latency.
 **Action:** Always include an `animate-spin` SVG and a "Saving..." state in the submit button of resource edit forms.

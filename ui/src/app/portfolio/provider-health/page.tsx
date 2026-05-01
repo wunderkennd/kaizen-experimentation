@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getProviderHealth } from '@/lib/api';
 import type { ProviderHealthResult, ProviderHealthSeries } from '@/lib/types';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 // Code-split: chart bundle loaded only when page is rendered
 const CatalogCoverageChart = dynamic(
@@ -97,12 +98,12 @@ export default function ProviderHealthPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/portfolio" className="hover:text-gray-700">Portfolio</Link>
-        <span aria-hidden="true">/</span>
-        <span className="text-gray-900 font-medium">Provider Health</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Portfolio', href: '/portfolio' },
+          { label: 'Provider Health' },
+        ]}
+      />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
