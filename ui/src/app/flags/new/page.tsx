@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { FlagType } from '@/lib/types';
 import { createFlag } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
 
@@ -55,11 +56,12 @@ function CreateFlagContent() {
 
   return (
     <div>
-      <div className="mb-2">
-        <Link href="/flags" className="text-sm text-indigo-600 hover:text-indigo-800">
-          &larr; Back to Flags
-        </Link>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: 'Flags', href: '/flags' },
+          { label: 'New Flag' },
+        ]}
+      />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Create Feature Flag</h1>
 

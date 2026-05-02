@@ -61,6 +61,10 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Learning:** Consistency in search UI (icon positioning and padding) and actionable empty states (CTAs and clear-filters) significantly reduces user friction when navigating large datasets like feature flags or audit logs. Decorative icons should always be hidden from screen readers using `aria-hidden="true"`.
 **Action:** Apply the `relative` container with `pl-9` padding and `aria-hidden` SVG pattern to all search inputs. Always provide a way to reset filters in empty result states.
 
+## 2026-06-25 - Safe Breadcrumb Refactoring
+**Learning:** Standardizing the `Breadcrumb` component to automatically include a `data-testid="back-link"` for the parent link allows for a clean migration from manual "Back" links without breaking legacy tests that depend on that specific identifier for navigation verification.
+**Action:** When migrating to shared navigation components, bake in support for legacy test identifiers to maintain CI stability while improving UX consistency.
+
 ## 2026-04-20 - Loading State for Feature Flag Promotion
 **Learning:** Promoting a feature flag to an experiment involves a network request and a navigation transition. Providing a loading spinner in the "Promote" button and disabling it during the process prevents duplicate submissions and gives clear feedback to the user.
 **Action:** Always implement a loading state (spinner + disabled state) for primary action buttons that trigger resource promotion or major state transitions outside of modals.
