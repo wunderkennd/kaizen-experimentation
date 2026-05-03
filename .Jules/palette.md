@@ -68,3 +68,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-06-20 - Loading Feedback for Resource Updates
 **Learning:** For forms that update resources (like Edit Flag), providing a loading spinner in the "Save" button is as important as in creation or promotion flows. It signals that the system is processing the update and prevents redundant save attempts during network latency.
 **Action:** Always include an `animate-spin` SVG and a "Saving..." state in the submit button of resource edit forms.
+
+## 2026-05-26 - Breadcrumb Navigation and Test Compatibility
+**Learning:** Standardizing navigation to a `Breadcrumb` component provides better spatial awareness and a consistent UI across the platform. However, legacy tests often rely on specific `data-testid="back-link"` identifiers on manual navigation links. Conditionally applying this identifier to the penultimate breadcrumb item (the one leading "back") allows for modernization without breaking existing automation.
+**Action:** Use the `Breadcrumb` component for navigation in detail and form pages. Apply `data-testid="back-link"` to the breadcrumb item at `index === items.length - 2` to maintain compatibility with legacy back-navigation tests.
