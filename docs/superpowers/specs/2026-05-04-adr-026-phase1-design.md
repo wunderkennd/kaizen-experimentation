@@ -79,7 +79,11 @@ message CompositeConfig {
 
 message CompositeOperand {
   string metric_id = 1;
-  // Coefficient; only meaningful when operator = WEIGHTED_SUM. Defaults to 1.0.
+  // Coefficient. Required for WEIGHTED_SUM (must be > 0); ignored for other operators.
+  // Note: proto3 has no custom default mechanism for scalar fields — `double`
+  // unset deserialises to 0.0, not 1.0. WEIGHTED_SUM operands must therefore
+  // set `weight` explicitly; M5 (#433) and the renderer (§3) reject `weight <= 0`
+  // when operator = WEIGHTED_SUM.
   double weight    = 2;
 }
 
@@ -271,8 +275,19 @@ case "FILTERED_MEAN":
     return r.RenderFilteredMean(p)
 
 case "COMPOSITE":
-    if len(p.Operands) == 0                                  { return "", fmt.Errorf("spark: COMPOSITE metric %q requires at least one operand", p.MetricID) }
-    if p.Operator == "" || p.Operator == "UNSPECIFIED"       { return "", fmt.Errorf("spark: COMPOSITE metric %q requires a known operator", p.MetricID) }
+    if len(p.Operands) == 0                            { return "", fmt.Errorf("spark: COMPOSITE metric %q requires at least one operand", p.MetricID) }
+    if p.Operator == "" || p.Operator == "UNSPECIFIED" { return "", fmt.Errorf("spark: COMPOSITE metric %q requires a known operator", p.MetricID) }
+    for i, op := range p.Operands {
+        if op.MetricID == "" {
+            return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] requires non-empty metric_id", p.MetricID, i)
+        }
+        if p.Operator == "WEIGHTED_SUM" && op.Weight <= 0 {
+            // proto3 doubles default to 0.0; "unset" and "explicit zero" are
+            // indistinguishable. Force callers to be explicit so we never silently
+            // multiply an operand by 0 in the rendered SQL.
+            return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] (%s) requires weight > 0 for WEIGHTED_SUM", p.MetricID, i, op.MetricID)
+        }
+    }
     return r.RenderComposite(p)
 
 case "WINDOWED_COUNT":
@@ -309,7 +324,7 @@ This is a thin guard against missing fields that would render invalid SQL. **Ful
 | Type | Renderer-side checks |
 | --- | --- |
 | `FILTERED_MEAN` | `filter_sql` non-empty; `value_column` non-empty |
-| `COMPOSITE` | ≥ 1 operand; each operand has non-empty `metric_id`; operator ≠ `UNSPECIFIED` |
+| `COMPOSITE` | ≥ 1 operand; each operand has non-empty `metric_id`; operator ≠ `UNSPECIFIED`; for `WEIGHTED_SUM` only, every operand has `weight > 0` |
 | `WINDOWED_COUNT` | `event_type` non-empty; `window_hours > 0` |
 
 Anything more than "is this field empty / zero" — column allowlist enforcement, Spark SQL parse check, COMPOSITE cycle detection, event catalog lookup — is M5's responsibility.
