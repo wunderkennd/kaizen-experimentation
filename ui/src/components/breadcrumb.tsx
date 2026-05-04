@@ -19,7 +19,11 @@ export function Breadcrumb({ items }: BreadcrumbProps) {
           <li key={item.label} className="flex items-center">
             {index > 0 && <span className="mx-2" aria-hidden="true">/</span>}
             {item.href ? (
-              <Link href={item.href} className="hover:text-indigo-600">
+              <Link
+                href={item.href}
+                className="hover:text-indigo-600"
+                data-testid={index === items.length - 2 ? 'back-link' : undefined}
+              >
                 {item.label}
               </Link>
             ) : (

@@ -6,12 +6,14 @@ import Link from 'next/link';
 import type { FlagType } from '@/lib/types';
 import { createFlag } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { Breadcrumb } from '@/components/breadcrumb';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
 
 function CreateFlagContent() {
   const router = useRouter();
-  const { canAtLeast } = useAuth();
+  const { canAtLeast, user } = useAuth();
   const canCreate = canAtLeast('experimenter');
 
   const [name, setName] = useState('');
@@ -47,19 +49,30 @@ function CreateFlagContent() {
 
   if (!canCreate) {
     return (
-      <div className="py-12 text-center">
-        <p className="text-sm text-gray-500">You need experimenter permissions to create flags.</p>
+      <div>
+        <Breadcrumb items={[{ label: 'Flags', href: '/flags' }, { label: 'New Flag' }]} />
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-6" data-testid="insufficient-permissions">
+          <h2 className="text-lg font-semibold text-yellow-800">Insufficient Permissions</h2>
+          <p className="mt-2 text-sm text-yellow-700">
+            Creating flags requires the <strong>Experimenter</strong> role.
+            {user && (
+              <> You are currently a <strong>{ROLE_LABELS[user.role]}</strong>.</>
+            )}
+          </p>
+          <Link
+            href="/flags"
+            className="mt-4 inline-block rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-700"
+          >
+            Back to Flags
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-2">
-        <Link href="/flags" className="text-sm text-indigo-600 hover:text-indigo-800">
-          &larr; Back to Flags
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: 'Flags', href: '/flags' }, { label: 'New Flag' }]} />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Create Feature Flag</h1>
 

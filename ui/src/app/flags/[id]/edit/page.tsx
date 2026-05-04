@@ -7,13 +7,15 @@ import type { Flag, FlagType } from '@/lib/types';
 import { getFlag, updateFlag } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
+import { Breadcrumb } from '@/components/breadcrumb';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
 
 function EditFlagContent() {
   const params = useParams();
   const router = useRouter();
-  const { canAtLeast } = useAuth();
+  const { canAtLeast, user } = useAuth();
   const canEdit = canAtLeast('experimenter');
   const flagId = params.id as string;
 
@@ -89,19 +91,30 @@ function EditFlagContent() {
 
   if (!canEdit) {
     return (
-      <div className="py-12 text-center">
-        <p className="text-sm text-gray-500">You need experimenter permissions to edit flags.</p>
+      <div>
+        <Breadcrumb items={[{ label: 'Flags', href: '/flags' }, { label: flag.name, href: `/flags/${flagId}` }, { label: 'Edit' }]} />
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-6" data-testid="insufficient-permissions">
+          <h2 className="text-lg font-semibold text-yellow-800">Insufficient Permissions</h2>
+          <p className="mt-2 text-sm text-yellow-700">
+            Editing flags requires the <strong>Experimenter</strong> role.
+            {user && (
+              <> You are currently a <strong>{ROLE_LABELS[user.role]}</strong>.</>
+            )}
+          </p>
+          <Link
+            href={`/flags/${flagId}`}
+            className="mt-4 inline-block rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-700"
+          >
+            Back to Flag
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-2">
-        <Link href={`/flags/${flagId}`} className="text-sm text-indigo-600 hover:text-indigo-800" data-testid="back-link">
-          &larr; Back to {flag.name}
-        </Link>
-      </div>
+      <Breadcrumb items={[{ label: 'Flags', href: '/flags' }, { label: flag.name, href: `/flags/${flagId}` }, { label: 'Edit' }]} />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Edit Flag</h1>
 
