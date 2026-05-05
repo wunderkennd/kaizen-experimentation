@@ -453,6 +453,38 @@ func TestRenderComposite(t *testing.T) {
 	}
 }
 
+// ADR-026 Phase 1: WINDOWED_COUNT template.
+
+func TestRenderWindowedCount(t *testing.T) {
+	cases := []struct {
+		name        string
+		metricID    string
+		eventType   string
+		filterSQL   string
+		windowHours int32
+		golden      string
+	}{
+		{"with_filter", "movie_starts_24h", "stream_start", "content_type = 'movie'", 24, "windowed_count_with_filter_expected.sql"},
+		{"no_filter", "all_starts_24h", "stream_start", "", 24, "windowed_count_no_filter_expected.sql"},
+		{"1h", "starts_1h", "stream_start", "", 1, "windowed_count_1h_expected.sql"},
+		{"168h", "starts_7d", "stream_start", "", 168, "windowed_count_168h_expected.sql"},
+	}
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = tc.metricID
+			p.EventType = tc.eventType
+			p.FilterSQL = tc.filterSQL
+			p.WindowHours = tc.windowHours
+			sql, err := r.RenderWindowedCount(p)
+			require.NoError(t, err)
+			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
 // ADR-015 Phase 2: MLRATE cross-fitting templates.
 
 func TestRenderMLRATEFeatures(t *testing.T) {
