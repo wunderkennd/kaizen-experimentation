@@ -44,6 +44,12 @@ enum MetricType {
   METRIC_TYPE_PERCENTILE = 5;
   // Custom SQL-defined metric. M3 executes the custom_sql field.
   METRIC_TYPE_CUSTOM = 6;
+  // Mean of value_column over rows matching a Spark SQL filter (ADR-026 Phase 1).
+  METRIC_TYPE_FILTERED_MEAN  = 7;
+  // Composition of other metrics via arithmetic operator (ADR-026 Phase 1).
+  METRIC_TYPE_COMPOSITE      = 8;
+  // Count of an event type within a time window after first exposure (ADR-026 Phase 1).
+  METRIC_TYPE_WINDOWED_COUNT = 9;
 }
 
 // MetricDefinition is the specification for a metric computed by M3.
@@ -81,4 +87,67 @@ message MetricDefinition {
   MetricStakeholder stakeholder = 15;
   // Unit of observation for this metric. Drives M3 computation pipeline selection.
   MetricAggregationLevel aggregation_level = 16;
+
+  // Per-type config for new types (ADR-026 Phase 1). Existing types continue
+  // to use their flat sibling fields; a future ADR may consolidate them here.
+  oneof type_config {
+    FilteredMeanConfig   filtered_mean   = 17;
+    CompositeConfig      composite       = 18;
+    WindowedCountConfig  windowed_count  = 19;
+  }
+}
+
+// FilteredMeanConfig — config for METRIC_TYPE_FILTERED_MEAN. The metric is the
+// AVG of value_column over rows whose event_type matches
+// MetricDefinition.source_event_type AND that pass filter_sql.
+message FilteredMeanConfig {
+  // Spark SQL fragment AND'd into the scan WHERE clause.
+  // Validated in M5 (#433): column allowlist + parse check.
+  // Example: "platform = 'mobile' AND duration_ms > 5000"
+  string filter_sql = 1;
+
+  // Column from source_event_type to AVG over.
+  // Example: "duration_ms"
+  string value_column = 2;
+}
+
+// CompositeConfig — config for METRIC_TYPE_COMPOSITE. The metric is computed
+// from per-user values of other (already-computed) metrics via the operator.
+message CompositeConfig {
+  // Operands referenced by metric_id. Cycle detection lives in M5 (#433).
+  repeated CompositeOperand operands = 1;
+  CompositeOperator         operator = 2;
+}
+
+message CompositeOperand {
+  string metric_id = 1;
+  // Coefficient. Required for WEIGHTED_SUM (must be > 0); ignored for other operators.
+  // Note: proto3 has no custom default mechanism for scalar fields — `double`
+  // unset deserialises to 0.0, not 1.0. WEIGHTED_SUM operands must therefore
+  // set `weight` explicitly; M5 (#433) and the renderer reject `weight <= 0`
+  // when operator = WEIGHTED_SUM.
+  double weight = 2;
+}
+
+enum CompositeOperator {
+  COMPOSITE_OPERATOR_UNSPECIFIED  = 0;
+  COMPOSITE_OPERATOR_ADD          = 1;
+  COMPOSITE_OPERATOR_SUBTRACT     = 2;
+  COMPOSITE_OPERATOR_MULTIPLY     = 3;
+  COMPOSITE_OPERATOR_DIVIDE       = 4;
+  COMPOSITE_OPERATOR_WEIGHTED_SUM = 5;
+}
+
+// WindowedCountConfig — config for METRIC_TYPE_WINDOWED_COUNT. The metric is
+// COUNT of events of event_type whose event_timestamp falls within
+// [exposure_ts, exposure_ts + window_hours) for each exposed user.
+message WindowedCountConfig {
+  // Event type to count. Validated against the event catalog in M5 (#433).
+  string event_type = 1;
+
+  // Optional Spark SQL fragment AND'd into the scan WHERE clause.
+  string filter_sql = 2;
+
+  // Time window relative to the user's first exposure (hours).
+  int32 window_hours = 3;
 }
