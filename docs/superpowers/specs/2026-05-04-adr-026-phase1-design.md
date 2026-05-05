@@ -275,8 +275,18 @@ case "FILTERED_MEAN":
     return r.RenderFilteredMean(p)
 
 case "COMPOSITE":
-    if len(p.Operands) == 0                            { return "", fmt.Errorf("spark: COMPOSITE metric %q requires at least one operand", p.MetricID) }
-    if p.Operator == "" || p.Operator == "UNSPECIFIED" { return "", fmt.Errorf("spark: COMPOSITE metric %q requires a known operator", p.MetricID) }
+    if len(p.Operands) == 0 {
+        return "", fmt.Errorf("spark: COMPOSITE metric %q requires at least one operand", p.MetricID)
+    }
+    // Allow-list, not deny-list: composite.sql.tmpl's if/else-if chain handles
+    // exactly these five operators. A new proto enum value without a matching
+    // template branch must fail loudly here, not produce malformed SQL.
+    switch p.Operator {
+    case "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "WEIGHTED_SUM":
+        // ok
+    default:
+        return "", fmt.Errorf("spark: COMPOSITE metric %q has unrecognized operator %q (supported: ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM)", p.MetricID, p.Operator)
+    }
     for i, op := range p.Operands {
         if op.MetricID == "" {
             return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] requires non-empty metric_id", p.MetricID, i)
