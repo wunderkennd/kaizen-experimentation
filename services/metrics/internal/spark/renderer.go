@@ -155,8 +155,8 @@ func (r *SQLRenderer) RenderFeedbackLoopContamination(p TemplateParams) (string,
 	return r.Render("feedback_loop_contamination.sql.tmpl", p)
 }
 
-// ADR-026 Phase 1 — new metric type renderers.
-// Templates are added in subsequent commits; these stubs wire the surface area.
+// ADR-026 Phase 1 (#432). filtered_mean (Task 3) and composite (Task 4)
+// templates land alongside this file; windowed_count.sql.tmpl ships in Task 5.
 
 func (r *SQLRenderer) RenderFilteredMean(p TemplateParams) (string, error) {
 	return r.Render("filtered_mean.sql.tmpl", p)

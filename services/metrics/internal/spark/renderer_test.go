@@ -419,6 +419,11 @@ func TestRenderComposite(t *testing.T) {
 		{MetricID: "m1", Weight: 0.7},
 		{MetricID: "m2", Weight: 0.3},
 	}
+	threeOperands := []OperandParam{
+		{MetricID: "m1", Weight: 0.5},
+		{MetricID: "m2", Weight: 0.3},
+		{MetricID: "m3", Weight: 0.2},
+	}
 	cases := []struct {
 		name     string
 		operator string
@@ -431,6 +436,7 @@ func TestRenderComposite(t *testing.T) {
 		{"divide", "DIVIDE", twoOperands, "composite_divide_expected.sql"},
 		{"weighted_sum_uniform", "WEIGHTED_SUM", twoOperands, "composite_weighted_sum_uniform_expected.sql"},
 		{"weighted_sum_nonuniform", "WEIGHTED_SUM", nonUniformOperands, "composite_weighted_sum_nonuniform_expected.sql"},
+		{"weighted_sum_three_operands", "WEIGHTED_SUM", threeOperands, "composite_weighted_sum_three_operands_expected.sql"},
 	}
 	r, err := NewSQLRenderer()
 	require.NoError(t, err)
