@@ -378,6 +378,36 @@ func TestRenderQoEEngagementCorrelation_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "STDDEV_SAMP")
 }
 
+// ADR-026 Phase 1: FILTERED_MEAN template.
+
+func TestRenderFilteredMean(t *testing.T) {
+	cases := []struct {
+		name        string
+		metricID    string
+		valueColumn string
+		filterSQL   string
+		golden      string
+	}{
+		{"simple", "mobile_avg_watch_time", "duration_ms", "platform = 'mobile'", "filtered_mean_simple_expected.sql"},
+		{"multi_clause", "mobile_long_watch_avg", "duration_ms", "platform = 'mobile' AND duration_ms > 5000", "filtered_mean_multi_clause_expected.sql"},
+		{"value_column_filter", "long_watches_only_avg", "duration_ms", "duration_ms > 1000", "filtered_mean_value_column_filter_expected.sql"},
+	}
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = tc.metricID
+			p.SourceEventType = "heartbeat"
+			p.ValueColumn = tc.valueColumn
+			p.FilterSQL = tc.filterSQL
+			sql, err := r.RenderFilteredMean(p)
+			require.NoError(t, err)
+			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
 // ADR-015 Phase 2: MLRATE cross-fitting templates.
 
 func TestRenderMLRATEFeatures(t *testing.T) {
