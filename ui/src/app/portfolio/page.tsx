@@ -7,6 +7,7 @@ import { getPortfolioAllocation, getPortfolioMetrics, getParetoFrontier } from '
 import type { PortfolioAllocationResult, PortfolioMetricsResult, ParetoFrontierResult } from '@/lib/types';
 import { ExperimentPortfolioTable } from '@/components/experiment-portfolio-table';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 // Code-split: chart bundles loaded only when page renders
 const BudgetAllocationChart = dynamic(
@@ -121,9 +122,7 @@ export default function PortfolioDashboard() {
   return (
     <div>
       {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm text-gray-500">
-        <span className="text-gray-900 font-medium">Portfolio</span>
-      </nav>
+      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Portfolio' }]} />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

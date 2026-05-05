@@ -6,6 +6,7 @@ import type { MetricDefinition, MetricType } from '@/lib/types';
 import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { CopyButton } from '@/components/copy-button';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const SqlHighlighter = dynamic(
   () => import('@/components/sql-highlighter').then((m) => ({ default: m.SqlHighlighter })),
@@ -248,14 +249,19 @@ function MetricBrowserContent() {
 
   if (metrics.length === 0) {
     return (
-      <div className="py-12 text-center" data-testid="empty-state">
-        <p className="text-sm text-gray-500">No metric definitions found.</p>
+      <div>
+        <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Metrics' }]} />
+        <h1 className="mb-6 text-2xl font-bold text-gray-900">Metric Definitions</h1>
+        <div className="py-12 text-center" data-testid="empty-state">
+          <p className="text-sm text-gray-500">No metric definitions found.</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Metrics' }]} />
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Metric Definitions</h1>
         <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="metric-count">

@@ -6,6 +6,7 @@ import type { Flag, FlagType } from '@/lib/types';
 import { listFlags } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -63,25 +64,30 @@ function FlagListContent() {
 
   if (flags.length === 0) {
     return (
-      <div className="py-12 text-center" data-testid="empty-state">
-        <p className="text-sm text-gray-500">No feature flags found.</p>
-        {canAtLeast('experimenter') && (
-          <div className="mt-6">
-            <Link
-              href="/flags/new"
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-              data-testid="create-first-flag"
-            >
-              Create your first feature flag
-            </Link>
-          </div>
-        )}
+      <div>
+        <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Flags' }]} />
+        <h1 className="mb-6 text-2xl font-bold text-gray-900">Feature Flags</h1>
+        <div className="py-12 text-center" data-testid="empty-state">
+          <p className="text-sm text-gray-500">No feature flags found.</p>
+          {canAtLeast('experimenter') && (
+            <div className="mt-6">
+              <Link
+                href="/flags/new"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                data-testid="create-first-flag"
+              >
+                Create your first feature flag
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Flags' }]} />
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
@@ -157,7 +163,11 @@ function FlagListContent() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filtered.map((f) => (
-                <tr key={f.flagId} className="hover:bg-gray-50" data-testid={`flag-row-${f.flagId}`}>
+                <tr
+                  key={f.flagId}
+                  className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+                  data-testid={`flag-row-${f.flagId}`}
+                >
                   <td className="px-4 py-3">
                     <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
                       {f.name}

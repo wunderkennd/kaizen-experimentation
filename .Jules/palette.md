@@ -72,3 +72,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-06-25 - Defensive Permission Gating
 **Learning:** Components rendering role-based information (like 'Insufficient Permissions' alerts) should wrap access to `user.role` or `ROLE_LABELS` in a conditional check (e.g., `{user && ...}`) to avoid runtime errors before the `AuthUser` object is fully loaded from context. Similarly, ensure data objects like `flag` are present before accessing their properties in breadcrumbs or titles within error states.
 **Action:** Always use optional chaining or conditional rendering when accessing `user` or asynchronous data objects in permission-gated UI blocks.
+
+## 2026-06-26 - Navigation Spatial Awareness with Breadcrumbs
+**Learning:** In a platform with many top-level sections (Flags, Metrics, Monitoring, Portfolio), users can easily lose their "home" context. Standardizing breadcrumbs starting from the root ('Experiments') across all primary list pages significantly improves spatial awareness and provides a consistent path back to the dashboard.
+**Action:** Always include the `Breadcrumb` component on primary list pages, starting with `[{ label: 'Experiments', href: '/' }, ...]`. Ensure the breadcrumb and page heading remain visible even in empty states to maintain structural consistency.
