@@ -53,6 +53,25 @@ type TemplateParams struct {
 	MLRATELookbackDays      int      // days of pre-experiment data for feature computation
 	MLRATEModelURI          string   // MLflow model URI prefix; fold models at {uri}/fold_{k}
 	MLRATEFoldID            int      // current fold ID for per-fold prediction (1-indexed)
+
+	// ADR-026 Phase 1 — FILTERED_MEAN
+	FilterSQL   string // Spark SQL fragment AND'd into the scan WHERE clause
+	ValueColumn string // bare identifier (M5-validated against allowlist) — column to AVG
+
+	// ADR-026 Phase 1 — COMPOSITE
+	Operands []OperandParam
+	Operator string // uppercase: ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM
+
+	// ADR-026 Phase 1 — WINDOWED_COUNT
+	EventType   string // counted event type (named distinctly from SourceEventType)
+	WindowHours int32  // time window after first exposure
+}
+
+// OperandParam represents one operand of a COMPOSITE metric.
+// Weight is meaningful only for WEIGHTED_SUM; ignored otherwise.
+type OperandParam struct {
+	MetricID string
+	Weight   float64
 }
 
 type SQLRenderer struct {
@@ -60,7 +79,14 @@ type SQLRenderer struct {
 }
 
 func NewSQLRenderer() (*SQLRenderer, error) {
-	tmpl, err := template.ParseFS(templateFS, "templates/*.sql.tmpl")
+	funcMap := template.FuncMap{
+		// last reports whether index i is the last element of slice. Used by
+		// composite.sql.tmpl to suppress the trailing comma in the pivot SELECT.
+		"last": func(i int, slice []OperandParam) bool {
+			return i == len(slice)-1
+		},
+	}
+	tmpl, err := template.New("spark").Funcs(funcMap).ParseFS(templateFS, "templates/*.sql.tmpl")
 	if err != nil {
 		return nil, fmt.Errorf("spark: parse templates: %w", err)
 	}
@@ -127,6 +153,21 @@ func (r *SQLRenderer) RenderMLRATECrossFitPredict(p TemplateParams) (string, err
 // Results go to delta.feedback_loop_contamination; consumed by M4a FeedbackLoopDetector.
 func (r *SQLRenderer) RenderFeedbackLoopContamination(p TemplateParams) (string, error) {
 	return r.Render("feedback_loop_contamination.sql.tmpl", p)
+}
+
+// ADR-026 Phase 1 — new metric type renderers.
+// Templates are added in subsequent commits; these stubs wire the surface area.
+
+func (r *SQLRenderer) RenderFilteredMean(p TemplateParams) (string, error) {
+	return r.Render("filtered_mean.sql.tmpl", p)
+}
+
+func (r *SQLRenderer) RenderComposite(p TemplateParams) (string, error) {
+	return r.Render("composite.sql.tmpl", p)
+}
+
+func (r *SQLRenderer) RenderWindowedCount(p TemplateParams) (string, error) {
+	return r.Render("windowed_count.sql.tmpl", p)
 }
 
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
