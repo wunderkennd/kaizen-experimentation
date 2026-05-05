@@ -193,7 +193,52 @@ func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string
 			return "", fmt.Errorf("spark: CUSTOM metric %q: %w", p.MetricID, err)
 		}
 		return r.RenderCustom(p)
+
+	case "FILTERED_MEAN":
+		if p.FilterSQL == "" {
+			return "", fmt.Errorf("spark: FILTERED_MEAN metric %q requires non-empty filter_sql", p.MetricID)
+		}
+		if p.ValueColumn == "" {
+			return "", fmt.Errorf("spark: FILTERED_MEAN metric %q requires non-empty value_column", p.MetricID)
+		}
+		return r.RenderFilteredMean(p)
+
+	case "COMPOSITE":
+		if len(p.Operands) == 0 {
+			return "", fmt.Errorf("spark: COMPOSITE metric %q requires at least one operand", p.MetricID)
+		}
+		// Allow-list, not deny-list: composite.sql.tmpl handles exactly these five
+		// operators. A new proto enum value without a matching template branch must
+		// fail loudly here, not produce malformed SQL.
+		switch p.Operator {
+		case "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "WEIGHTED_SUM":
+			// ok
+		default:
+			return "", fmt.Errorf("spark: COMPOSITE metric %q has unrecognized operator %q (supported: ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM)", p.MetricID, p.Operator)
+		}
+		for i, op := range p.Operands {
+			if op.MetricID == "" {
+				return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] requires non-empty metric_id", p.MetricID, i)
+			}
+			if p.Operator == "WEIGHTED_SUM" && op.Weight <= 0 {
+				// proto3 doubles default to 0.0; "unset" and "explicit zero" are
+				// indistinguishable. Force callers to be explicit so we never
+				// silently multiply an operand by 0 in the rendered SQL.
+				return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] (%s) requires weight > 0 for WEIGHTED_SUM", p.MetricID, i, op.MetricID)
+			}
+		}
+		return r.RenderComposite(p)
+
+	case "WINDOWED_COUNT":
+		if p.EventType == "" {
+			return "", fmt.Errorf("spark: WINDOWED_COUNT metric %q requires non-empty event_type", p.MetricID)
+		}
+		if p.WindowHours <= 0 {
+			return "", fmt.Errorf("spark: WINDOWED_COUNT metric %q requires window_hours > 0", p.MetricID)
+		}
+		return r.RenderWindowedCount(p)
+
 	default:
-		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM)", metricType)
+		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM, FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT)", metricType)
 	}
 }

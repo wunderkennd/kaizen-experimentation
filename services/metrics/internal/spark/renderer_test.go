@@ -89,9 +89,17 @@ func TestRenderForType(t *testing.T) {
 	p.SourceEventType = "test_event"
 	p.NumeratorEventType = "num_event"
 	p.DenominatorEventType = "denom_event"
+	// ADR-026 Phase 1 fixture
+	p.FilterSQL = "1=1"
+	p.ValueColumn = "value"
+	p.Operands = []OperandParam{{MetricID: "m1", Weight: 1.0}}
+	p.Operator = "ADD"
+	p.EventType = "stream_start"
+	p.WindowHours = 24
 	for _, tc := range []struct{ mt string; wantErr bool }{
 		{"MEAN", false}, {"PROPORTION", false}, {"COUNT", false}, {"RATIO", false},
 		{"mean", false}, {"ratio", false}, {"CUSTOM", true}, {"INVALID", true},
+		{"FILTERED_MEAN", false}, {"COMPOSITE", false}, {"WINDOWED_COUNT", false},
 	} {
 		t.Run(tc.mt, func(t *testing.T) {
 			_, err := r.RenderForType(tc.mt, p)
@@ -481,6 +489,105 @@ func TestRenderWindowedCount(t *testing.T) {
 			sql, err := r.RenderWindowedCount(p)
 			require.NoError(t, err)
 			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
+func TestRenderForType_NewTypes_Validation(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	cases := []struct {
+		name             string
+		metricType       string
+		params           func(p *TemplateParams)
+		wantErrSubstring string
+	}{
+		{
+			"filtered_mean_empty_filter",
+			"FILTERED_MEAN",
+			func(p *TemplateParams) { p.ValueColumn = "duration_ms"; p.SourceEventType = "heartbeat" },
+			"non-empty filter_sql",
+		},
+		{
+			"filtered_mean_empty_value_column",
+			"FILTERED_MEAN",
+			func(p *TemplateParams) { p.FilterSQL = "1=1"; p.SourceEventType = "heartbeat" },
+			"non-empty value_column",
+		},
+		{
+			"composite_no_operands",
+			"COMPOSITE",
+			func(p *TemplateParams) { p.Operator = "ADD" },
+			"at least one operand",
+		},
+		{
+			"composite_unknown_operator",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: 1}}
+				p.Operator = "POWER"
+			},
+			"unrecognized operator",
+		},
+		{
+			"composite_unspecified_operator",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: 1}}
+				p.Operator = "UNSPECIFIED"
+			},
+			"unrecognized operator",
+		},
+		{
+			"composite_empty_metric_id",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "", Weight: 1}}
+				p.Operator = "ADD"
+			},
+			"non-empty metric_id",
+		},
+		{
+			"composite_weighted_sum_zero_weight",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: 0}}
+				p.Operator = "WEIGHTED_SUM"
+			},
+			"weight > 0",
+		},
+		{
+			"composite_weighted_sum_negative_weight",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: -1}}
+				p.Operator = "WEIGHTED_SUM"
+			},
+			"weight > 0",
+		},
+		{
+			"windowed_count_empty_event_type",
+			"WINDOWED_COUNT",
+			func(p *TemplateParams) { p.WindowHours = 24 },
+			"non-empty event_type",
+		},
+		{
+			"windowed_count_zero_window",
+			"WINDOWED_COUNT",
+			func(p *TemplateParams) { p.EventType = "stream_start"; p.WindowHours = 0 },
+			"window_hours > 0",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = "test_metric"
+			tc.params(&p)
+			_, err := r.RenderForType(tc.metricType, p)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErrSubstring)
 		})
 	}
 }
