@@ -45,9 +45,9 @@ enum MetricType {
   // Custom SQL-defined metric. M3 executes the custom_sql field.
   METRIC_TYPE_CUSTOM = 6;
   // Mean of value_column over rows matching a Spark SQL filter (ADR-026 Phase 1).
-  METRIC_TYPE_FILTERED_MEAN  = 7;
+  METRIC_TYPE_FILTERED_MEAN = 7;
   // Composition of other metrics via arithmetic operator (ADR-026 Phase 1).
-  METRIC_TYPE_COMPOSITE      = 8;
+  METRIC_TYPE_COMPOSITE = 8;
   // Count of an event type within a time window after first exposure (ADR-026 Phase 1).
   METRIC_TYPE_WINDOWED_COUNT = 9;
 }
@@ -91,9 +91,9 @@ message MetricDefinition {
   // Per-type config for new types (ADR-026 Phase 1). Existing types continue
   // to use their flat sibling fields; a future ADR may consolidate them here.
   oneof type_config {
-    FilteredMeanConfig   filtered_mean   = 17;
-    CompositeConfig      composite       = 18;
-    WindowedCountConfig  windowed_count  = 19;
+    FilteredMeanConfig filtered_mean = 17;
+    CompositeConfig composite = 18;
+    WindowedCountConfig windowed_count = 19;
   }
 }
 
@@ -107,16 +107,24 @@ message FilteredMeanConfig {
   string filter_sql = 1;
 
   // Column from source_event_type to AVG over.
+  // Must be a numeric column in the source_event_type schema. Validated in M5 (#433).
   // Example: "duration_ms"
   string value_column = 2;
 }
 
 // CompositeConfig — config for METRIC_TYPE_COMPOSITE. The metric is computed
 // from per-user values of other (already-computed) metrics via the operator.
+//
+// Operand arity rules (enforced by M5 #433):
+//   ADD, MULTIPLY, WEIGHTED_SUM:    >= 2 operands, evaluated left-to-right
+//   SUBTRACT, DIVIDE:               exactly 2 operands (operands[0] op operands[1])
+//   UNSPECIFIED:                    invalid
+// Cycle detection over metric_id references also lives in M5.
 message CompositeConfig {
   // Operands referenced by metric_id. Cycle detection lives in M5 (#433).
   repeated CompositeOperand operands = 1;
-  CompositeOperator         operator = 2;
+  // Arithmetic operator applied to operands. See operand arity rules above.
+  CompositeOperator operator = 2;
 }
 
 message CompositeOperand {
@@ -130,11 +138,12 @@ message CompositeOperand {
 }
 
 enum CompositeOperator {
-  COMPOSITE_OPERATOR_UNSPECIFIED  = 0;
-  COMPOSITE_OPERATOR_ADD          = 1;
-  COMPOSITE_OPERATOR_SUBTRACT     = 2;
-  COMPOSITE_OPERATOR_MULTIPLY     = 3;
-  COMPOSITE_OPERATOR_DIVIDE       = 4;
+  COMPOSITE_OPERATOR_UNSPECIFIED = 0;
+  COMPOSITE_OPERATOR_ADD = 1;
+  COMPOSITE_OPERATOR_SUBTRACT = 2;
+  COMPOSITE_OPERATOR_MULTIPLY = 3;
+  COMPOSITE_OPERATOR_DIVIDE = 4;
+  // Linear combination: sum(operand_i * weight_i). Use ADD when all weights are 1.0.
   COMPOSITE_OPERATOR_WEIGHTED_SUM = 5;
 }
 
@@ -146,8 +155,10 @@ message WindowedCountConfig {
   string event_type = 1;
 
   // Optional Spark SQL fragment AND'd into the scan WHERE clause.
+  // Validated in M5 (#433): column allowlist + parse check.
   string filter_sql = 2;
 
   // Time window relative to the user's first exposure (hours).
+  // Must be > 0; M5 (#433) rejects window_hours <= 0.
   int32 window_hours = 3;
 }
