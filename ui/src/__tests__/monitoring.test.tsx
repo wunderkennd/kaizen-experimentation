@@ -25,7 +25,7 @@ vi.mock('next/link', () => ({
 async function renderAndWait() {
   render(<MonitoringPage />);
   await waitFor(() => {
-    expect(screen.getByText('Monitoring')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Monitoring', level: 1 })).toBeInTheDocument();
     expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
   });
 }
