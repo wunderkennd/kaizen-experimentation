@@ -408,6 +408,45 @@ func TestRenderFilteredMean(t *testing.T) {
 	}
 }
 
+// ADR-026 Phase 1: COMPOSITE template.
+
+func TestRenderComposite(t *testing.T) {
+	twoOperands := []OperandParam{
+		{MetricID: "m1", Weight: 1.0},
+		{MetricID: "m2", Weight: 1.0},
+	}
+	nonUniformOperands := []OperandParam{
+		{MetricID: "m1", Weight: 0.7},
+		{MetricID: "m2", Weight: 0.3},
+	}
+	cases := []struct {
+		name     string
+		operator string
+		operands []OperandParam
+		golden   string
+	}{
+		{"add", "ADD", twoOperands, "composite_add_expected.sql"},
+		{"subtract", "SUBTRACT", twoOperands, "composite_subtract_expected.sql"},
+		{"multiply", "MULTIPLY", twoOperands, "composite_multiply_expected.sql"},
+		{"divide", "DIVIDE", twoOperands, "composite_divide_expected.sql"},
+		{"weighted_sum_uniform", "WEIGHTED_SUM", twoOperands, "composite_weighted_sum_uniform_expected.sql"},
+		{"weighted_sum_nonuniform", "WEIGHTED_SUM", nonUniformOperands, "composite_weighted_sum_nonuniform_expected.sql"},
+	}
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = "composite_metric"
+			p.Operands = tc.operands
+			p.Operator = tc.operator
+			sql, err := r.RenderComposite(p)
+			require.NoError(t, err)
+			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
 // ADR-015 Phase 2: MLRATE cross-fitting templates.
 
 func TestRenderMLRATEFeatures(t *testing.T) {

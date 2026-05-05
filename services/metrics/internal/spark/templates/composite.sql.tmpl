@@ -1,0 +1,36 @@
+WITH operand_rows AS (
+    SELECT user_id, variant_id, metric_id, metric_value
+    FROM delta.metric_summaries
+    WHERE experiment_id = '{{.ExperimentID}}'
+      AND computation_date = CAST('{{.ComputationDate}}' AS DATE)
+      AND metric_id IN ({{range $i, $op := .Operands}}{{if $i}}, {{end}}'{{$op.MetricID}}'{{end}})
+),
+pivoted AS (
+    SELECT
+        user_id,
+        variant_id,
+        {{- range $i, $op := .Operands}}
+        MAX(CASE WHEN metric_id = '{{$op.MetricID}}' THEN metric_value END) AS m{{$i}}{{if not (last $i $.Operands)}},{{end}}
+        {{- end}}
+    FROM operand_rows
+    GROUP BY user_id, variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    user_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    {{- if eq .Operator "ADD"}}
+    ({{range $i, $op := .Operands}}{{if $i}} + {{end}}m{{$i}}{{end}}) AS metric_value,
+    {{- else if eq .Operator "SUBTRACT"}}
+    ({{range $i, $op := .Operands}}{{if $i}} - {{end}}m{{$i}}{{end}}) AS metric_value,
+    {{- else if eq .Operator "MULTIPLY"}}
+    ({{range $i, $op := .Operands}}{{if $i}} * {{end}}m{{$i}}{{end}}) AS metric_value,
+    {{- else if eq .Operator "DIVIDE"}}
+    ({{range $i, $op := .Operands}}{{if $i}} / NULLIF(m{{$i}}, 0){{else}}m{{$i}}{{end}}{{end}}) AS metric_value,
+    {{- else if eq .Operator "WEIGHTED_SUM"}}
+    ({{range $i, $op := .Operands}}{{if $i}} + {{end}}({{$op.Weight}} * m{{$i}}){{end}}) AS metric_value,
+    {{- end}}
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    1.0 AS assignment_probability
+FROM pivoted;
