@@ -53,6 +53,25 @@ type TemplateParams struct {
 	MLRATELookbackDays      int      // days of pre-experiment data for feature computation
 	MLRATEModelURI          string   // MLflow model URI prefix; fold models at {uri}/fold_{k}
 	MLRATEFoldID            int      // current fold ID for per-fold prediction (1-indexed)
+
+	// ADR-026 Phase 1 — FILTERED_MEAN
+	FilterSQL   string // Spark SQL fragment AND'd into the scan WHERE clause
+	ValueColumn string // bare identifier (M5-validated against allowlist) — column to AVG
+
+	// ADR-026 Phase 1 — COMPOSITE
+	Operands []OperandParam
+	Operator string // uppercase: ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM
+
+	// ADR-026 Phase 1 — WINDOWED_COUNT
+	EventType   string // counted event type (named distinctly from SourceEventType)
+	WindowHours int32  // time window after first exposure
+}
+
+// OperandParam represents one operand of a COMPOSITE metric.
+// Weight is meaningful only for WEIGHTED_SUM; ignored otherwise.
+type OperandParam struct {
+	MetricID string
+	Weight   float64
 }
 
 type SQLRenderer struct {
@@ -60,7 +79,14 @@ type SQLRenderer struct {
 }
 
 func NewSQLRenderer() (*SQLRenderer, error) {
-	tmpl, err := template.ParseFS(templateFS, "templates/*.sql.tmpl")
+	funcMap := template.FuncMap{
+		// last reports whether index i is the last element of slice. Used by
+		// composite.sql.tmpl to suppress the trailing comma in the pivot SELECT.
+		"last": func(i int, slice []OperandParam) bool {
+			return i == len(slice)-1
+		},
+	}
+	tmpl, err := template.New("spark").Funcs(funcMap).ParseFS(templateFS, "templates/*.sql.tmpl")
 	if err != nil {
 		return nil, fmt.Errorf("spark: parse templates: %w", err)
 	}
@@ -129,6 +155,21 @@ func (r *SQLRenderer) RenderFeedbackLoopContamination(p TemplateParams) (string,
 	return r.Render("feedback_loop_contamination.sql.tmpl", p)
 }
 
+// ADR-026 Phase 1 (#432). filtered_mean (Task 3) and composite (Task 4)
+// templates land alongside this file; windowed_count.sql.tmpl ships in Task 5.
+
+func (r *SQLRenderer) RenderFilteredMean(p TemplateParams) (string, error) {
+	return r.Render("filtered_mean.sql.tmpl", p)
+}
+
+func (r *SQLRenderer) RenderComposite(p TemplateParams) (string, error) {
+	return r.Render("composite.sql.tmpl", p)
+}
+
+func (r *SQLRenderer) RenderWindowedCount(p TemplateParams) (string, error) {
+	return r.Render("windowed_count.sql.tmpl", p)
+}
+
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
 	switch strings.ToUpper(metricType) {
 	case "MEAN":
@@ -152,7 +193,52 @@ func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string
 			return "", fmt.Errorf("spark: CUSTOM metric %q: %w", p.MetricID, err)
 		}
 		return r.RenderCustom(p)
+
+	case "FILTERED_MEAN":
+		if p.FilterSQL == "" {
+			return "", fmt.Errorf("spark: FILTERED_MEAN metric %q requires non-empty filter_sql", p.MetricID)
+		}
+		if p.ValueColumn == "" {
+			return "", fmt.Errorf("spark: FILTERED_MEAN metric %q requires non-empty value_column", p.MetricID)
+		}
+		return r.RenderFilteredMean(p)
+
+	case "COMPOSITE":
+		if len(p.Operands) == 0 {
+			return "", fmt.Errorf("spark: COMPOSITE metric %q requires at least one operand", p.MetricID)
+		}
+		// Allow-list, not deny-list: composite.sql.tmpl handles exactly these five
+		// operators. A new proto enum value without a matching template branch must
+		// fail loudly here, not produce malformed SQL.
+		switch p.Operator {
+		case "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "WEIGHTED_SUM":
+			// ok
+		default:
+			return "", fmt.Errorf("spark: COMPOSITE metric %q has unrecognized operator %q (supported: ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM)", p.MetricID, p.Operator)
+		}
+		for i, op := range p.Operands {
+			if op.MetricID == "" {
+				return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] requires non-empty metric_id", p.MetricID, i)
+			}
+			if p.Operator == "WEIGHTED_SUM" && op.Weight <= 0 {
+				// proto3 doubles default to 0.0; "unset" and "explicit zero" are
+				// indistinguishable. Force callers to be explicit so we never
+				// silently multiply an operand by 0 in the rendered SQL.
+				return "", fmt.Errorf("spark: COMPOSITE metric %q operand[%d] (%s) requires weight > 0 for WEIGHTED_SUM", p.MetricID, i, op.MetricID)
+			}
+		}
+		return r.RenderComposite(p)
+
+	case "WINDOWED_COUNT":
+		if p.EventType == "" {
+			return "", fmt.Errorf("spark: WINDOWED_COUNT metric %q requires non-empty event_type", p.MetricID)
+		}
+		if p.WindowHours <= 0 {
+			return "", fmt.Errorf("spark: WINDOWED_COUNT metric %q requires window_hours > 0", p.MetricID)
+		}
+		return r.RenderWindowedCount(p)
+
 	default:
-		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM)", metricType)
+		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM, FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT)", metricType)
 	}
 }
