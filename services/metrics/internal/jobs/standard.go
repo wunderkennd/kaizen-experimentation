@@ -91,7 +91,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		} else {
 			rendered, err := j.renderer.RenderForType(m.Type, params)
 			if err != nil {
-				slog.Warn("skipping unsupported metric type",
+				slog.Warn("skipping metric: render error",
 					"metric_id", m.MetricID, "type", m.Type, "error", err)
 				continue
 			}
