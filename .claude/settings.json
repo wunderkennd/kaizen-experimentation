@@ -92,7 +92,7 @@
       "Bash(npm i *)"
     ]
   },
-  "model": "claude-3-7-opus",
+  "model": "claude-4-7-opus[1M]",
   "enabledPlugins": {
     "everything-claude-code@everything-claude-code": true,
     "context7@claude-plugins-official": true,
