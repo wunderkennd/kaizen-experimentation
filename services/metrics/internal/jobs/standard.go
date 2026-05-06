@@ -75,6 +75,13 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			DenominatorEventType: m.DenominatorEventType,
 			CustomSQL:            m.CustomSQL,
 			Percentile:           m.Percentile,
+			// ADR-026 Phase 1
+			FilterSQL:   m.FilterSQL,
+			ValueColumn: m.ValueColumn,
+			Operator:    m.Operator,
+			EventType:   m.EventType,
+			WindowHours: m.WindowHours,
+			Operands:    toSparkOperands(m.Operands),
 		}
 
 		// QoE metrics use a separate template reading from delta.qoe_events.
@@ -394,4 +401,21 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		UsersProcessed:  int(totalRows),
 		CompletedAt:     time.Now(),
 	}, nil
+}
+
+// toSparkOperands converts config-layer OperandConfig values to the
+// spark.OperandParam shape consumed by the renderer's composite template.
+// Returns nil for an empty/nil input (matches Go's zero-value convention).
+func toSparkOperands(in []config.OperandConfig) []spark.OperandParam {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]spark.OperandParam, len(in))
+	for i, op := range in {
+		out[i] = spark.OperandParam{
+			MetricID: op.MetricID,
+			Weight:   op.Weight,
+		}
+	}
+	return out
 }

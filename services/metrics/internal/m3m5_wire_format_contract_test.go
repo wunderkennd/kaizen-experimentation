@@ -200,6 +200,13 @@ func TestM3M5_MetricConfig_FieldCompleteness(t *testing.T) {
 		"mlrate_feature_event_types": "mlrateConfig.featureEventTypes",
 		"mlrate_model_uri":           "mlrateConfig.modelUri",
 		"mlrate_lookback_days":       "mlrateConfig.lookbackDays",
+		// ADR-026 Phase 1 — new-type fields map to protojson oneof type_config branches.
+		"filter_sql":   "filteredMean.filterSql",   // FilteredMeanConfig.filter_sql
+		"value_column": "filteredMean.valueColumn", // FilteredMeanConfig.value_column
+		"operands":     "composite.operands",        // CompositeConfig.operands
+		"operator":     "composite.operator",        // CompositeConfig.operator
+		"event_type":   "windowedCount.eventType",  // WindowedCountConfig.event_type
+		"window_hours": "windowedCount.windowHours", // WindowedCountConfig.window_hours
 	}
 
 	m3Tags := extractJSONTags(reflect.TypeOf(config.MetricConfig{}))
