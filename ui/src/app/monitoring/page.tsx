@@ -7,6 +7,7 @@ import { MonitoringSummaryCards } from '@/components/monitoring-summary-cards';
 import { MonitoringHealthTable } from '@/components/monitoring-health-table';
 import { MonitoringBreachList } from '@/components/monitoring-breach-list';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const AUTO_REFRESH_INTERVAL_MS = 30_000;
 
@@ -116,6 +117,11 @@ export default function MonitoringPage() {
 
   return (
     <div>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Monitoring' },
+      ]} />
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Monitoring</h1>
         <div className="flex items-center gap-4">
