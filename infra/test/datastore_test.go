@@ -12,11 +12,11 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/kaizen-experimentation/infra/pkg/cache"
+	"github.com/kaizen-experimentation/infra/pkg/aws/cache"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
-	"github.com/kaizen-experimentation/infra/pkg/database"
-	"github.com/kaizen-experimentation/infra/pkg/secrets"
-	"github.com/kaizen-experimentation/infra/pkg/storage"
+	"github.com/kaizen-experimentation/infra/pkg/aws/database"
+	"github.com/kaizen-experimentation/infra/pkg/aws/secrets"
+	"github.com/kaizen-experimentation/infra/pkg/aws/storage"
 )
 
 // ---------------------------------------------------------------------------
