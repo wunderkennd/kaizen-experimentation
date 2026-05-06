@@ -1,11 +1,15 @@
 # ADR-026 Phase 1 — Design Spec
 
-- **Date:** 2026-05-04
-- **Status:** Approved
+- **Date:** 2026-05-04 (errata 2026-05-06)
+- **Status:** Approved (with erratum)
 - **Author:** Kenneth Sylvain + Claude Code
 - **Implements:** [Issue #432](https://github.com/wunderkennd/kaizen-experimentation/issues/432) (proto + M3 templates + renderer)
 - **Downstream consumers:** [#433](https://github.com/wunderkennd/kaizen-experimentation/issues/433) (M5 validation), [#434](https://github.com/wunderkennd/kaizen-experimentation/issues/434) (M6 UI)
 - **Parent ADR:** [ADR-026 Phase 1](../../adrs/026-custom-metrics-layer.md)
+
+## Erratum (2026-05-06)
+
+The original draft of this spec referenced a non-existent column `delta.exposures.exposure_timestamp` in the `windowed_count.sql.tmpl` template literal and supporting prose. The actual schema column is `event_timestamp` (`delta/delta_lake_tables.sql:14-29`; the table is even partitioned on this column). All affected lines have been corrected to `event_timestamp` to match reality. The implementation in PR #497 was correct against the schema; this erratum aligns the spec with what shipped. No design decisions changed — only the column name in the worked SQL example.
 
 ## Context
 
@@ -219,12 +223,12 @@ This is real additional scope outside #432's "proto + templates + golden files" 
 
 #### `windowed_count.sql.tmpl`
 
-Custom CTEs because it needs `event_timestamp` and `exposure_timestamp`, which the existing `exposure_join` template doesn't expose:
+Custom CTEs because it needs `event_timestamp` from both `delta.exposures` (anchor) and `delta.metric_events` (counted-event time), which the existing `exposure_join` template doesn't expose:
 
 ```sql
 WITH exposed_users AS (
     SELECT user_id, variant_id,
-           MIN(exposure_timestamp) AS exposure_ts,
+           MIN(event_timestamp) AS exposure_ts,
            MIN(assignment_probability) AS assignment_probability
     FROM delta.exposures
     WHERE experiment_id = '{{.ExperimentID}}'
@@ -253,8 +257,8 @@ GROUP BY eu.user_id, eu.variant_id, eu.assignment_probability;
 ```
 
 - Half-open interval `[exposure_ts, exposure_ts + window)` matches industry convention.
-- `MIN(exposure_timestamp)` anchors to the user's first exposure (a user can be exposed multiple times; first wins).
-- Schema dependency: assumes `delta.exposures` has an `exposure_timestamp` column. Implementation must verify against the actual Delta Lake schema before the template ships.
+- `MIN(event_timestamp)` anchors to the user's first exposure (a user can be exposed multiple times; first wins). The alias `exposure_ts` makes the semantic role clear locally even though the underlying column is `event_timestamp`.
+- Schema confirmed (post-implementation): `delta.exposures.event_timestamp` exists per `delta/delta_lake_tables.sql:25` (column the table is also partitioned on). The implementation in PR #497 uses this column verbatim.
 
 ### 3. Renderer plumbing
 
