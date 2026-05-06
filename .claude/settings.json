@@ -1,5 +1,4 @@
 {
-  "model": "claude-3-7-sonnet-latest",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_EFFORT_LEVEL": "max",
@@ -61,19 +60,6 @@
       "Bash(diff *)",
       "Bash(mkdir -p *)"
     ],
-    "ask": [
-      "Bash(git push*)",
-      "Bash(git reset*)",
-      "Bash(git rebase*)",
-      "Bash(git merge*)",
-      "Bash(git checkout*)",
-      "Bash(git clean*)",
-      "Bash(cargo publish*)",
-      "Bash(cargo install*)",
-      "Bash(npm publish*)",
-      "Bash(npm install*)",
-      "Bash(npm i *)"
-    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)",
@@ -91,10 +77,26 @@
       "Bash(git push -f*)",
       "Bash(git reset --hard*)",
       "Bash(git clean -fdx*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git reset*)",
+      "Bash(git rebase*)",
+      "Bash(git merge*)",
+      "Bash(git checkout*)",
+      "Bash(git clean*)",
+      "Bash(cargo publish*)",
+      "Bash(cargo install*)",
+      "Bash(npm publish*)",
+      "Bash(npm install*)",
+      "Bash(npm i *)"
     ]
   },
+  "model": "claude-3-7-opus",
   "enabledPlugins": {
     "everything-claude-code@everything-claude-code": true,
-    "context7@claude-plugins-official": true
+    "context7@claude-plugins-official": true,
+    "deploy-on-aws@claude-plugins-official": true,
+    "sagemaker-ai@claude-plugins-official": true
   }
 }
