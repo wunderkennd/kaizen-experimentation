@@ -74,6 +74,30 @@ type MetricConfig struct {
 	MLRATEFeatureEventTypes []string `json:"mlrate_feature_event_types,omitempty"` // pre-experiment event types as LightGBM features
 	MLRATEModelURI          string   `json:"mlrate_model_uri,omitempty"`           // MLflow model URI prefix (fold models at {uri}/fold_{k})
 	MLRATELookbackDays      int      `json:"mlrate_lookback_days,omitempty"`       // days of pre-experiment data for features (default 14)
+
+	// ADR-026 Phase 1 — FILTERED_MEAN
+	FilterSQL   string `json:"filter_sql,omitempty"`
+	ValueColumn string `json:"value_column,omitempty"`
+
+	// ADR-026 Phase 1 — COMPOSITE
+	Operands []OperandConfig `json:"operands,omitempty"`
+	Operator string          `json:"operator,omitempty"` // ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM
+
+	// ADR-026 Phase 1 — WINDOWED_COUNT
+	EventType   string `json:"event_type,omitempty"`   // distinct from SourceEventType
+	WindowHours int32  `json:"window_hours,omitempty"`
+}
+
+// OperandConfig is the config-layer representation of one operand of a
+// COMPOSITE metric. Mirrors the proto CompositeOperand fields (ADR-026 Phase 1).
+//
+// Weight is meaningful only for WEIGHTED_SUM operator; ignored otherwise.
+// Note: encoding/json deserialises a missing or null number to 0.0, so
+// WEIGHTED_SUM operands MUST set weight explicitly. The renderer's
+// RenderForType arm rejects weight <= 0 for WEIGHTED_SUM.
+type OperandConfig struct {
+	MetricID string  `json:"metric_id"`
+	Weight   float64 `json:"weight"`
 }
 
 type seedFile struct {
