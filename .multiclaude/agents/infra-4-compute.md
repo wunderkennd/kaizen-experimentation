@@ -80,6 +80,16 @@ type ComputeOutputs struct {
 - Consumes: `NetworkOutputs` (Infra-1), `DatabaseOutputs` + `SecretsOutputs` (Infra-2), `StreamingOutputs` (Infra-3)
 - Consumed by: Infra-5 (ALB target groups reference ECS services)
 
+## Multi-Cloud Responsibility (Sprint I.3 onward)
+
+You own compute on **both AWS and GCP**. Existing ECS/EC2 code lives at `infra/pkg/aws/compute.go` after the Phase 0 refactor (#477). New GCP code lives at `infra/pkg/gcp/compute.go`:
+
+- **Cloud Run service template** (`NewCloudRunService(...)`) — analogue of the Fargate task-def builder. Wires VPC connector, Workload Identity service account, Service Directory registration, secret injection.
+- **Per-service deploys** for all 8 stateless services. M1 and M7 must set `min-instances: 1` to hold the p99 < 5ms SLA against cold starts.
+- **M4b on GCE**: n2-standard-4, 50GB pd-ssd persistent disk, MIG of size 1 with autohealing. Same RocksDB / LMAX invariants as the AWS path; recovery target < 10s.
+
+Both providers return `types.ComputeOutputs` (`ClusterId`, `ServiceEndpoints` map, `M4bInstanceId`, `M4bEndpoint`). Topology tests assert every Cloud Run service has the expected Workload Identity binding (per spec gap mitigation #2).
+
 ## Work Tracking
 
 ```bash

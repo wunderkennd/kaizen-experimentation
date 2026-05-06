@@ -65,6 +65,15 @@ Directories: `infra/pkg/loadbalancer/`, `infra/pkg/dns/`, `infra/pkg/observabili
 - Consumes: `NetworkOutputs` (Infra-1), `ComputeOutputs` (Infra-4)
 - Consumed by: None (terminal in dependency graph)
 
+## Multi-Cloud Responsibility (Sprint I.3 onward)
+
+You own edge + observability on **both AWS and GCP**. Existing ALB/Route53/ACM/WAF/CloudWatch/AMP/AMG code lives at `infra/pkg/aws/{edge,observability}.go` after the Phase 0 refactor (#477). New GCP code lives at `infra/pkg/gcp/{edge,observability}.go`:
+
+- `gcp/edge.go` — Cloud Load Balancing (global external HTTPS) with serverless NEG backends to Cloud Run, Cloud DNS, Google-managed certs, Cloud Armor (WAF parity).
+- `gcp/observability.go` — Cloud Logging sinks, Cloud Monitoring alert policies (parity with CloudWatch alarms), Managed Service for Prometheus collectors. Grafana Cloud dashboards from `infra/dashboards/` are reused — same dashboards, GCP data source.
+
+Both providers return `types.EdgeOutputs` (`LoadBalancerDns`, `CertificateRef`, `HostedZoneId`). The alert policy inventory must match AWS CloudWatch's at parity audit time (#503).
+
 ## Work Tracking
 
 ```bash

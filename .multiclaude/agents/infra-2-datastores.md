@@ -65,6 +65,17 @@ type StorageOutputs struct {
 - Consumes: `NetworkOutputs` from Infra-1 (VPC, subnets, security groups)
 - Consumed by: Infra-4 (ECS services reference RDS/Redis/S3/Secrets outputs)
 
+## Multi-Cloud Responsibility (Sprint I.3 onward)
+
+You own data stores, secrets, and storage on **both AWS and GCP**. Existing AWS code lives at `infra/pkg/aws/{database,cache,storage,secrets}.go` after the Phase 0 refactor (#477). New GCP code lives at `infra/pkg/gcp/{database,cache,storage,secrets}.go`:
+
+- `gcp/database.go` — Cloud SQL PostgreSQL (parity with RDS)
+- `gcp/cache.go` — Memorystore Redis (parity with ElastiCache)
+- `gcp/storage.go` — Cloud Storage buckets (parity with S3); `BucketRef` populated as `gs://...`
+- `gcp/secrets.go` — Secret Manager (parity with Secrets Manager); `SecretRef` populated as `projects/*/secrets/*` paths
+
+All four return their respective shared structs from `infra/pkg/types/` (`DatabaseOutputs`, `CacheOutputs`, `StorageOutputs`, `SecretsOutputs`). Topology tests are parameterized over `cloudProvider` and assert that every secret referenced by compute is created by this module in the same run.
+
 ## Work Tracking
 
 ```bash

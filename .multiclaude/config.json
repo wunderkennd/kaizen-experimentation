@@ -20,7 +20,8 @@
     "required_checks": [
       "cd infra && go build ./...",
       "cd infra && go vet ./...",
-      "cd infra && go test ./..."
+      "cd infra && go test ./...",
+      "cargo test -p experimentation-ingest -p experimentation-pipeline"
     ]
   }
 }
