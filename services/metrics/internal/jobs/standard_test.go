@@ -430,3 +430,67 @@ func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 			"Query should reference delta.exposures or delta.metric_summaries")
 	}
 }
+
+func TestStandardJob_Run_ADR026Phase1_NewTypes(t *testing.T) {
+	cfgStore, err := config.LoadFromFile("../config/testdata/seed_adr026_phase1.json")
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(123)
+	qlWriter := querylog.NewMemWriter()
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter)
+
+	ctx := context.Background()
+	result, err := job.Run(ctx, "e0000000-0000-0000-0000-0000000adr26")
+	require.NoError(t, err)
+	assert.Equal(t, 3, result.MetricsComputed,
+		"all 3 new-type metrics should compute successfully (no slog.Warn skip)")
+
+	calls := executor.GetCalls()
+	require.GreaterOrEqual(t, len(calls), 3, "executor should receive >= 3 SQL calls (one per metric, plus any post-processing)")
+
+	// Each metric's primary SQL must contain its type-distinctive identifier.
+	// Use the first executor call per metric_id from the query log.
+	entries := qlWriter.AllEntries()
+	sqlByMetric := make(map[string]string, 3)
+	for _, e := range entries {
+		if e.JobType == "daily_metric" {
+			sqlByMetric[e.MetricID] = e.SQLText
+		}
+	}
+
+	t.Run("filtered_mean SQL", func(t *testing.T) {
+		sql, ok := sqlByMetric["mobile_avg_watch_time"]
+		require.True(t, ok, "FILTERED_MEAN metric must have produced SQL")
+		assert.Contains(t, sql, "filtered_data",
+			"FILTERED_MEAN template must produce a `filtered_data` CTE")
+		assert.Contains(t, sql, "platform = 'mobile'",
+			"FILTERED_MEAN SQL must inline the configured filter_sql")
+		assert.Contains(t, sql, "me.duration_ms",
+			"FILTERED_MEAN SQL must reference the configured value_column")
+	})
+
+	t.Run("composite SQL", func(t *testing.T) {
+		sql, ok := sqlByMetric["composite_engagement"]
+		require.True(t, ok, "COMPOSITE metric must have produced SQL")
+		assert.Contains(t, sql, "operand_rows",
+			"COMPOSITE template must produce an `operand_rows` CTE")
+		assert.Contains(t, sql, "delta.metric_summaries",
+			"COMPOSITE template must read from delta.metric_summaries")
+		assert.Contains(t, sql, "0.7", "WEIGHTED_SUM SQL must inline operand weights")
+		assert.Contains(t, sql, "0.3", "WEIGHTED_SUM SQL must inline operand weights")
+	})
+
+	t.Run("windowed_count SQL", func(t *testing.T) {
+		sql, ok := sqlByMetric["stream_starts_24h"]
+		require.True(t, ok, "WINDOWED_COUNT metric must have produced SQL")
+		assert.Contains(t, sql, "windowed_events",
+			"WINDOWED_COUNT template must produce a `windowed_events` CTE")
+		assert.Contains(t, sql, "INTERVAL 24 HOURS",
+			"WINDOWED_COUNT SQL must inline the configured window_hours")
+		assert.Contains(t, sql, "me.event_type = 'stream_start'",
+			"WINDOWED_COUNT SQL must inline the configured event_type")
+	})
+}

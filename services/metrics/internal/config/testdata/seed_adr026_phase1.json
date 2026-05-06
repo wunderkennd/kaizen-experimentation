@@ -1,0 +1,46 @@
+{
+  "experiments": [
+    {
+      "experiment_id": "e0000000-0000-0000-0000-0000000adr26",
+      "name": "adr026_phase1_smoke",
+      "type": "STANDARD",
+      "state": "RUNNING",
+      "started_at": "2026-05-01",
+      "primary_metric_id": "mobile_avg_watch_time",
+      "secondary_metric_ids": ["composite_engagement", "stream_starts_24h"],
+      "variants": [
+        {"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+        {"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "metric_id": "mobile_avg_watch_time",
+      "name": "Mobile avg watch time",
+      "type": "FILTERED_MEAN",
+      "source_event_type": "heartbeat",
+      "filter_sql": "platform = 'mobile'",
+      "value_column": "duration_ms"
+    },
+    {
+      "metric_id": "composite_engagement",
+      "name": "Composite engagement",
+      "type": "COMPOSITE",
+      "source_event_type": "n/a",
+      "operator": "WEIGHTED_SUM",
+      "operands": [
+        {"metric_id": "watch_time_minutes", "weight": 0.7},
+        {"metric_id": "stream_start_rate", "weight": 0.3}
+      ]
+    },
+    {
+      "metric_id": "stream_starts_24h",
+      "name": "Stream starts within 24h of exposure",
+      "type": "WINDOWED_COUNT",
+      "source_event_type": "n/a",
+      "event_type": "stream_start",
+      "window_hours": 24
+    }
+  ]
+}
