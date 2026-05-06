@@ -113,8 +113,51 @@ done < <(printf '%s\n' "$ISSUES_JSON")
 echo ""
 echo "Summary: created=$CREATED already-linked=$SKIPPED"
 
+# === Encode "Blocked by" edges from issue bodies as bd dependencies. ===
+# Runs on every sync (not just CREATED > 0) so edges added later — when a
+# blocker bead finally exists — get picked up on a subsequent run.
+# Uses jq lookups instead of bash associative arrays for macOS bash 3.2 compat.
+echo ""
+echo "=== Encoding dependency edges ==="
+
+# Snapshot of current beads with gh-* external refs as a JSON object:
+# { "477": "kz-ism", "478": "kz-4b2", ... }
+BEAD_LOOKUP=$(bd list --all --json 2>/dev/null \
+  | jq -c '
+      [.[]
+       | select(.external_ref != null)
+       | select(.external_ref | startswith("gh-"))
+       | {key: (.external_ref | sub("^gh-"; "")), value: .id}
+      ]
+      | from_entries')
+
+EDGE_COUNT=0
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  num=$(echo "$line" | jq -r '.number')
+  bead_id=$(echo "$BEAD_LOOKUP" | jq -r --arg k "$num" '.[$k] // empty')
+  if [ -z "$bead_id" ]; then continue; fi
+  body=$(echo "$line" | jq -r '.body // ""')
+  blockers=$(echo "$body" \
+    | awk '/^## Blocked by/{flag=1; next} /^## /{flag=0} flag' \
+    | grep -oE '#[0-9]+' | tr -d '#' | sort -u || true)
+  for blocker_num in $blockers; do
+    blocker_bead=$(echo "$BEAD_LOOKUP" | jq -r --arg k "$blocker_num" '.[$k] // empty')
+    if [ -z "$blocker_bead" ]; then
+      echo "  (skip: blocker #$blocker_num not synced as a bead)"
+      continue
+    fi
+    # bd dep add <blocked> <blocker> — idempotent.
+    if bd dep add "$bead_id" "$blocker_bead" 2>/dev/null; then
+      EDGE_COUNT=$((EDGE_COUNT + 1))
+    fi
+  done
+done < <(printf '%s\n' "$ISSUES_JSON")
+
+echo "✓ Dependency edges processed (added or already-present: $EDGE_COUNT)"
+
 # Export to git-tracked JSONL so teammates can `bd import` after pull
-if [ "$CREATED" -gt 0 ]; then
+if [ "$CREATED" -gt 0 ] || [ "$EDGE_COUNT" -gt 0 ]; then
   bd export -o "$BEADS_ROOT/issues.jsonl" 2>/dev/null || true
   echo "Exported to $BEADS_ROOT/issues.jsonl (commit to share with team)"
 fi
