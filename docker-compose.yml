@@ -23,60 +23,78 @@ services:
       timeout: 3s
       retries: 5
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.7.0
-    ports: ["2181:2181"]
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
+  # Redpanda replaces the Confluent zookeeper + cp-kafka + cp-schema-registry trio.
+  # Kafka API-compatible broker with built-in Schema Registry on the same ports the
+  # Confluent images previously occupied (9092 Kafka, 29092 in-network Kafka, 8081
+  # Schema Registry). The `schema-registry` network alias preserves the in-network
+  # DNS name so consumers (kafka-ui, future services) keep resolving with no edits.
+  # See docs/guides/streaming-integration.md for compatibility caveats.
   kafka:
-    image: confluentinc/cp-kafka:7.7.0
-    ports: ["9092:9092", "29092:29092"]
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_NUM_PARTITIONS: 4
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-    depends_on:
-      zookeeper: { condition: service_started }
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.7
+    container_name: kaizen-redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=internal://0.0.0.0:29092,external://0.0.0.0:9092
+      # Advertise the external listener as 127.0.0.1 (not "localhost"). On macOS
+      # via Colima/Docker Desktop, the IPv6 mapping for [::1]:9092 is flaky — the
+      # bootstrap socket recovers via IPv4 fallback but the GroupCoordinator path
+      # does not, and tests panic with BrokerTransportFailure on subscribe. Forcing
+      # IPv4 in the advertised address sidesteps the IPv6 hop entirely.
+      - --advertise-kafka-addr=internal://kafka:29092,external://127.0.0.1:9092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://kafka:8082,external://127.0.0.1:18082
+      # Schema Registry is a single HTTP listener — no internal/external split,
+      # otherwise both names try to bind 0.0.0.0:8081 and the second listener
+      # fails with EADDRINUSE inside the container.
+      - --schema-registry-addr=0.0.0.0:8081
+      - --rpc-addr=kafka:33145
+      - --advertise-rpc-addr=kafka:33145
+      - --mode=dev-container
+      - --smp=1
+      - --default-log-level=info
+      # auto-create off matches the prior cp-kafka setting; topics are created by
+      # the kafka-init container below. dev-container mode supplies sane defaults
+      # for partitions/replications, so we don't override them here.
+      - --set
+      - redpanda.auto_create_topics_enabled=false
+    ports:
+      - "9092:9092"     # external Kafka API (matches former cp-kafka HOST listener)
+      - "29092:29092"   # in-network Kafka API (matches former cp-kafka PLAINTEXT listener)
+      - "8081:8081"     # built-in Schema Registry (matches former cp-schema-registry)
+      - "18082:18082"   # Pandaproxy REST (HTTP-to-Kafka), unused today, exposed for parity
+      - "9644:9644"     # Redpanda Admin API (rpk, observability)
+    networks:
+      default:
+        aliases:
+          - schema-registry
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
-      interval: 10s
+      test:
+        - CMD-SHELL
+        - rpk cluster health -X brokers=localhost:29092 | grep -E 'Healthy:.+true'
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 10s
 
   kafka-init:
-    image: confluentinc/cp-kafka:7.7.0
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.7
     depends_on:
       kafka: { condition: service_healthy }
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo 'Creating Kafka topics...'
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic exposures         --partitions 4 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic metric_events     --partitions 8 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic reward_events     --partitions 4 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic qoe_events        --partitions 4 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic guardrail_alerts            --partitions 2 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic model_retraining_events    --partitions 8 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic model_training_requests    --partitions 2 --replication-factor 1
+        echo 'Creating Kafka topics via rpk...'
+        # rpk topic create exits non-zero with TOPIC_ALREADY_EXISTS on reruns;
+        # || true keeps the init container idempotent across `up` cycles.
+        rpk topic create exposures               --brokers kafka:29092 --partitions 4 --replicas 1 || true
+        rpk topic create metric_events           --brokers kafka:29092 --partitions 8 --replicas 1 || true
+        rpk topic create reward_events           --brokers kafka:29092 --partitions 4 --replicas 1 || true
+        rpk topic create qoe_events              --brokers kafka:29092 --partitions 4 --replicas 1 || true
+        rpk topic create guardrail_alerts        --brokers kafka:29092 --partitions 2 --replicas 1 || true
+        rpk topic create model_retraining_events --brokers kafka:29092 --partitions 8 --replicas 1 || true
+        rpk topic create model_training_requests --brokers kafka:29092 --partitions 2 --replicas 1 || true
         echo 'Done.'
-
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.7.0
-    ports: ["8081:8081"]
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-    depends_on:
-      kafka: { condition: service_healthy }
 
   redis:
     image: redis:7-alpine

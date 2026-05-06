@@ -18,23 +18,34 @@ services:
       timeout: 2s
       retries: 10
 
+  # Redpanda broker for CI integration tests. Single-broker dev-container mode,
+  # advertises 127.0.0.1:9092 to the host network so `go test -tags=integration`
+  # against `localhost:9092` keeps working unchanged. Kafka API + built-in Schema
+  # Registry — same ports as the dev compose stack.
   kafka:
-    image: confluentinc/cp-kafka:7.7.0
-    ports: ["9092:9092"]
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      CLUSTER_ID: "Y2ktdGVzdC1rYWZrYS0wMD"
-    user: "0:0"
-    tmpfs: /var/lib/kafka/data
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.7
+    ports: ["9092:9092", "8081:8081"]
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      # Use 127.0.0.1 in advertised listener to avoid the macOS/Colima IPv6
+      # localhost flakiness librdkafka hits on the GroupCoordinator path.
+      - --advertise-kafka-addr=PLAINTEXT://127.0.0.1:9092
+      - --schema-registry-addr=0.0.0.0:8081
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=kafka:33145
+      - --mode=dev-container
+      - --smp=1
+      - --default-log-level=warn
+      - --set
+      - redpanda.auto_create_topics_enabled=true
+    tmpfs: /var/lib/redpanda/data
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 5s
+      test:
+        - CMD-SHELL
+        - rpk cluster health -X brokers=localhost:9092 | grep -E 'Healthy:.+true'
+      interval: 3s
       timeout: 3s
-      retries: 10
+      retries: 20
+      start_period: 5s
