@@ -627,8 +627,8 @@ status:
         || echo "    (not reachable)"
     @echo ""
     @echo "  Kafka topics:"
-    @docker exec -it $$({{ docker }} ps -q --filter name=kafka 2>/dev/null | head -1) \
-        kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null \
+    @docker exec -i $$({{ docker }} ps -q --filter name=redpanda 2>/dev/null | head -1) \
+        rpk topic list --brokers=localhost:9092 2>/dev/null \
         || echo "    (not reachable)"
 
 # Watch Rust workspace for changes and re-run tests
