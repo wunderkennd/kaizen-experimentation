@@ -179,6 +179,13 @@ type EdgeOutputs struct {
 	// LoadBalancerArn is the AWS ALB ARN. Empty on GCP.
 	LoadBalancerArn pulumi.StringOutput
 
+	// LoadBalancerArnSuffix is the AWS ALB ARN suffix
+	// (e.g. "app/kaizen-dev-alb/50dc6c495c0c9188") — the trailing portion
+	// of the ARN after "loadbalancer/". Required by CloudWatch's
+	// ALBRequestCountPerTarget resource label, which expects the suffix
+	// rather than the full ARN. Empty on GCP.
+	LoadBalancerArnSuffix pulumi.StringOutput
+
 	// CertificateRef is the TLS certificate reference (ACM ARN on AWS,
 	// google_compute_managed_ssl_certificate self-link on GCP).
 	CertificateRef pulumi.StringOutput

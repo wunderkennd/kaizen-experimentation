@@ -414,10 +414,11 @@ func NewEdge(
 	}
 
 	return types.EdgeOutputs{
-		LoadBalancerDns: albOut.AlbDnsName,
-		LoadBalancerArn: albOut.AlbArn,
-		CertificateRef:  dnsOut.CertificateArn,
-		HostedZoneId:    dnsOut.HostedZoneID.ToStringOutput(),
+		LoadBalancerDns:       albOut.AlbDnsName,
+		LoadBalancerArn:       albOut.AlbArn,
+		LoadBalancerArnSuffix: albOut.AlbArnSuffix,
+		CertificateRef:        dnsOut.CertificateArn,
+		HostedZoneId:          dnsOut.HostedZoneID.ToStringOutput(),
 	}, tgOut, nil
 }
 

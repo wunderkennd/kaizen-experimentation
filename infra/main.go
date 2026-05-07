@@ -152,12 +152,10 @@ func Deploy(ctx *pulumi.Context) error {
 		if err != nil {
 			return err
 		}
-		// Autoscaling references the ALB ARN suffix; the underlying ALBOutputs
-		// exposes it as albOut.AlbArnSuffix. The aggregator returns the full
-		// ARN in EdgeOutputs.LoadBalancerArn — for behavior parity with the
-		// original main.go, the autoscaling helper accepts the StringOutput
-		// directly and the compute module slices it as needed.
-		if err = aws.NewAutoscaling(ctx, cfg, computeOut, edgeOut.LoadBalancerArn, tgOut); err != nil {
+		// Autoscaling's ALBRequestCountPerTarget metric needs the ALB ARN
+		// suffix (e.g. "app/kaizen-dev-alb/50dc6c495c0c9188"), not the full
+		// ARN — see types.EdgeOutputs.LoadBalancerArnSuffix.
+		if err = aws.NewAutoscaling(ctx, cfg, computeOut, edgeOut.LoadBalancerArnSuffix, tgOut); err != nil {
 			return err
 		}
 		if err = aws.NewObservability(ctx, cfg, dbOut, streamOut, computeOut); err != nil {
