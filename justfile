@@ -937,16 +937,24 @@ _ready label:
     #!/usr/bin/env bash
     set -euo pipefail
     LABEL="{{label}}"
-    # Prefer beads when initialized: true DAG semantics with cycle detection.
-    if command -v bd >/dev/null 2>&1 && bd list --all --json >/dev/null 2>&1; then
-      bd ready --label "$LABEL" --json --limit 200 2>/dev/null \
-        | jq -c '.[] | select(.external_ref != null) | select(.external_ref | startswith("gh-")) | {number: (.external_ref | sub("^gh-"; "") | tonumber), title}'
-      exit 0
-    fi
-    # Fallback: parse "## Blocked by" from issue bodies.
+    # In-flight PRs (open PRs that close any issue) — both code paths exclude these.
     IN_FLIGHT=$(gh pr list --state open --limit 200 \
       --json closingIssuesReferences \
       --jq '[.[].closingIssuesReferences[].number] | unique | join(" ")' 2>/dev/null || echo "")
+    # Prefer beads when initialized: true DAG semantics with cycle detection.
+    if command -v bd >/dev/null 2>&1 && bd list --all --json >/dev/null 2>&1; then
+      bd ready --label "$LABEL" --json --limit 200 2>/dev/null \
+        | jq -c '.[] | select(.external_ref != null) | select(.external_ref | startswith("gh-")) | {number: (.external_ref | sub("^gh-"; "") | tonumber), title}' \
+        | while IFS= read -r issue; do
+            num=$(echo "$issue" | jq -r '.number')
+            if [ -n "$IN_FLIGHT" ] && echo " $IN_FLIGHT " | grep -q " $num "; then
+              continue
+            fi
+            echo "$issue"
+          done
+      exit 0
+    fi
+    # Fallback: parse "## Blocked by" from issue bodies.
     gh issue list --label "$LABEL" --state open --limit 200 --json number,title,body \
       | jq -c '.[]' \
       | while IFS= read -r issue; do
@@ -996,19 +1004,28 @@ autonomous-sprint sprint_num:
       *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, I.0-I.3, or tc.0-tc.4."; exit 1 ;;
     esac
     echo "=== Launching workers for: $MS ==="
-    # Use _ready to filter blocked or in-flight issues. Falls back to label/milestone
-    # query if _ready returns nothing — older sprints don't follow the
-    # "## Blocked by" convention, so they appear empty under _ready.
+    # Use _ready to filter blocked or in-flight issues.
     ISSUES=$(just _ready "$LABEL")
     if [ -z "$ISSUES" ]; then
-      ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
-      if [ -z "$ISSUES" ]; then
-        echo "  No issues found with label '$LABEL', trying milestone..."
-        ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+      # Distinguish "no work ready" (all blocked or in-flight) from "no Blocked-by
+      # structure exists" (legacy sprint). If at least one labeled issue has a
+      # "## Blocked by" section, _ready is authoritative — empty means "wait."
+      # If NO labeled issue has the structure, fall back to legacy label/milestone.
+      HAS_STRUCTURE=$(gh issue list --label "$LABEL" --state open --limit 50 --json body \
+        --jq '[.[] | select(.body | contains("## Blocked by"))] | length' 2>/dev/null || echo "0")
+      if [ "$HAS_STRUCTURE" = "0" ]; then
+        ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+        if [ -z "$ISSUES" ]; then
+          echo "  No issues found with label '$LABEL', trying milestone..."
+          ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+        fi
+      else
+        echo "  ⚠ No ready issues for sprint {{sprint_num}}: every labeled issue is either blocked by an open dependency or has an in-flight PR. Wait for review/merge, then re-run."
+        exit 0
       fi
     fi
     if [ -z "$ISSUES" ]; then
-      echo "  ⚠ No ready issues found for sprint {{sprint_num}}. Either all blocked, all in-flight, or none labeled."
+      echo "  ⚠ No issues found for sprint {{sprint_num}} via label or milestone. Nothing to launch."
       exit 0
     fi
     COUNT=0
