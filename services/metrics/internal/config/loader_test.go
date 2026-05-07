@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,4 +130,78 @@ func TestLoadFromFile_InvalidPath(t *testing.T) {
 func TestLoadFromFile_InvalidJSON(t *testing.T) {
 	_, err := LoadFromFile("loader.go")
 	assert.Error(t, err)
+}
+
+func TestMetricConfig_ADR026Phase1_RoundTrip(t *testing.T) {
+	t.Run("filtered_mean", func(t *testing.T) {
+		raw := `{
+            "metric_id": "mobile_avg_watch_time",
+            "name": "Mobile avg watch time",
+            "type": "FILTERED_MEAN",
+            "source_event_type": "heartbeat",
+            "filter_sql": "platform = 'mobile'",
+            "value_column": "duration_ms"
+        }`
+		var m MetricConfig
+		require.NoError(t, json.Unmarshal([]byte(raw), &m))
+		assert.Equal(t, "FILTERED_MEAN", m.Type)
+		assert.Equal(t, "platform = 'mobile'", m.FilterSQL)
+		assert.Equal(t, "duration_ms", m.ValueColumn)
+	})
+
+	t.Run("composite", func(t *testing.T) {
+		raw := `{
+            "metric_id": "engagement_score",
+            "name": "Composite engagement",
+            "type": "COMPOSITE",
+            "operator": "WEIGHTED_SUM",
+            "operands": [
+                {"metric_id": "watch_time_minutes", "weight": 0.7},
+                {"metric_id": "stream_start_rate", "weight": 0.3}
+            ]
+        }`
+		var m MetricConfig
+		require.NoError(t, json.Unmarshal([]byte(raw), &m))
+		assert.Equal(t, "COMPOSITE", m.Type)
+		assert.Equal(t, "WEIGHTED_SUM", m.Operator)
+		require.Len(t, m.Operands, 2)
+		assert.Equal(t, "watch_time_minutes", m.Operands[0].MetricID)
+		assert.InDelta(t, 0.7, m.Operands[0].Weight, 1e-9)
+		assert.Equal(t, "stream_start_rate", m.Operands[1].MetricID)
+		assert.InDelta(t, 0.3, m.Operands[1].Weight, 1e-9)
+	})
+
+	t.Run("windowed_count", func(t *testing.T) {
+		raw := `{
+            "metric_id": "stream_starts_24h",
+            "name": "Stream starts within 24h",
+            "type": "WINDOWED_COUNT",
+            "event_type": "stream_start",
+            "window_hours": 24
+        }`
+		var m MetricConfig
+		require.NoError(t, json.Unmarshal([]byte(raw), &m))
+		assert.Equal(t, "WINDOWED_COUNT", m.Type)
+		assert.Equal(t, "stream_start", m.EventType)
+		assert.Equal(t, int32(24), m.WindowHours)
+	})
+
+	t.Run("omitempty preserves backward compatibility", func(t *testing.T) {
+		// A pre-ADR-026 metric (e.g. MEAN) must still unmarshal cleanly with
+		// no JSON keys for the new fields.
+		raw := `{
+            "metric_id": "watch_time_minutes",
+            "name": "Watch time",
+            "type": "MEAN",
+            "source_event_type": "heartbeat"
+        }`
+		var m MetricConfig
+		require.NoError(t, json.Unmarshal([]byte(raw), &m))
+		assert.Empty(t, m.FilterSQL)
+		assert.Empty(t, m.ValueColumn)
+		assert.Empty(t, m.Operands)
+		assert.Empty(t, m.Operator)
+		assert.Empty(t, m.EventType)
+		assert.Equal(t, int32(0), m.WindowHours)
+	})
 }
