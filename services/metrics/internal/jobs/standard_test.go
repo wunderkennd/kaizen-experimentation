@@ -431,6 +431,36 @@ func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 	}
 }
 
+func TestIsLegacyStyle(t *testing.T) {
+	t.Run("legacy types return true", func(t *testing.T) {
+		legacy := []string{
+			"MEAN", "PROPORTION", "COUNT", "RATIO", "PERCENTILE", "CUSTOM",
+			"mean", "proportion", "count", "ratio", "percentile", "custom",
+			"Custom", "Ratio",
+		}
+		for _, mt := range legacy {
+			assert.True(t, isLegacyStyle(mt), "%q should be legacy", mt)
+		}
+	})
+
+	t.Run("ADR-026 Phase 1 types return false", func(t *testing.T) {
+		nonLegacy := []string{
+			"FILTERED_MEAN", "COMPOSITE", "WINDOWED_COUNT",
+			"filtered_mean", "composite", "windowed_count",
+		}
+		for _, mt := range nonLegacy {
+			assert.False(t, isLegacyStyle(mt), "%q should not be legacy", mt)
+		}
+	})
+
+	t.Run("unknown types return false", func(t *testing.T) {
+		unknown := []string{"", " ", "UNKNOWN_TYPE", "FOO_BAR"}
+		for _, mt := range unknown {
+			assert.False(t, isLegacyStyle(mt), "%q should not be legacy", mt)
+		}
+	})
+}
+
 func TestStandardJob_Run_ADR026Phase1_NewTypes(t *testing.T) {
 	cfgStore, err := config.LoadFromFile("../config/testdata/seed_adr026_phase1.json")
 	require.NoError(t, err)
