@@ -300,12 +300,31 @@ jobs:
       - name: Verify hash parity (10,000 vectors)
         run: python scripts/verify_hash_parity.py
 
-  # ───────── Stage 6: Docker Build (main only) ─────────
+  # ───────── Stage 6: Docker Build + Dual-Push (main only) ─────────
+  #
+  # Builds each service image once (multi-arch: linux/amd64 + linux/arm64) and
+  # pushes the resulting tag/digest to BOTH AWS ECR and GCP Artifact Registry
+  # in parallel within the same buildx invocation. Both registries end up with
+  # an identical OCI manifest digest, so a Cloud Run service pulling from AR
+  # and an ECS task pulling from ECR resolve to the same bytes.
+  #
+  # Auth model:
+  #   - AWS: GitHub OIDC → role assumption (`aws-actions/configure-aws-credentials`)
+  #   - GCP: GitHub OIDC → Workload Identity Federation (`google-github-actions/auth`)
+  #
+  # If any of the three required secrets/vars are missing, the corresponding
+  # registry login is skipped and the job emits a warning rather than failing
+  # outright. This lets the pipeline keep working during phased rollout (e.g.
+  # before the GCP WIP is provisioned in a fork).
   docker:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [rust, go, typescript, hash-parity, infra]
+    permissions:
+      id-token: write    # required for OIDC to AWS + GCP
+      contents: read
     strategy:
+      fail-fast: false   # one failing image shouldn't block the others
       matrix:
         service:
           - { name: assignment, path: crates/experimentation-assignment }
@@ -315,6 +334,11 @@ jobs:
           - { name: management, path: services/management }
           - { name: metrics, path: services/metrics }
           - { name: ui, path: ui }
+    env:
+      # Image coordinates, kept as env so the build/push step is one shell
+      # block instead of branching across multiple step languages.
+      IMAGE_NAME: kaizen-${{ matrix.service.name }}
+      IMAGE_TAG: sha-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -342,15 +366,118 @@ jobs:
           )
           GOMOD
 
-      - name: Login to Docker Hub
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── AWS auth (OIDC) ────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        id: aws-auth
+        if: vars.AWS_DEPLOY_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        if: steps.aws-auth.outcome == 'success'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── GCP auth (OIDC via Workload Identity Federation) ───────────────
+      - name: Authenticate to Google Cloud
+        id: gcp-auth
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_CI_PUSH_SA != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_PUSH_SA }}
+
+      - name: Login to Google Artifact Registry
+        if: steps.gcp-auth.outcome == 'success'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Default to "us" multi-region (matches Pulumi.gcp-dev.yaml's
+          # gcpArLocation). Override via vars.GCP_AR_LOCATION if a specific
+          # region is needed (e.g. data residency).
+          registry: ${{ vars.GCP_AR_LOCATION || 'us' }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
 
-      - name: Build image
+      # ── Compose dual-tag list, build once, push to both ───────────────
+      - name: Compute image tags
+        id: tags
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          GCP_AR_LOCATION: ${{ vars.GCP_AR_LOCATION || 'us' }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
         run: |
-          docker build \
-            -f ${{ matrix.service.path }}/Dockerfile \
-            -t experimentation/${{ matrix.service.name }}:${{ github.sha }} \
-            .
+          tags=()
+          if [ -n "${ECR_REGISTRY:-}" ]; then
+            tags+=("${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}")
+            tags+=("${ECR_REGISTRY}/${IMAGE_NAME}:latest")
+          fi
+          if [ -n "${GCP_PROJECT_ID:-}" ] && [ "${{ steps.gcp-auth.outcome }}" = "success" ]; then
+            ar_repo="${GCP_AR_LOCATION}-docker.pkg.dev/${GCP_PROJECT_ID}/${IMAGE_NAME}"
+            tags+=("${ar_repo}:${IMAGE_TAG}")
+            tags+=("${ar_repo}:latest")
+          fi
+          if [ ${#tags[@]} -eq 0 ]; then
+            echo "::warning::No registries configured (neither AWS_DEPLOY_ROLE_ARN nor GCP_PROJECT_ID set). Building without push."
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "tags=experimentation/${{ matrix.service.name }}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            # Comma-separated, the format docker/build-push-action expects.
+            ( IFS=, ; echo "tags=${tags[*]}" ) >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push (multi-arch, multi-registry)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.path }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.tags.outputs.push == 'true' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # Provenance + SBOM attestations land on the manifest in BOTH
+          # registries since buildx pushes the same OCI manifest object.
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Verify both registries received the same digest ───────────────
+      - name: Verify cross-registry digest parity
+        if: steps.tags.outputs.push == 'true' && steps.ecr-login.outcome == 'success' && steps.gcp-auth.outcome == 'success'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          GCP_AR_LOCATION: ${{ vars.GCP_AR_LOCATION || 'us' }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          ecr_ref="${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          ar_ref="${GCP_AR_LOCATION}-docker.pkg.dev/${GCP_PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          # `docker buildx imagetools inspect` emits the manifest digest in a
+          # single "Digest:" line. Equality across the two registries is the
+          # acceptance criterion — anything else means a divergent push and
+          # downstream services on AWS vs GCP would silently see different
+          # bytes.
+          ecr_digest=$(docker buildx imagetools inspect "${ecr_ref}" | awk '/^Digest:/ { print $2; exit }')
+          ar_digest=$(docker buildx imagetools inspect "${ar_ref}"  | awk '/^Digest:/ { print $2; exit }')
+          echo "ECR digest: ${ecr_digest}"
+          echo "AR  digest: ${ar_digest}"
+          if [ -z "${ecr_digest}" ] || [ -z "${ar_digest}" ]; then
+            echo "::error::Failed to read digest from one or both registries"
+            exit 1
+          fi
+          if [ "${ecr_digest}" != "${ar_digest}" ]; then
+            echo "::error::Digest mismatch between ECR and Artifact Registry"
+            exit 1
+          fi
+          echo "✓ ECR and Artifact Registry resolved to identical digest"
