@@ -1,0 +1,28 @@
+config:
+  gcp:project: kaizen-experimentation-dev
+  gcp:region: us-central1
+  kaizen-experimentation:environment: dev
+  kaizen-experimentation:cloudProvider: gcp
+  kaizen-experimentation:projectName: kaizen-experimentation
+  kaizen-experimentation:domain: example.com
+  kaizen-experimentation:vpcCidr: "10.0.0.0/16"
+  kaizen-experimentation:gcpPublicSubnetCidr: "10.0.0.0/20"
+  kaizen-experimentation:gcpPrivateSubnetCidr: "10.0.16.0/20"
+  kaizen-experimentation:gcpVpcConnectorCidr: "10.8.0.0/28"
+  kaizen-experimentation:gcpVpcConnectorMachineType: e2-micro
+  # Downstream stages (storage, database, cache, secrets, compute, cicd)
+  # are wired through subsequent issues #480-#486. The values below are
+  # placeholders so LoadConfig() does not panic on Require() — they will
+  # be revisited as each downstream GCP module lands.
+  kaizen-experimentation:rdsInstanceClass: db-custom-2-7680
+  kaizen-experimentation:rdsMultiAz: "false"
+  kaizen-experimentation:mskBrokerCount: "2"
+  kaizen-experimentation:mskInstanceType: redpanda.t3.small
+  kaizen-experimentation:redisNodeType: BASIC_M1
+  kaizen-experimentation:m4bInstanceType: n2-standard-4
+  kaizen-experimentation:natGatewayCount: "1"
+  kaizen-experimentation:wafEnabled: "false"
+  kaizen-experimentation:fargateMinTasks: "1"
+  kaizen-experimentation:cloudwatchRetentionDays: "7"
+  kafka:saslUsername: kaizen-redpanda-user
+  kafka:saslPassword: CHANGE_ME_VIA_PULUMI_CONFIG_SET_SECRET

@@ -8,6 +8,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/aws"
 	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -34,6 +35,8 @@ func Deploy(ctx *pulumi.Context) error {
 	switch cfg.CloudProvider {
 	case "aws":
 		netOut, err = aws.NewNetwork(ctx, cfg)
+	case "gcp":
+		netOut, err = gcp.NewNetwork(ctx, cfg)
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
