@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kaizen-experimentation/infra/pkg/cicd"
-	"github.com/kaizen-experimentation/infra/pkg/compute"
+	"github.com/kaizen-experimentation/infra/pkg/aws/cicd"
+	"github.com/kaizen-experimentation/infra/pkg/aws/compute"
 )
 
 // ---------------------------------------------------------------------------

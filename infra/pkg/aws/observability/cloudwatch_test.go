@@ -3,7 +3,7 @@ package observability
 import (
 	"testing"
 
-	"github.com/kaizen-experimentation/infra/pkg/cicd"
+	"github.com/kaizen-experimentation/infra/pkg/aws/cicd"
 )
 
 // TestLogGroupCount verifies we create exactly 9 log groups (one per service).

@@ -8,7 +8,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
-	"github.com/kaizen-experimentation/infra/pkg/streaming"
+	"github.com/kaizen-experimentation/infra/pkg/aws/streaming"
 )
 
 // newMskMockInputs returns a standard MskInputs suitable for mock testing.

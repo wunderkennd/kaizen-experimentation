@@ -52,6 +52,11 @@ type Config struct {
 	WafEnabled           bool
 	WafBlockedCountries  []string
 	WafRateLimitPerIP    int
+
+	// Provider routing — read by Deploy()'s switch dispatch.
+	// Defaults preserve current AWS-only behavior when stack config omits them.
+	CloudProvider     string // "aws" (default) or "gcp"
+	StreamingProvider string // "msk" (default) or "redpanda"
 }
 
 // KaizenConfig is an alias for Config. Some modules reference this type name.
@@ -109,6 +114,16 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		wafRateLimit = v
 	}
 
+	// Provider routing — default to AWS / MSK to preserve existing behavior.
+	cloudProvider := "aws"
+	if v, err := cfg.Try("cloudProvider"); err == nil && v != "" {
+		cloudProvider = v
+	}
+	streamingProvider := "msk"
+	if v, err := cfg.Try("streamingProvider"); err == nil && v != "" {
+		streamingProvider = v
+	}
+
 	return &Config{
 		Project:              "kaizen",
 		Environment:          env,
@@ -128,6 +143,8 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		WafRateLimitPerIP:    wafRateLimit,
 		FargateMinTasks:      cfg.RequireInt("fargateMinTasks"),
 		CloudwatchRetention:  cfg.RequireInt("cloudwatchRetentionDays"),
+		CloudProvider:        cloudProvider,
+		StreamingProvider:    streamingProvider,
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kaizen-experimentation/infra/pkg/network"
+	"github.com/kaizen-experimentation/infra/pkg/aws/network"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
