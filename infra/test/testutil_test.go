@@ -129,8 +129,11 @@ func (m *universalMocks) NewResource(args pulumi.MockResourceArgs) (string, reso
 	case "aws:msk/cluster:Cluster":
 		outputs["bootstrapBrokersSaslScram"] = resource.NewStringProperty(
 			"b-1.kaizen.kafka.us-east-1.amazonaws.com:9096,b-2.kaizen.kafka.us-east-1.amazonaws.com:9096")
-		outputs["clusterArn"] = resource.NewStringProperty(
-			"arn:aws:kafka:us-east-1:123456789012:cluster/kaizen/" + args.Name)
+		// pulumi-aws v6's MSK Cluster exposes the ARN as `arn` (not `clusterArn`).
+		// `clusterArn` is kept for callers that read the legacy field name.
+		mskArn := "arn:aws:kafka:us-east-1:123456789012:cluster/kaizen/" + args.Name
+		outputs["arn"] = resource.NewStringProperty(mskArn)
+		outputs["clusterArn"] = resource.NewStringProperty(mskArn)
 		outputs["clusterName"] = resource.NewStringProperty(args.Name)
 
 	// -- KMS --
@@ -172,6 +175,34 @@ func (m *universalMocks) NewResource(args pulumi.MockResourceArgs) (string, reso
 		}
 		outputs["repositoryUrl"] = resource.NewStringProperty(
 			"123456789012.dkr.ecr.us-east-1.amazonaws.com/" + repoName)
+
+	// -- Redpanda Cloud (TF-bridge type tokens) --
+	// These mirror what a generated pulumi-redpanda SDK would emit. The TF
+	// provider's responses are simulated here so topology tests resolve
+	// downstream references (bootstrap brokers, schema registry URL, etc.).
+	case "redpanda:index/resourceGroup:ResourceGroup":
+		outputs["id"] = resource.NewStringProperty("rg_" + args.Name)
+	case "redpanda:index/network:Network":
+		outputs["id"] = resource.NewStringProperty("net_" + args.Name)
+	case "redpanda:index/cluster:Cluster":
+		outputs["bootstrapBrokers"] = resource.NewStringProperty(
+			"seed-0." + args.Name + ".fmc.prd.cloud.redpanda.com:9092," +
+				"seed-1." + args.Name + ".fmc.prd.cloud.redpanda.com:9092," +
+				"seed-2." + args.Name + ".fmc.prd.cloud.redpanda.com:9092")
+		outputs["schemaRegistryUrl"] = resource.NewStringProperty(
+			"https://schema-registry-" + args.Name + ".fmc.prd.cloud.redpanda.com:30081")
+		outputs["clusterApiUrl"] = resource.NewStringProperty(
+			"https://api-" + args.Name + ".fmc.prd.cloud.redpanda.com:9644")
+	case "redpanda:index/user:User",
+		"redpanda:index/acl:Acl":
+		// Inputs already copied to outputs; no extra computed fields needed.
+
+	// -- Pulumi-Kafka provider + Topic --
+	// The kafka provider creates a logical resource without needing computed
+	// outputs in tests (the actual Kafka API call is stubbed out by mocks).
+	case "pulumi:providers:kafka",
+		"kafka:index/topic:Topic":
+		// Default copy is sufficient.
 
 	// -- Default: inputs copied above are sufficient --
 	}

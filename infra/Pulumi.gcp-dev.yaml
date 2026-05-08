@@ -1,0 +1,47 @@
+# Multi-cloud Phase 2 stack: GCP tenant on Redpanda Cloud streaming.
+#
+# - cloudProvider=gcp selects the GCP module set (Phase 1+ — currently
+#   stubbed; Stage 1 will return a not-yet-implemented error until those
+#   modules land).
+# - streamingProvider=redpanda selects the cloud-agnostic Redpanda Cloud
+#   module at infra/pkg/streaming/redpanda.go. The Redpanda Cloud control
+#   plane provisions the underlying cluster on AWS or GCP (controlled by
+#   the redpanda:cloudProvider key below) and surfaces a Kafka-protocol
+#   bootstrap endpoint plus a built-in Schema Registry.
+#
+# Secrets (clientId, clientSecret, kafkaPassword) are managed via
+# `pulumi config set --secret redpanda:<key>` — placeholder values below
+# must be replaced before the first `pulumi up`.
+config:
+  # Provider routing — the only fields this stack actually changes vs. dev.
+  kaizen-experimentation:cloudProvider: gcp
+  kaizen-experimentation:streamingProvider: redpanda
+
+  # Standard tenant-side config. GCP module set will consume these once Phase 1
+  # ships; Phase 2 only needs the streaming provider to be wired.
+  kaizen-experimentation:environment: gcp-dev
+  kaizen-experimentation:vpcCidr: "10.10.0.0/16"
+  kaizen-experimentation:rdsInstanceClass: db-custom-2-7680
+  kaizen-experimentation:rdsMultiAz: "false"
+  kaizen-experimentation:mskBrokerCount: "0"           # Unused: streamingProvider=redpanda
+  kaizen-experimentation:mskInstanceType: "n/a"        # Unused: streamingProvider=redpanda
+  kaizen-experimentation:redisNodeType: "redis-basic-1gb"
+  kaizen-experimentation:m4bInstanceType: n2-standard-4
+  kaizen-experimentation:natGatewayCount: "1"
+  kaizen-experimentation:wafEnabled: "false"
+  kaizen-experimentation:fargateMinTasks: "1"
+  kaizen-experimentation:cloudwatchRetentionDays: "7"
+
+  # Redpanda Cloud configuration.
+  redpanda:cloudProvider: gcp
+  redpanda:region: us-central1
+  redpanda:zones: us-central1-a,us-central1-b,us-central1-c
+  redpanda:throughputTier: tier-1-gcp-v2
+  redpanda:clusterType: dedicated
+  redpanda:connectionType: private
+  redpanda:kafkaUsername: kaizen-redpanda-user
+
+  # Secrets — set with `pulumi config set --secret`.
+  # redpanda:clientId        SET_VIA_PULUMI_CONFIG_SET_SECRET
+  # redpanda:clientSecret    SET_VIA_PULUMI_CONFIG_SET_SECRET
+  # redpanda:kafkaPassword   SET_VIA_PULUMI_CONFIG_SET_SECRET

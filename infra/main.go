@@ -8,6 +8,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/aws"
 	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	cloudstreaming "github.com/kaizen-experimentation/infra/pkg/streaming"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -91,12 +92,22 @@ func Deploy(ctx *pulumi.Context) error {
 		streamOut  types.StreamingOutputs
 		secretsOut types.SecretsOutputs
 		cicdOut    types.CICDOutputs
+		// streamingHasBuiltInRegistry is true when the streaming provider ships
+		// its own Schema Registry (Redpanda Cloud). When true, Stage 5 skips
+		// the standalone Schema Registry deployment.
+		streamingHasBuiltInRegistry bool
 	)
 	switch cfg.StreamingProvider {
 	case "msk":
 		streamOut, err = aws.NewKafkaCluster(ctx, cfg, netOut)
+	case "redpanda":
+		// Redpanda Cloud bundles cluster, users/ACLs, topics, and a built-in
+		// Schema Registry — so the dispatch is self-contained and does NOT
+		// flow through aws.NewKafkaTopics or aws.NewSchemaRegistry below.
+		streamOut, err = cloudstreaming.NewRedpanda(ctx, cfg, netOut)
+		streamingHasBuiltInRegistry = true
 	default:
-		return fmt.Errorf("unsupported streamingProvider %q (Phase 0 supports only \"msk\")", cfg.StreamingProvider)
+		return fmt.Errorf("unsupported streamingProvider %q (expected \"msk\" or \"redpanda\")", cfg.StreamingProvider)
 	}
 	if err != nil {
 		return err
@@ -107,8 +118,13 @@ func Deploy(ctx *pulumi.Context) error {
 		if err != nil {
 			return err
 		}
-		if err = aws.NewKafkaTopics(ctx, streamOut); err != nil {
-			return err
+		// MSK requires a Pulumi-managed kafka provider against the cluster's
+		// SCRAM creds; Redpanda already provisioned topics inside NewRedpanda
+		// using the same Kafka-protocol provider, so skip duplicate creation.
+		if cfg.StreamingProvider == "msk" {
+			if err = aws.NewKafkaTopics(ctx, streamOut); err != nil {
+				return err
+			}
 		}
 		cicdOut, err = aws.NewCICD(ctx, cfg)
 	default:
@@ -132,14 +148,21 @@ func Deploy(ctx *pulumi.Context) error {
 		if err != nil {
 			return err
 		}
-		schemaUrl, schemaSvcName, err = aws.NewSchemaRegistry(ctx, cfg, netOut, computeOut, streamOut, secretsOut)
+		// Redpanda ships its own Schema Registry (URL already populated in
+		// streamOut.SchemaRegistryUrl by NewRedpanda) — only deploy the
+		// standalone Confluent Schema Registry on ECS for MSK tenants.
+		if !streamingHasBuiltInRegistry {
+			schemaUrl, schemaSvcName, err = aws.NewSchemaRegistry(ctx, cfg, netOut, computeOut, streamOut, secretsOut)
+		}
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
 	if err != nil {
 		return err
 	}
-	streamOut.SchemaRegistryUrl = schemaUrl
+	if !streamingHasBuiltInRegistry {
+		streamOut.SchemaRegistryUrl = schemaUrl
+	}
 
 	// =====================================================================
 	// Stage 6: Edge + Observability + HealthGate + Autoscaling
@@ -161,8 +184,12 @@ func Deploy(ctx *pulumi.Context) error {
 		if err = aws.NewObservability(ctx, cfg, dbOut, streamOut, computeOut); err != nil {
 			return err
 		}
-		if err = aws.NewKafkaHealthGate(ctx, cfg, computeOut, schemaSvcName); err != nil {
-			return err
+		// Schema Registry health gate watches the standalone ECS service —
+		// not applicable when Redpanda's built-in registry is in use.
+		if !streamingHasBuiltInRegistry {
+			if err = aws.NewKafkaHealthGate(ctx, cfg, computeOut, schemaSvcName); err != nil {
+				return err
+			}
 		}
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
