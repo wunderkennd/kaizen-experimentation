@@ -7,7 +7,9 @@
       "state": "RUNNING",
       "started_at": "2026-05-01",
       "primary_metric_id": "mobile_avg_watch_time",
-      "secondary_metric_ids": ["composite_engagement", "stream_starts_24h"],
+      "secondary_metric_ids": ["composite_engagement", "stream_starts_24h", "legacy_watch_time"],
+      "session_level": true,
+      "lifecycle_stratification_enabled": true,
       "variants": [
         {"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
         {"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
@@ -21,7 +23,8 @@
       "type": "FILTERED_MEAN",
       "source_event_type": "heartbeat",
       "filter_sql": "platform = 'mobile'",
-      "value_column": "duration_ms"
+      "value_column": "duration_ms",
+      "cuped_covariate_metric_id": "legacy_watch_time"
     },
     {
       "metric_id": "composite_engagement",
@@ -41,6 +44,12 @@
       "source_event_type": "n/a",
       "event_type": "stream_start",
       "window_hours": 24
+    },
+    {
+      "metric_id": "legacy_watch_time",
+      "name": "Legacy watch time (MEAN)",
+      "type": "MEAN",
+      "source_event_type": "heartbeat"
     }
   ]
 }
