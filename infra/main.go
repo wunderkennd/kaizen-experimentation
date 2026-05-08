@@ -8,6 +8,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/aws"
 	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -34,6 +35,13 @@ func Deploy(ctx *pulumi.Context) error {
 	switch cfg.CloudProvider {
 	case "aws":
 		netOut, err = aws.NewNetwork(ctx, cfg)
+	case "gcp":
+		// Phase 1 sibling task: gcp.NewNetwork lands in a separate PR.
+		// Return zero-valued NetworkOutputs so downstream stages that don't
+		// yet have a gcp arm (everything except Storage today) can be
+		// short-circuited cleanly. The Storage gcp module does not consume
+		// any field on NetworkOutputs; see pkg/gcp/gcp.go NewStorage.
+		netOut = types.NetworkOutputs{}
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
@@ -55,6 +63,10 @@ func Deploy(ctx *pulumi.Context) error {
 			return err
 		}
 		iamOut, err = aws.NewIAM(ctx, cfg, storageOut)
+	case "gcp":
+		storageOut, err = gcp.NewStorage(ctx, cfg, netOut)
+		// IAM (Workload Identity) is wired by the compute Phase 1 PR — it
+		// owns the runtime service accounts that bind to bucket roles.
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
@@ -62,6 +74,21 @@ func Deploy(ctx *pulumi.Context) error {
 		return err
 	}
 	_ = iamOut // exported via ctx.Export inside NewIAM; reserved for future stages
+
+	// =====================================================================
+	// GCP early return — Phase 1 storage slice
+	// =====================================================================
+	// The remaining stages (data stores, streaming, compute, edge) are
+	// implemented for AWS today. Each will land its own gcp arm in a
+	// separate Phase 1 PR. Until those land, return cleanly so
+	// `pulumi preview --stack gcp-dev` succeeds for the storage slice
+	// and the topology test can assert StorageOutputs for both providers.
+	// Each subsequent Phase 1 PR moves this early-return marker further
+	// down Deploy() and removes it entirely once all stages are wired.
+	if cfg.CloudProvider == "gcp" {
+		ctx.Export("dataBucket", storageOut.DataBucketName)
+		return nil
+	}
 
 	// =====================================================================
 	// Stage 3: Data Stores
