@@ -403,6 +403,22 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 	}, nil
 }
 
+// isLegacyStyle reports whether a MetricType uses the legacy MEAN-style
+// column convention (me.value, me.event_type = '{{.SourceEventType}}')
+// that the post-processing templates (cuped_covariate, session_level_mean,
+// lifecycle_mean, mlrate_*) assume.
+//
+// ADR-026 Phase 1 types (FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT) use
+// different column conventions and must skip post-processing until those
+// templates grow per-type variants (issue #511 option b).
+func isLegacyStyle(metricType string) bool {
+	switch strings.ToUpper(metricType) {
+	case "MEAN", "PROPORTION", "COUNT", "RATIO", "PERCENTILE", "CUSTOM":
+		return true
+	}
+	return false
+}
+
 // toSparkOperands converts config-layer OperandConfig values to the
 // spark.OperandParam shape consumed by the renderer's composite template.
 // Returns nil for an empty/nil input (matches Go's zero-value convention).
