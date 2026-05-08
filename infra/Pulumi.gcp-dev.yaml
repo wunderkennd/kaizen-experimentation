@@ -1,0 +1,22 @@
+config:
+  # Provider routing — selects the GCP branch in pkg/gcp/. Phase 1 supports
+  # only the cicd slice; subsequent phases will fill in the remaining stages.
+  kaizen-experimentation:cloudProvider: gcp
+
+  # Core identification
+  kaizen-experimentation:environment: dev
+
+  # GCP project + Artifact Registry settings
+  # Override `gcpProjectId` per real account before applying. The default here
+  # is a placeholder that satisfies `pulumi preview` against the unit-test
+  # mocks but is NOT a real GCP project.
+  kaizen-experimentation:gcpProjectId: kaizen-experimentation-dev
+  kaizen-experimentation:gcpRegion: us-central1
+  kaizen-experimentation:gcpArLocation: us
+  # CI push principal — set after provisioning the Workload Identity Pool +
+  # GitHub Actions OIDC binding (see docs/runbooks/artifact-registry-credentials.md).
+  # Example value (uncomment + customise once the WIP exists):
+  #   kaizen-experimentation:gcpCiPushPrincipal: "principalSet://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-actions/attribute.repository/<OWNER>/<REPO>"
+  # Cloud Run runtime SAs that must pull from AR (comma-separated). Empty
+  # for now — populated when compute lands in Phase 1+.
+  # kaizen-experimentation:gcpRunPullPrincipals: "serviceAccount:kaizen-run@kaizen-experimentation-dev.iam.gserviceaccount.com"

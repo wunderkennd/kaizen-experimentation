@@ -8,6 +8,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/aws"
 	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -23,6 +24,26 @@ import (
 func Deploy(ctx *pulumi.Context) error {
 	cfg := kconfig.LoadConfig(ctx)
 	ctx.Export("environment", pulumi.String(cfg.Environment))
+
+	// =====================================================================
+	// GCP Phase 1: CICD-only slice
+	// =====================================================================
+	// Phase 1 ships only Artifact Registry. Network/storage/database/etc.
+	// land in subsequent phases per docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md.
+	// Until they do, a `cloudProvider=gcp` stack runs only the CICD stage and
+	// returns — that's exactly what `pulumi preview --stack gcp-dev` needs to
+	// succeed against the issue #482 acceptance criterion.
+	if cfg.CloudProvider == "gcp" {
+		cicdOut, err := gcp.NewCICD(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		// Export a representative URL so `pulumi stack output` is non-empty.
+		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
+			ctx.Export("cicdAssignmentRepositoryUrl", url)
+		}
+		return nil
+	}
 
 	// =====================================================================
 	// Stage 1: Network Foundation
@@ -183,7 +204,11 @@ func Deploy(ctx *pulumi.Context) error {
 func unsupportedCloud(provider string) error {
 	switch provider {
 	case "gcp":
-		return fmt.Errorf("cloudProvider=gcp is not implemented yet (Phase 1 of ADR multi-cloud foundation)")
+		// Phase 1 only supports the cicd slice on GCP — that path returns
+		// before reaching any of the other stage switches. Hitting this is
+		// a programming error: a switch added a gcp case but Deploy() should
+		// have early-returned above.
+		return fmt.Errorf("internal: cloudProvider=gcp reached a non-CICD stage (Phase 1 supports only Artifact Registry)")
 	default:
 		return fmt.Errorf("unsupported cloudProvider %q (expected \"aws\" or \"gcp\")", provider)
 	}
