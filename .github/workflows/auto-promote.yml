@@ -15,6 +15,7 @@ jobs:
       - name: Find newly-ready dependents and comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           CLOSED_ISSUE: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
