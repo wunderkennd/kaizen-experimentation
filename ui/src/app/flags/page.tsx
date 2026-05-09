@@ -6,6 +6,8 @@ import type { Flag, FlagType } from '@/lib/types';
 import { listFlags } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
+import { Breadcrumb } from '@/components/breadcrumb';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -15,7 +17,7 @@ const FLAG_TYPE_BADGE: Record<FlagType, string> = {
 };
 
 function FlagListContent() {
-  const { canAtLeast } = useAuth();
+  const { canAtLeast, user } = useAuth();
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,48 +50,20 @@ function FlagListContent() {
     );
   }, [flags, search]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
-        <span className="sr-only">Loading</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <RetryableError message={error} onRetry={fetchData} context="feature flags" />;
-  }
-
-  if (flags.length === 0) {
-    return (
-      <div className="py-12 text-center" data-testid="empty-state">
-        <p className="text-sm text-gray-500">No feature flags found.</p>
-        {canAtLeast('experimenter') && (
-          <div className="mt-6">
-            <Link
-              href="/flags/new"
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-              data-testid="create-first-flag"
-            >
-              Create your first feature flag
-            </Link>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Flags' }]} />
+
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="flag-count">
-            {filtered.length}
-          </span>
+          {!loading && !error && flags.length > 0 && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="flag-count">
+              {filtered.length}
+            </span>
+          )}
         </div>
-        {canAtLeast('experimenter') && (
+        {canAtLeast('experimenter') ? (
           <Link
             href="/flags/new"
             className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
@@ -97,8 +71,41 @@ function FlagListContent() {
           >
             New Flag
           </Link>
+        ) : (
+          <span
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            title={`Requires Experimenter role (you are ${user ? ROLE_LABELS[user.role] : 'Unknown'})`}
+            data-testid="new-flag-disabled"
+          >
+            New Flag
+          </span>
         )}
       </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+          <span className="sr-only">Loading</span>
+        </div>
+      ) : error ? (
+        <RetryableError message={error} onRetry={fetchData} context="feature flags" />
+      ) : flags.length === 0 ? (
+        <div className="py-12 text-center" data-testid="empty-state">
+          <p className="text-sm text-gray-500">No feature flags found.</p>
+          {canAtLeast('experimenter') && (
+            <div className="mt-6">
+              <Link
+                href="/flags/new"
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                data-testid="create-first-flag"
+              >
+                Create your first feature flag
+              </Link>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[300px] max-w-md">
@@ -132,18 +139,18 @@ function FlagListContent() {
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="py-12 text-center" data-testid="no-filter-matches">
-          <p className="text-sm text-gray-500">No flags match your search.</p>
-          <button
-            onClick={() => setSearch('')}
-            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+          {filtered.length === 0 ? (
+            <div className="py-12 text-center" data-testid="no-filter-matches">
+              <p className="text-sm text-gray-500">No flags match your search.</p>
+              <button
+                onClick={() => setSearch('')}
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -187,6 +194,8 @@ function FlagListContent() {
             </tbody>
           </table>
         </div>
+          )}
+        </>
       )}
     </div>
   );

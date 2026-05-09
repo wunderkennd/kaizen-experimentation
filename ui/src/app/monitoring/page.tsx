@@ -7,6 +7,7 @@ import { MonitoringSummaryCards } from '@/components/monitoring-summary-cards';
 import { MonitoringHealthTable } from '@/components/monitoring-health-table';
 import { MonitoringBreachList } from '@/components/monitoring-breach-list';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const AUTO_REFRESH_INTERVAL_MS = 30_000;
 
@@ -101,21 +102,10 @@ export default function MonitoringPage() {
     };
   }, [autoRefresh, fetchData]);
 
-  if (loading && experiments.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
-        <span className="sr-only">Loading</span>
-      </div>
-    );
-  }
-
-  if (error && experiments.length === 0) {
-    return <RetryableError message={error} onRetry={fetchData} context="monitoring data" />;
-  }
-
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Monitoring' }]} />
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Monitoring</h1>
         <div className="flex items-center gap-4">
@@ -137,7 +127,16 @@ export default function MonitoringPage() {
         </div>
       </div>
 
-      <section className="mb-8" aria-labelledby="summary-heading">
+      {loading && experiments.length === 0 ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+          <span className="sr-only">Loading</span>
+        </div>
+      ) : error && experiments.length === 0 ? (
+        <RetryableError message={error} onRetry={fetchData} context="monitoring data" />
+      ) : (
+        <>
+          <section className="mb-8" aria-labelledby="summary-heading">
         <h2 id="summary-heading" className="mb-4 text-lg font-semibold text-gray-800">
           Active Experiments Summary
         </h2>
@@ -155,15 +154,17 @@ export default function MonitoringPage() {
         />
       </section>
 
-      <section aria-labelledby="breaches-heading">
-        <h2 id="breaches-heading" className="mb-4 text-lg font-semibold text-gray-800">
-          Recent Guardrail Breaches
-        </h2>
-        <MonitoringBreachList
-          experiments={experiments}
-          guardrailStatuses={guardrailStatuses}
-        />
-      </section>
+          <section aria-labelledby="breaches-heading">
+            <h2 id="breaches-heading" className="mb-4 text-lg font-semibold text-gray-800">
+              Recent Guardrail Breaches
+            </h2>
+            <MonitoringBreachList
+              experiments={experiments}
+              guardrailStatuses={guardrailStatuses}
+            />
+          </section>
+        </>
+      )}
     </div>
   );
 }
