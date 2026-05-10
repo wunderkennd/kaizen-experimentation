@@ -6,6 +6,7 @@ import type { MetricDefinition, MetricType } from '@/lib/types';
 import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { CopyButton } from '@/components/copy-button';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 const SqlHighlighter = dynamic(
   () => import('@/components/sql-highlighter').then((m) => ({ default: m.SqlHighlighter })),
@@ -246,22 +247,30 @@ function MetricBrowserContent() {
     return <RetryableError message={error} onRetry={fetchData} context="metric definitions" />;
   }
 
-  if (metrics.length === 0) {
-    return (
-      <div className="py-12 text-center" data-testid="empty-state">
-        <p className="text-sm text-gray-500">No metric definitions found.</p>
-      </div>
-    );
-  }
+  const isEmpty = metrics.length === 0;
 
   return (
     <div>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Metrics' },
+      ]} />
+
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Metric Definitions</h1>
-        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="metric-count">
-          {filtered.length}
-        </span>
+        {!isEmpty && (
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="metric-count">
+            {filtered.length}
+          </span>
+        )}
       </div>
+
+      {isEmpty ? (
+        <div className="py-12 text-center" data-testid="empty-state">
+          <p className="text-sm text-gray-500">No metric definitions found.</p>
+        </div>
+      ) : (
+        <>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[300px] max-w-md">
@@ -307,37 +316,39 @@ function MetricBrowserContent() {
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="py-12 text-center" data-testid="no-filter-matches">
-          <p className="text-sm text-gray-500">No metrics match your filters.</p>
-          <button
-            onClick={clearFilters}
-            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
-            data-testid="clear-filters-empty"
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Metric ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Source Event</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Direction</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filtered.map((m) => (
-                <MetricRow key={m.metricId} metric={m} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center" data-testid="no-filter-matches">
+            <p className="text-sm text-gray-500">No metrics match your filters.</p>
+            <button
+              onClick={clearFilters}
+              className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+              data-testid="clear-filters-empty"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Metric ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Source Event</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Direction</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filtered.map((m) => (
+                  <MetricRow key={m.metricId} metric={m} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

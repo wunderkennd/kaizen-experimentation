@@ -129,7 +129,10 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
           {sorted.map((exp) => (
-            <tr key={exp.experimentId} className="hover:bg-gray-50">
+            <tr
+              key={exp.experimentId}
+              className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+            >
               <td className="py-3 pl-4 pr-3">
                 <Link
                   href={`/experiments/${exp.experimentId}`}

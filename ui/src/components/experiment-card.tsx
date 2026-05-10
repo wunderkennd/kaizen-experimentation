@@ -42,7 +42,7 @@ export const ExperimentCard = ExperimentRow;
 
 export function ExperimentRow({ experiment }: ExperimentCardProps) {
   return (
-    <tr className="hover:bg-gray-50">
+    <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
       <td className="whitespace-nowrap px-4 py-3">
         <Link
           href={`/experiments/${experiment.experimentId}`}
