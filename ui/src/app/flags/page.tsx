@@ -175,7 +175,7 @@ function FlagListContent() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filtered.map((f) => (
-                    <tr key={f.flagId} className="hover:bg-gray-50" data-testid={`flag-row-${f.flagId}`}>
+                    <tr key={f.flagId} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
                       <td className="px-4 py-3">
                         <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
                           {f.name}

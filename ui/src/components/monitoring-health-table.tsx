@@ -145,7 +145,11 @@ export function MonitoringHealthTable({
             const daysRunning = computeDaysRunning(exp.startedAt);
 
             return (
-              <tr key={exp.experimentId} data-testid={`health-row-${exp.experimentId}`}>
+              <tr
+                key={exp.experimentId}
+                className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+                data-testid={`health-row-${exp.experimentId}`}
+              >
                 <td className="whitespace-nowrap px-4 py-3 text-sm">
                   <Link
                     href={`/experiments/${exp.experimentId}`}

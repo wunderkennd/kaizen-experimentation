@@ -92,6 +92,10 @@ export default function AuditLogPage() {
   if (entries.length === 0) {
     return (
       <div>
+        <Breadcrumb items={[
+          { label: 'Experiments', href: '/' },
+          { label: 'Audit Log' },
+        ]} />
         <h1 className="mb-6 text-2xl font-bold text-gray-900">Audit Log</h1>
         <div className="py-12 text-center">
           <p className="text-sm text-gray-500">No audit log entries found.</p>
