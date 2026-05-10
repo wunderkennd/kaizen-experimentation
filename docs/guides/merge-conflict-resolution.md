@@ -12,7 +12,7 @@ echo "<pattern>" >> .gitignore
 git rebase --continue
 ```
 
-Common offenders: `tsconfig.tsbuildinfo`, `.Jules/palette.md`, `node_modules/`, `.next/`, `target/`.
+Common offenders: `tsconfig.tsbuildinfo`, `node_modules/`, `.next/`, `target/`.
 
 ## Multi-Branch Rebase After File Removal
 
@@ -26,9 +26,7 @@ for branch in $(gh pr list --json headRefName --jq '.[].headRefName'); do
   git checkout "$branch"
   git rebase main || {
     git rm --cached ui/tsconfig.tsbuildinfo 2>/dev/null
-    git rm --cached .Jules/palette.md 2>/dev/null
     git rm ui/tsconfig.tsbuildinfo 2>/dev/null
-    git rm .Jules/palette.md 2>/dev/null
     git rebase --continue
   }
   git push --force-with-lease origin "$branch"

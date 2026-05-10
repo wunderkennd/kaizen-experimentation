@@ -33,6 +33,13 @@ Thumbs.db
 *.profdata
 
 # ============================================
+# Agent runtime state — see CLAUDE.md "Files That Must NOT Be Tracked in Git"
+# ============================================
+
+# .Jules/ — Jules session state (task IDs, scratch buffers, etc.)
+.Jules/
+
+# ============================================
 # Claude Code & Multiclaude
 # ============================================
 
