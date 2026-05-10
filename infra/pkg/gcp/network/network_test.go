@@ -4,6 +4,7 @@
 package network
 
 import (
+	"net"
 	"sync"
 	"testing"
 
@@ -201,5 +202,19 @@ func TestVpcConnectorCidrIsValidSlash28(t *testing.T) {
 	// validation belongs at the Pulumi/GCP level.
 	if got := cidr[len(cidr)-3:]; got != "/28" {
 		t.Errorf("expected /28 CIDR, got %q", cidr)
+	}
+
+	// Connector CIDR must sit inside the VPC supernet (10.0.0.0/16) so VPC
+	// peering / Cloud Interconnect advertising the supernet still reaches it.
+	connectorIp, _, err := net.ParseCIDR(cidr)
+	if err != nil {
+		t.Fatalf("connector CIDR %q is not valid: %v", cidr, err)
+	}
+	_, supernet, err := net.ParseCIDR("10.0.0.0/16")
+	if err != nil {
+		t.Fatalf("parse VPC supernet: %v", err)
+	}
+	if !supernet.Contains(connectorIp) {
+		t.Errorf("connector CIDR %q is outside the VPC supernet %s", cidr, supernet)
 	}
 }

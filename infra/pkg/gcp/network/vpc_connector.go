@@ -32,10 +32,11 @@ func NewVpcConnector(ctx *pulumi.Context, args *VpcConnectorArgs, opts ...pulumi
 
 	cidr := cfg.Get("gcpVpcConnectorCidr")
 	if cidr == "" {
-		// Default /28 inside the VPC supernet. Must not overlap with any
-		// other subnet; placed deliberately above the private subnet (10.0.16.0/20)
-		// and well below any reserved private services access ranges (10.x.x.x/16).
-		cidr = "10.8.0.0/28"
+		// Default /28 inside the VPC supernet (10.0.0.0/16). Must not overlap
+		// with any other subnet; placed immediately after the private subnet
+		// (10.0.16.0/20 ends at 10.0.31.255) so VPC peering / Cloud Interconnect
+		// advertising 10.0.0.0/16 still reaches the connector.
+		cidr = "10.0.32.0/28"
 	}
 
 	machineType := cfg.Get("gcpVpcConnectorMachineType")

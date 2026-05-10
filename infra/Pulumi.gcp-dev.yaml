@@ -23,7 +23,7 @@ config:
   # GCP network subnet CIDR ranges (read by pkg/gcp/network).
   kaizen-experimentation:gcpPublicSubnetCidr: "10.0.0.0/20"
   kaizen-experimentation:gcpPrivateSubnetCidr: "10.0.16.0/20"
-  kaizen-experimentation:gcpVpcConnectorCidr: "10.8.0.0/28"
+  kaizen-experimentation:gcpVpcConnectorCidr: "10.0.32.0/28"
   kaizen-experimentation:gcpVpcConnectorMachineType: e2-micro
 
   # The remaining values are required by config.LoadConfig() because LoadConfig
