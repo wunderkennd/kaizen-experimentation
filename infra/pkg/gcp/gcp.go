@@ -2,10 +2,9 @@
 // stage-aggregating function per Deploy() switch arm) and is intentionally
 // thin — actual resource creation happens in pkg/gcp/<module>/ sub-packages.
 //
-// Phase 1 only ships the cicd stage; subsequent phases will fill in network,
-// storage, database, cache, secrets, compute, and edge. Until those land,
-// Deploy() will hit the unsupportedCloud error in main.go for any stage
-// other than cicd when cloudProvider=="gcp".
+// Phase 1 ships network (#519), cicd (Artifact Registry, #516), and storage
+// (Cloud Storage, #480). Subsequent phases will fill in database, cache,
+// secrets, compute, and edge.
 package gcp
 
 import (
@@ -13,10 +12,99 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
+
+// ─── Stage 1: Network ───────────────────────────────────────────────────────
+
+// NewNetwork creates the GCP networking foundation: a custom VPC with public
+// and private regional subnets, Cloud Router + Cloud NAT for egress, six
+// firewall rules whose target tags match the AWS security-group keys, a
+// Service Directory namespace for service discovery, and a Serverless VPC
+// Access connector so Cloud Run services can reach private resources.
+//
+// Returns types.NetworkOutputs with provider-specific zero values for the
+// AWS-only fields PrivateRouteTableIds and S3VpcEndpointId — GCP networks
+// route implicitly and have no S3 gateway endpoint analogue. Documented in
+// pkg/types/outputs.go.
+func NewNetwork(ctx *pulumi.Context, _ *kconfig.Config) (types.NetworkOutputs, error) {
+	vpcOut, err := network.NewVpc(ctx)
+	if err != nil {
+		return types.NetworkOutputs{}, err
+	}
+
+	fwRes, err := network.NewFirewallRules(ctx, &network.FirewallArgs{
+		NetworkId: vpcOut.NetworkId,
+	})
+	if err != nil {
+		return types.NetworkOutputs{}, err
+	}
+
+	sdOut, err := network.NewServiceDirectory(ctx, &network.ServiceDirectoryArgs{
+		Region: vpcOut.Region,
+	})
+	if err != nil {
+		return types.NetworkOutputs{}, err
+	}
+	ctx.Export("serviceDirectoryNamespaceId", sdOut.NamespaceId)
+	ctx.Export("serviceDirectoryNamespaceName", sdOut.NamespaceName)
+
+	connOut, err := network.NewVpcConnector(ctx, &network.VpcConnectorArgs{
+		NetworkName: vpcOut.NetworkName,
+		Region:      vpcOut.Region,
+	})
+	if err != nil {
+		return types.NetworkOutputs{}, err
+	}
+	ctx.Export("vpcConnectorId", connOut.ConnectorId)
+	ctx.Export("vpcConnectorSelfLink", connOut.ConnectorSelfLink)
+
+	return types.NetworkOutputs{
+		VpcId:              vpcOut.NetworkId,
+		PublicSubnetIds:    vpcOut.PublicSubnetIds,
+		PrivateSubnetIds:   vpcOut.PrivateSubnetIds,
+		SecurityGroupIds:   fwRes.Rules,
+		ServiceDiscoveryId: sdOut.NamespaceId,
+		// Zero-valued on GCP per types.NetworkOutputs documentation:
+		// PrivateRouteTableIds — GCP routes implicitly via subnet definitions.
+		// S3VpcEndpointId — no S3 gateway endpoint analogue on GCP.
+	}, nil
+}
+
+// ─── Stage 2: Storage + IAM ─────────────────────────────────────────────────
+
+// NewStorage creates the Cloud Storage buckets (data, mlflow, logs) and
+// returns them via the cross-provider types.StorageOutputs contract.
+//
+// Unlike AWS, GCS buckets do not consume any input from the network stage:
+// VPC-private access on GCP is enforced via VPC Service Controls (an
+// org-level resource, not bucket IAM) and is intentionally deferred to a
+// follow-up PR. The `_ types.NetworkOutputs` parameter is kept to maintain
+// signature parity with `aws.NewStorage` so Deploy() can call either
+// without per-provider wiring differences.
+func NewStorage(ctx *pulumi.Context, cfg *kconfig.Config, _ types.NetworkOutputs) (types.StorageOutputs, error) {
+	out, err := storage.NewStorage(ctx, cfg.Environment, &storage.StorageInputs{})
+	if err != nil {
+		return types.StorageOutputs{}, err
+	}
+	ctx.Export("dataBucketName", out.DataBucketName)
+	ctx.Export("mlflowBucketName", out.MlflowBucketName)
+	ctx.Export("logsBucketName", out.LogsBucketName)
+	return types.StorageOutputs{
+		DataBucketName:   out.DataBucketName,
+		DataBucketRef:    out.DataBucketURI,
+		MlflowBucketName: out.MlflowBucketName,
+		MlflowBucketRef:  out.MlflowBucketURI,
+		LogsBucketName:   out.LogsBucketName,
+		LogsBucketRef:    out.LogsBucketURI,
+	}, nil
+}
+
+// ─── Stage 4: Streaming + Secrets + CICD ────────────────────────────────────
 
 // NewCICD provisions Artifact Registry repositories for all Kaizen services.
 // Returns the same shared types.CICDOutputs shape as pkg/aws.NewCICD so the

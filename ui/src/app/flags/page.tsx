@@ -52,7 +52,10 @@ function FlagListContent() {
 
   return (
     <div>
-      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Flags' }]} />
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Flags' },
+      ]} />
 
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -151,49 +154,49 @@ function FlagListContent() {
             </div>
           ) : (
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rollout %</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Variants</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filtered.map((f) => (
-                <tr key={f.flagId} className="hover:bg-gray-50" data-testid={`flag-row-${f.flagId}`}>
-                  <td className="px-4 py-3">
-                    <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
-                      {f.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_TYPE_BADGE[f.type] || 'bg-gray-100 text-gray-800'}`}>
-                      {f.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    <code className="text-xs">{f.defaultValue}</code>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${f.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                      {f.enabled ? 'On' : 'Off'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {(f.rolloutPercentage * 100).toFixed(0)}%
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {f.variants.length}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rollout %</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Variants</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filtered.map((f) => (
+                    <tr key={f.flagId} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
+                      <td className="px-4 py-3">
+                        <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
+                          {f.name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_TYPE_BADGE[f.type] || 'bg-gray-100 text-gray-800'}`}>
+                          {f.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        <code className="text-xs">{f.defaultValue}</code>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${f.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                          {f.enabled ? 'On' : 'Off'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {(f.rolloutPercentage * 100).toFixed(0)}%
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {f.variants.length}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}
