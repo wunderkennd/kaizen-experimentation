@@ -36,12 +36,7 @@ func Deploy(ctx *pulumi.Context) error {
 	case "aws":
 		netOut, err = aws.NewNetwork(ctx, cfg)
 	case "gcp":
-		// Phase 1 sibling task: gcp.NewNetwork lands in a separate PR.
-		// Return zero-valued NetworkOutputs so downstream stages that don't
-		// yet have a gcp arm (everything except Storage today) can be
-		// short-circuited cleanly. The Storage gcp module does not consume
-		// any field on NetworkOutputs; see pkg/gcp/gcp.go NewStorage.
-		netOut = types.NetworkOutputs{}
+		netOut, err = gcp.NewNetwork(ctx, cfg)
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
