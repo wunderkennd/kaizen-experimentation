@@ -12,8 +12,8 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"

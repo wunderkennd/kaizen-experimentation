@@ -51,7 +51,7 @@ type VpcOutputs struct {
 // gateway. Mirrors infra/pkg/aws/network/vpc.go in shape but uses GCP's
 // regional subnet model.
 func NewVpc(ctx *pulumi.Context) (*VpcOutputs, error) {
-	cfg := config.New(ctx, "kaizen")
+	cfg := config.New(ctx, "kaizen-experimentation")
 	gcpCfg := config.New(ctx, "gcp")
 
 	region := gcpCfg.Get("region")

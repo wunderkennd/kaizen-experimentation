@@ -28,7 +28,7 @@ type VpcConnectorOutputs struct {
 // kaizen-rds / kaizen-redis / kaizen-msk just as ECS Fargate ENIs do on
 // the AWS side.
 func NewVpcConnector(ctx *pulumi.Context, args *VpcConnectorArgs, opts ...pulumi.ResourceOption) (*VpcConnectorOutputs, error) {
-	cfg := config.New(ctx, "kaizen")
+	cfg := config.New(ctx, "kaizen-experimentation")
 
 	cidr := cfg.Get("gcpVpcConnectorCidr")
 	if cidr == "" {
