@@ -188,7 +188,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Test vectors (hash parity) | `test-vectors/hash_vectors.json` |
 | Phase 5 plan & changelog | `docs/coordination/phase5-implementation-plan.md`, `docs/coordination/CHANGELOG-phase5.md` |
 | Playbook | `docs/coordination/phase5-playbook.md` |
-| Developer guides | `docs/guides/` (git-hygiene, github-issues-workflow, orchestration-workflow, pr-triage-and-cleanup, merge-conflict-resolution, gastown-setup) |
+| Developer guides | `docs/guides/` (git-hygiene, github-issues-workflow, orchestration-workflow, pr-triage-and-cleanup, merge-conflict-resolution, gastown-setup, palette) |
 | Issue specs (QoE etc.) | `docs/issues/` |
 | Infrastructure (Pulumi) | `infra/` (`main.go`, `Pulumi.{dev,staging,prod}.yaml`, `fullstack_test.go`) |
 | SDKs | `sdks/{android,ios,server-go,server-python,web}/` |
