@@ -26,26 +26,6 @@ func Deploy(ctx *pulumi.Context) error {
 	ctx.Export("environment", pulumi.String(cfg.Environment))
 
 	// =====================================================================
-	// GCP Phase 1: CICD-only slice
-	// =====================================================================
-	// Phase 1 ships only Artifact Registry. Network/storage/database/etc.
-	// land in subsequent phases per docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md.
-	// Until they do, a `cloudProvider=gcp` stack runs only the CICD stage and
-	// returns — that's exactly what `pulumi preview --stack gcp-dev` needs to
-	// succeed against the issue #482 acceptance criterion.
-	if cfg.CloudProvider == "gcp" {
-		cicdOut, err := gcp.NewCICD(ctx, cfg)
-		if err != nil {
-			return err
-		}
-		// Export a representative URL so `pulumi stack output` is non-empty.
-		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
-			ctx.Export("cicdAssignmentRepositoryUrl", url)
-		}
-		return nil
-	}
-
-	// =====================================================================
 	// Stage 1: Network Foundation
 	// =====================================================================
 	var (
@@ -55,6 +35,13 @@ func Deploy(ctx *pulumi.Context) error {
 	switch cfg.CloudProvider {
 	case "aws":
 		netOut, err = aws.NewNetwork(ctx, cfg)
+	case "gcp":
+		// Phase 1 sibling task: gcp.NewNetwork lands in a separate PR.
+		// Return zero-valued NetworkOutputs so downstream stages that don't
+		// yet have a gcp arm (everything except Storage today) can be
+		// short-circuited cleanly. The Storage gcp module does not consume
+		// any field on NetworkOutputs; see pkg/gcp/gcp.go NewStorage.
+		netOut = types.NetworkOutputs{}
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
@@ -76,6 +63,10 @@ func Deploy(ctx *pulumi.Context) error {
 			return err
 		}
 		iamOut, err = aws.NewIAM(ctx, cfg, storageOut)
+	case "gcp":
+		storageOut, err = gcp.NewStorage(ctx, cfg, netOut)
+		// IAM (Workload Identity) is wired by the compute Phase 1 PR — it
+		// owns the runtime service accounts that bind to bucket roles.
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
@@ -83,6 +74,27 @@ func Deploy(ctx *pulumi.Context) error {
 		return err
 	}
 	_ = iamOut // exported via ctx.Export inside NewIAM; reserved for future stages
+
+	// =====================================================================
+	// GCP early return — Phase 1 storage + cicd slice
+	// =====================================================================
+	// Stages 3–6 (data stores, streaming, compute, edge) are AWS-only today.
+	// GCP arms for those stages land in subsequent Phase 1 PRs. Until they do,
+	// we run the two implemented GCP stages (storage above, cicd below) and
+	// return cleanly so `pulumi preview --stack gcp-dev` succeeds.
+	// Each subsequent Phase 1 PR moves this early-return marker further down
+	// Deploy() and removes it entirely once all stages are wired.
+	if cfg.CloudProvider == "gcp" {
+		cicdOut, err := gcp.NewCICD(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
+			ctx.Export("cicdAssignmentRepositoryUrl", url)
+		}
+		ctx.Export("dataBucket", storageOut.DataBucketName)
+		return nil
+	}
 
 	// =====================================================================
 	// Stage 3: Data Stores
@@ -204,11 +216,12 @@ func Deploy(ctx *pulumi.Context) error {
 func unsupportedCloud(provider string) error {
 	switch provider {
 	case "gcp":
-		// Phase 1 only supports the cicd slice on GCP — that path returns
-		// before reaching any of the other stage switches. Hitting this is
-		// a programming error: a switch added a gcp case but Deploy() should
-		// have early-returned above.
-		return fmt.Errorf("internal: cloudProvider=gcp reached a non-CICD stage (Phase 1 supports only Artifact Registry)")
+		// Phase 1 supports storage (Stage 2) and cicd (early-return block) on GCP.
+		// Stages 3–6 are AWS-only today; GCP should never reach their switches
+		// because Deploy() early-returns after the cicd block. Hitting this is
+		// a programming error: a stage switch is missing a gcp case or the
+		// early-return was removed without wiring the remaining stages.
+		return fmt.Errorf("internal: cloudProvider=gcp reached an unimplemented stage (Phase 1 supports Storage + CICD only)")
 	default:
 		return fmt.Errorf("unsupported cloudProvider %q (expected \"aws\" or \"gcp\")", provider)
 	}
