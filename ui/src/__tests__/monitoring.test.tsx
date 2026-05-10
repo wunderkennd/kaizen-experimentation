@@ -25,7 +25,7 @@ vi.mock('next/link', () => ({
 async function renderAndWait() {
   render(<MonitoringPage />);
   await waitFor(() => {
-    expect(screen.getByText('Monitoring')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Monitoring', level: 1 })).toBeInTheDocument();
     expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
   });
 }
@@ -136,6 +136,41 @@ describe('Monitoring Page', () => {
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/experiments/11111111-1111-1111-1111-111111111111');
     expect(link).toHaveTextContent('homepage_recs_v2');
+  });
+
+  it('shows breadcrumbs', async () => {
+    await renderAndWait();
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(nav).toBeInTheDocument();
+    expect(within(nav).getByText('Experiments')).toBeInTheDocument();
+    expect(within(nav).getByText('Monitoring')).toBeInTheDocument();
+  });
+
+  it('shows refreshing indicator during auto-refresh', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await renderAndWait();
+
+    // Enable auto-refresh
+    const toggle = screen.getByTestId('auto-refresh-toggle');
+    await user.click(toggle);
+
+    // Mock a slow response for the next call to listExperiments
+    server.use(
+      http.post(`${MGMT_SVC}/ListExperiments`, async () => {
+        // Use a delay to simulate loading
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json({ experiments: [], nextPageToken: '' });
+      }),
+    );
+
+    // Advance time by 30s to trigger refresh
+    vi.advanceTimersByTime(30000);
+
+    // Wait for the state update and check for the refreshing indicator
+    await waitFor(() => {
+      expect(screen.getByTestId('refreshing-indicator')).toBeInTheDocument();
+      expect(screen.getByText('Refreshing...')).toBeInTheDocument();
+    });
   });
 
   it('shows "No running experiments" when none exist', async () => {

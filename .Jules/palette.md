@@ -72,3 +72,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-06-25 - Defensive Permission Gating
 **Learning:** Components rendering role-based information (like 'Insufficient Permissions' alerts) should wrap access to `user.role` or `ROLE_LABELS` in a conditional check (e.g., `{user && ...}`) to avoid runtime errors before the `AuthUser` object is fully loaded from context. Similarly, ensure data objects like `flag` are present before accessing their properties in breadcrumbs or titles within error states.
 **Action:** Always use optional chaining or conditional rendering when accessing `user` or asynchronous data objects in permission-gated UI blocks.
+
+## 2026-06-30 - Background Refresh Indicators
+**Learning:** For dashboards with auto-refreshing data, showing a subtle "Refreshing..." indicator with a spinner near the "Last updated" timestamp provides clear feedback that an update is in progress without the disruptive flicker of a full-page loading state.
+**Action:** Implement conditional background loading indicators (e.g., `{loading && data.length > 0 && ...}`) to improve perceived performance and transparency during periodic data fetches.
