@@ -1,0 +1,49 @@
+name: Auto-promote dependents on issue close
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  promote:
+    if: contains(github.event.issue.labels.*.name, 'sprint-I.3')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find newly-ready dependents and comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          CLOSED_ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Find open sprint-I.3 issues whose body lists the just-closed issue
+          # as a blocker (under the "## Blocked by" section).
+          gh issue list --label "sprint-I.3" --state open --limit 200 \
+            --json number,body \
+          | jq -c --arg closed "#$CLOSED_ISSUE" '
+              .[]
+              | select(.body | test("(?ms)^## Blocked by.*?" + $closed + "\\b"))
+            ' \
+          | while IFS= read -r dep; do
+              num=$(echo "$dep" | jq -r '.number')
+              body=$(echo "$dep" | jq -r '.body')
+              # Re-check ALL of this dependent's blockers — only comment when
+              # every blocker is now closed.
+              blockers=$(echo "$body" \
+                | awk '/^## Blocked by/{flag=1; next} /^## /{flag=0} flag' \
+                | grep -oE '#[0-9]+' | tr -d '#' | sort -u || true)
+              all_closed=true
+              for b in $blockers; do
+                state=$(gh issue view "$b" --json state -q '.state' 2>/dev/null || echo "MISSING")
+                if [ "$state" != "CLOSED" ]; then
+                  all_closed=false
+                  break
+                fi
+              done
+              if [ "$all_closed" = "true" ]; then
+                gh issue comment "$num" --body "🟢 All blockers closed. This issue is now ready for dispatch — run \`just autonomous-sprint I.3\` (or wait for the next scheduled run)."
+              fi
+            done

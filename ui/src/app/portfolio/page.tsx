@@ -121,8 +121,10 @@ export default function PortfolioDashboard() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Portfolio' }]} />
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Portfolio' },
+      ]} />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

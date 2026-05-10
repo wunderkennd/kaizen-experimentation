@@ -77,7 +77,11 @@ function FlagDetailContent() {
 
   return (
     <div>
-      <Breadcrumb items={[{ label: 'Flags', href: '/flags' }, { label: flag.name }]} />
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Flags', href: '/flags' },
+        { label: flag.name },
+      ]} />
 
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-2xl font-bold text-gray-900" data-testid="flag-name">{flag.name}</h1>

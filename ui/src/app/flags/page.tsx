@@ -7,6 +7,7 @@ import { listFlags } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -16,7 +17,7 @@ const FLAG_TYPE_BADGE: Record<FlagType, string> = {
 };
 
 function FlagListContent() {
-  const { canAtLeast } = useAuth();
+  const { canAtLeast, user } = useAuth();
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,11 +63,44 @@ function FlagListContent() {
     return <RetryableError message={error} onRetry={fetchData} context="feature flags" />;
   }
 
-  if (flags.length === 0) {
-    return (
-      <div>
-        <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Flags' }]} />
-        <h1 className="mb-6 text-2xl font-bold text-gray-900">Feature Flags</h1>
+  const isEmpty = flags.length === 0;
+
+  return (
+    <div>
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Flags' },
+      ]} />
+
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
+          {!isEmpty && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="flag-count">
+              {filtered.length}
+            </span>
+          )}
+        </div>
+        {canAtLeast('experimenter') ? (
+          <Link
+            href="/flags/new"
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+            data-testid="new-flag-button"
+          >
+            New Flag
+          </Link>
+        ) : (
+          <span
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            title={`Requires Experimenter role (you are ${user ? ROLE_LABELS[user.role] : 'Unknown'})`}
+            data-testid="new-flag-disabled"
+          >
+            New Flag
+          </span>
+        )}
+      </div>
+
+      {isEmpty ? (
         <div className="py-12 text-center" data-testid="empty-state">
           <p className="text-sm text-gray-500">No feature flags found.</p>
           {canAtLeast('experimenter') && (
@@ -81,30 +115,8 @@ function FlagListContent() {
             </div>
           )}
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Flags' }]} />
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="flag-count">
-            {filtered.length}
-          </span>
-        </div>
-        {canAtLeast('experimenter') && (
-          <Link
-            href="/flags/new"
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
-            data-testid="new-flag-button"
-          >
-            New Flag
-          </Link>
-        )}
-      </div>
+      ) : (
+        <>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[300px] max-w-md">
@@ -138,65 +150,63 @@ function FlagListContent() {
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="py-12 text-center" data-testid="no-filter-matches">
-          <p className="text-sm text-gray-500">No flags match your search.</p>
-          <button
-            onClick={() => setSearch('')}
-            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rollout %</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Variants</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filtered.map((f) => (
-                <tr
-                  key={f.flagId}
-                  className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
-                  data-testid={`flag-row-${f.flagId}`}
-                >
-                  <td className="px-4 py-3">
-                    <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
-                      {f.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_TYPE_BADGE[f.type] || 'bg-gray-100 text-gray-800'}`}>
-                      {f.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    <code className="text-xs">{f.defaultValue}</code>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${f.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                      {f.enabled ? 'On' : 'Off'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {(f.rolloutPercentage * 100).toFixed(0)}%
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {f.variants.length}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {filtered.length === 0 ? (
+            <div className="py-12 text-center" data-testid="no-filter-matches">
+              <p className="text-sm text-gray-500">No flags match your search.</p>
+              <button
+                onClick={() => setSearch('')}
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rollout %</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Variants</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filtered.map((f) => (
+                    <tr key={f.flagId} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
+                      <td className="px-4 py-3">
+                        <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
+                          {f.name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_TYPE_BADGE[f.type] || 'bg-gray-100 text-gray-800'}`}>
+                          {f.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        <code className="text-xs">{f.defaultValue}</code>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${f.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                          {f.enabled ? 'On' : 'Off'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {(f.rolloutPercentage * 100).toFixed(0)}%
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {f.variants.length}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

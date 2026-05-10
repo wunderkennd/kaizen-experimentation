@@ -11,7 +11,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/sns"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/kaizen-experimentation/infra/pkg/cicd"
+	"github.com/kaizen-experimentation/infra/pkg/aws/cicd"
 	"github.com/kaizen-experimentation/infra/pkg/config"
 )
 

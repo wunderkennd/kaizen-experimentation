@@ -627,8 +627,8 @@ status:
         || echo "    (not reachable)"
     @echo ""
     @echo "  Kafka topics:"
-    @docker exec -it $$({{ docker }} ps -q --filter name=kafka 2>/dev/null | head -1) \
-        kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null \
+    @docker exec -i $$({{ docker }} ps -q --filter name=redpanda 2>/dev/null | head -1) \
+        rpk topic list --brokers=localhost:9092 2>/dev/null \
         || echo "    (not reachable)"
 
 # Watch Rust workspace for changes and re-run tests
@@ -822,8 +822,12 @@ beads-sync sprint_num:
       4|5.4) LABEL="sprint-5.4" ;;
       5|5.5) LABEL="sprint-5.5" ;;
       6|5.6) LABEL="sprint-5.6" ;;
+      I.0)   LABEL="sprint-I.0" ;;
+      I.1)   LABEL="sprint-I.1" ;;
+      I.2)   LABEL="sprint-I.2" ;;
+      I.3)   LABEL="sprint-I.3" ;;
       all)   LABEL="--all" ;;
-      *) echo "Unknown sprint: {{sprint_num}} (use 0-6, 5.0-5.6, or 'all')"; exit 1 ;;
+      *) echo "Unknown sprint: {{sprint_num}} (use 0-6, 5.0-5.6, I.0-I.3, or 'all')"; exit 1 ;;
     esac
     bash scripts/beads-sync.sh "$LABEL"
 
@@ -925,6 +929,56 @@ autonomous-shutdown:
     multiclaude stop 2>/dev/null || true
     echo "✓ Multiclaude fully stopped."
 
+# Internal: emit one JSON object per line for "ready" issues with the given label.
+# An issue is ready when (1) it has no open PR closing it, AND (2) every "#N"
+# listed under "## Blocked by" in its body refers to a CLOSED issue (or no
+# blockers exist). Prefers beads ('bd ready') when initialized.
+_ready label:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LABEL="{{label}}"
+    # In-flight PRs (open PRs that close any issue) — both code paths exclude these.
+    IN_FLIGHT=$(gh pr list --state open --limit 200 \
+      --json closingIssuesReferences \
+      --jq '[.[].closingIssuesReferences[].number] | unique | join(" ")' 2>/dev/null || echo "")
+    # Prefer beads when initialized: true DAG semantics with cycle detection.
+    if command -v bd >/dev/null 2>&1 && bd list --all --json >/dev/null 2>&1; then
+      bd ready --label "$LABEL" --json --limit 200 2>/dev/null \
+        | jq -c '.[] | select(.external_ref != null) | select(.external_ref | startswith("gh-")) | {number: (.external_ref | sub("^gh-"; "") | tonumber), title}' \
+        | while IFS= read -r issue; do
+            num=$(echo "$issue" | jq -r '.number')
+            if [ -n "$IN_FLIGHT" ] && echo " $IN_FLIGHT " | grep -q " $num "; then
+              continue
+            fi
+            echo "$issue"
+          done
+      exit 0
+    fi
+    # Fallback: parse "## Blocked by" from issue bodies.
+    gh issue list --label "$LABEL" --state open --limit 200 --json number,title,body \
+      | jq -c '.[]' \
+      | while IFS= read -r issue; do
+          num=$(echo "$issue" | jq -r '.number')
+          if [ -n "$IN_FLIGHT" ] && echo " $IN_FLIGHT " | grep -q " $num "; then
+            continue
+          fi
+          body=$(echo "$issue" | jq -r '.body // ""')
+          blockers=$(echo "$body" \
+            | awk '/^## Blocked by/{flag=1; next} /^## /{flag=0} flag' \
+            | grep -oE '#[0-9]+' | tr -d '#' | sort -u || true)
+          ready=true
+          for b in $blockers; do
+            state=$(gh issue view "$b" --json state -q '.state' 2>/dev/null || echo "MISSING")
+            if [ "$state" != "CLOSED" ]; then
+              ready=false
+              break
+            fi
+          done
+          if [ "$ready" = "true" ]; then
+            echo "$issue" | jq -c '{number, title}'
+          fi
+        done
+
 # Sprint launchers read Issues by label (primary) with milestone fallback
 autonomous-sprint sprint_num:
     #!/usr/bin/env bash
@@ -941,27 +995,41 @@ autonomous-sprint sprint_num:
       I.0) LABEL="sprint-I.0"; MS="Sprint I.0: Scaffold + Foundation" ;;
       I.1) LABEL="sprint-I.1"; MS="Sprint I.1: Services + Wiring" ;;
       I.2) LABEL="sprint-I.2"; MS="Sprint I.2: Integration + Hardening" ;;
+      I.3) LABEL="sprint-I.3"; MS="Sprint I.3: Multi-Cloud Foundation" ;;
       tc.0) LABEL="sprint-tc-0"; MS="TC.0: Foundations" ;;
       tc.1) LABEL="sprint-tc-1"; MS="TC.1: Statistical Goldens" ;;
       tc.2) LABEL="sprint-tc-2"; MS="TC.2: Service Binaries" ;;
       tc.3) LABEL="sprint-tc-3"; MS="TC.3: Contract Backfill" ;;
       tc.4) LABEL="sprint-tc-4"; MS="TC.4: UI E2E + Hygiene" ;;
-      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, I.0-I.2, or tc.0-tc.4."; exit 1 ;;
+      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, I.0-I.3, or tc.0-tc.4."; exit 1 ;;
     esac
     echo "=== Launching workers for: $MS ==="
-    # Query by label first (always present), fall back to milestone
-    # Use jq to produce one JSON object per line (handles multi-line bodies safely)
-    ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+    # Use _ready to filter blocked or in-flight issues.
+    ISSUES=$(just _ready "$LABEL")
     if [ -z "$ISSUES" ]; then
-      echo "  No issues found with label '$LABEL', trying milestone..."
-      ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+      # Distinguish "no work ready" (all blocked or in-flight) from "no Blocked-by
+      # structure exists" (legacy sprint). If at least one labeled issue has a
+      # "## Blocked by" section, _ready is authoritative — empty means "wait."
+      # If NO labeled issue has the structure, fall back to legacy label/milestone.
+      HAS_STRUCTURE=$(gh issue list --label "$LABEL" --state open --limit 50 --json body \
+        --jq '[.[] | select(.body | contains("## Blocked by"))] | length' 2>/dev/null || echo "0")
+      if [ "$HAS_STRUCTURE" = "0" ]; then
+        ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+        if [ -z "$ISSUES" ]; then
+          echo "  No issues found with label '$LABEL', trying milestone..."
+          ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
+        fi
+      else
+        echo "  ⚠ No ready issues for sprint {{sprint_num}}: every labeled issue is either blocked by an open dependency or has an in-flight PR. Wait for review/merge, then re-run."
+        exit 0
+      fi
     fi
     if [ -z "$ISSUES" ]; then
-      echo "  ⚠ No open issues found for sprint {{sprint_num}}. Nothing to launch."
+      echo "  ⚠ No issues found for sprint {{sprint_num}} via label or milestone. Nothing to launch."
       exit 0
     fi
     COUNT=0
-    echo "$ISSUES" | while IFS= read -r line; do
+    while IFS= read -r line; do
       num=$(echo "$line" | jq -r '.number')
       title=$(echo "$line" | jq -r '.title')
       # Fetch full issue body separately to avoid newline parsing issues
@@ -980,8 +1048,8 @@ autonomous-sprint sprint_num:
       fi
       multiclaude worker create "$title. $body. $BRANCH_HINT PR must include 'Closes #$num'."
       COUNT=$((COUNT + 1))
-    done
-    echo "✓ Workers launched for $MS ($COUNT issues)"
+    done <<< "$ISSUES"
+    echo "✓ Workers launched for $MS ($COUNT ready issues)"
     echo "Monitor: just autonomous-status"
 
 # --- Solo Mode ---

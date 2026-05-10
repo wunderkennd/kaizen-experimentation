@@ -75,6 +75,13 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			DenominatorEventType: m.DenominatorEventType,
 			CustomSQL:            m.CustomSQL,
 			Percentile:           m.Percentile,
+			// ADR-026 Phase 1
+			FilterSQL:   m.FilterSQL,
+			ValueColumn: m.ValueColumn,
+			Operator:    m.Operator,
+			EventType:   m.EventType,
+			WindowHours: m.WindowHours,
+			Operands:    toSparkOperands(m.Operands),
 		}
 
 		// QoE metrics use a separate template reading from delta.qoe_events.
@@ -91,7 +98,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		} else {
 			rendered, err := j.renderer.RenderForType(m.Type, params)
 			if err != nil {
-				slog.Warn("skipping unsupported metric type",
+				slog.Warn("skipping metric: render error",
 					"metric_id", m.MetricID, "type", m.Type, "error", err)
 				continue
 			}
@@ -155,134 +162,162 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		// If metric has a CUPED covariate configured and experiment has a start date,
 		// compute the pre-experiment covariate value for variance reduction.
 		if m.CupedCovariateMetricID != "" && exp.StartedAt != "" {
-			covMetric, err := j.config.GetMetric(m.CupedCovariateMetricID)
-			if err != nil {
-				return nil, fmt.Errorf("jobs: resolve CUPED covariate metric %s for %s: %w",
-					m.CupedCovariateMetricID, m.MetricID, err)
+			if !isLegacyStyle(m.Type) {
+				slog.Info("skipping CUPED covariate: legacy column convention not supported for this metric type",
+					"metric_id", m.MetricID,
+					"type", m.Type,
+				)
+			} else {
+				covMetric, err := j.config.GetMetric(m.CupedCovariateMetricID)
+				if err != nil {
+					return nil, fmt.Errorf("jobs: resolve CUPED covariate metric %s for %s: %w",
+						m.CupedCovariateMetricID, m.MetricID, err)
+				}
+
+				cupedParams := params
+				cupedParams.CupedEnabled = true
+				cupedParams.CupedCovariateEventType = covMetric.SourceEventType
+				cupedParams.ExperimentStartDate = exp.StartedAt
+				cupedParams.CupedLookbackDays = defaultCupedLookbackDays
+
+				cupedSQL, err := j.renderer.RenderCupedCovariate(cupedParams)
+				if err != nil {
+					return nil, fmt.Errorf("jobs: render CUPED covariate for %s: %w", m.MetricID, err)
+				}
+
+				cupedResult, err := j.executor.ExecuteAndWrite(ctx, cupedSQL, "delta.metric_summaries")
+				if err != nil {
+					return nil, fmt.Errorf("jobs: execute CUPED covariate for %s: %w", m.MetricID, err)
+				}
+				m3metrics.SparkQueryDuration.WithLabelValues("cuped_covariate").Observe(cupedResult.Duration.Seconds())
+				m3metrics.SparkQueryRows.WithLabelValues("cuped_covariate").Observe(float64(cupedResult.RowCount))
+
+				if err := j.queryLog.Log(ctx, querylog.Entry{
+					ExperimentID: experimentID,
+					MetricID:     m.MetricID,
+					SQLText:      cupedSQL,
+					RowCount:     cupedResult.RowCount,
+					DurationMs:   cupedResult.Duration.Milliseconds(),
+					JobType:      "cuped_covariate",
+				}); err != nil {
+					return nil, fmt.Errorf("jobs: log CUPED covariate query for %s: %w", m.MetricID, err)
+				}
+
+				slog.Info("computed CUPED covariate",
+					"experiment_id", experimentID,
+					"metric_id", m.MetricID,
+					"covariate_metric_id", m.CupedCovariateMetricID,
+					"rows", cupedResult.RowCount,
+				)
 			}
-
-			cupedParams := params
-			cupedParams.CupedEnabled = true
-			cupedParams.CupedCovariateEventType = covMetric.SourceEventType
-			cupedParams.ExperimentStartDate = exp.StartedAt
-			cupedParams.CupedLookbackDays = defaultCupedLookbackDays
-
-			cupedSQL, err := j.renderer.RenderCupedCovariate(cupedParams)
-			if err != nil {
-				return nil, fmt.Errorf("jobs: render CUPED covariate for %s: %w", m.MetricID, err)
-			}
-
-			cupedResult, err := j.executor.ExecuteAndWrite(ctx, cupedSQL, "delta.metric_summaries")
-			if err != nil {
-				return nil, fmt.Errorf("jobs: execute CUPED covariate for %s: %w", m.MetricID, err)
-			}
-			m3metrics.SparkQueryDuration.WithLabelValues("cuped_covariate").Observe(cupedResult.Duration.Seconds())
-			m3metrics.SparkQueryRows.WithLabelValues("cuped_covariate").Observe(float64(cupedResult.RowCount))
-
-			if err := j.queryLog.Log(ctx, querylog.Entry{
-				ExperimentID: experimentID,
-				MetricID:     m.MetricID,
-				SQLText:      cupedSQL,
-				RowCount:     cupedResult.RowCount,
-				DurationMs:   cupedResult.Duration.Milliseconds(),
-				JobType:      "cuped_covariate",
-			}); err != nil {
-				return nil, fmt.Errorf("jobs: log CUPED covariate query for %s: %w", m.MetricID, err)
-			}
-
-			slog.Info("computed CUPED covariate",
-				"experiment_id", experimentID,
-				"metric_id", m.MetricID,
-				"covariate_metric_id", m.CupedCovariateMetricID,
-				"rows", cupedResult.RowCount,
-			)
 		}
 
 		// MLRATE cross-fitting: if experiment has MLRATE enabled and metric has
 		// feature config, generate K-fold cross-fitted predictions as AVLM covariates.
 		if exp.MLRATEEnabled && len(m.MLRATEFeatureEventTypes) > 0 && m.MLRATEModelURI != "" && exp.StartedAt != "" {
-			mlrateJob := NewMLRATEJob(j.renderer, j.executor, j.queryLog)
-			mlrateResult, err := mlrateJob.Run(ctx, exp, &m, computationDate)
-			if err != nil {
-				return nil, fmt.Errorf("jobs: MLRATE cross-fit for %s: %w", m.MetricID, err)
-			}
+			if !isLegacyStyle(m.Type) {
+				slog.Info("skipping MLRATE cross-fit: legacy column convention not supported for this metric type",
+					"metric_id", m.MetricID,
+					"type", m.Type,
+				)
+			} else {
+				mlrateJob := NewMLRATEJob(j.renderer, j.executor, j.queryLog)
+				mlrateResult, err := mlrateJob.Run(ctx, exp, &m, computationDate)
+				if err != nil {
+					return nil, fmt.Errorf("jobs: MLRATE cross-fit for %s: %w", m.MetricID, err)
+				}
 
-			slog.Info("computed MLRATE cross-fitted predictions",
-				"experiment_id", experimentID,
-				"metric_id", m.MetricID,
-				"folds", mlrateResult.Folds,
-				"users_scored", mlrateResult.UsersScored,
-			)
+				slog.Info("computed MLRATE cross-fitted predictions",
+					"experiment_id", experimentID,
+					"metric_id", m.MetricID,
+					"folds", mlrateResult.Folds,
+					"users_scored", mlrateResult.UsersScored,
+				)
+			}
 		}
 
 		// Session-level aggregation: if enabled, also compute per-session metrics.
 		if exp.SessionLevel && !m.IsQoEMetric {
-			slParams := params
-			slParams.SessionLevel = true
+			if !isLegacyStyle(m.Type) {
+				slog.Info("skipping session-level metric: legacy column convention not supported for this metric type",
+					"metric_id", m.MetricID,
+					"type", m.Type,
+				)
+			} else {
+				slParams := params
+				slParams.SessionLevel = true
 
-			slSQL, err := j.renderer.RenderSessionLevelMean(slParams)
-			if err != nil {
-				return nil, fmt.Errorf("jobs: render session-level metric for %s: %w", m.MetricID, err)
+				slSQL, err := j.renderer.RenderSessionLevelMean(slParams)
+				if err != nil {
+					return nil, fmt.Errorf("jobs: render session-level metric for %s: %w", m.MetricID, err)
+				}
+
+				slResult, err := j.executor.ExecuteAndWrite(ctx, slSQL, "delta.metric_summaries")
+				if err != nil {
+					return nil, fmt.Errorf("jobs: execute session-level metric for %s: %w", m.MetricID, err)
+				}
+				m3metrics.SparkQueryDuration.WithLabelValues("session_level_metric").Observe(slResult.Duration.Seconds())
+				m3metrics.SparkQueryRows.WithLabelValues("session_level_metric").Observe(float64(slResult.RowCount))
+
+				if err := j.queryLog.Log(ctx, querylog.Entry{
+					ExperimentID: experimentID,
+					MetricID:     m.MetricID,
+					SQLText:      slSQL,
+					RowCount:     slResult.RowCount,
+					DurationMs:   slResult.Duration.Milliseconds(),
+					JobType:      "session_level_metric",
+				}); err != nil {
+					return nil, fmt.Errorf("jobs: log session-level metric query for %s: %w", m.MetricID, err)
+				}
+
+				slog.Info("computed session-level metric",
+					"experiment_id", experimentID,
+					"metric_id", m.MetricID,
+					"rows", slResult.RowCount,
+				)
 			}
-
-			slResult, err := j.executor.ExecuteAndWrite(ctx, slSQL, "delta.metric_summaries")
-			if err != nil {
-				return nil, fmt.Errorf("jobs: execute session-level metric for %s: %w", m.MetricID, err)
-			}
-			m3metrics.SparkQueryDuration.WithLabelValues("session_level_metric").Observe(slResult.Duration.Seconds())
-			m3metrics.SparkQueryRows.WithLabelValues("session_level_metric").Observe(float64(slResult.RowCount))
-
-			if err := j.queryLog.Log(ctx, querylog.Entry{
-				ExperimentID: experimentID,
-				MetricID:     m.MetricID,
-				SQLText:      slSQL,
-				RowCount:     slResult.RowCount,
-				DurationMs:   slResult.Duration.Milliseconds(),
-				JobType:      "session_level_metric",
-			}); err != nil {
-				return nil, fmt.Errorf("jobs: log session-level metric query for %s: %w", m.MetricID, err)
-			}
-
-			slog.Info("computed session-level metric",
-				"experiment_id", experimentID,
-				"metric_id", m.MetricID,
-				"rows", slResult.RowCount,
-			)
 		}
 
 		// Lifecycle segmentation: if enabled, also compute per-lifecycle-segment metrics.
 		if exp.LifecycleStratificationEnabled && !m.IsQoEMetric {
-			lcParams := params
-			lcParams.LifecycleEnabled = true
+			if !isLegacyStyle(m.Type) {
+				slog.Info("skipping lifecycle metric: legacy column convention not supported for this metric type",
+					"metric_id", m.MetricID,
+					"type", m.Type,
+				)
+			} else {
+				lcParams := params
+				lcParams.LifecycleEnabled = true
 
-			lcSQL, err := j.renderer.RenderLifecycleMean(lcParams)
-			if err != nil {
-				return nil, fmt.Errorf("jobs: render lifecycle metric for %s: %w", m.MetricID, err)
+				lcSQL, err := j.renderer.RenderLifecycleMean(lcParams)
+				if err != nil {
+					return nil, fmt.Errorf("jobs: render lifecycle metric for %s: %w", m.MetricID, err)
+				}
+
+				lcResult, err := j.executor.ExecuteAndWrite(ctx, lcSQL, "delta.metric_summaries")
+				if err != nil {
+					return nil, fmt.Errorf("jobs: execute lifecycle metric for %s: %w", m.MetricID, err)
+				}
+				m3metrics.SparkQueryDuration.WithLabelValues("lifecycle_metric").Observe(lcResult.Duration.Seconds())
+				m3metrics.SparkQueryRows.WithLabelValues("lifecycle_metric").Observe(float64(lcResult.RowCount))
+
+				if err := j.queryLog.Log(ctx, querylog.Entry{
+					ExperimentID: experimentID,
+					MetricID:     m.MetricID,
+					SQLText:      lcSQL,
+					RowCount:     lcResult.RowCount,
+					DurationMs:   lcResult.Duration.Milliseconds(),
+					JobType:      "lifecycle_metric",
+				}); err != nil {
+					return nil, fmt.Errorf("jobs: log lifecycle metric query for %s: %w", m.MetricID, err)
+				}
+
+				slog.Info("computed lifecycle metric",
+					"experiment_id", experimentID,
+					"metric_id", m.MetricID,
+					"rows", lcResult.RowCount,
+				)
 			}
-
-			lcResult, err := j.executor.ExecuteAndWrite(ctx, lcSQL, "delta.metric_summaries")
-			if err != nil {
-				return nil, fmt.Errorf("jobs: execute lifecycle metric for %s: %w", m.MetricID, err)
-			}
-			m3metrics.SparkQueryDuration.WithLabelValues("lifecycle_metric").Observe(lcResult.Duration.Seconds())
-			m3metrics.SparkQueryRows.WithLabelValues("lifecycle_metric").Observe(float64(lcResult.RowCount))
-
-			if err := j.queryLog.Log(ctx, querylog.Entry{
-				ExperimentID: experimentID,
-				MetricID:     m.MetricID,
-				SQLText:      lcSQL,
-				RowCount:     lcResult.RowCount,
-				DurationMs:   lcResult.Duration.Milliseconds(),
-				JobType:      "lifecycle_metric",
-			}); err != nil {
-				return nil, fmt.Errorf("jobs: log lifecycle metric query for %s: %w", m.MetricID, err)
-			}
-
-			slog.Info("computed lifecycle metric",
-				"experiment_id", experimentID,
-				"metric_id", m.MetricID,
-				"rows", lcResult.RowCount,
-			)
 		}
 
 		slog.Info("computed metric",
@@ -394,4 +429,37 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		UsersProcessed:  int(totalRows),
 		CompletedAt:     time.Now(),
 	}, nil
+}
+
+// isLegacyStyle reports whether a MetricType uses the legacy MEAN-style
+// column convention (me.value, me.event_type = '{{.SourceEventType}}')
+// that the post-processing templates (cuped_covariate, session_level_mean,
+// lifecycle_mean, mlrate_*) assume.
+//
+// ADR-026 Phase 1 types (FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT) use
+// different column conventions and must skip post-processing until those
+// templates grow per-type variants (issue #511 option b).
+func isLegacyStyle(metricType string) bool {
+	switch strings.ToUpper(metricType) {
+	case "MEAN", "PROPORTION", "COUNT", "RATIO", "PERCENTILE", "CUSTOM":
+		return true
+	}
+	return false
+}
+
+// toSparkOperands converts config-layer OperandConfig values to the
+// spark.OperandParam shape consumed by the renderer's composite template.
+// Returns nil for an empty/nil input (matches Go's zero-value convention).
+func toSparkOperands(in []config.OperandConfig) []spark.OperandParam {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]spark.OperandParam, len(in))
+	for i, op := range in {
+		out[i] = spark.OperandParam{
+			MetricID: op.MetricID,
+			Weight:   op.Weight,
+		}
+	}
+	return out
 }

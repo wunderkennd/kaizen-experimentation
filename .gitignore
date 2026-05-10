@@ -80,3 +80,8 @@ docs/coordination/status/*
 # runtime locks, and logs. The portable export .beads/issues.jsonl is NOT
 # ignored there — commit it intentionally via `just beads-export` so teammates
 # can `bd import` after `git pull`.
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

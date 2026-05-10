@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import MonitoringPage from '@/app/monitoring/page';
+import { AuthProvider } from '@/lib/auth-context';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
@@ -23,7 +24,11 @@ vi.mock('next/link', () => ({
 }));
 
 async function renderAndWait() {
-  render(<MonitoringPage />);
+  render(
+    <AuthProvider>
+      <MonitoringPage />
+    </AuthProvider>,
+  );
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Monitoring', level: 1 })).toBeInTheDocument();
     expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
@@ -43,6 +48,7 @@ describe('Monitoring Page', () => {
     await renderAndWait();
 
     expect(screen.getByRole('heading', { name: 'Monitoring', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Experiments')).toBeInTheDocument(); // Breadcrumb
     expect(screen.getByRole('heading', { name: 'Active Experiments Summary' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Running Experiments Health' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Guardrail Breaches' })).toBeInTheDocument();
@@ -167,7 +173,11 @@ describe('Monitoring Page', () => {
       }),
     );
 
-    render(<MonitoringPage />);
+    render(
+      <AuthProvider>
+        <MonitoringPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('no-running-experiments')).toBeInTheDocument();
     });
@@ -221,7 +231,11 @@ describe('Monitoring Page', () => {
       }),
     );
 
-    render(<MonitoringPage />);
+    render(
+      <AuthProvider>
+        <MonitoringPage />
+      </AuthProvider>,
+    );
     await waitFor(() => {
       expect(screen.getByTestId('days-running-test-days')).toBeInTheDocument();
     });

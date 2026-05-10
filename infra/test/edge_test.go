@@ -11,8 +11,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
-	"github.com/kaizen-experimentation/infra/pkg/dns"
-	"github.com/kaizen-experimentation/infra/pkg/loadbalancer"
+	"github.com/kaizen-experimentation/infra/pkg/aws/dns"
+	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 )
 
 // ---------------------------------------------------------------------------

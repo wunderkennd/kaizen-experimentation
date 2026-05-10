@@ -1,9 +1,14 @@
 ##############################################################################
 # Local Development Infrastructure
 # Usage:
-#   docker-compose up -d                 # Start all infra
-#   docker-compose up -d postgres kafka  # Start specific services
-#   docker-compose down -v               # Stop and remove volumes
+#   docker-compose up -d                    # Start all infra
+#   docker-compose up -d postgres redpanda  # Start specific services
+#   docker-compose down -v                  # Stop and remove volumes
+#
+# Streaming: Redpanda (Kafka API + built-in Schema Registry).
+# Replaces Confluent Kafka + Zookeeper + Schema Registry as of Phase 2 of the
+# multi-cloud migration (docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md).
+# See docs/guides/streaming-integration.md for compatibility notes.
 ##############################################################################
 
 services:
@@ -23,60 +28,65 @@ services:
       timeout: 3s
       retries: 5
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.7.0
-    ports: ["2181:2181"]
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
-  kafka:
-    image: confluentinc/cp-kafka:7.7.0
-    ports: ["9092:9092", "29092:29092"]
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_NUM_PARTITIONS: 4
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-    depends_on:
-      zookeeper: { condition: service_started }
+  # Redpanda: Kafka API on :9092 (external) and :29092 (internal),
+  # built-in Schema Registry on :8081, Pandaproxy on :8082, Admin API on :9644.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.5
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --mode=dev-container
+      - --default-log-level=info
+      - --kafka-addr=internal://0.0.0.0:29092,external://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:29092,external://localhost:9092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - "9092:9092"     # Kafka API (host)
+      - "29092:29092"   # Kafka API (in-network alias kept for parity with prior kafka:29092)
+      - "8081:8081"     # Schema Registry (Confluent-compatible HTTP API)
+      - "18081:18081"   # Schema Registry (host alias, unused by services)
+      - "8082:8082"     # Pandaproxy (Kafka REST proxy, optional)
+      - "18082:18082"   # Pandaproxy (host alias)
+      - "9644:9644"     # Admin API (rpk, monitoring)
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
-      interval: 10s
+      test: ["CMD-SHELL", "rpk cluster health --brokers=localhost:9092 | grep -E 'Healthy:[[:space:]]+true'"]
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 20s
 
-  kafka-init:
-    image: confluentinc/cp-kafka:7.7.0
+  # Topic seeding. Kept as a separate service so the broker stays generic
+  # and topic config is reviewable in one place. Mirrors the Confluent
+  # `kafka-init` step that this compose file used to run.
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.5
     depends_on:
-      kafka: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo 'Creating Kafka topics...'
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic exposures         --partitions 4 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic metric_events     --partitions 8 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic reward_events     --partitions 4 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic qoe_events        --partitions 4 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic guardrail_alerts            --partitions 2 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic model_retraining_events    --partitions 8 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic model_training_requests    --partitions 2 --replication-factor 1
+        set -e
+        echo 'Creating Redpanda topics...'
+        BROKERS=redpanda:29092
+        rpk topic create exposures               --partitions 4 --replicas 1 --brokers $$BROKERS || true
+        rpk topic create metric_events           --partitions 8 --replicas 1 --brokers $$BROKERS || true
+        rpk topic create reward_events           --partitions 4 --replicas 1 --brokers $$BROKERS || true
+        rpk topic create qoe_events              --partitions 4 --replicas 1 --brokers $$BROKERS || true
+        rpk topic create guardrail_alerts        --partitions 2 --replicas 1 --brokers $$BROKERS || true
+        rpk topic create model_retraining_events --partitions 8 --replicas 1 --brokers $$BROKERS || true
+        rpk topic create model_training_requests --partitions 2 --replicas 1 --brokers $$BROKERS || true
         echo 'Done.'
-
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.7.0
-    ports: ["8081:8081"]
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-    depends_on:
-      kafka: { condition: service_healthy }
+        rpk topic list --brokers $$BROKERS
 
   redis:
     image: redis:7-alpine
@@ -87,15 +97,19 @@ services:
       timeout: 3s
       retries: 5
 
+  # Redpanda Console — successor to the previous `kafka-ui` setup.
+  # Talks to the broker over the internal listener and to the built-in
+  # Schema Registry over its internal HTTP endpoint.
   kafka-ui:
     image: docker.redpanda.com/redpandadata/console:latest
     ports: ["8080:8080"]
     environment:
-      KAFKA_BROKERS: kafka:29092
+      KAFKA_BROKERS: redpanda:29092
       KAFKA_SCHEMAREGISTRY_ENABLED: "true"
-      KAFKA_SCHEMAREGISTRY_URLS: http://schema-registry:8081
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
     depends_on:
-      kafka: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
 
 volumes:
   postgres_data:
+  redpanda_data:

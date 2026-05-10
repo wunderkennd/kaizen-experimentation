@@ -89,9 +89,17 @@ func TestRenderForType(t *testing.T) {
 	p.SourceEventType = "test_event"
 	p.NumeratorEventType = "num_event"
 	p.DenominatorEventType = "denom_event"
+	// ADR-026 Phase 1 fixture
+	p.FilterSQL = "1=1"
+	p.ValueColumn = "value"
+	p.Operands = []OperandParam{{MetricID: "m1", Weight: 1.0}}
+	p.Operator = "ADD"
+	p.EventType = "stream_start"
+	p.WindowHours = 24
 	for _, tc := range []struct{ mt string; wantErr bool }{
 		{"MEAN", false}, {"PROPORTION", false}, {"COUNT", false}, {"RATIO", false},
 		{"mean", false}, {"ratio", false}, {"CUSTOM", true}, {"INVALID", true},
+		{"FILTERED_MEAN", false}, {"COMPOSITE", false}, {"WINDOWED_COUNT", false},
 	} {
 		t.Run(tc.mt, func(t *testing.T) {
 			_, err := r.RenderForType(tc.mt, p)
@@ -376,6 +384,212 @@ func TestRenderQoEEngagementCorrelation_ContainsKeyFields(t *testing.T) {
 	assert.Contains(t, sql, "CORR(joined.qoe_value, joined.engagement_value)")
 	assert.Contains(t, sql, "pearson_correlation")
 	assert.Contains(t, sql, "STDDEV_SAMP")
+}
+
+// ADR-026 Phase 1: FILTERED_MEAN template.
+
+func TestRenderFilteredMean(t *testing.T) {
+	cases := []struct {
+		name        string
+		metricID    string
+		valueColumn string
+		filterSQL   string
+		golden      string
+	}{
+		{"simple", "mobile_avg_watch_time", "duration_ms", "platform = 'mobile'", "filtered_mean_simple_expected.sql"},
+		{"multi_clause", "mobile_long_watch_avg", "duration_ms", "platform = 'mobile' AND duration_ms > 5000", "filtered_mean_multi_clause_expected.sql"},
+		{"value_column_filter", "long_watches_only_avg", "duration_ms", "duration_ms > 1000", "filtered_mean_value_column_filter_expected.sql"},
+	}
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = tc.metricID
+			p.SourceEventType = "heartbeat"
+			p.ValueColumn = tc.valueColumn
+			p.FilterSQL = tc.filterSQL
+			sql, err := r.RenderFilteredMean(p)
+			require.NoError(t, err)
+			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
+// ADR-026 Phase 1: COMPOSITE template.
+
+func TestRenderComposite(t *testing.T) {
+	twoOperands := []OperandParam{
+		{MetricID: "m1", Weight: 1.0},
+		{MetricID: "m2", Weight: 1.0},
+	}
+	nonUniformOperands := []OperandParam{
+		{MetricID: "m1", Weight: 0.7},
+		{MetricID: "m2", Weight: 0.3},
+	}
+	threeOperands := []OperandParam{
+		{MetricID: "m1", Weight: 0.5},
+		{MetricID: "m2", Weight: 0.3},
+		{MetricID: "m3", Weight: 0.2},
+	}
+	cases := []struct {
+		name     string
+		operator string
+		operands []OperandParam
+		golden   string
+	}{
+		{"add", "ADD", twoOperands, "composite_add_expected.sql"},
+		{"subtract", "SUBTRACT", twoOperands, "composite_subtract_expected.sql"},
+		{"multiply", "MULTIPLY", twoOperands, "composite_multiply_expected.sql"},
+		{"divide", "DIVIDE", twoOperands, "composite_divide_expected.sql"},
+		{"weighted_sum_uniform", "WEIGHTED_SUM", twoOperands, "composite_weighted_sum_uniform_expected.sql"},
+		{"weighted_sum_nonuniform", "WEIGHTED_SUM", nonUniformOperands, "composite_weighted_sum_nonuniform_expected.sql"},
+		{"weighted_sum_three_operands", "WEIGHTED_SUM", threeOperands, "composite_weighted_sum_three_operands_expected.sql"},
+	}
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = "composite_metric"
+			p.Operands = tc.operands
+			p.Operator = tc.operator
+			sql, err := r.RenderComposite(p)
+			require.NoError(t, err)
+			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
+// ADR-026 Phase 1: WINDOWED_COUNT template.
+
+func TestRenderWindowedCount(t *testing.T) {
+	cases := []struct {
+		name        string
+		metricID    string
+		eventType   string
+		filterSQL   string
+		windowHours int32
+		golden      string
+	}{
+		{"with_filter", "movie_starts_24h", "stream_start", "content_type = 'movie'", 24, "windowed_count_with_filter_expected.sql"},
+		{"no_filter", "all_starts_24h", "stream_start", "", 24, "windowed_count_no_filter_expected.sql"},
+		{"1h", "starts_1h", "stream_start", "", 1, "windowed_count_1h_expected.sql"},
+		{"168h", "starts_7d", "stream_start", "", 168, "windowed_count_168h_expected.sql"},
+	}
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = tc.metricID
+			p.EventType = tc.eventType
+			p.FilterSQL = tc.filterSQL
+			p.WindowHours = tc.windowHours
+			sql, err := r.RenderWindowedCount(p)
+			require.NoError(t, err)
+			assert.Equal(t, readGolden(t, tc.golden), sql)
+		})
+	}
+}
+
+func TestRenderForType_NewTypes_Validation(t *testing.T) {
+	r, err := NewSQLRenderer()
+	require.NoError(t, err)
+
+	cases := []struct {
+		name             string
+		metricType       string
+		params           func(p *TemplateParams)
+		wantErrSubstring string
+	}{
+		{
+			"filtered_mean_empty_filter",
+			"FILTERED_MEAN",
+			func(p *TemplateParams) { p.ValueColumn = "duration_ms"; p.SourceEventType = "heartbeat" },
+			"non-empty filter_sql",
+		},
+		{
+			"filtered_mean_empty_value_column",
+			"FILTERED_MEAN",
+			func(p *TemplateParams) { p.FilterSQL = "1=1"; p.SourceEventType = "heartbeat" },
+			"non-empty value_column",
+		},
+		{
+			"composite_no_operands",
+			"COMPOSITE",
+			func(p *TemplateParams) { p.Operator = "ADD" },
+			"at least one operand",
+		},
+		{
+			"composite_unknown_operator",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: 1}}
+				p.Operator = "POWER"
+			},
+			"unrecognized operator",
+		},
+		{
+			"composite_unspecified_operator",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: 1}}
+				p.Operator = "UNSPECIFIED"
+			},
+			"unrecognized operator",
+		},
+		{
+			"composite_empty_metric_id",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "", Weight: 1}}
+				p.Operator = "ADD"
+			},
+			"non-empty metric_id",
+		},
+		{
+			"composite_weighted_sum_zero_weight",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: 0}}
+				p.Operator = "WEIGHTED_SUM"
+			},
+			"weight > 0",
+		},
+		{
+			"composite_weighted_sum_negative_weight",
+			"COMPOSITE",
+			func(p *TemplateParams) {
+				p.Operands = []OperandParam{{MetricID: "m1", Weight: -1}}
+				p.Operator = "WEIGHTED_SUM"
+			},
+			"weight > 0",
+		},
+		{
+			"windowed_count_empty_event_type",
+			"WINDOWED_COUNT",
+			func(p *TemplateParams) { p.WindowHours = 24 },
+			"non-empty event_type",
+		},
+		{
+			"windowed_count_zero_window",
+			"WINDOWED_COUNT",
+			func(p *TemplateParams) { p.EventType = "stream_start"; p.WindowHours = 0 },
+			"window_hours > 0",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams
+			p.MetricID = "test_metric"
+			tc.params(&p)
+			_, err := r.RenderForType(tc.metricType, p)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErrSubstring)
+		})
+	}
 }
 
 // ADR-015 Phase 2: MLRATE cross-fitting templates.

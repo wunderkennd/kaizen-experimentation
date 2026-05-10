@@ -117,7 +117,11 @@ export default function MonitoringPage() {
 
   return (
     <div>
-      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Monitoring' }]} />
+      <Breadcrumb items={[
+        { label: 'Experiments', href: '/' },
+        { label: 'Monitoring' },
+      ]} />
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Monitoring</h1>
         <div className="flex items-center gap-4">

@@ -50,6 +50,16 @@ type StreamingOutputs struct {
 - Consumes: `NetworkOutputs` from Infra-1 (VPC, private subnets, `msk-sg`)
 - Consumed by: Infra-4 (ECS services need bootstrap brokers for env vars)
 
+## Multi-Cloud Responsibility (Sprint I.3 onward)
+
+Streaming dispatches on `cfg.StreamingProvider`, **not** `cfg.CloudProvider` — an AWS tenant can opt into Redpanda later without changing clouds.
+
+- AWS tenants on MSK: code stays at `infra/pkg/aws/streaming.go` after the Phase 0 refactor (#477).
+- New tenants (any cloud) on Redpanda: code at `infra/pkg/streaming/redpanda.go` (cloud-agnostic, uses the Redpanda Cloud Pulumi-Terraform bridge).
+- Schema Registry: existing tenants keep Confluent on ECS Fargate; new Redpanda tenants use Redpanda's built-in registry. Wire compatibility must be proven first via Docker Compose (#478).
+
+Both modules return `types.StreamingOutputs` (`BootstrapBrokers`, `SchemaRegistryUrl`, `ClusterArn`). See `docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md` (Streaming section).
+
 ## Work Tracking
 
 ```bash

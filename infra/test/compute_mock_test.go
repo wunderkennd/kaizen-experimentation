@@ -8,7 +8,7 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	"github.com/kaizen-experimentation/infra/pkg/compute"
+	"github.com/kaizen-experimentation/infra/pkg/aws/compute"
 )
 
 // ---------------------------------------------------------------------------

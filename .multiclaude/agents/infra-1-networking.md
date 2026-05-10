@@ -43,6 +43,17 @@ Do NOT change this struct shape without coordinating with all other Infra agents
 - Security group rules: least-privilege, no `0.0.0.0/0` on internal SGs
 - Tests: Pulumi unit tests with mocked provider
 
+## Multi-Cloud Responsibility (Sprint I.3 onward)
+
+You own networking on **both AWS and GCP**. Existing AWS code lives at `infra/pkg/aws/network.go` after the Phase 0 refactor (#477). New GCP code lives at `infra/pkg/gcp/network.go` and provisions:
+
+- VPC + subnets across the configured region's zones
+- Firewall rules with the same security-group keys (`ecs`, `rds`, `redis`, etc.)
+- Service Directory namespace (Cloud Map analogue)
+- Serverless VPC Access connector for Cloud Run → VPC
+
+Both providers must return `types.NetworkOutputs` (defined in `infra/pkg/types/`). Topology tests are parameterized over `cloudProvider`. See `docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md` for the full GCP module contract.
+
 ## Work Tracking
 
 ```bash
