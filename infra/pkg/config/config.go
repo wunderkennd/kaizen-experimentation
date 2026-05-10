@@ -57,6 +57,21 @@ type Config struct {
 	// Defaults preserve current AWS-only behavior when stack config omits them.
 	CloudProvider     string // "aws" (default) or "gcp"
 	StreamingProvider string // "msk" (default) or "redpanda"
+
+	// GCP-specific fields. Required when CloudProvider="gcp", ignored otherwise.
+	// Reading these via Try() (not Require()) keeps existing AWS stacks
+	// byte-for-byte identical — they don't have to declare these.
+	GCPProjectID  string // e.g. "kaizen-experimentation-dev"
+	GCPRegion     string // e.g. "us-central1" — used for regional resources later
+	GCPARLocation string // Artifact Registry location, e.g. "us" (multi-region) or "us-central1"
+	// GCPCIPushPrincipal is the IAM principal CI uses to push images, e.g.
+	// "serviceAccount:kaizen-ci-push@<project>.iam.gserviceaccount.com" or a
+	// Workload Identity principalSet. Empty means "skip the IAM binding" —
+	// useful during bootstrap before the SA exists.
+	GCPCIPushPrincipal string
+	// GCPRunPullPrincipals lists Cloud Run runtime SAs that need to pull from
+	// AR. Comma-separated in stack config. Empty means "skip".
+	GCPRunPullPrincipals []string
 }
 
 // KaizenConfig is an alias for Config. Some modules reference this type name.
@@ -124,28 +139,75 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		streamingProvider = v
 	}
 
-	return &Config{
+	// GCP fields — all optional at the config layer; the GCP facade enforces
+	// presence when cloudProvider="gcp".
+	gcpProjectID, _ := cfg.Try("gcpProjectId")
+	gcpRegion, _ := cfg.Try("gcpRegion")
+	gcpARLocation, _ := cfg.Try("gcpArLocation")
+	gcpCIPush, _ := cfg.Try("gcpCiPushPrincipal")
+
+	var gcpPullPrincipals []string
+	if v, err := cfg.Try("gcpRunPullPrincipals"); err == nil && v != "" {
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				gcpPullPrincipals = append(gcpPullPrincipals, p)
+			}
+		}
+	}
+
+	out := &Config{
 		Project:              "kaizen",
 		Environment:          env,
 		Env:                  Environment(env),
 		Domain:               domain,
 		ProjectName:          projectName,
-		VpcCidr:              cfg.Require("vpcCidr"),
-		RdsInstanceClass:     cfg.Require("rdsInstanceClass"),
-		RdsMultiAz:           cfg.RequireBool("rdsMultiAz"),
-		MskBrokerCount:       cfg.RequireInt("mskBrokerCount"),
-		MskInstanceType:      cfg.Require("mskInstanceType"),
-		RedisNodeType:        cfg.Require("redisNodeType"),
-		M4bInstanceType:      cfg.Require("m4bInstanceType"),
-		NatGatewayCount:      cfg.RequireInt("natGatewayCount"),
-		WafEnabled:           cfg.RequireBool("wafEnabled"),
 		WafBlockedCountries:  blockedCountries,
 		WafRateLimitPerIP:    wafRateLimit,
-		FargateMinTasks:      cfg.RequireInt("fargateMinTasks"),
-		CloudwatchRetention:  cfg.RequireInt("cloudwatchRetentionDays"),
 		CloudProvider:        cloudProvider,
 		StreamingProvider:    streamingProvider,
+		GCPProjectID:         gcpProjectID,
+		GCPRegion:            gcpRegion,
+		GCPARLocation:        gcpARLocation,
+		GCPCIPushPrincipal:   gcpCIPush,
+		GCPRunPullPrincipals: gcpPullPrincipals,
 	}
+
+	// AWS-specific stack config. Required when targeting AWS so existing
+	// stacks behave identically; ignored under cloudProvider=gcp where these
+	// fields have no meaning. The AWS facade is what reads them, and it only
+	// runs from Deploy() when cfg.CloudProvider=="aws".
+	if cloudProvider == "aws" {
+		out.VpcCidr = cfg.Require("vpcCidr")
+		out.RdsInstanceClass = cfg.Require("rdsInstanceClass")
+		out.RdsMultiAz = cfg.RequireBool("rdsMultiAz")
+		out.MskBrokerCount = cfg.RequireInt("mskBrokerCount")
+		out.MskInstanceType = cfg.Require("mskInstanceType")
+		out.RedisNodeType = cfg.Require("redisNodeType")
+		out.M4bInstanceType = cfg.Require("m4bInstanceType")
+		out.NatGatewayCount = cfg.RequireInt("natGatewayCount")
+		out.WafEnabled = cfg.RequireBool("wafEnabled")
+		out.FargateMinTasks = cfg.RequireInt("fargateMinTasks")
+		out.CloudwatchRetention = cfg.RequireInt("cloudwatchRetentionDays")
+	} else {
+		// Soft reads for non-AWS providers — keep zero-values when missing
+		// so a misconfigured stack fails in the AWS facade (with a clear
+		// "Require..." panic) instead of silently here.
+		if v, err := cfg.Try("vpcCidr"); err == nil {
+			out.VpcCidr = v
+		}
+		if v, err := cfg.TryInt("natGatewayCount"); err == nil {
+			out.NatGatewayCount = v
+		}
+		if v, err := cfg.TryInt("fargateMinTasks"); err == nil {
+			out.FargateMinTasks = v
+		}
+		if v, err := cfg.TryInt("cloudwatchRetentionDays"); err == nil {
+			out.CloudwatchRetention = v
+		}
+	}
+
+	return out
 }
 
 // ---------------------------------------------------------------------------

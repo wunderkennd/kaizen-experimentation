@@ -1,5 +1,8 @@
 # Lightweight infrastructure for CI integration tests.
-# No persistent volumes — everything is ephemeral.
+# Postgres uses tmpfs (its entrypoint chmods the data dir at startup, so tmpfs
+# ownership doesn't matter). Redpanda needs a named volume — its entrypoint
+# expects the image's existing redpanda:redpanda ownership on /var/lib/redpanda/data,
+# which tmpfs does not preserve. CI cleans the volume via `docker compose down -v`.
 #
 # Streaming: Redpanda (Kafka API + built-in Schema Registry).
 # Replaces the prior single-node Confluent KRaft Kafka image as of Phase 2 of
@@ -43,10 +46,19 @@ services:
       - "9092:9092"     # Kafka API
       - "8081:8081"     # Schema Registry (built-in)
       - "9644:9644"     # Admin API
-    tmpfs: /var/lib/redpanda/data
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    # NOTE: `rpk cluster health` is too strict for single-node dev-container mode —
+    # it can fail to report `Healthy: true` for the entire 75s polling window even
+    # though the broker is fully serving. `rpk cluster info` is a connectivity
+    # check (does the Kafka API listener accept a metadata request?) which
+    # succeeds the moment the broker logs "Successfully started Redpanda!".
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health --brokers=localhost:9092 | grep -E 'Healthy:[[:space:]]+true'"]
+      test: ["CMD-SHELL", "rpk cluster info --brokers=localhost:9092 >/dev/null 2>&1"]
       interval: 2s
       timeout: 3s
       retries: 30
       start_period: 15s
+
+volumes:
+  redpanda-data:
