@@ -44,8 +44,12 @@ describe('Monitoring Page', () => {
     vi.useRealTimers();
   });
 
-  it('renders page heading', async () => {
+  it('renders breadcrumb and page heading', async () => {
     await renderAndWait();
+
+    const breadcrumb = screen.getByRole('navigation', { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByText('Monitoring')).toBeInTheDocument();
+    expect(within(breadcrumb).getByText('Experiments')).toHaveAttribute('href', '/');
 
     expect(screen.getByRole('heading', { name: 'Monitoring', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('Experiments')).toBeInTheDocument(); // Breadcrumb

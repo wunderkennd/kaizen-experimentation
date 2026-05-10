@@ -198,23 +198,25 @@ describe('Flag List Page', () => {
     expect(screen.getByTestId('new-flag-button')).toHaveAttribute('href', '/flags/new');
   });
 
-  it('hides "New Flag" button for viewers', async () => {
+  it('shows disabled "New Flag" button for viewers', async () => {
+    // The AuthProvider within FlagListPage will use NEXT_PUBLIC_USER_ROLE which is experimenter
+    // We need to wrap it with an AuthProvider with a viewer user to test RBAC.
     render(
       <AuthProvider initialUser={viewerUser}>
         <FlagListPage />
       </AuthProvider>,
     );
-    // The AuthProvider wrapper is inside FlagListPage itself, so we need to
-    // use the non-wrapped content. Since FlagListPage wraps its own AuthProvider,
-    // the viewer test needs to override at the MSW level or use env vars.
-    // For simplicity, test that the button exists in default render (experimenter role via env).
     await waitFor(() => {
       expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
     });
+    const disabledBtn = screen.getByTestId('new-flag-disabled');
+    expect(disabledBtn).toBeInTheDocument();
+    expect(disabledBtn.className).toContain('cursor-not-allowed');
+    expect(disabledBtn.title).toContain('Requires Experimenter role');
   });
 
 
-  it('has Flags nav link pointing to /flags', async () => {
+  it('has breadcrumb and nav link pointing to /flags', async () => {
     render(
       <AuthProvider>
         <NavHeader />
@@ -224,6 +226,13 @@ describe('Flag List Page', () => {
     await waitFor(() => {
       expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
     });
+
+    // Check breadcrumb
+    const breadcrumb = screen.getByRole('navigation', { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByText('Flags')).toBeInTheDocument();
+    expect(within(breadcrumb).getByText('Experiments')).toHaveAttribute('href', '/');
+
+    // Check nav link
     const navLink = screen.getByTestId('nav-flags');
     expect(navLink).toHaveAttribute('href', '/flags');
     expect(navLink).toHaveTextContent('Flags');
