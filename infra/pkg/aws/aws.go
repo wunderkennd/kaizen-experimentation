@@ -448,14 +448,23 @@ func NewObservability(
 	streamOut types.StreamingOutputs,
 	computeOut types.ComputeOutputs,
 ) error {
-	if _, err := observability.NewCloudWatch(ctx, &observability.CloudWatchArgs{
+	// Gate MSK-specific CloudWatch inputs on the streaming provider.
+	// When streamingProvider=redpanda, there is no AWS/Kafka cluster, so
+	// MskClusterName must not be forwarded — passing it would cause
+	// NewCloudWatch to create a consumer-lag alarm against a non-existent
+	// MSK cluster, which would alarm perpetually and incur cost.
+	cwArgs := &observability.CloudWatchArgs{
 		Environment:             cfg.Environment,
 		CloudwatchRetention:     cfg.CloudwatchRetention,
 		RdsInstanceId:           dbOut.InstanceId,
-		MskClusterName:          streamOut.ClusterName,
 		M4bAutoScalingGroupName: computeOut.M4bAsgName,
 		Tags:                    kconfig.DefaultTags(cfg.Environment),
-	}); err != nil {
+	}
+	if cfg.StreamingProvider == "msk" {
+		cwArgs.MskAlarmEnabled = true
+		cwArgs.MskClusterName = streamOut.ClusterName
+	}
+	if _, err := observability.NewCloudWatch(ctx, cwArgs); err != nil {
 		return err
 	}
 
