@@ -120,10 +120,6 @@ func Deploy(ctx *pulumi.Context) error {
 		streamOut  types.StreamingOutputs
 		secretsOut types.SecretsOutputs
 		cicdOut    types.CICDOutputs
-		// streamingHasBuiltInRegistry is true when the streaming provider ships
-		// its own Schema Registry (Redpanda Cloud). When true, Stage 5 skips
-		// the standalone Schema Registry deployment.
-		streamingHasBuiltInRegistry bool
 	)
 	switch cfg.StreamingProvider {
 	case "msk":
@@ -133,13 +129,19 @@ func Deploy(ctx *pulumi.Context) error {
 		// Schema Registry — so the dispatch is self-contained and does NOT
 		// flow through aws.NewKafkaTopics or aws.NewSchemaRegistry below.
 		streamOut, err = cloudstreaming.NewRedpanda(ctx, cfg, netOut)
-		streamingHasBuiltInRegistry = true
 	default:
 		return fmt.Errorf("unsupported streamingProvider %q (expected \"msk\" or \"redpanda\")", cfg.StreamingProvider)
 	}
 	if err != nil {
 		return err
 	}
+	// MSK is the only streaming provider that requires the AWS-side helper
+	// stages — separate topic provisioning, a standalone Confluent Schema
+	// Registry on ECS, and the Schema Registry health gate. Redpanda Cloud
+	// ships all three inside NewRedpanda, so those stages are skipped.
+	// A single source-of-truth predicate prevents the topic-creation gate
+	// and the schema-registry gate from drifting out of sync.
+	needsAWSStreamingStages := cfg.StreamingProvider == "msk"
 	switch cfg.CloudProvider {
 	case "aws":
 		secretsOut, err = aws.NewSecrets(ctx, cfg, dbOut, streamOut, cacheOut)
@@ -149,7 +151,7 @@ func Deploy(ctx *pulumi.Context) error {
 		// MSK requires a Pulumi-managed kafka provider against the cluster's
 		// SCRAM creds; Redpanda already provisioned topics inside NewRedpanda
 		// using the same Kafka-protocol provider, so skip duplicate creation.
-		if cfg.StreamingProvider == "msk" {
+		if needsAWSStreamingStages {
 			if err = aws.NewKafkaTopics(ctx, streamOut); err != nil {
 				return err
 			}
@@ -179,7 +181,7 @@ func Deploy(ctx *pulumi.Context) error {
 		// Redpanda ships its own Schema Registry (URL already populated in
 		// streamOut.SchemaRegistryUrl by NewRedpanda) — only deploy the
 		// standalone Confluent Schema Registry on ECS for MSK tenants.
-		if !streamingHasBuiltInRegistry {
+		if needsAWSStreamingStages {
 			schemaUrl, schemaSvcName, err = aws.NewSchemaRegistry(ctx, cfg, netOut, computeOut, streamOut, secretsOut)
 		}
 	default:
@@ -188,7 +190,7 @@ func Deploy(ctx *pulumi.Context) error {
 	if err != nil {
 		return err
 	}
-	if !streamingHasBuiltInRegistry {
+	if needsAWSStreamingStages {
 		streamOut.SchemaRegistryUrl = schemaUrl
 	}
 
@@ -214,7 +216,7 @@ func Deploy(ctx *pulumi.Context) error {
 		}
 		// Schema Registry health gate watches the standalone ECS service —
 		// not applicable when Redpanda's built-in registry is in use.
-		if !streamingHasBuiltInRegistry {
+		if needsAWSStreamingStages {
 			if err = aws.NewKafkaHealthGate(ctx, cfg, computeOut, schemaSvcName); err != nil {
 				return err
 			}
@@ -229,6 +231,11 @@ func Deploy(ctx *pulumi.Context) error {
 	ctx.Export("databaseEndpoint", dbOut.Endpoint)
 	ctx.Export("cacheEndpoint", cacheOut.Endpoint)
 	ctx.Export("streamingBootstrapBrokers", streamOut.BootstrapBrokers)
+	// Cloud-agnostic Schema Registry URL: populated by aws.NewSchemaRegistry
+	// (ECS Confluent) for MSK or by cloudstreaming.NewRedpanda (built-in
+	// Redpanda registry) for Redpanda. Downstream consumers read this single
+	// export regardless of which streaming provider is in use.
+	ctx.Export("schemaRegistryUrl", streamOut.SchemaRegistryUrl)
 	ctx.Export("loadBalancerDns", edgeOut.LoadBalancerDns)
 	ctx.Export("dataBucket", storageOut.DataBucketName)
 

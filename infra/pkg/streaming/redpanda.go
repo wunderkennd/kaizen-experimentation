@@ -52,11 +52,11 @@ type RedpandaInputs struct {
 	// ConnectionType is "public" or "private" — Kaizen uses "private"
 	// so the cluster lives on the tenant VPC.
 	ConnectionType string
-	// ClientID is the Redpanda Cloud OAuth client_id used by the provider
-	// to authenticate against the control plane.
-	ClientID pulumi.StringInput
-	// ClientSecret is the Redpanda Cloud OAuth client_secret.
-	ClientSecret pulumi.StringInput
+	// TenantVpcID is the tenant-side VPC ID (NetworkOutputs.VpcId) that the
+	// Redpanda private network peers with. The TF provider does not yet read
+	// this field directly, so it is persisted as a tag on the resource group
+	// for operator-visible cross-reference between the two VPCs.
+	TenantVpcID pulumi.StringInput
 	// KafkaUsername is the SASL/SCRAM username the topics provider authenticates with.
 	KafkaUsername pulumi.StringInput
 	// KafkaPassword is the SASL/SCRAM password matching KafkaUsername.
@@ -73,8 +73,12 @@ type RedpandaInputs struct {
 // types.StreamingOutputs has BootstrapBrokers, SchemaRegistryUrl, and
 // ClusterName populated; ClusterArn is intentionally empty (see types.StreamingOutputs).
 //
-// netOut is consumed for VPC-aware private connectivity: Redpanda Cloud's
-// "private" connection type peers the cluster network with the tenant VPC.
+// netOut is consumed for VPC-aware private connectivity: the tenant VPC ID is
+// propagated to the Redpanda resource group as a tag so operators can
+// cross-reference the two VPCs in Redpanda's private connection type. The
+// upstream OAuth client credentials (redpanda:clientId / redpanda:clientSecret)
+// are read directly from Pulumi config by the underlying terraform-provider-
+// redpanda plugin, so they are not threaded through Go code here.
 func NewRedpanda(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.StreamingOutputs, error) {
 	rp := pulumiconfig.New(ctx, "redpanda")
 
@@ -105,8 +109,8 @@ func NewRedpanda(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 		ThroughputTier: rp.Require("throughputTier"),
 		ClusterType:    clusterType,
 		ConnectionType: connectionType,
-		ClientID:       rp.RequireSecret("clientId"),
-		ClientSecret:   rp.RequireSecret("clientSecret"),
+		// netOut.VpcId is an IDOutput; convert to StringInput for tag propagation.
+		TenantVpcID:    netOut.VpcId.ToStringOutput(),
 		KafkaUsername:  pulumi.String(rp.Require("kafkaUsername")),
 		KafkaPassword:  rp.RequireSecret("kafkaPassword"),
 		Tags:           kconfig.DefaultTags(cfg.Environment),
@@ -120,11 +124,6 @@ func NewRedpanda(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 	ctx.Export("redpandaBootstrapBrokers", out.BootstrapBrokers)
 	ctx.Export("redpandaSchemaRegistryUrl", out.SchemaRegistryUrl)
 	ctx.Export("redpandaClusterName", out.ClusterName)
-
-	// Use the shared private-network ID as a tenant-side hint for Redpanda's
-	// private connection type. The TF provider currently treats this as
-	// information-only at the resource-group layer.
-	_ = netOut
 
 	return out, nil
 }
@@ -145,9 +144,21 @@ func newRedpanda(ctx *pulumi.Context, args *RedpandaInputs) (types.StreamingOutp
 	}
 
 	// --- Resource Group: logical container in the Redpanda Cloud account ---
+	// Tenant VPC ID (from the upstream NetworkOutputs) is folded into the
+	// resource-group tag set so the two VPCs at each side of the private
+	// connection peering can be correlated by operators.
+	rgTags := args.Tags
+	if args.TenantVpcID != nil {
+		rgTagsCopy := pulumi.StringMap{}
+		for k, v := range rgTags {
+			rgTagsCopy[k] = v
+		}
+		rgTagsCopy["kaizenTenantVpcId"] = args.TenantVpcID
+		rgTags = rgTagsCopy
+	}
 	rg, err := newRedpandaResourceGroup(ctx, args.ClusterName+"-rg", pulumi.Map{
 		"name": pulumi.String(args.ClusterName + "-rg"),
-		"tags": args.Tags,
+		"tags": rgTags,
 	})
 	if err != nil {
 		return types.StreamingOutputs{}, fmt.Errorf("creating Redpanda resource group: %w", err)
