@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { Experiment, AnalysisResult } from '@/lib/types';
 import { listExperiments, getAnalysisResult } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { ExperimentSelector } from '@/components/experiment-selector';
 import { ComparisonTable } from '@/components/comparison-table';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 // Dynamic import for chart — recharts only loads when needed
 const ComparisonChart = dynamic(
@@ -97,11 +97,7 @@ export default function ComparePage() {
   if (error) {
     return (
       <div>
-        <nav className="mb-4 text-sm text-gray-500">
-          <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900">Compare</span>
-        </nav>
+        <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Compare' }]} />
         <RetryableError message={error} onRetry={fetchExperiments} context="experiments" />
       </div>
     );
@@ -109,12 +105,7 @@ export default function ComparePage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/" className="hover:text-indigo-600">Experiments</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">Compare</span>
-      </nav>
+      <Breadcrumb items={[{ label: 'Experiments', href: '/' }, { label: 'Compare' }]} />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Experiment Comparison</h1>
 
