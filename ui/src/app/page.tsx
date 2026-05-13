@@ -10,6 +10,7 @@ import { useExperimentFilters, type SortField } from '@/lib/use-experiment-filte
 import { useAuth } from '@/lib/auth-context';
 import { ROLE_LABELS } from '@/lib/auth';
 import { RetryableError } from '@/components/retryable-error';
+import { Breadcrumb } from '@/components/breadcrumb';
 
 function SortableHeader({
   label,
@@ -88,6 +89,7 @@ export default function ExperimentListPage() {
   if (experiments.length === 0) {
     return (
       <div>
+        <Breadcrumb items={[{ label: 'Experiments' }]} />
         <h1 className="mb-6 text-2xl font-bold text-gray-900">Experiments</h1>
         <div className="py-12 text-center" data-testid="empty-state">
           <p className="text-sm text-gray-500">No experiments yet.</p>
@@ -111,6 +113,8 @@ export default function ExperimentListPage() {
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Experiments' }]} />
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Experiments</h1>
         {canCreate ? (
