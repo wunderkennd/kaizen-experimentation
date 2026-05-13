@@ -190,11 +190,25 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 }
 
 // NewSecrets creates the Secrets Manager entries for DB, Kafka, Redis, auth.
+// The Kafka secret's SASL username is sourced from the streaming provider's
+// own config namespace so service clients can authenticate against whichever
+// cluster (MSK or Redpanda) the stack is wired to.
 func NewSecrets(ctx *pulumi.Context, cfg *kconfig.Config, dbOut types.DatabaseOutputs, streamOut types.StreamingOutputs, cacheOut types.CacheOutputs) (types.SecretsOutputs, error) {
+	var kafkaSaslUsername string
+	switch cfg.StreamingProvider {
+	case "redpanda":
+		kafkaSaslUsername = pulumiconfig.New(ctx, "redpanda").Require("kafkaUsername")
+	default:
+		// MSK (and the historical default) reads the username from the
+		// kafka:saslUsername key — the same config NewKafkaTopics uses
+		// when authenticating the topic-provisioning provider.
+		kafkaSaslUsername = pulumiconfig.New(ctx, "kafka").Require("saslUsername")
+	}
 	out, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
 		RdsEndpoint:         dbOut.Endpoint,
 		MskBootstrapBrokers: streamOut.BootstrapBrokers,
 		RedisEndpoint:       cacheOut.Endpoint,
+		KafkaSaslUsername:   kafkaSaslUsername,
 	})
 	if err != nil {
 		return types.SecretsOutputs{}, err
@@ -448,14 +462,23 @@ func NewObservability(
 	streamOut types.StreamingOutputs,
 	computeOut types.ComputeOutputs,
 ) error {
-	if _, err := observability.NewCloudWatch(ctx, &observability.CloudWatchArgs{
+	// Gate MSK-specific CloudWatch inputs on the streaming provider.
+	// When streamingProvider=redpanda, there is no AWS/Kafka cluster, so
+	// MskClusterName must not be forwarded — passing it would cause
+	// NewCloudWatch to create a consumer-lag alarm against a non-existent
+	// MSK cluster, which would alarm perpetually and incur cost.
+	cwArgs := &observability.CloudWatchArgs{
 		Environment:             cfg.Environment,
 		CloudwatchRetention:     cfg.CloudwatchRetention,
 		RdsInstanceId:           dbOut.InstanceId,
-		MskClusterName:          streamOut.ClusterName,
 		M4bAutoScalingGroupName: computeOut.M4bAsgName,
 		Tags:                    kconfig.DefaultTags(cfg.Environment),
-	}); err != nil {
+	}
+	if cfg.StreamingProvider == "msk" {
+		cwArgs.MskAlarmEnabled = true
+		cwArgs.MskClusterName = streamOut.ClusterName
+	}
+	if _, err := observability.NewCloudWatch(ctx, cwArgs); err != nil {
 		return err
 	}
 

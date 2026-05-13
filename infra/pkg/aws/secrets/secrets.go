@@ -66,6 +66,13 @@ type SecretsInputs struct {
 	MskBootstrapBrokers pulumi.StringOutput
 	// Redis primary endpoint address.
 	RedisEndpoint pulumi.StringOutput
+	// KafkaSaslUsername is the SASL/SCRAM username embedded in the Kafka
+	// secret JSON. For streamingProvider=msk this is the kafka:saslUsername
+	// config value; for streamingProvider=redpanda it is the Redpanda admin
+	// user (redpanda:kafkaUsername). Callers MUST set this to a value that
+	// matches the streaming provider in use so service clients can
+	// authenticate against the actual cluster.
+	KafkaSaslUsername string
 }
 
 // NewSecrets creates all four Secrets Manager secrets with environment-
@@ -112,10 +119,12 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return nil, err
 	}
 
-	// Kafka secret version: wire actual MSK bootstrap brokers.
+	// Kafka secret version: wire actual bootstrap brokers + streaming-provider
+	// SASL username (kaizen-msk-user for MSK, the Redpanda admin for Redpanda).
+	saslUsername := inputs.KafkaSaslUsername
 	kafkaSecretValue := inputs.MskBootstrapBrokers.ApplyT(func(brokers string) (string, error) {
 		v := KafkaSecret{
-			SaslUsername:     "kaizen-msk-user",
+			SaslUsername:     saslUsername,
 			SaslPassword:     "CHANGE_ME",
 			SaslMechanism:    "SCRAM-SHA-512",
 			BootstrapBrokers: brokers,

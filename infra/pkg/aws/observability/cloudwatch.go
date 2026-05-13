@@ -23,7 +23,13 @@ type CloudWatchArgs struct {
 	CloudwatchRetention int
 	// RdsInstanceId is the RDS DB instance identifier for metric alarms.
 	RdsInstanceId pulumi.StringOutput
+	// MskAlarmEnabled controls whether the MSK consumer-lag alarm is created.
+	// Set to true only when streamingProvider=msk; leave false for Redpanda
+	// (or any future non-MSK provider) to avoid a pointless alarm against a
+	// non-existent AWS/Kafka cluster.
+	MskAlarmEnabled bool
 	// MskClusterName is the MSK cluster name for consumer lag alarms.
+	// Consumed only when MskAlarmEnabled is true.
 	MskClusterName pulumi.StringOutput
 	// M4bAutoScalingGroupName is the ASG name for EC2 status check alarms.
 	M4bAutoScalingGroupName pulumi.StringOutput
@@ -80,9 +86,9 @@ func NewCloudWatch(ctx *pulumi.Context, args *CloudWatchArgs) (*CloudWatchOutput
 		service     string
 		thresholdMs float64
 	}{
-		{"assignment", 5},   // M1 < 5ms
-		{"management", 50},  // M5 < 50ms
-		{"flags", 10},       // M7 < 10ms
+		{"assignment", 5},  // M1 < 5ms
+		{"management", 50}, // M5 < 50ms
+		{"flags", 10},      // M7 < 10ms
 	}
 
 	for _, t := range latencyTargets {
@@ -210,28 +216,34 @@ func NewCloudWatch(ctx *pulumi.Context, args *CloudWatchArgs) (*CloudWatchOutput
 	}
 
 	// ── MSK consumer lag alarm (guardrail_alerts > 10000) ───────────────
-	_, err = cloudwatch.NewMetricAlarm(ctx, "alarm-msk-consumer-lag", &cloudwatch.MetricAlarmArgs{
-		Name:               pulumi.Sprintf("kaizen-%s-msk-consumer-lag", args.Environment),
-		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
-		EvaluationPeriods:  pulumi.Int(3),
-		MetricName:         pulumi.String("MaxOffsetLag"),
-		Namespace:          pulumi.String("AWS/Kafka"),
-		Period:             pulumi.Int(300),
-		Statistic:          pulumi.String("Maximum"),
-		Threshold:          pulumi.Float64(10000.0),
-		AlarmDescription:   pulumi.String("MSK consumer lag on guardrail_alerts exceeds 10000"),
-		AlarmActions:       pulumi.Array{alarmTopic.Arn},
-		OkActions:          pulumi.Array{alarmTopic.Arn},
-		Dimensions: pulumi.StringMap{
-			"Cluster Name":   args.MskClusterName,
-			"Consumer Group": pulumi.String("guardrail_alerts"),
-			"Topic":          pulumi.String("guardrail_alerts"),
-		},
-		TreatMissingData: pulumi.String("notBreaching"),
-		Tags:             tags,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating MSK consumer lag alarm: %w", err)
+	// Only created when streamingProvider=msk. For Redpanda tenants, there is
+	// no AWS/Kafka cluster to monitor; creating this alarm with a Redpanda
+	// cluster name as the "Cluster Name" dimension would target a non-existent
+	// metric, cause the alarm to fire perpetually, and incur unnecessary cost.
+	if args.MskAlarmEnabled {
+		_, err = cloudwatch.NewMetricAlarm(ctx, "alarm-msk-consumer-lag", &cloudwatch.MetricAlarmArgs{
+			Name:               pulumi.Sprintf("kaizen-%s-msk-consumer-lag", args.Environment),
+			ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+			EvaluationPeriods:  pulumi.Int(3),
+			MetricName:         pulumi.String("MaxOffsetLag"),
+			Namespace:          pulumi.String("AWS/Kafka"),
+			Period:             pulumi.Int(300),
+			Statistic:          pulumi.String("Maximum"),
+			Threshold:          pulumi.Float64(10000.0),
+			AlarmDescription:   pulumi.String("MSK consumer lag on guardrail_alerts exceeds 10000"),
+			AlarmActions:       pulumi.Array{alarmTopic.Arn},
+			OkActions:          pulumi.Array{alarmTopic.Arn},
+			Dimensions: pulumi.StringMap{
+				"Cluster Name":   args.MskClusterName,
+				"Consumer Group": pulumi.String("guardrail_alerts"),
+				"Topic":          pulumi.String("guardrail_alerts"),
+			},
+			TreatMissingData: pulumi.String("notBreaching"),
+			Tags:             tags,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating MSK consumer lag alarm: %w", err)
+		}
 	}
 
 	// ── M4b EC2 status check failure alarm ──────────────────────────────

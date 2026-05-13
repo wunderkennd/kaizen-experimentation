@@ -1,6 +1,13 @@
 config:
-  # Provider routing — selects the GCP branch in pkg/gcp/.
+  # Provider routing — selects the GCP branch in pkg/gcp/ and Redpanda Cloud streaming.
   kaizen-experimentation:cloudProvider: gcp
+  # streamingProvider=redpanda selects the cloud-agnostic Redpanda Cloud module at
+  # infra/pkg/streaming/redpanda.go. The Redpanda Cloud control plane provisions the
+  # underlying cluster on GCP and surfaces a Kafka-protocol bootstrap endpoint plus a
+  # built-in Schema Registry. The GCP early-return in Deploy() means the streaming
+  # dispatch is not yet exercised for cloudProvider=gcp; this key is present so that
+  # once the GCP streaming arm lands, this stack picks up Redpanda automatically.
+  kaizen-experimentation:streamingProvider: redpanda
 
   # Core identification
   kaizen-experimentation:environment: dev
@@ -44,3 +51,20 @@ config:
   kaizen-experimentation:wafEnabled: "false"
   kaizen-experimentation:fargateMinTasks: "1"
   kaizen-experimentation:cloudwatchRetentionDays: "7"
+
+  # Redpanda Cloud configuration.
+  # Secrets (clientId, clientSecret, kafkaPassword) are managed via
+  # `pulumi config set --secret redpanda:<key>` — placeholder comments below
+  # must be replaced before the first `pulumi up` targeting this stack.
+  redpanda:cloudProvider: gcp
+  redpanda:region: us-central1
+  redpanda:zones: us-central1-a,us-central1-b,us-central1-c
+  redpanda:throughputTier: tier-1-gcp-v2
+  redpanda:clusterType: dedicated
+  redpanda:connectionType: private
+  redpanda:kafkaUsername: kaizen-redpanda-user
+
+  # Secrets — set with `pulumi config set --secret`.
+  # redpanda:clientId        SET_VIA_PULUMI_CONFIG_SET_SECRET
+  # redpanda:clientSecret    SET_VIA_PULUMI_CONFIG_SET_SECRET
+  # redpanda:kafkaPassword   SET_VIA_PULUMI_CONFIG_SET_SECRET
