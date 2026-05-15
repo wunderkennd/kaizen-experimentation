@@ -128,6 +128,9 @@ func runM6Compute(t *testing.T) (*m6Mocks, map[string]string) {
 				"pipeline": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline",
 				).ToStringOutput(),
+				"management": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/management",
+				).ToStringOutput(),
 			},
 		}
 		dbOut := types.DatabaseOutputs{

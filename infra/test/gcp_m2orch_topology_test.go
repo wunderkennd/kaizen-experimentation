@@ -72,6 +72,9 @@ func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseO
 			"pipeline": pulumi.String(
 				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline",
 			).ToStringOutput(),
+			"management": pulumi.String(
+				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/management",
+			).ToStringOutput(),
 		},
 	}
 	dbOut := types.DatabaseOutputs{
