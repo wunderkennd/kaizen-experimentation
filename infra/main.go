@@ -167,7 +167,7 @@ func Deploy(ctx *pulumi.Context) error {
 		// Run service factory + canary (#486), and the per-service stateless
 		// Cloud Run deploys as they land — M2 Orchestration via #490. Sibling
 		// services (#488, #489, #491..#495) extend the same call.
-		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, gcpStreamOut, gcpSecretsOut, storageOut)
+		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, gcpStreamOut, gcpSecretsOut, storageOut, cacheOut)
 		if err != nil {
 			return err
 		}

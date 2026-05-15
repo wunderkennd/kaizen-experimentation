@@ -34,7 +34,7 @@ import (
 // m2OrchUpstreams builds the upstream-stage outputs gcp.NewCompute consumes,
 // with deterministic stand-in values so the recorded Cloud Run resource has
 // resolvable env vars and secret refs.
-func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs, types.StorageOutputs) {
+func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs, types.StorageOutputs, types.CacheOutputs) {
 	netOut := types.NetworkOutputs{
 		PrivateSubnetIds: pulumi.ToStringArray([]string{
 			"projects/kaizen-experimentation-dev/regions/us-central1/subnetworks/kaizen-dev-private",
@@ -66,6 +66,9 @@ func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseO
 			"metrics": pulumi.String(
 				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/metrics",
 			).ToStringOutput(),
+			"flags": pulumi.String(
+				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/flags",
+			).ToStringOutput(),
 		},
 	}
 	dbOut := types.DatabaseOutputs{
@@ -95,7 +98,10 @@ func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseO
 		DataBucketName: pulumi.String("kaizen-dev-data").ToStringOutput(),
 		DataBucketRef:  pulumi.String("gs://kaizen-dev-data").ToStringOutput(),
 	}
-	return netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut
+	cacheOut := types.CacheOutputs{
+		Endpoint: pulumi.String("redis://10.99.1.1:6379").ToStringOutput(),
+	}
+	return netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut
 }
 
 // runM2OrchCompute exercises gcp.NewCompute under mocks and returns the
@@ -113,8 +119,8 @@ func runM2OrchCompute(t *testing.T) (*computeMocks, map[string]string) {
 			GCPProjectID: "kaizen-experimentation-dev",
 			GCPRegion:    "us-central1",
 		}
-		netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := m2OrchUpstreams()
-		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := m2OrchUpstreams()
+		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
 		if err != nil {
 			return err
 		}
