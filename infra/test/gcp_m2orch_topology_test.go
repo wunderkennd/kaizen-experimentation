@@ -119,9 +119,9 @@ func runM2OrchCompute(t *testing.T) (*computeMocks, map[string]string) {
 // findCloudRunService returns the recorded Cloud Run service whose `name`
 // input matches want, or nil.
 func findCloudRunService(mocks *computeMocks, want string) *recordedComputeResource {
-	for i, r := range mocks.byType("gcp:cloudrunv2/service:Service") {
+	svcs := mocks.byType("gcp:cloudrunv2/service:Service")
+	for i, r := range svcs {
 		if v, ok := r.Inputs["name"]; ok && v.HasValue() && v.StringValue() == want {
-			svcs := mocks.byType("gcp:cloudrunv2/service:Service")
 			return &svcs[i]
 		}
 	}

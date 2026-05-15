@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -276,19 +277,35 @@ func TestFullStackResourceCounts_GCP(t *testing.T) {
 // TestFullStackDeploy_GCP_RejectsMissingProject ensures Deploy() fails fast
 // when the GCP project is not configured. Without this guard, AR would 400
 // at apply time and waste an apply cycle.
+//
+// The config includes streamingProvider=redpanda (+ the minimum Redpanda
+// keys Stage 4a needs) so the streaming stage passes and Deploy() actually
+// reaches the gcpProjectId check in gcp.NewCICD (Stage 4c). Without these
+// keys the streaming switch rejects "msk" first, masking the real
+// validation this test is meant to pin.
 func TestFullStackDeploy_GCP_RejectsMissingProject(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	err := pulumi.RunErr(Deploy,
 		pulumi.WithMocks("kaizen", "dev", mocks),
 		func(info *pulumi.RunInfo) {
 			info.Config = map[string]string{
-				"kaizen-experimentation:environment":   "dev",
-				"kaizen-experimentation:cloudProvider": "gcp",
-				// no gcpProjectId
+				"kaizen-experimentation:environment":       "dev",
+				"kaizen-experimentation:cloudProvider":     "gcp",
+				"kaizen-experimentation:streamingProvider": "redpanda",
+				// Minimum Redpanda keys so Stage 4a (streaming) passes.
+				"redpanda:region":         "us-central1",
+				"redpanda:zones":          "us-central1-a,us-central1-b,us-central1-c",
+				"redpanda:throughputTier": "tier-1-gcp-v2",
+				"redpanda:kafkaUsername":  "kaizen-redpanda-user",
+				"redpanda:kafkaPassword":  "test-kafka-password",
+				// no gcpProjectId — this is what we are testing
 			}
 		},
 	)
 	if err == nil {
 		t.Fatal("expected error for missing gcpProjectId, got nil")
+	}
+	if !strings.Contains(err.Error(), "gcpProjectId") && !strings.Contains(err.Error(), "GCPProjectID") {
+		t.Fatalf("expected gcpProjectId validation error, got: %v", err)
 	}
 }
