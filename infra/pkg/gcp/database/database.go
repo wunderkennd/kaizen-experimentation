@@ -69,9 +69,15 @@ func NewCloudSQL(ctx *pulumi.Context, kcfg *kconfig.Config, inputs *CloudSQLInpu
 	}
 
 	cfg := config.New(ctx, "kaizen-experimentation")
-	gcpCfg := config.New(ctx, "gcp")
 
-	region := gcpCfg.Get("region")
+	// Region: prefer the app-level gcpRegion (consistent with cache and
+	// compute modules which read cfg.GCPRegion) then fall back to the
+	// provider-level gcp:region, then to the hard-coded default.
+	region := kcfg.GCPRegion
+	if region == "" {
+		gcpCfg := config.New(ctx, "gcp")
+		region = gcpCfg.Get("region")
+	}
 	if region == "" {
 		region = "us-central1"
 	}
@@ -133,7 +139,7 @@ func NewCloudSQL(ctx *pulumi.Context, kcfg *kconfig.Config, inputs *CloudSQLInpu
 	labels := pulumi.StringMap{
 		"project":     pulumi.String("kaizen"),
 		"environment": pulumi.String(kcfg.Environment),
-		"managed-by":  pulumi.String("pulumi"),
+		"managed_by":  pulumi.String("pulumi"),
 	}
 	if inputs.PsaReservedRangeName != nil {
 		labels["psa-range"] = inputs.PsaReservedRangeName.ToStringOutput()
