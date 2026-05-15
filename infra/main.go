@@ -113,6 +113,17 @@ func Deploy(ctx *pulumi.Context) error {
 	// PR moves this early-return marker further down Deploy() and removes it
 	// entirely once all stages (incl. edge) are wired.
 	if cfg.CloudProvider == "gcp" {
+		// Required-config gate. Validated upfront so the fail-fast behavior
+		// (and `TestFullStackDeploy_GCP_RejectsMissingProject`) is preserved
+		// regardless of where each downstream stage's own config check lives
+		// — without this, the streaming stage below would shadow the
+		// gcp.NewCICD check by erroring on the default streamingProvider=msk.
+		if cfg.GCPProjectID == "" {
+			return fmt.Errorf(
+				"cloudProvider=gcp requires kaizen-experimentation:gcpProjectId " +
+					"(set via `pulumi config set kaizen-experimentation:gcpProjectId <ID>`)")
+		}
+
 		// ── Stage 4a: Streaming ──────────────────────────────────────────
 		// GCP tenants use Redpanda Cloud (cloud-agnostic module, gated on
 		// streamingProvider). MSK is AWS-only, so reject any other value
