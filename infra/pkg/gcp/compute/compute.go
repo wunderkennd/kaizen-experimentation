@@ -466,7 +466,7 @@ func validateInputs(cfg *config.Config, inputs *Inputs, name string, opts *Optio
 		return fmt.Errorf("compute.NewCloudRunService: name must not be empty")
 	}
 	if !isValidServiceName(name) {
-		return fmt.Errorf("compute.NewCloudRunService: name %q must match [a-z][a-z0-9-]* and be 1..49 chars", name)
+		return fmt.Errorf("compute.NewCloudRunService: name %q must match [a-z][a-z0-9-]*[a-z0-9] and be 1..48 chars", name)
 	}
 	if opts == nil {
 		return fmt.Errorf("compute.NewCloudRunService: opts must not be nil")
@@ -559,10 +559,9 @@ func saAccountID(env, name string) (string, error) {
 }
 
 // isValidServiceName accepts only DNS-label-compatible service names (which
-// is also the SD service-id constraint). Cloud Run resource names extend
-// to 49 chars in practice once the kaizen-<env>- prefix is added; we
-// enforce the same upper bound on `name` so the resource name never
-// overflows the 63-char Cloud Run limit even with "staging" as env.
+// is also the SD service-id constraint). The Cloud Run resource name is
+// formatted as kaizen-<env>-<name>; with env="staging" (15-char prefix)
+// the name must be at most 48 chars so the total never exceeds 63.
 func isValidServiceName(s string) bool {
 	if len(s) == 0 || len(s) > 48 {
 		return false
@@ -583,7 +582,6 @@ func isValidServiceName(s string) bool {
 	}
 	last := s[len(s)-1]
 	return last != '-'
-}
 }
 
 // slug rewrites IAM role strings (e.g. "roles/cloudsql.client") into a

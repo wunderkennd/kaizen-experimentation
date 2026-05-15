@@ -66,16 +66,17 @@ func TestIsValidServiceName(t *testing.T) {
 		{"m2-orchestration", true},
 		{"a", true},
 		{"preview-canary", true},
-		{strings.Repeat("a", 49), true},
+		{strings.Repeat("a", 48), true},
 
 		// Invalid
 		{"", false},
-		{"M1-Assignment", false}, // uppercase
-		{"-m1", false},           // leading hyphen
-		{"1m-test", false},       // leading digit
-		{"m1_test", false},       // underscore
-		{"m1.test", false},       // dot
-		{strings.Repeat("a", 50), false}, // overflow
+		{"M1-Assignment", false},         // uppercase
+		{"-m1", false},                   // leading hyphen
+		{"1m-test", false},               // leading digit
+		{"m1_test", false},               // underscore
+		{"m1.test", false},               // dot
+		{"m1-", false},                   // trailing hyphen
+		{strings.Repeat("a", 49), false}, // overflow
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
