@@ -47,8 +47,8 @@ pg_password := env("POSTGRES_PASSWORD", "localdev")
 # Setup & Development
 # ==============================================================================
 
-# Full first-time setup — infra, codegen, install deps, seed data, verify
-setup: infra codegen deps seed test
+# Full first-time setup — infra, codegen, install deps, restore agent skills, seed data, verify
+setup: infra codegen deps install-skills seed test
     @echo ""
     @echo "============================================"
     @echo "  Setup complete. All tests passing."
@@ -140,6 +140,23 @@ deps-go:
 deps-ts:
     @echo "  Installing TypeScript dependencies..."
     cd {{ ui_dir }} && {{ npm }} ci --prefer-offline 2>/dev/null || {{ npm }} install
+
+# ==============================================================================
+# Agent Skills (Claude Code, Antigravity, Devin, Gemini CLI, Junie, Warp)
+# ==============================================================================
+
+# Restore project skills from skills-lock.json (run on fresh clone or after pull)
+install-skills:
+    @echo "  Restoring agent skills from skills-lock.json..."
+    npx --yes skills experimental_install -y
+
+# Check for skill updates available upstream
+update-skills-check:
+    npx --yes skills check
+
+# Pull latest versions of locked skills (commit the updated skills-lock.json)
+update-skills:
+    npx --yes skills update -p -y
 
 # ==============================================================================
 # Testing

@@ -250,5 +250,18 @@ Build artifacts and agent runtime state — never commit:
 - `ui/tsconfig.tsbuildinfo`, `.Jules/`, `node_modules/`, `.next/`, `target/`, `dist/`
 - `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/teams/`, `.claude/tasks/`
 - `.multiclaude/state/`, `.multiclaude/messages/`, `.multiclaude/worktrees/`, `*.pid`, `*.log`
+- `.agents/`, `.claude/skills/` — restored from `skills-lock.json` via `just install-skills`
 
 See `.gitignore` and `docs/guides/git-hygiene.md`.
+
+## Agent Skills (portable across devices)
+
+Project-required agent skills are pinned in `skills-lock.json` (committed). The skill content itself lives in `.agents/skills/` and `.claude/skills/` and is **not committed** — it's regenerated on demand:
+
+```bash
+just install-skills          # restore from lockfile (runs as part of `just setup`)
+just update-skills-check     # see what new versions are available upstream
+just update-skills           # pull latest, then commit the updated skills-lock.json
+```
+
+Skills cover: Pulumi-to-Terraform migration (`pulumi-terraform-to-pulumi`), Playwright UI testing (`webapp-testing`), ADR drafting (`documentation-and-adrs`), plus Matt Pocock's engineering productivity set (`tdd`, `diagnose`, `triage`, `to-issues`, `to-prd`, `grill-me`, etc.). Add new shared skills with `npx skills add <owner/repo@skill>` (project scope — omit `-g`).
