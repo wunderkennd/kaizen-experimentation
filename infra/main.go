@@ -72,13 +72,14 @@ func Deploy(ctx *pulumi.Context) error {
 	_ = iamOut // exported via ctx.Export inside NewIAM; reserved for future stages
 
 	// =====================================================================
-	// GCP early return — Phase 1 storage + cache + cicd slice
+	// GCP early return — Phase 1 storage + cache + cicd + M4b compute slice
 	// =====================================================================
-	// Stages 4–6 (streaming, compute, edge) and the remaining Stage 3
-	// modules (database, secrets) are AWS-only today. GCP arms for those
-	// stages land in subsequent Phase 1 PRs. Until they do, we run the
-	// implemented GCP stages (storage above, cache + cicd below) and
-	// return cleanly so `pulumi preview --stack gcp-dev` succeeds.
+	// The remaining Stage 3 module (database), Stage 4 (streaming + secrets),
+	// Stage 5 stateless compute, and Stage 6 (edge) are AWS-only today; GCP
+	// arms for those stages land in subsequent Phase 1 PRs. Until they do,
+	// we run every GCP stage that's already wired (storage above, cache +
+	// cicd + M4b compute below) and return cleanly so
+	// `pulumi preview --stack gcp-dev` succeeds.
 	// Each subsequent Phase 1 PR moves this early-return marker further down
 	// Deploy() and removes it entirely once all stages are wired.
 	if cfg.CloudProvider == "gcp" {
@@ -93,6 +94,17 @@ func Deploy(ctx *pulumi.Context) error {
 		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
 			ctx.Export("cicdAssignmentRepositoryUrl", url)
 		}
+		// M4b stateful compute slice — issue #487. Cloud Run services for
+		// the eight stateless modules land in a sibling PR (#486); when
+		// they do, this NewCompute call grows to wire them in too and the
+		// early-return marker moves below the edge stage.
+		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut)
+		if err != nil {
+			return err
+		}
+		ctx.Export("m4bAsgName", gcpComputeOut.M4bAsgName)
+		ctx.Export("m4bInstanceId", gcpComputeOut.M4bInstanceId)
+		ctx.Export("m4bEndpointAddress", gcpComputeOut.M4bEndpoint)
 		ctx.Export("dataBucket", storageOut.DataBucketName)
 		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
 		return nil

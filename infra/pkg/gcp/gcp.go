@@ -15,6 +15,7 @@ import (
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/cache"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/compute"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"
@@ -207,5 +208,74 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 
 	return types.CICDOutputs{
 		RepositoryURLs: out.RepositoryURLs,
+	}, nil
+}
+
+// ─── Stage 5: Compute ───────────────────────────────────────────────────────
+
+// NewCompute provisions the GCP compute layer. Phase 1 ships only the
+// stateful M4b Policy slice — the eight stateless Cloud Run services land in
+// #486 and will populate ServiceEndpoints/ServiceArns on the returned
+// ComputeOutputs.
+//
+// The M4b slice consumes:
+//   - The private subnet self-link (held in NetworkOutputs.PrivateSubnetIds[0])
+//     for the instance's network interface and reserved internal IP.
+//   - The Service Directory namespace resource name (held in
+//     NetworkOutputs.ServiceDiscoveryId — see types.NetworkOutputs doc) so
+//     m4b-policy registers under kaizen-local.
+//   - The GCP region from kconfig; falls back to us-central1 to keep the
+//     gcp-dev stack working with a partially-configured Pulumi.gcp-dev.yaml.
+//
+// Returned ComputeOutputs has the M4b* fields populated and other fields
+// zero-valued; the compute-stage early-return in Deploy() exports
+// independently. When #486 lands, this function grows the Cloud Run services
+// and the early-return marker in Deploy() moves below the edge stage.
+func NewCompute(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.ComputeOutputs, error) {
+	region := cfg.GCPRegion
+	if region == "" {
+		region = "us-central1"
+	}
+
+	// Pick the first (and only — GCP private subnets are regional) self-link
+	// from the network output's array. ApplyT keeps the lazy output chain
+	// intact through the topology test.
+	privateSubnetSelfLink := netOut.PrivateSubnetIds.ApplyT(func(ids []string) string {
+		if len(ids) == 0 {
+			return ""
+		}
+		return ids[0]
+	}).(pulumi.StringOutput)
+
+	// types.NetworkOutputs.ServiceDiscoveryId is documented as the Cloud Map
+	// namespace ID on AWS and the Service Directory namespace *resource name*
+	// on GCP (projects/<P>/locations/<R>/namespaces/<N>). The GCP network
+	// facade populates it from servicedirectory.Namespace.ID(), which is
+	// exactly that resource name.
+	namespaceName := netOut.ServiceDiscoveryId.ToStringOutput()
+
+	m4bOut, err := compute.NewM4bInstance(ctx, &compute.M4bArgs{
+		Environment:                   cfg.Environment,
+		Region:                        pulumi.String(region).ToStringOutput(),
+		PrivateSubnetSelfLink:         privateSubnetSelfLink,
+		ServiceDirectoryNamespaceName: namespaceName,
+	})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+
+	ctx.Export("m4bMigName", m4bOut.MigName)
+	ctx.Export("m4bInstanceName", m4bOut.InstanceName)
+	ctx.Export("m4bEndpoint", m4bOut.Endpoint)
+	ctx.Export("m4bServiceDirectoryServiceName", m4bOut.ServiceName)
+	ctx.Export("m4bDataDiskName", m4bOut.DataDiskName)
+
+	return types.ComputeOutputs{
+		// Phase 1 ships only the M4b slice; Cloud Run services follow in #486.
+		// The cluster fields stay zero-valued until then because GCP has no
+		// orchestrator analog for Cloud Run (each service is independent).
+		M4bInstanceId: m4bOut.InstanceName,
+		M4bEndpoint:   m4bOut.Endpoint,
+		M4bAsgName:    m4bOut.MigName,
 	}, nil
 }
