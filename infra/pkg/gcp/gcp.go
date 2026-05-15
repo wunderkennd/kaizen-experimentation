@@ -570,6 +570,46 @@ func NewCompute(
 	ctx.Export("gcpComputeM4aUrl", m4a.URL)
 	ctx.Export("gcpComputeM4aSaEmail", m4a.ServiceAccountEmail)
 
+	// ─── M1 Assignment (issue #488) ───────────────────────────────────────
+	// The platform's strictest latency budget (p99 < 5ms) — MinInstances=1
+	// keeps one warm instance so Cloud Run never cold-starts a request.
+	assignmentRepo, ok := cicdOut.RepositoryURLs["assignment"]
+	if !ok {
+		return types.ComputeOutputs{}, fmt.Errorf(
+			"gcp.NewCompute: CICDOutputs.RepositoryURLs is missing the \"assignment\" repo (required for the M1 image)")
+	}
+	m1Image := assignmentRepo.ApplyT(func(repo string) string {
+		return repo + ":latest"
+	}).(pulumi.StringOutput)
+
+	m1, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m1-assignment",
+		&compute.Options{
+			Image:         m1Image,
+			ContainerPort: 8080,
+			MinInstances:  1, // p99 < 5ms SLA — no cold starts.
+			EnvVars: []compute.EnvVar{
+				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
+				{Name: "RUST_LOG", Value: pulumi.String("info")},
+				{Name: "GRPC_ADDR", Value: pulumi.String("0.0.0.0:50051")},
+				{Name: "HTTP_ADDR", Value: pulumi.String("0.0.0.0:8080")},
+				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
+				{Name: "M4B_ADDR", Value: m4bOut.Endpoint},
+			},
+			Secrets: []compute.SecretEnv{
+				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
+				{EnvName: "REDIS_SECRET", SecretID: secretsOut.RedisSecretRef, Version: "latest"},
+				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
+			},
+			ProjectRoles: []string{"roles/cloudsql.client"},
+		})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	endpoints["m1"] = m1.URL
+	arns["m1"] = m1.Service.ID().ToStringOutput()
+	ctx.Export("gcpComputeM1Url", m1.URL)
+	ctx.Export("gcpComputeM1SaEmail", m1.ServiceAccountEmail)
+
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:
 		// Cloud Run is serverless (no cluster); M4b is a single MIG.
