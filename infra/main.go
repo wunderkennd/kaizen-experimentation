@@ -99,12 +99,14 @@ func Deploy(ctx *pulumi.Context) error {
 	}
 
 	// =====================================================================
-	// GCP early return — Phase 1 storage + cache + database + cicd + M4b compute slice
+	// GCP early return — Phase 1 storage + cache + database + cicd + M4b + Cloud Run compute slice
 	// =====================================================================
-	// Stage 4 (streaming + secrets), Stage 5 stateless compute, and Stage 6
-	// (edge) are AWS-only today. GCP arms for those stages land in subsequent
-	// Phase 1 PRs. Until they do, we run every GCP stage that's already wired
-	// (network, storage, cache, database above; cicd + M4b compute below) and
+	// Stage 4 (streaming + secrets), Stage 5 per-service stateless Cloud Run
+	// deploys, and Stage 6 (edge) are AWS-only today. GCP arms for those
+	// stages land in subsequent Phase 1 PRs. Until they do, we run every GCP
+	// stage that's already wired (network, storage, cache, database above;
+	// cicd + compute below — the latter covering both M4b stateful (issue
+	// #487) and the Cloud Run service factory + canary (issue #486)) and
 	// return cleanly so `pulumi preview --stack gcp-dev` succeeds.
 	// Each subsequent Phase 1 PR moves this early-return marker further down
 	// Deploy() and removes it entirely once all stages are wired.
@@ -116,10 +118,11 @@ func Deploy(ctx *pulumi.Context) error {
 		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
 			ctx.Export("cicdAssignmentRepositoryUrl", url)
 		}
-		// M4b stateful compute slice — issue #487. Cloud Run services for
-		// the eight stateless modules land in #486; when they do, this
-		// NewCompute call grows to wire them in too and the early-return
-		// marker moves below the edge stage.
+		// gcp.NewCompute provisions both the stateful M4b slice (issue #487)
+		// and the Cloud Run service factory + canary (issue #486). Per-service
+		// stateless Cloud Run deploys (M1, M2, ..., M7) land in follow-up
+		// issues #488..#495; when they do, this NewCompute call grows to wire
+		// them in too and the early-return marker moves below the edge stage.
 		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut)
 		if err != nil {
 			return err
@@ -127,6 +130,9 @@ func Deploy(ctx *pulumi.Context) error {
 		ctx.Export("m4bAsgName", gcpComputeOut.M4bAsgName)
 		ctx.Export("m4bInstanceId", gcpComputeOut.M4bInstanceId)
 		ctx.Export("m4bEndpointAddress", gcpComputeOut.M4bEndpoint)
+		for name, url := range gcpComputeOut.ServiceEndpoints {
+			ctx.Export("cloudRunUrl_"+name, url)
+		}
 		ctx.Export("dataBucket", storageOut.DataBucketName)
 		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
 		ctx.Export("databaseEndpoint", dbOut.Endpoint)

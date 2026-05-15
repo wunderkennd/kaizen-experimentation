@@ -85,6 +85,7 @@ func NewNetwork(ctx *pulumi.Context, _ *kconfig.Config) (types.NetworkOutputs, e
 		SecurityGroupIds:         fwRes.Rules,
 		ServiceDiscoveryId:       sdOut.NamespaceId,
 		ReservedPeeringRangeName: psaOut.ReservedRangeName,
+		VpcConnectorSelfLink:     connOut.ConnectorSelfLink,
 		// Zero-valued on GCP per types.NetworkOutputs documentation:
 		// PrivateRouteTableIds — GCP routes implicitly via subnet definitions.
 		// S3VpcEndpointId — no S3 gateway endpoint analogue on GCP.
@@ -249,12 +250,14 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 	}, nil
 }
 
-// ─── Stage 5: Compute ───────────────────────────────────────────────────────
+// ─── Stage 5: Compute (M4b stateful + Cloud Run service factory) ───────────
 
-// NewCompute provisions the GCP compute layer. Phase 1 ships only the
-// stateful M4b Policy slice — the eight stateless Cloud Run services land in
-// #486 and will populate ServiceEndpoints/ServiceArns on the returned
-// ComputeOutputs.
+// NewCompute provisions the GCP compute layer for Phase 1: the stateful
+// M4b Policy slice on GCE + persistent disk + autohealing MIG (issue #487)
+// AND the reusable Cloud Run service factory exercised with a single
+// trivial canary service so `pulumi preview --stack gcp-dev` succeeds end-to-end
+// (issue #486). Per-Kaizen-service Cloud Run deploys (M1, M2, ..., M7) land
+// in follow-up issues #488..#495.
 //
 // The M4b slice consumes:
 //   - The private subnet self-link (held in NetworkOutputs.PrivateSubnetIds[0])
@@ -262,19 +265,23 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 //   - The Service Directory namespace resource name (held in
 //     NetworkOutputs.ServiceDiscoveryId — see types.NetworkOutputs doc) so
 //     m4b-policy registers under kaizen-local.
-//   - The GCP region from kconfig; falls back to us-central1 to keep the
-//     gcp-dev stack working with a partially-configured Pulumi.gcp-dev.yaml.
 //
-// Returned ComputeOutputs has the M4b* fields populated and other fields
-// zero-valued; the compute-stage early-return in Deploy() exports
-// independently. When #486 lands, this function grows the Cloud Run services
-// and the early-return marker in Deploy() moves below the edge stage.
+// The Cloud Run canary uses Google's public hello-world image so this slice
+// neither blocks on Artifact Registry image builds (#482 already shipped the
+// registry, but no images have been built yet) nor leaks unrelated service
+// spec. Per-service issues replace the image with the matching Artifact
+// Registry URL from CICDOutputs.RepositoryURLs.
+//
+// Returns types.ComputeOutputs with both M4b fields AND ServiceEndpoints
+// populated for the canary. ClusterId is zero-valued — Cloud Run is
+// serverless and M4b is a single instance, not an orchestrator cluster.
 func NewCompute(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.ComputeOutputs, error) {
 	region := cfg.GCPRegion
 	if region == "" {
 		region = "us-central1"
 	}
 
+	// ─── M4b slice (issue #487) ───────────────────────────────────────────
 	// Pick the first (and only — GCP private subnets are regional) self-link
 	// from the network output's array. ApplyT keeps the lazy output chain
 	// intact through the topology test.
@@ -308,12 +315,51 @@ func NewCompute(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOu
 	ctx.Export("m4bServiceDirectoryServiceName", m4bOut.ServiceName)
 	ctx.Export("m4bDataDiskName", m4bOut.DataDiskName)
 
+	// ─── Cloud Run service factory + canary (issue #486) ──────────────────
+	if cfg.GCPProjectID == "" {
+		return types.ComputeOutputs{}, fmt.Errorf(
+			"gcp.NewCompute: cfg.GCPProjectID is required when cloudProvider=gcp")
+	}
+
+	cloudRunInputs := &compute.Inputs{
+		Project:                     cfg.GCPProjectID,
+		Region:                      cfg.GCPRegion,
+		VpcConnectorSelfLink:        netOut.VpcConnectorSelfLink,
+		ServiceDirectoryNamespaceID: netOut.ServiceDiscoveryId.ToStringOutput(),
+	}
+
+	canary, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "preview-canary",
+		&compute.Options{
+			// Google's public hello-world image — exercises the helper
+			// against `pulumi preview` without depending on a real
+			// build/push of a Kaizen image. Replace per-service in
+			// issues #488..#495 with the matching Artifact Registry URL
+			// from CICDOutputs.RepositoryURLs.
+			Image:         pulumi.String("us-docker.pkg.dev/cloudrun/container/hello"),
+			ContainerPort: 8080,
+			MinInstances:  0,
+		})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+
+	endpoints := map[string]pulumi.StringOutput{
+		"preview-canary": canary.URL,
+	}
+	arns := map[string]pulumi.StringOutput{
+		"preview-canary": canary.Service.ID().ToStringOutput(),
+	}
+
+	ctx.Export("gcpComputeCanaryUrl", canary.URL)
+	ctx.Export("gcpComputeCanarySaEmail", canary.ServiceAccountEmail)
+
 	return types.ComputeOutputs{
-		// Phase 1 ships only the M4b slice; Cloud Run services follow in #486.
-		// The cluster fields stay zero-valued until then because GCP has no
-		// orchestrator analog for Cloud Run (each service is independent).
-		M4bInstanceId: m4bOut.InstanceName,
-		M4bEndpoint:   m4bOut.Endpoint,
-		M4bAsgName:    m4bOut.MigName,
+		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:
+		// Cloud Run is serverless (no cluster); M4b is a single MIG.
+		M4bInstanceId:    m4bOut.InstanceName,
+		M4bEndpoint:      m4bOut.Endpoint,
+		M4bAsgName:       m4bOut.MigName,
+		ServiceEndpoints: endpoints,
+		ServiceArns:      arns,
 	}, nil
 }
