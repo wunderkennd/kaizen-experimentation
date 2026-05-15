@@ -610,6 +610,43 @@ func NewCompute(
 	ctx.Export("gcpComputeM1Url", m1.URL)
 	ctx.Export("gcpComputeM1SaEmail", m1.ServiceAccountEmail)
 
+	// ─── M3 Metrics (issue #491) ──────────────────────────────────────────
+	// Go service. Spark SQL orchestration → Delta Lake on GCS; reads metric
+	// definitions from Cloud SQL. Default min-instances; batch path, not
+	// p99-sensitive. Image from the "metrics" Artifact Registry repo.
+	m3RepoURL, ok := cicdOut.RepositoryURLs["metrics"]
+	if !ok {
+		return types.ComputeOutputs{}, fmt.Errorf(
+			"gcp.NewCompute: cicdOut.RepositoryURLs missing \"metrics\" key required for M3 deploy (#491)")
+	}
+	m3, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m3-metrics",
+		&compute.Options{
+			Image:         pulumi.Sprintf("%s:latest", m3RepoURL),
+			ContainerPort: 50056,
+			MinInstances:  0,
+			EnvVars: []compute.EnvVar{
+				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
+				{Name: "LOG_LEVEL", Value: pulumi.String("info")},
+				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
+				{Name: "DATA_BUCKET", Value: storageOut.DataBucketName},
+				{Name: "DATA_BUCKET_URI", Value: storageOut.DataBucketRef},
+			},
+			Secrets: []compute.SecretEnv{
+				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
+			},
+			// roles/storage.objectAdmin on the data bucket (#491 AC3).
+			Buckets: []pulumi.StringInput{storageOut.DataBucketName},
+			// roles/cloudsql.client — connect to Cloud SQL for metric defs.
+			ProjectRoles: []string{"roles/cloudsql.client"},
+		})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	endpoints["m3"] = m3.URL
+	arns["m3"] = m3.Service.ID().ToStringOutput()
+	ctx.Export("gcpComputeM3Url", m3.URL)
+	ctx.Export("gcpComputeM3SaEmail", m3.ServiceAccountEmail)
+
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:
 		// Cloud Run is serverless (no cluster); M4b is a single MIG.
