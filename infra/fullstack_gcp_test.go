@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -103,6 +104,77 @@ func (m *gcpFullstackMocks) NewResource(args pulumi.MockResourceArgs) (string, r
 			"projects/test/locations/us-central1/namespaces/kaizen/services/" + args.Name)
 	case "gcp:servicedirectory/endpoint:Endpoint":
 		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:compute/instanceTemplate:InstanceTemplate":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/instanceTemplates/" + args.Name)
+	case "gcp:compute/healthCheck:HealthCheck":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/healthChecks/" + args.Name)
+	case "gcp:compute/address:Address":
+		outputs["address"] = resource.NewStringProperty("10.0.16.20")
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/regions/us-central1/addresses/" + args.Name)
+
+	// --- Stage 4 streaming: Redpanda Cloud (TF-bridge type tokens) ---
+	// Mirrors infra/test/testutil_test.go so the Stage 4 arm now wired into
+	// the GCP path (#490) resolves bootstrap brokers + schema registry.
+	case "redpanda:index/resourceGroup:ResourceGroup":
+		outputs["id"] = resource.NewStringProperty("rg_" + args.Name)
+	case "redpanda:index/network:Network":
+		outputs["id"] = resource.NewStringProperty("net_" + args.Name)
+	case "redpanda:index/cluster:Cluster":
+		outputs["bootstrapBrokers"] = resource.NewStringProperty(
+			"seed-0." + args.Name + ".fmc.prd.cloud.redpanda.com:9092," +
+				"seed-1." + args.Name + ".fmc.prd.cloud.redpanda.com:9092")
+		outputs["schemaRegistryUrl"] = resource.NewStringProperty(
+			"https://schema-registry-" + args.Name + ".fmc.prd.cloud.redpanda.com:30081")
+		outputs["clusterApiUrl"] = resource.NewStringProperty(
+			"https://api-" + args.Name + ".fmc.prd.cloud.redpanda.com:9644")
+	case "redpanda:index/user:User",
+		"redpanda:index/acl:Acl",
+		"pulumi:providers:kafka",
+		"kafka:index/topic:Topic":
+		// Inputs already copied to outputs; no extra computed fields needed.
+
+	// --- Stage 4 secrets: Secret Manager ---
+	case "gcp:secretmanager/secret:Secret":
+		secretID := args.Name
+		if v, ok := args.Inputs["secretId"]; ok && v.HasValue() {
+			secretID = v.StringValue()
+		}
+		outputs["name"] = resource.NewStringProperty(
+			"projects/kaizen-experimentation-dev/secrets/" + secretID)
+		outputs["secretId"] = resource.NewStringProperty(secretID)
+	case "gcp:secretmanager/secretVersion:SecretVersion",
+		"gcp:secretmanager/secretIamMember:SecretIamMember":
+		// Default copy is sufficient (no computed fields read downstream).
+
+	// --- Stage 5 compute: per-service Cloud Run runtime identity + service ---
+	case "gcp:serviceaccount/account:Account":
+		accountID := ""
+		if v, ok := args.Inputs["accountId"]; ok && v.HasValue() {
+			accountID = v.StringValue()
+		}
+		project := ""
+		if v, ok := args.Inputs["project"]; ok && v.HasValue() {
+			project = v.StringValue()
+		}
+		email := accountID + "@" + project + ".iam.gserviceaccount.com"
+		outputs["email"] = resource.NewStringProperty(email)
+		outputs["name"] = resource.NewStringProperty(
+			"projects/" + project + "/serviceAccounts/" + email)
+		outputs["uniqueId"] = resource.NewStringProperty("100000000000000000001")
+	case "gcp:cloudrunv2/service:Service":
+		name := args.Name
+		if v, ok := args.Inputs["name"]; ok && v.HasValue() {
+			name = v.StringValue()
+		}
+		region := "us-central1"
+		if v, ok := args.Inputs["location"]; ok && v.HasValue() {
+			region = v.StringValue()
+		}
+		outputs["uri"] = resource.NewStringProperty(
+			"https://" + name + "-mock-" + region + ".a.run.app")
 	}
 	return id, outputs, nil
 }
@@ -124,7 +196,11 @@ func (m *gcpFullstackMocks) byType(t string) []fsResource {
 }
 
 // gcpFullstackConfig sets the minimal stack config that Pulumi.gcp-dev.yaml
-// declares plus a CI push principal so the IAM bindings get exercised.
+// declares plus a CI push principal so the IAM bindings get exercised. The
+// redpanda:* keys mirror Pulumi.gcp-dev.yaml so the Stage 4 streaming arm
+// (now wired into the GCP path by #490) reads valid config; kafkaPassword is
+// supplied as a plain value because RequireSecret reads test config the same
+// way Require does.
 func gcpFullstackConfig() pulumi.RunOption {
 	return func(info *pulumi.RunInfo) {
 		info.Config = map[string]string{
@@ -132,11 +208,20 @@ func gcpFullstackConfig() pulumi.RunOption {
 			"gcp:region":                                  "us-central1",
 			"kaizen-experimentation:environment":          "dev",
 			"kaizen-experimentation:cloudProvider":        "gcp",
+			"kaizen-experimentation:streamingProvider":    "redpanda",
 			"kaizen-experimentation:gcpProjectId":         "kaizen-experimentation-dev",
 			"kaizen-experimentation:gcpRegion":            "us-central1",
 			"kaizen-experimentation:gcpArLocation":        "us",
 			"kaizen-experimentation:gcpCiPushPrincipal":   "serviceAccount:ci@kaizen-experimentation-dev.iam.gserviceaccount.com",
 			"kaizen-experimentation:gcpRunPullPrincipals": "serviceAccount:run@kaizen-experimentation-dev.iam.gserviceaccount.com",
+			"redpanda:cloudProvider":                      "gcp",
+			"redpanda:region":                             "us-central1",
+			"redpanda:zones":                              "us-central1-a,us-central1-b,us-central1-c",
+			"redpanda:throughputTier":                     "tier-1-gcp-v2",
+			"redpanda:clusterType":                        "dedicated",
+			"redpanda:connectionType":                     "private",
+			"redpanda:kafkaUsername":                      "kaizen-redpanda-user",
+			"redpanda:kafkaPassword":                      "test-kafka-password",
 		}
 	}
 }
@@ -192,19 +277,35 @@ func TestFullStackResourceCounts_GCP(t *testing.T) {
 // TestFullStackDeploy_GCP_RejectsMissingProject ensures Deploy() fails fast
 // when the GCP project is not configured. Without this guard, AR would 400
 // at apply time and waste an apply cycle.
+//
+// The config includes streamingProvider=redpanda (+ the minimum Redpanda
+// keys Stage 4a needs) so the streaming stage passes and Deploy() actually
+// reaches the gcpProjectId check in gcp.NewCICD (Stage 4c). Without these
+// keys the streaming switch rejects "msk" first, masking the real
+// validation this test is meant to pin.
 func TestFullStackDeploy_GCP_RejectsMissingProject(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	err := pulumi.RunErr(Deploy,
 		pulumi.WithMocks("kaizen", "dev", mocks),
 		func(info *pulumi.RunInfo) {
 			info.Config = map[string]string{
-				"kaizen-experimentation:environment":   "dev",
-				"kaizen-experimentation:cloudProvider": "gcp",
-				// no gcpProjectId
+				"kaizen-experimentation:environment":       "dev",
+				"kaizen-experimentation:cloudProvider":     "gcp",
+				"kaizen-experimentation:streamingProvider": "redpanda",
+				// Minimum Redpanda keys so Stage 4a (streaming) passes.
+				"redpanda:region":         "us-central1",
+				"redpanda:zones":          "us-central1-a,us-central1-b,us-central1-c",
+				"redpanda:throughputTier": "tier-1-gcp-v2",
+				"redpanda:kafkaUsername":  "kaizen-redpanda-user",
+				"redpanda:kafkaPassword":  "test-kafka-password",
+				// no gcpProjectId — this is what we are testing
 			}
 		},
 	)
 	if err == nil {
 		t.Fatal("expected error for missing gcpProjectId, got nil")
+	}
+	if !strings.Contains(err.Error(), "gcpProjectId") && !strings.Contains(err.Error(), "GCPProjectID") {
+		t.Fatalf("expected gcpProjectId validation error, got: %v", err)
 	}
 }

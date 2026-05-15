@@ -18,6 +18,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/gcp/compute"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/database"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
@@ -189,6 +190,22 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 	}, nil
 }
 
+// serviceImage resolves a Kaizen service's container image reference from the
+// CICD stage's Artifact Registry repository map and pins the :latest tag.
+// Returns an error (fail-fast at program-build time) when the registry key is
+// absent, rather than letting Cloud Run surface an opaque image-pull failure
+// at apply. registryKey is the pkg/gcp/cicd repository key (e.g.
+// "orchestration"), NOT the ServiceEndpoints map key.
+func serviceImage(cicdOut types.CICDOutputs, registryKey string) (pulumi.StringInput, error) {
+	repoURL, ok := cicdOut.RepositoryURLs[registryKey]
+	if !ok {
+		return nil, fmt.Errorf(
+			"gcp.NewCompute: CICDOutputs.RepositoryURLs missing key %q (Artifact Registry repo not provisioned by gcp.NewCICD)",
+			registryKey)
+	}
+	return pulumi.Sprintf("%s:latest", repoURL), nil
+}
+
 // gcpLabels returns the standard label set for GCP resources. GCP label
 // values must match [a-z0-9_-]+, so we lowercase and substitute the AWS
 // tag values that don't fit. Kept private until a second module needs the
@@ -205,8 +222,55 @@ func gcpLabels(cfg *kconfig.Config) pulumi.StringMap {
 	}
 }
 
-
 // ─── Stage 4: Streaming + Secrets + CICD ────────────────────────────────────
+
+// NewSecrets provisions the four GCP Secret Manager secrets (database, kafka,
+// redis, auth) and narrows pkg/gcp/secrets' richer output to the cross-cloud
+// types.SecretsOutputs contract. It mirrors pkg/aws.NewSecrets so Deploy()
+// composes either provider identically.
+//
+// Inputs flow lazily through Pulumi outputs from the upstream Stage 3
+// (database, cache) and Stage 4 (streaming) modules:
+//   - dbOut.Endpoint        → DatabaseSecret.Host
+//   - streamOut.BootstrapBrokers → KafkaSecret.BootstrapBrokers
+//   - cacheOut.Endpoint     → RedisSecret.Endpoint
+//
+// Contract note: types.SecretsOutputs.*SecretRef is documented as the native
+// reference — on GCP that is the bare "projects/<P>/secrets/<S>" resource
+// name (NOT the version-qualified accessor path). That is exactly what Cloud
+// Run's container env secretKeyRef.secret and Secret Manager IAM bindings
+// expect, with the version supplied separately ("latest"). We therefore map
+// the secrets module's *SecretName (bare path) onto *SecretRef here.
+func NewSecrets(
+	ctx *pulumi.Context,
+	cfg *kconfig.Config,
+	dbOut types.DatabaseOutputs,
+	streamOut types.StreamingOutputs,
+	cacheOut types.CacheOutputs,
+) (types.SecretsOutputs, error) {
+	out, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
+		CloudSqlEndpoint:      dbOut.Endpoint,
+		KafkaBootstrapBrokers: streamOut.BootstrapBrokers,
+		RedisEndpoint:         cacheOut.Endpoint,
+	})
+	if err != nil {
+		return types.SecretsOutputs{}, err
+	}
+	ctx.Export("secretManagerDatabaseName", out.DatabaseSecretName)
+	ctx.Export("secretManagerKafkaName", out.KafkaSecretName)
+	// *SecretName → *SecretRef is intentional, not a mapping bug: the GCP
+	// "native reference" for the SecretsOutputs contract is the bare
+	// `projects/<P>/secrets/<S>` path that Cloud Run's secretKeyRef.secret
+	// and Secret Manager IAM bindings consume, NOT the version-qualified
+	// `/versions/latest` accessor path. See the function preamble and
+	// types.SecretsOutputs docs for the full contract.
+	return types.SecretsOutputs{
+		DatabaseSecretRef: out.DatabaseSecretName,
+		KafkaSecretRef:    out.KafkaSecretName,
+		RedisSecretRef:    out.RedisSecretName,
+		AuthSecretRef:     out.AuthSecretName,
+	}, nil
+}
 
 // NewCICD provisions Artifact Registry repositories for all Kaizen services.
 // Returns the same shared types.CICDOutputs shape as pkg/aws.NewCICD so the
@@ -253,11 +317,11 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 // ─── Stage 5: Compute (M4b stateful + Cloud Run service factory) ───────────
 
 // NewCompute provisions the GCP compute layer for Phase 1: the stateful
-// M4b Policy slice on GCE + persistent disk + autohealing MIG (issue #487)
-// AND the reusable Cloud Run service factory exercised with a single
-// trivial canary service so `pulumi preview --stack gcp-dev` succeeds end-to-end
-// (issue #486). Per-Kaizen-service Cloud Run deploys (M1, M2, ..., M7) land
-// in follow-up issues #488..#495.
+// M4b Policy slice on GCE + persistent disk + autohealing MIG (issue #487),
+// the reusable Cloud Run service factory + a trivial canary so
+// `pulumi preview --stack gcp-dev` succeeds end-to-end (issue #486), and the
+// per-Kaizen-service Cloud Run deploys as they land (issues #488..#495).
+// This PR wires M2 Orchestration (issue #490).
 //
 // The M4b slice consumes:
 //   - The private subnet self-link (held in NetworkOutputs.PrivateSubnetIds[0])
@@ -266,16 +330,30 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 //     NetworkOutputs.ServiceDiscoveryId — see types.NetworkOutputs doc) so
 //     m4b-policy registers under kaizen-local.
 //
-// The Cloud Run canary uses Google's public hello-world image so this slice
-// neither blocks on Artifact Registry image builds (#482 already shipped the
-// registry, but no images have been built yet) nor leaks unrelated service
-// spec. Per-service issues replace the image with the matching Artifact
-// Registry URL from CICDOutputs.RepositoryURLs.
+// The stateless Cloud Run services consume:
+//   - cicdOut.RepositoryURLs[<registry key>] for the container image.
+//   - dbOut.Endpoint / streamOut.BootstrapBrokers as literal env vars so the
+//     service can dial Cloud SQL (through the VPC connector) and Redpanda.
+//   - secretsOut.*SecretRef for Secret Manager-backed env vars; the factory
+//     auto-creates the matching roles/secretmanager.secretAccessor bindings.
 //
-// Returns types.ComputeOutputs with both M4b fields AND ServiceEndpoints
-// populated for the canary. ClusterId is zero-valued — Cloud Run is
-// serverless and M4b is a single instance, not an orchestrator cluster.
-func NewCompute(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.ComputeOutputs, error) {
+// The Cloud Run canary uses Google's public hello-world image so the slice
+// never blocks on a real Kaizen image build. It is retained until all of
+// #488..#495 land, at which point it can be retired.
+//
+// Returns types.ComputeOutputs with M4b fields AND ServiceEndpoints populated
+// for every Cloud Run service (canary + per-service). ClusterId is
+// zero-valued — Cloud Run is serverless and M4b is a single instance, not an
+// orchestrator cluster.
+func NewCompute(
+	ctx *pulumi.Context,
+	cfg *kconfig.Config,
+	netOut types.NetworkOutputs,
+	cicdOut types.CICDOutputs,
+	dbOut types.DatabaseOutputs,
+	streamOut types.StreamingOutputs,
+	secretsOut types.SecretsOutputs,
+) (types.ComputeOutputs, error) {
 	region := cfg.GCPRegion
 	if region == "" {
 		region = "us-central1"
@@ -352,6 +430,54 @@ func NewCompute(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOu
 
 	ctx.Export("gcpComputeCanaryUrl", canary.URL)
 	ctx.Export("gcpComputeCanarySaEmail", canary.ServiceAccountEmail)
+
+	// ─── M2 Orchestration (issue #490) ────────────────────────────────────
+	// Stateless coordinator. Needs Cloud SQL for orchestration state and
+	// Redpanda for event flow. Service name "m2-orchestration" (matches the
+	// AWS Cloud Map name + the dev-m2-orchestration-run SA convention); the
+	// ServiceEndpoints map key is "m2-orch" (matches the AWS service key and
+	// the #490 acceptance criterion). Default min-instances (0) — the spec's
+	// Compute Model marks M2-Orch a stateless orchestrator, NOT an M1/M7
+	// cold-start-sensitive service.
+	m2OrchImage, err := serviceImage(cicdOut, "orchestration")
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	m2Orch, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m2-orchestration",
+		&compute.Options{
+			Image:         m2OrchImage,
+			ContainerPort: 50058,
+			MinInstances:  0,
+			EnvVars: []compute.EnvVar{
+				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
+				{Name: "LOG_LEVEL", Value: pulumi.String("info")},
+				// Cloud SQL host:port — reachable from the container only
+				// through the Serverless VPC Access connector wired by the
+				// factory (acceptance criterion #3).
+				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
+				// Redpanda Kafka-protocol bootstrap brokers for event flow.
+				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
+			},
+			Secrets: []compute.SecretEnv{
+				// secretsOut.*SecretRef is the bare projects/<P>/secrets/<S>
+				// path on GCP (see gcp.NewSecrets contract note); the factory
+				// grants roles/secretmanager.secretAccessor on each — i.e.
+				// "read DB creds, read Kafka creds".
+				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
+				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
+			},
+			// Cloud SQL connection scope. The secret-accessor bindings above
+			// cover credential reads; this grants the IAM scope to open the
+			// connection itself.
+			ProjectRoles: []string{"roles/cloudsql.client"},
+		})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	endpoints["m2-orch"] = m2Orch.URL
+	arns["m2-orch"] = m2Orch.Service.ID().ToStringOutput()
+	ctx.Export("gcpComputeM2OrchUrl", m2Orch.URL)
+	ctx.Export("gcpComputeM2OrchSaEmail", m2Orch.ServiceAccountEmail)
 
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:

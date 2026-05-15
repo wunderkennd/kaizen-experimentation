@@ -99,18 +99,61 @@ func Deploy(ctx *pulumi.Context) error {
 	}
 
 	// =====================================================================
-	// GCP early return — Phase 1 storage + cache + database + cicd + M4b + Cloud Run compute slice
+	// GCP early return — Phase 1 storage + cache + database + streaming +
+	// secrets + cicd + M4b + Cloud Run compute slice
 	// =====================================================================
-	// Stage 4 (streaming + secrets), Stage 5 per-service stateless Cloud Run
-	// deploys, and Stage 6 (edge) are AWS-only today. GCP arms for those
-	// stages land in subsequent Phase 1 PRs. Until they do, we run every GCP
-	// stage that's already wired (network, storage, cache, database above;
-	// cicd + compute below — the latter covering both M4b stateful (issue
-	// #487) and the Cloud Run service factory + canary (issue #486)) and
-	// return cleanly so `pulumi preview --stack gcp-dev` succeeds.
-	// Each subsequent Phase 1 PR moves this early-return marker further down
-	// Deploy() and removes it entirely once all stages are wired.
+	// Stage 4 (streaming + secrets) is now wired for GCP: the per-service
+	// Cloud Run deploys (#488..#495) need Redpanda bootstrap brokers + Secret
+	// Manager refs threaded into compute. Stage 6 (edge) remains AWS-only
+	// today. We run every wired GCP stage (network, storage, cache, database
+	// above; streaming + secrets + cicd + compute below — compute covering
+	// M4b stateful (#487), the Cloud Run factory + canary (#486), and the
+	// per-service deploys as they land, M2-Orch via #490) and return cleanly
+	// so `pulumi preview --stack gcp-dev` succeeds. Each subsequent Phase 1
+	// PR moves this early-return marker further down Deploy() and removes it
+	// entirely once all stages (incl. edge) are wired.
 	if cfg.CloudProvider == "gcp" {
+		// Required-config gate. Validated upfront so the fail-fast behavior
+		// (and `TestFullStackDeploy_GCP_RejectsMissingProject`) is preserved
+		// regardless of where each downstream stage's own config check lives
+		// — without this, the streaming stage below would shadow the
+		// gcp.NewCICD check by erroring on the default streamingProvider=msk.
+		if cfg.GCPProjectID == "" {
+			return fmt.Errorf(
+				"cloudProvider=gcp requires kaizen-experimentation:gcpProjectId " +
+					"(set via `pulumi config set kaizen-experimentation:gcpProjectId <ID>`)")
+		}
+
+		// ── Stage 4a: Streaming ──────────────────────────────────────────
+		// GCP tenants use Redpanda Cloud (cloud-agnostic module, gated on
+		// streamingProvider). MSK is AWS-only, so reject any other value
+		// loudly rather than silently shipping a brokerless stack.
+		var gcpStreamOut types.StreamingOutputs
+		switch cfg.StreamingProvider {
+		case "redpanda":
+			gcpStreamOut, err = cloudstreaming.NewRedpanda(ctx, cfg, netOut)
+		default:
+			// streamingProvider defaults to "msk" when unset (see
+			// pkg/config/config.go), so a GCP stack with the key omitted will
+			// land here. Spell out the remedy so operators don't have to
+			// chase the default through config code.
+			return fmt.Errorf(
+				"cloudProvider=gcp requires streamingProvider=redpanda (got %q — "+
+					"MSK is AWS-only; set explicitly with "+
+					"`pulumi config set kaizen-experimentation:streamingProvider redpanda`)",
+				cfg.StreamingProvider)
+		}
+		if err != nil {
+			return err
+		}
+
+		// ── Stage 4b: Secrets ────────────────────────────────────────────
+		gcpSecretsOut, err := gcp.NewSecrets(ctx, cfg, dbOut, gcpStreamOut, cacheOut)
+		if err != nil {
+			return err
+		}
+
+		// ── Stage 4c: CICD ───────────────────────────────────────────────
 		cicdOut, err := gcp.NewCICD(ctx, cfg)
 		if err != nil {
 			return err
@@ -118,15 +161,17 @@ func Deploy(ctx *pulumi.Context) error {
 		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
 			ctx.Export("cicdAssignmentRepositoryUrl", url)
 		}
-		// gcp.NewCompute provisions both the stateful M4b slice (issue #487)
-		// and the Cloud Run service factory + canary (issue #486). Per-service
-		// stateless Cloud Run deploys (M1, M2, ..., M7) land in follow-up
-		// issues #488..#495; when they do, this NewCompute call grows to wire
-		// them in too and the early-return marker moves below the edge stage.
-		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut)
+
+		// ── Stage 5: Compute ─────────────────────────────────────────────
+		// gcp.NewCompute provisions the stateful M4b slice (#487), the Cloud
+		// Run service factory + canary (#486), and the per-service stateless
+		// Cloud Run deploys as they land — M2 Orchestration via #490. Sibling
+		// services (#488, #489, #491..#495) extend the same call.
+		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, gcpStreamOut, gcpSecretsOut)
 		if err != nil {
 			return err
 		}
+		ctx.Export("streamingBootstrapBrokers", gcpStreamOut.BootstrapBrokers)
 		ctx.Export("m4bAsgName", gcpComputeOut.M4bAsgName)
 		ctx.Export("m4bInstanceId", gcpComputeOut.M4bInstanceId)
 		ctx.Export("m4bEndpointAddress", gcpComputeOut.M4bEndpoint)

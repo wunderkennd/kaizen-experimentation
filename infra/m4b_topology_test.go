@@ -362,7 +362,12 @@ func TestM4bGcpComputeFacade(t *testing.T) {
 	if got := len(mocks.byType("gcp:compute/disk:Disk")); got != 1 {
 		t.Errorf("expected 1 standalone Disk from Deploy(gcp), got %d", got)
 	}
-	if got := len(mocks.byType("gcp:servicedirectory/service:Service")); got != 1 {
-		t.Errorf("expected 1 SD Service from Deploy(gcp), got %d", got)
+	// Deploy(gcp) registers one Service Directory entry per Cloud Run
+	// service plus one for M4b: M4b's own SD service from
+	// compute.NewM4bInstance, the Cloud Run canary from #486
+	// (gcp.NewCompute), and M2-Orch from #490 (compute.NewCloudRunService).
+	// Each per-service Cloud Run deploy (#488..#495) adds one as it lands.
+	if got := len(mocks.byType("gcp:servicedirectory/service:Service")); got != 3 {
+		t.Errorf("expected 3 SD Services from Deploy(gcp) (M4b + canary + M2-Orch), got %d", got)
 	}
 }
