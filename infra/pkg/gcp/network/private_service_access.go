@@ -94,8 +94,20 @@ func NewPrivateServiceAccess(ctx *pulumi.Context, args *PrivateServiceAccessArgs
 		return nil, err
 	}
 
+	// Derive ReservedRangeName from BOTH psaRange.Name AND conn.Peering so
+	// downstream consumers transitively wait for the Connection to finish
+	// establishing — not just the GlobalAddress. Without this, Cloud SQL /
+	// Memorystore instances that consume ReservedRangeName depend only on
+	// the GlobalAddress and Pulumi can schedule them before the VPC peering
+	// is ready, surfacing as opaque "network not authorized" errors at
+	// instance-creation time. The resolved value is identical (the range
+	// name string); pulumi.All purely extends the dependency graph.
+	rangeNameWithConnDep := pulumi.All(psaRange.Name, conn.Peering).ApplyT(func(args []interface{}) string {
+		return args[0].(string)
+	}).(pulumi.StringOutput)
+
 	return &PrivateServiceAccessOutputs{
-		ReservedRangeName: psaRange.Name,
+		ReservedRangeName: rangeNameWithConnDep,
 		ConnectionPeering: conn.Peering,
 	}, nil
 }
