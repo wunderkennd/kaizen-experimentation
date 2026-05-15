@@ -53,6 +53,15 @@ type NetworkOutputs struct {
 	// Pulumi's output graph orders their creation after the PSA peering is
 	// live; the value itself is informational at the application layer.
 	ReservedPeeringRangeName pulumi.StringOutput
+
+	// VpcConnectorSelfLink is GCP-specific (Serverless VPC Access connector
+	// self-link in the form
+	// "projects/<P>/locations/<R>/connectors/<C>"). The compute stage feeds
+	// this into every Cloud Run service's template.vpcAccess.connector so
+	// requests reach private VPC resources (Cloud SQL, Memorystore, GCE M4b).
+	// Zero-valued on AWS — Cloud Run does not exist there and ECS Fargate
+	// reaches the VPC directly via task ENIs.
+	VpcConnectorSelfLink pulumi.StringOutput
 }
 
 // DatabaseOutputs holds outputs from the relational database stage
