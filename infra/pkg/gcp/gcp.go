@@ -258,6 +258,12 @@ func NewSecrets(
 	}
 	ctx.Export("secretManagerDatabaseName", out.DatabaseSecretName)
 	ctx.Export("secretManagerKafkaName", out.KafkaSecretName)
+	// *SecretName → *SecretRef is intentional, not a mapping bug: the GCP
+	// "native reference" for the SecretsOutputs contract is the bare
+	// `projects/<P>/secrets/<S>` path that Cloud Run's secretKeyRef.secret
+	// and Secret Manager IAM bindings consume, NOT the version-qualified
+	// `/versions/latest` accessor path. See the function preamble and
+	// types.SecretsOutputs docs for the full contract.
 	return types.SecretsOutputs{
 		DatabaseSecretRef: out.DatabaseSecretName,
 		KafkaSecretRef:    out.KafkaSecretName,

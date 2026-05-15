@@ -133,8 +133,14 @@ func Deploy(ctx *pulumi.Context) error {
 		case "redpanda":
 			gcpStreamOut, err = cloudstreaming.NewRedpanda(ctx, cfg, netOut)
 		default:
+			// streamingProvider defaults to "msk" when unset (see
+			// pkg/config/config.go), so a GCP stack with the key omitted will
+			// land here. Spell out the remedy so operators don't have to
+			// chase the default through config code.
 			return fmt.Errorf(
-				"cloudProvider=gcp requires streamingProvider=redpanda (got %q)",
+				"cloudProvider=gcp requires streamingProvider=redpanda (got %q — "+
+					"MSK is AWS-only; set explicitly with "+
+					"`pulumi config set kaizen-experimentation:streamingProvider redpanda`)",
 				cfg.StreamingProvider)
 		}
 		if err != nil {
