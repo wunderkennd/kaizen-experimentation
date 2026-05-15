@@ -564,7 +564,7 @@ func saAccountID(env, name string) (string, error) {
 // enforce the same upper bound on `name` so the resource name never
 // overflows the 63-char Cloud Run limit even with "staging" as env.
 func isValidServiceName(s string) bool {
-	if len(s) == 0 || len(s) > 49 {
+	if len(s) == 0 || len(s) > 48 {
 		return false
 	}
 	first := s[0]
