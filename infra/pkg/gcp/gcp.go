@@ -16,6 +16,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/gcp/cache"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/compute"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/database"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"
@@ -65,12 +66,25 @@ func NewNetwork(ctx *pulumi.Context, _ *kconfig.Config) (types.NetworkOutputs, e
 	ctx.Export("vpcConnectorId", connOut.ConnectorId)
 	ctx.Export("vpcConnectorSelfLink", connOut.ConnectorSelfLink)
 
+	// Private Service Access — VPC peering with Google's managed services
+	// tenant projects so Cloud SQL (#484) and Memorystore (#485) can be
+	// reached via private IPs. Provisioned here because PSA is VPC-scoped:
+	// one peering serves every Google-managed data store on the VPC.
+	psaOut, err := network.NewPrivateServiceAccess(ctx, &network.PrivateServiceAccessArgs{
+		NetworkId: vpcOut.NetworkId,
+	})
+	if err != nil {
+		return types.NetworkOutputs{}, err
+	}
+	ctx.Export("psaReservedRangeName", psaOut.ReservedRangeName)
+
 	return types.NetworkOutputs{
-		VpcId:              vpcOut.NetworkId,
-		PublicSubnetIds:    vpcOut.PublicSubnetIds,
-		PrivateSubnetIds:   vpcOut.PrivateSubnetIds,
-		SecurityGroupIds:   fwRes.Rules,
-		ServiceDiscoveryId: sdOut.NamespaceId,
+		VpcId:                    vpcOut.NetworkId,
+		PublicSubnetIds:          vpcOut.PublicSubnetIds,
+		PrivateSubnetIds:         vpcOut.PrivateSubnetIds,
+		SecurityGroupIds:         fwRes.Rules,
+		ServiceDiscoveryId:       sdOut.NamespaceId,
+		ReservedPeeringRangeName: psaOut.ReservedRangeName,
 		// Zero-valued on GCP per types.NetworkOutputs documentation:
 		// PrivateRouteTableIds — GCP routes implicitly via subnet definitions.
 		// S3VpcEndpointId — no S3 gateway endpoint analogue on GCP.
@@ -151,6 +165,29 @@ func NewCache(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutp
 	}, nil
 }
 
+// NewDatabase creates the Cloud SQL for PostgreSQL instance and returns the
+// shared types.DatabaseOutputs (Endpoint as host:port, Port, InstanceId).
+// The instance is configured for parity with pkg/aws.NewDatabase: regional
+// HA in staging/prod, daily backups with PITR, 7-day retention, IAM-DB
+// authentication enabled, and reachable only via the VPC through Private
+// Service Access.
+func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.DatabaseOutputs, error) {
+	out, err := database.NewCloudSQL(ctx, cfg, &database.CloudSQLInputs{
+		PrivateNetwork:       netOut.VpcId.ToStringOutput(),
+		PsaReservedRangeName: netOut.ReservedPeeringRangeName,
+	})
+	if err != nil {
+		return types.DatabaseOutputs{}, err
+	}
+	ctx.Export("cloudSqlEndpoint", out.Endpoint)
+	ctx.Export("cloudSqlInstanceId", out.InstanceId)
+	return types.DatabaseOutputs{
+		Endpoint:   out.Endpoint,
+		Port:       out.Port,
+		InstanceId: out.InstanceId,
+	}, nil
+}
+
 // gcpLabels returns the standard label set for GCP resources. GCP label
 // values must match [a-z0-9_-]+, so we lowercase and substitute the AWS
 // tag values that don't fit. Kept private until a second module needs the
@@ -166,6 +203,7 @@ func gcpLabels(cfg *kconfig.Config) pulumi.StringMap {
 		"managed_by":  pulumi.String("pulumi"),
 	}
 }
+
 
 // ─── Stage 4: Streaming + Secrets + CICD ────────────────────────────────────
 

@@ -43,6 +43,16 @@ type NetworkOutputs struct {
 	// Kept as IDOutput because the storage module's bucket-policy ApplyT chain
 	// type-asserts the underlying value as pulumi.ID, not string.
 	S3VpcEndpointId pulumi.IDOutput
+
+	// ReservedPeeringRangeName is GCP-specific: the name of the reserved
+	// global address used for Private Service Access (VPC peering with
+	// Google's tenant projects for Cloud SQL, Memorystore, etc.). Zero-valued
+	// on AWS — RDS sits in the VPC directly via DB subnet group.
+	//
+	// Cloud SQL and Memorystore modules attach this as a resource label so
+	// Pulumi's output graph orders their creation after the PSA peering is
+	// live; the value itself is informational at the application layer.
+	ReservedPeeringRangeName pulumi.StringOutput
 }
 
 // DatabaseOutputs holds outputs from the relational database stage

@@ -72,45 +72,6 @@ func Deploy(ctx *pulumi.Context) error {
 	_ = iamOut // exported via ctx.Export inside NewIAM; reserved for future stages
 
 	// =====================================================================
-	// GCP early return — Phase 1 storage + cache + cicd + M4b compute slice
-	// =====================================================================
-	// The remaining Stage 3 module (database), Stage 4 (streaming + secrets),
-	// Stage 5 stateless compute, and Stage 6 (edge) are AWS-only today; GCP
-	// arms for those stages land in subsequent Phase 1 PRs. Until they do,
-	// we run every GCP stage that's already wired (storage above, cache +
-	// cicd + M4b compute below) and return cleanly so
-	// `pulumi preview --stack gcp-dev` succeeds.
-	// Each subsequent Phase 1 PR moves this early-return marker further down
-	// Deploy() and removes it entirely once all stages are wired.
-	if cfg.CloudProvider == "gcp" {
-		cacheOut, err := gcp.NewCache(ctx, cfg, netOut)
-		if err != nil {
-			return err
-		}
-		cicdOut, err := gcp.NewCICD(ctx, cfg)
-		if err != nil {
-			return err
-		}
-		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
-			ctx.Export("cicdAssignmentRepositoryUrl", url)
-		}
-		// M4b stateful compute slice — issue #487. Cloud Run services for
-		// the eight stateless modules land in a sibling PR (#486); when
-		// they do, this NewCompute call grows to wire them in too and the
-		// early-return marker moves below the edge stage.
-		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut)
-		if err != nil {
-			return err
-		}
-		ctx.Export("m4bAsgName", gcpComputeOut.M4bAsgName)
-		ctx.Export("m4bInstanceId", gcpComputeOut.M4bInstanceId)
-		ctx.Export("m4bEndpointAddress", gcpComputeOut.M4bEndpoint)
-		ctx.Export("dataBucket", storageOut.DataBucketName)
-		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
-		return nil
-	}
-
-	// =====================================================================
 	// Stage 3: Data Stores
 	// =====================================================================
 	var (
@@ -124,11 +85,52 @@ func Deploy(ctx *pulumi.Context) error {
 			return err
 		}
 		dbOut, err = aws.NewDatabase(ctx, cfg, netOut)
+	case "gcp":
+		cacheOut, err = gcp.NewCache(ctx, cfg, netOut)
+		if err != nil {
+			return err
+		}
+		dbOut, err = gcp.NewDatabase(ctx, cfg, netOut)
 	default:
 		return unsupportedCloud(cfg.CloudProvider)
 	}
 	if err != nil {
 		return err
+	}
+
+	// =====================================================================
+	// GCP early return — Phase 1 storage + cache + database + cicd + M4b compute slice
+	// =====================================================================
+	// Stage 4 (streaming + secrets), Stage 5 stateless compute, and Stage 6
+	// (edge) are AWS-only today. GCP arms for those stages land in subsequent
+	// Phase 1 PRs. Until they do, we run every GCP stage that's already wired
+	// (network, storage, cache, database above; cicd + M4b compute below) and
+	// return cleanly so `pulumi preview --stack gcp-dev` succeeds.
+	// Each subsequent Phase 1 PR moves this early-return marker further down
+	// Deploy() and removes it entirely once all stages are wired.
+	if cfg.CloudProvider == "gcp" {
+		cicdOut, err := gcp.NewCICD(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		if url, ok := cicdOut.RepositoryURLs["assignment"]; ok {
+			ctx.Export("cicdAssignmentRepositoryUrl", url)
+		}
+		// M4b stateful compute slice — issue #487. Cloud Run services for
+		// the eight stateless modules land in #486; when they do, this
+		// NewCompute call grows to wire them in too and the early-return
+		// marker moves below the edge stage.
+		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut)
+		if err != nil {
+			return err
+		}
+		ctx.Export("m4bAsgName", gcpComputeOut.M4bAsgName)
+		ctx.Export("m4bInstanceId", gcpComputeOut.M4bInstanceId)
+		ctx.Export("m4bEndpointAddress", gcpComputeOut.M4bEndpoint)
+		ctx.Export("dataBucket", storageOut.DataBucketName)
+		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
+		ctx.Export("databaseEndpoint", dbOut.Endpoint)
+		return nil
 	}
 
 	// =====================================================================
@@ -263,13 +265,14 @@ func Deploy(ctx *pulumi.Context) error {
 func unsupportedCloud(provider string) error {
 	switch provider {
 	case "gcp":
-		// Phase 1 supports storage (Stage 2), cache (Stage 3), and cicd on
-		// GCP. Stages 4–6 plus the remaining Stage 3 modules are AWS-only
-		// today; GCP should never reach their switches because Deploy()
-		// early-returns after the cache + cicd block. Hitting this is a
-		// programming error: a stage switch is missing a gcp case or the
-		// early-return was removed without wiring the remaining stages.
-		return fmt.Errorf("internal: cloudProvider=gcp reached an unimplemented stage (Phase 1 supports Storage + Cache + CICD only)")
+		// Phase 1 supports network, storage, cache, database (Stage 3), cicd,
+		// and M4b compute on GCP. Stage 4 (streaming + secrets), Stage 5
+		// stateless compute, and Stage 6 (edge) are AWS-only today; GCP
+		// should never reach their switches because Deploy() early-returns
+		// after the cicd + M4b block. Hitting this is a programming error:
+		// a stage switch is missing a gcp case or the early-return was
+		// removed without wiring the remaining stages.
+		return fmt.Errorf("internal: cloudProvider=gcp reached an unimplemented stage (Phase 1 supports Network + Storage + Cache + Database + CICD + M4b only)")
 	default:
 		return fmt.Errorf("unsupported cloudProvider %q (expected \"aws\" or \"gcp\")", provider)
 	}
