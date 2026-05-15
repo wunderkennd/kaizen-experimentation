@@ -411,6 +411,162 @@ func TestCloudRunServiceMinInstancesOverride(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Resource limits + health probe (issue #492 — M4a Analysis is a
+// CPU-intensive batch Rust gRPC service that needs elevated CPU/memory and
+// an end-to-end-verifiable health check)
+// ---------------------------------------------------------------------------
+
+// firstContainer pulls template.containers[0] out of a recorded Cloud Run
+// service so the resource/probe assertions stay readable.
+func firstContainer(t *testing.T, svc recordedComputeResource) resource.PropertyMap {
+	t.Helper()
+	template, ok := svc.Inputs["template"]
+	if !ok || !template.IsObject() {
+		t.Fatal("Cloud Run service missing template")
+	}
+	containers, ok := template.ObjectValue()["containers"]
+	if !ok || !containers.IsArray() {
+		t.Fatal("template.containers missing or not an array")
+	}
+	arr := containers.ArrayValue()
+	if len(arr) != 1 {
+		t.Fatalf("expected exactly 1 container, got %d", len(arr))
+	}
+	if !arr[0].IsObject() {
+		t.Fatal("template.containers[0] is not an object")
+	}
+	return arr[0].ObjectValue()
+}
+
+// TestCloudRunServiceResourceLimits asserts CPULimit/MemoryLimit propagate
+// to template.containers[0].resources.limits. M4a is "CPU-intensive batch"
+// per the multi-cloud spec Compute Model, so the factory must let callers
+// raise the per-container CPU/memory ceiling above the Cloud Run default.
+func TestCloudRunServiceResourceLimits(t *testing.T) {
+	opts := representativeOpts()
+	opts.CPULimit = "2"
+	opts.MemoryLimit = "4Gi"
+	mocks := runComputeFactory(t, "m4a-analysis", opts)
+
+	runSvcs := mocks.byType("gcp:cloudrunv2/service:Service")
+	if len(runSvcs) != 1 {
+		t.Fatalf("expected 1 Cloud Run service, got %d", len(runSvcs))
+	}
+	container := firstContainer(t, runSvcs[0])
+
+	res, ok := container["resources"]
+	if !ok || !res.IsObject() {
+		t.Fatal("container.resources missing — CPU/memory ceiling not applied")
+	}
+	limits, ok := res.ObjectValue()["limits"]
+	if !ok || !limits.IsObject() {
+		t.Fatal("container.resources.limits missing")
+	}
+	limitsObj := limits.ObjectValue()
+	if cpu, ok := limitsObj["cpu"]; !ok || cpu.StringValue() != "2" {
+		t.Errorf("resources.limits.cpu = %v, want \"2\"", limitsObj["cpu"])
+	}
+	if mem, ok := limitsObj["memory"]; !ok || mem.StringValue() != "4Gi" {
+		t.Errorf("resources.limits.memory = %v, want \"4Gi\"", limitsObj["memory"])
+	}
+	// cpuIdle must be explicitly set when resources is set, otherwise Cloud
+	// Run flips request-scoped CPU billing semantics (SDK doc note on
+	// ServiceTemplateContainerResourcesArgs.CpuIdle).
+	if idle, ok := res.ObjectValue()["cpuIdle"]; !ok || !idle.HasValue() {
+		t.Error("container.resources.cpuIdle must be set explicitly when resources is set")
+	}
+}
+
+// TestCloudRunServiceOmitsResourcesByDefault locks the cost-safety
+// invariant: callers that don't ask for elevated limits get the Cloud Run
+// platform default (no resources block), not a hard-coded ceiling.
+func TestCloudRunServiceOmitsResourcesByDefault(t *testing.T) {
+	opts := representativeOpts() // no CPULimit / MemoryLimit
+	mocks := runComputeFactory(t, "m2-pipeline", opts)
+
+	runSvcs := mocks.byType("gcp:cloudrunv2/service:Service")
+	if len(runSvcs) != 1 {
+		t.Fatalf("expected 1 Cloud Run service, got %d", len(runSvcs))
+	}
+	container := firstContainer(t, runSvcs[0])
+	if res, ok := container["resources"]; ok && res.IsObject() {
+		if _, hasLimits := res.ObjectValue()["limits"]; hasLimits {
+			t.Error("resources.limits set without CPULimit/MemoryLimit — must default to Cloud Run platform sizing")
+		}
+	}
+}
+
+// TestCloudRunServiceGrpcStartupProbe asserts a gRPC HealthCheck propagates
+// to template.containers[0].startupProbe.grpc on the configured port. M4a
+// Analysis exposes the standard gRPC Health Checking Protocol on 50053
+// (AWS parity: grpc_health_probe -addr=:50053); this is the end-to-end
+// "health check returns 200" acceptance criterion in mock form.
+func TestCloudRunServiceGrpcStartupProbe(t *testing.T) {
+	opts := representativeOpts()
+	opts.HealthCheck = &gcpcompute.HealthProbe{
+		Type:                "grpc",
+		Port:                50053,
+		InitialDelaySeconds: 10,
+		PeriodSeconds:       10,
+		FailureThreshold:    6,
+	}
+	mocks := runComputeFactory(t, "m4a-analysis", opts)
+
+	runSvcs := mocks.byType("gcp:cloudrunv2/service:Service")
+	if len(runSvcs) != 1 {
+		t.Fatalf("expected 1 Cloud Run service, got %d", len(runSvcs))
+	}
+	container := firstContainer(t, runSvcs[0])
+
+	probe, ok := container["startupProbe"]
+	if !ok || !probe.IsObject() {
+		t.Fatal("container.startupProbe missing — health check not wired")
+	}
+	grpc, ok := probe.ObjectValue()["grpc"]
+	if !ok || !grpc.IsObject() {
+		t.Fatal("startupProbe.grpc missing — gRPC health probe not configured")
+	}
+	port, ok := grpc.ObjectValue()["port"]
+	if !ok || port.NumberValue() != 50053 {
+		t.Errorf("startupProbe.grpc.port = %v, want 50053", grpc.ObjectValue()["port"])
+	}
+	if ft, ok := probe.ObjectValue()["failureThreshold"]; !ok || ft.NumberValue() != 6 {
+		t.Errorf("startupProbe.failureThreshold = %v, want 6", probe.ObjectValue()["failureThreshold"])
+	}
+}
+
+// TestCloudRunServiceHttpStartupProbe asserts the factory also supports an
+// HTTP probe (M3/M5/M6 expose wget-able /healthz on AWS) so the same
+// helper covers every Kaizen service's health-check style.
+func TestCloudRunServiceHttpStartupProbe(t *testing.T) {
+	opts := representativeOpts()
+	opts.HealthCheck = &gcpcompute.HealthProbe{
+		Type: "http",
+		Path: "/healthz",
+		Port: 50056,
+	}
+	mocks := runComputeFactory(t, "m3-metrics", opts)
+
+	runSvcs := mocks.byType("gcp:cloudrunv2/service:Service")
+	if len(runSvcs) != 1 {
+		t.Fatalf("expected 1 Cloud Run service, got %d", len(runSvcs))
+	}
+	container := firstContainer(t, runSvcs[0])
+
+	probe, ok := container["startupProbe"]
+	if !ok || !probe.IsObject() {
+		t.Fatal("container.startupProbe missing")
+	}
+	httpGet, ok := probe.ObjectValue()["httpGet"]
+	if !ok || !httpGet.IsObject() {
+		t.Fatal("startupProbe.httpGet missing")
+	}
+	if path, ok := httpGet.ObjectValue()["path"]; !ok || path.StringValue() != "/healthz" {
+		t.Errorf("startupProbe.httpGet.path = %v, want /healthz", httpGet.ObjectValue()["path"])
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Multi-service topology assertion (the per-service invariant scaled up)
 // ---------------------------------------------------------------------------
 

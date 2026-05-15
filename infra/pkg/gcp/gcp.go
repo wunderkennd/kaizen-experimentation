@@ -353,6 +353,7 @@ func NewCompute(
 	dbOut types.DatabaseOutputs,
 	streamOut types.StreamingOutputs,
 	secretsOut types.SecretsOutputs,
+	storageOut types.StorageOutputs,
 ) (types.ComputeOutputs, error) {
 	region := cfg.GCPRegion
 	if region == "" {
@@ -520,6 +521,54 @@ func NewCompute(
 	arns["m6"] = m6.Service.ID().ToStringOutput()
 	ctx.Export("gcpComputeM6Url", m6.URL)
 	ctx.Export("gcpComputeM6SaEmail", m6.ServiceAccountEmail)
+
+	// ─── M4a Analysis (issue #492) ────────────────────────────────────────
+	// CPU-intensive batch (Rust gRPC). Elevated CPU/memory above the
+	// default Cloud Run sizing; gRPC startup probe verifies the standard
+	// gRPC Health Checking Protocol responds before traffic is routed.
+	// Not in the p99 < 5ms cold-start-sensitive set (only M1/M7 pin
+	// min-instances=1); batch analysis tolerates cold starts.
+	const m4aPort = 50053
+	m4aRepoURL, ok := cicdOut.RepositoryURLs["analysis"]
+	if !ok {
+		return types.ComputeOutputs{}, fmt.Errorf(
+			"gcp.NewCompute: cicdOut.RepositoryURLs missing \"analysis\" repo for M4a (#492)")
+	}
+	m4a, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m4a-analysis",
+		&compute.Options{
+			Image:         pulumi.Sprintf("%s:latest", m4aRepoURL),
+			ContainerPort: m4aPort,
+			MinInstances:  0,
+			// 2 vCPU / 4Gi mirrors the AWS Fargate M4a Tier-2 sizing intent.
+			CPULimit:    "2",
+			MemoryLimit: "4Gi",
+			EnvVars: []compute.EnvVar{
+				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
+				{Name: "RUST_LOG", Value: pulumi.String("info")},
+				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
+				{Name: "DATA_BUCKET", Value: storageOut.DataBucketName},
+				{Name: "DATA_BUCKET_URI", Value: storageOut.DataBucketRef},
+			},
+			Secrets: []compute.SecretEnv{
+				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
+			},
+			Buckets:      []pulumi.StringInput{storageOut.DataBucketName},
+			ProjectRoles: []string{"roles/cloudsql.client"},
+			HealthCheck: &compute.HealthProbe{
+				Type:                "grpc",
+				Port:                m4aPort,
+				InitialDelaySeconds: 10,
+				PeriodSeconds:       10,
+				FailureThreshold:    6,
+			},
+		})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	endpoints["m4a"] = m4a.URL
+	arns["m4a"] = m4a.Service.ID().ToStringOutput()
+	ctx.Export("gcpComputeM4aUrl", m4a.URL)
+	ctx.Export("gcpComputeM4aSaEmail", m4a.ServiceAccountEmail)
 
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:

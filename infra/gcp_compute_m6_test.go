@@ -116,6 +116,9 @@ func runM6Compute(t *testing.T) (*m6Mocks, map[string]string) {
 				"orchestration": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/orchestration",
 				).ToStringOutput(),
+				"analysis": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/analysis",
+				).ToStringOutput(),
 			},
 		}
 		dbOut := types.DatabaseOutputs{
@@ -133,8 +136,12 @@ func runM6Compute(t *testing.T) (*m6Mocks, map[string]string) {
 			RedisSecretRef:    pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-redis").ToStringOutput(),
 			AuthSecretRef:     pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-auth").ToStringOutput(),
 		}
+		storageOut := types.StorageOutputs{
+			DataBucketName: pulumi.String("kaizen-dev-data").ToStringOutput(),
+			DataBucketRef:  pulumi.String("gs://kaizen-dev-data").ToStringOutput(),
+		}
 
-		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut)
+		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
 		if err != nil {
 			return err
 		}
