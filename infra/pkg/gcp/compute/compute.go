@@ -581,7 +581,9 @@ func isValidServiceName(s string) bool {
 			return false
 		}
 	}
-	return true
+	last := s[len(s)-1]
+	return last != '-'
+}
 }
 
 // slug rewrites IAM role strings (e.g. "roles/cloudsql.client") into a
