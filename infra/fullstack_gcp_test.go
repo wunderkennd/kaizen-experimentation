@@ -44,6 +44,65 @@ func (m *gcpFullstackMocks) NewResource(args pulumi.MockResourceArgs) (string, r
 		if v, ok := args.Inputs["project"]; ok {
 			outputs["project"] = v
 		}
+
+	// --- GCP network prerequisites (VPC, subnets, firewall, etc.) ---
+	case "gcp:compute/network:Network":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/networks/" + args.Name)
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:compute/subnetwork:Subnetwork":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/regions/us-central1/subnetworks/" + args.Name)
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:compute/router:Router":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/regions/us-central1/routers/" + args.Name)
+	case "gcp:compute/firewall:Firewall":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/firewalls/" + args.Name)
+	case "gcp:servicedirectory/namespace:Namespace":
+		outputs["name"] = resource.NewStringProperty(
+			"projects/test/locations/us-central1/namespaces/" + args.Name)
+	case "gcp:vpcaccess/connector:Connector":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"projects/test/locations/us-central1/connectors/" + args.Name)
+
+	// --- PSA (Private Service Access) ---
+	case "gcp:compute/globalAddress:GlobalAddress":
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:servicenetworking/connection:Connection":
+		outputs["peering"] = resource.NewStringProperty("servicenetworking-googleapis-com")
+
+	// --- Cloud SQL ---
+	case "gcp:sql/databaseInstance:DatabaseInstance":
+		outputs["name"] = resource.NewStringProperty(args.Name)
+		outputs["privateIpAddress"] = resource.NewStringProperty("10.99.0.3")
+		outputs["connectionName"] = resource.NewStringProperty("kaizen-test:us-central1:" + args.Name)
+	case "gcp:sql/database:Database":
+		outputs["name"] = resource.NewStringProperty(args.Name)
+
+	// --- Memorystore Redis ---
+	case "gcp:redis/instance:Instance":
+		outputs["host"] = resource.NewStringProperty("10.99.1.1")
+		outputs["port"] = resource.NewNumberProperty(6379)
+		outputs["name"] = resource.NewStringProperty(args.Name)
+
+	// --- GCE / M4b compute ---
+	case "gcp:compute/instance:Instance":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/zones/us-central1-a/instances/" + args.Name)
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:compute/instanceGroupManager:InstanceGroupManager":
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:compute/disk:Disk":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/zones/us-central1-a/disks/" + args.Name)
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "gcp:servicedirectory/service:Service":
+		outputs["name"] = resource.NewStringProperty(
+			"projects/test/locations/us-central1/namespaces/kaizen/services/" + args.Name)
+	case "gcp:servicedirectory/endpoint:Endpoint":
+		outputs["name"] = resource.NewStringProperty(args.Name)
 	}
 	return id, outputs, nil
 }
@@ -69,6 +128,8 @@ func (m *gcpFullstackMocks) byType(t string) []fsResource {
 func gcpFullstackConfig() pulumi.RunOption {
 	return func(info *pulumi.RunInfo) {
 		info.Config = map[string]string{
+			"gcp:project":                                 "kaizen-experimentation-dev",
+			"gcp:region":                                  "us-central1",
 			"kaizen-experimentation:environment":          "dev",
 			"kaizen-experimentation:cloudProvider":        "gcp",
 			"kaizen-experimentation:gcpProjectId":         "kaizen-experimentation-dev",
