@@ -186,6 +186,8 @@ func runM7Facade(t *testing.T) (*m7FacadeMocks, types.ComputeOutputs) {
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/assignment").ToStringOutput(),
 				"metrics": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/metrics").ToStringOutput(),
+				"pipeline": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline").ToStringOutput(),
 			},
 		}
 		dbOut := types.DatabaseOutputs{
