@@ -19,6 +19,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/gcp/database"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/secrets"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
@@ -409,17 +410,7 @@ func NewCompute(
 		ServiceDirectoryNamespaceID: netOut.ServiceDiscoveryId.ToStringOutput(),
 	}
 
-	canary, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "preview-canary",
-		&compute.Options{
-			// Google's public hello-world image — exercises the helper
-			// against `pulumi preview` without depending on a real
-			// build/push of a Kaizen image. Replace per-service in
-			// issues #488..#495 with the matching Artifact Registry URL
-			// from CICDOutputs.RepositoryURLs.
-			Image:         pulumi.String("us-docker.pkg.dev/cloudrun/container/hello"),
-			ContainerPort: 8080,
-			MinInstances:  0,
-		})
+	canary, err := services.NewCanary(ctx, cfg, cloudRunInputs)
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
