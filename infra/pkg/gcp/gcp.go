@@ -345,6 +345,7 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 // for every Cloud Run service (canary + per-service). ClusterId is
 // zero-valued — Cloud Run is serverless and M4b is a single instance, not an
 // orchestrator cluster.
+
 func NewCompute(
 	ctx *pulumi.Context,
 	cfg *kconfig.Config,
@@ -354,6 +355,7 @@ func NewCompute(
 	streamOut types.StreamingOutputs,
 	secretsOut types.SecretsOutputs,
 	storageOut types.StorageOutputs,
+	cacheOut types.CacheOutputs,
 ) (types.ComputeOutputs, error) {
 	region := cfg.GCPRegion
 	if region == "" {
@@ -672,6 +674,53 @@ func NewCompute(
 	arns["m3"] = m3.Service.ID().ToStringOutput()
 	ctx.Export("gcpComputeM3Url", m3.URL)
 	ctx.Export("gcpComputeM3SaEmail", m3.ServiceAccountEmail)
+
+	// ─── M7 Flags (issue #495) ────────────────────────────────────────────
+	// Rust feature-flag service (ADR-024) on its gRPC port 50057. Same SLA
+	// profile as M1: min-instances=1 keeps a warm instance so requests never
+	// pay a Cloud Run cold start (spec Compute Model → Cold starts;
+	// p99 < 5ms). Image pulled from the "flags" Artifact Registry repo.
+	//
+	// SecretRef values from gcp.NewSecrets are already the bare
+	// `projects/<P>/secrets/<S>` path that Cloud Run's secretKeyRef and
+	// Secret Manager IAM bindings expect (see gcp.NewSecrets contract note);
+	// they're passed through directly without trimming, matching the M1/M2-
+	// Orch/M3 convention above.
+	flagsRepo, ok := cicdOut.RepositoryURLs["flags"]
+	if !ok {
+		return types.ComputeOutputs{}, fmt.Errorf(
+			"gcp.NewCompute: CICDOutputs.RepositoryURLs missing \"flags\" repo for M7 — " +
+				"the CICD stage must run before compute")
+	}
+
+	m7, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m7-flags",
+		&compute.Options{
+			Image:         pulumi.Sprintf("%s:latest", flagsRepo),
+			ContainerPort: 50057,
+			MinInstances:  1, // p99 < 5ms SLA (parity with M1).
+			MaxInstances:  10,
+			EnvVars: []compute.EnvVar{
+				{Name: "RUST_LOG", Value: pulumi.String("info")},
+				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
+				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
+				{Name: "REDIS_ENDPOINT", Value: cacheOut.Endpoint},
+			},
+			Secrets: []compute.SecretEnv{
+				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
+				{EnvName: "REDIS_SECRET", SecretID: secretsOut.RedisSecretRef, Version: "latest"},
+			},
+			ProjectRoles: []string{"roles/cloudsql.client"},
+		})
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	endpoints["m7"] = m7.URL
+	arns["m7"] = m7.Service.ID().ToStringOutput()
+	// Distinct export key (matches M1/M3/canary convention) — main.go also
+	// emits "cloudRunUrl_m7" by iterating ServiceEndpoints, so this avoids a
+	// silent overwrite duplicate of the same value.
+	ctx.Export("gcpComputeM7Url", m7.URL)
+	ctx.Export("gcpComputeM7SaEmail", m7.ServiceAccountEmail)
 
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:

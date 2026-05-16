@@ -122,6 +122,9 @@ func runM6Compute(t *testing.T) (*m6Mocks, map[string]string) {
 				"metrics": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/metrics",
 				).ToStringOutput(),
+				"flags": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/flags",
+				).ToStringOutput(),
 			},
 		}
 		dbOut := types.DatabaseOutputs{
@@ -143,8 +146,11 @@ func runM6Compute(t *testing.T) (*m6Mocks, map[string]string) {
 			DataBucketName: pulumi.String("kaizen-dev-data").ToStringOutput(),
 			DataBucketRef:  pulumi.String("gs://kaizen-dev-data").ToStringOutput(),
 		}
+		cacheOut := types.CacheOutputs{
+			Endpoint: pulumi.String("redis://10.99.1.1:6379").ToStringOutput(),
+		}
 
-		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
 		if err != nil {
 			return err
 		}

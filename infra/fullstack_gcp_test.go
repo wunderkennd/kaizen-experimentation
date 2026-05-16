@@ -323,7 +323,7 @@ func TestFullStackDeploy_GCP_RejectsMissingProject(t *testing.T) {
 
 // gcpComputeInputs returns a representative set of upstream-stage outputs for
 // driving gcp.NewCompute in isolation.
-func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs, types.StorageOutputs) {
+func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs, types.StorageOutputs, types.CacheOutputs) {
 	cfg := &kconfig.Config{
 		Project:      "kaizen",
 		Environment:  "dev",
@@ -349,6 +349,7 @@ func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutput
 			"ui":            pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/ui").ToStringOutput(),
 			"assignment":    pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/assignment").ToStringOutput(),
 			"metrics":       pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/metrics").ToStringOutput(),
+			"flags":         pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/flags").ToStringOutput(),
 		},
 	}
 	storageOut := types.StorageOutputs{
@@ -367,7 +368,10 @@ func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutput
 		RedisSecretRef:    pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-redis").ToStringOutput(),
 		AuthSecretRef:     pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-auth").ToStringOutput(),
 	}
-	return cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut
+	cacheOut := types.CacheOutputs{
+		Endpoint: pulumi.String("redis://10.99.1.1:6379").ToStringOutput(),
+	}
+	return cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut
 }
 
 func (m *gcpFullstackMocks) cloudRunByName(name string) (fsResource, bool) {
@@ -384,9 +388,9 @@ func TestGCPCompute_M4aInServiceEndpoints(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	var out types.ComputeOutputs
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := gcpComputeInputs()
+		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := gcpComputeInputs()
 		var e error
-		out, e = gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		out, e = gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
 		return e
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {
@@ -415,8 +419,8 @@ func keysOf(m map[string]pulumi.StringOutput) []string {
 func TestGCPCompute_M4aHealthProbeAndResources(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := gcpComputeInputs()
-		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := gcpComputeInputs()
+		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
 		return e
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {
@@ -461,8 +465,8 @@ func TestGCPCompute_M4aHealthProbeAndResources(t *testing.T) {
 func TestGCPCompute_M4aDataBucketAndSecretIAM(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := gcpComputeInputs()
-		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := gcpComputeInputs()
+		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
 		return e
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {

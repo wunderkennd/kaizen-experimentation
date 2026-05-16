@@ -173,6 +173,9 @@ func runNewCompute(t *testing.T) (*computeMocks, types.ComputeOutputs) {
 				"assignment": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/assignment",
 				).ToStringOutput(),
+				"flags": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/flags",
+				).ToStringOutput(),
 			},
 		}
 		storageOut := types.StorageOutputs{
@@ -181,6 +184,9 @@ func runNewCompute(t *testing.T) (*computeMocks, types.ComputeOutputs) {
 		}
 		dbOut := types.DatabaseOutputs{
 			Endpoint: pulumi.String("10.99.0.3:5432").ToStringOutput(),
+		}
+		cacheOut := types.CacheOutputs{
+			Endpoint: pulumi.String("redis://10.99.1.1:6379").ToStringOutput(),
 		}
 		streamOut := types.StreamingOutputs{
 			BootstrapBrokers: pulumi.String("seed-0.kaizen-dev.fmc.prd.cloud.redpanda.com:9092").ToStringOutput(),
@@ -193,7 +199,7 @@ func runNewCompute(t *testing.T) (*computeMocks, types.ComputeOutputs) {
 		}
 
 		var cerr error
-		out, cerr = NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		out, cerr = NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
 		return cerr
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {
