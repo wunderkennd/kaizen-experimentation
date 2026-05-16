@@ -559,7 +559,10 @@ func NewCompute(
 	// publisher for lifecycle events. Default MinInstances (0): M5 carries
 	// no p99 cold-start SLA, so it eats Cloud Run cold starts to save idle
 	// cost. Only M1/M7 override to 1.
-	m5, err := newM5ManagementService(ctx, cfg, cloudRunInputs, cicdOut, dbOut, cacheOut, streamOut, secretsOut)
+	m5, err := services.NewM5Management(ctx, cfg, cloudRunInputs, services.StageOutputs{
+		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+	})
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
@@ -579,66 +582,3 @@ func NewCompute(
 	}, nil
 }
 
-// m5ManagementPort is the HTTP/gRPC port M5 Management binds to. Matches the
-// AWS service contract (pkg/aws/compute/services.go) and the value baked into
-// the experimentation-management container per ADR-025.
-const m5ManagementPort = 50055
-
-// newM5ManagementService wires M5 Management (Rust experimentation-management,
-// ADR-025) onto Cloud Run via the shared factory. CRUD/Postgres + Kafka
-// publisher for lifecycle events. Env-var contract mirrors the AWS service
-// contract so the same image runs unmodified on either cloud; credentials
-// arrive via Secret Manager refs (factory mounts secretKeyRef + auto-creates
-// secretAccessor IAM binding on the per-service SA).
-func newM5ManagementService(
-	ctx *pulumi.Context,
-	cfg *kconfig.Config,
-	inputs *compute.Inputs,
-	cicdOut types.CICDOutputs,
-	dbOut types.DatabaseOutputs,
-	cacheOut types.CacheOutputs,
-	streamOut types.StreamingOutputs,
-	secretsOut types.SecretsOutputs,
-) (*compute.CloudRunService, error) {
-	repoURL, ok := cicdOut.RepositoryURLs["management"]
-	if !ok {
-		return nil, fmt.Errorf(
-			"gcp.NewCompute: cicdOut.RepositoryURLs is missing the \"management\" Artifact Registry repo required by M5")
-	}
-
-	// secretIDForRef returns the bare local secret ID Cloud Run's
-	// secretKeyRef.secret + the secretAccessor IAM binding expect, but routes
-	// the value through an ApplyT on the corresponding Stage-4 *SecretRef
-	// output so M5's secret mounts + IAM bindings are ordered after the
-	// Secret Manager secret + version actually exist. The string returned is
-	// deterministic (secrets.SecretID is a pure function of cfg.Env +
-	// component name); the ApplyT exists solely to thread the dependency
-	// edge — see #542 refactor for unifying this across services.
-	secretIDForRef := func(ref pulumi.StringOutput, component string) pulumi.StringInput {
-		return ref.ApplyT(func(string) string {
-			return secrets.SecretID(cfg, component)
-		}).(pulumi.StringOutput)
-	}
-
-	return compute.NewCloudRunService(ctx, cfg, inputs, "m5-management",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", repoURL),
-			ContainerPort: m5ManagementPort,
-			MinInstances:  0, // CRUD/Postgres — no p99 < 5ms SLA.
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				{Name: "REDIS_ENDPOINT", Value: cacheOut.Endpoint},
-				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
-				{Name: "OTEL_SERVICE_NAME", Value: pulumi.String("m5-management")},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretIDForRef(secretsOut.DatabaseSecretRef, "database"), Version: "latest"},
-				{EnvName: "KAFKA_SECRET", SecretID: secretIDForRef(secretsOut.KafkaSecretRef, "kafka"), Version: "latest"},
-				{EnvName: "REDIS_SECRET", SecretID: secretIDForRef(secretsOut.RedisSecretRef, "redis"), Version: "latest"},
-				{EnvName: "AUTH_SECRET", SecretID: secretIDForRef(secretsOut.AuthSecretRef, "auth"), Version: "latest"},
-			},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
-}
