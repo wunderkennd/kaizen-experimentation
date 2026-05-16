@@ -363,24 +363,14 @@ func NewCompute(
 		region = "us-central1"
 	}
 
-	// ─── M4b slice (issue #487) ───────────────────────────────────────────
-	// Pick the first (and only — GCP private subnets are regional) self-link
-	// from the network output's array. ApplyT keeps the lazy output chain
-	// intact through the topology test.
+	// M4b stays here — stateful GCE/MIG slice, not a Cloud Run service.
 	privateSubnetSelfLink := netOut.PrivateSubnetIds.ApplyT(func(ids []string) string {
 		if len(ids) == 0 {
 			return ""
 		}
 		return ids[0]
 	}).(pulumi.StringOutput)
-
-	// types.NetworkOutputs.ServiceDiscoveryId is documented as the Cloud Map
-	// namespace ID on AWS and the Service Directory namespace *resource name*
-	// on GCP (projects/<P>/locations/<R>/namespaces/<N>). The GCP network
-	// facade populates it from servicedirectory.Namespace.ID(), which is
-	// exactly that resource name.
 	namespaceName := netOut.ServiceDiscoveryId.ToStringOutput()
-
 	m4bOut, err := compute.NewM4bInstance(ctx, &compute.M4bArgs{
 		Environment:                   cfg.Environment,
 		Region:                        pulumi.String(region).ToStringOutput(),
@@ -390,19 +380,16 @@ func NewCompute(
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
-
 	ctx.Export("m4bMigName", m4bOut.MigName)
 	ctx.Export("m4bInstanceName", m4bOut.InstanceName)
 	ctx.Export("m4bEndpoint", m4bOut.Endpoint)
 	ctx.Export("m4bServiceDirectoryServiceName", m4bOut.ServiceName)
 	ctx.Export("m4bDataDiskName", m4bOut.DataDiskName)
 
-	// ─── Cloud Run service factory + canary (issue #486) ──────────────────
 	if cfg.GCPProjectID == "" {
 		return types.ComputeOutputs{}, fmt.Errorf(
 			"gcp.NewCompute: cfg.GCPProjectID is required when cloudProvider=gcp")
 	}
-
 	cloudRunInputs := &compute.Inputs{
 		Project:                     cfg.GCPProjectID,
 		Region:                      cfg.GCPRegion,
@@ -410,166 +397,46 @@ func NewCompute(
 		ServiceDirectoryNamespaceID: netOut.ServiceDiscoveryId.ToStringOutput(),
 	}
 
-	canary, err := services.NewCanary(ctx, cfg, cloudRunInputs)
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-
-	endpoints := map[string]pulumi.StringOutput{
-		"preview-canary": canary.URL,
-	}
-	arns := map[string]pulumi.StringOutput{
-		"preview-canary": canary.Service.ID().ToStringOutput(),
-	}
-
-	ctx.Export("gcpComputeCanaryUrl", canary.URL)
-	ctx.Export("gcpComputeCanarySaEmail", canary.ServiceAccountEmail)
-
-	// ─── M2 Orchestration (issue #490) ────────────────────────────────────
-	// Stateless coordinator. Needs Cloud SQL for orchestration state and
-	// Redpanda for event flow. Service name "m2-orchestration" (matches the
-	// AWS Cloud Map name + the dev-m2-orchestration-run SA convention); the
-	// ServiceEndpoints map key is "m2-orch" (matches the AWS service key and
-	// the #490 acceptance criterion). Default min-instances (0) — the spec's
-	// Compute Model marks M2-Orch a stateless orchestrator, NOT an M1/M7
-	// cold-start-sensitive service.
-	m2Orch, err := services.NewM2Orchestration(ctx, cfg, cloudRunInputs, services.StageOutputs{
+	stages := services.StageOutputs{
 		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
 		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	})
-	if err != nil {
-		return types.ComputeOutputs{}, err
 	}
-	endpoints["m2-orch"] = m2Orch.URL
-	arns["m2-orch"] = m2Orch.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM2OrchUrl", m2Orch.URL)
-	ctx.Export("gcpComputeM2OrchSaEmail", m2Orch.ServiceAccountEmail)
 
-	// ─── M6 UI (issue #494) ────────────────────────────────────────────────
-	// Next.js 14 SSR. Image comes from the "ui" Artifact Registry repo
-	// (#482 created the registry; the CI image pipeline pushes :latest).
-	// Default min-instances (0): M6 is request-driven UI traffic, not a
-	// p99-SLA gRPC path like M1/M7, so cold starts are acceptable and the
-	// scale-to-zero cost saving applies. The factory auto-mints the
-	// roles/secretmanager.secretAccessor binding for the auth secret and
-	// registers m6-ui in Service Directory so peers can resolve it.
-	m6, err := services.NewM6UI(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	}, m4bOut.Endpoint)
-	if err != nil {
-		return types.ComputeOutputs{}, err
+	// Registry order is the historical order each per-service issue landed.
+	registry := []services.RegistryEntry{
+		{Key: "preview-canary", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, _ services.StageOutputs) (*compute.CloudRunService, error) {
+			return services.NewCanary(ctx, cfg, in)
+		}},
+		{Key: "m2-orch", Factory: services.NewM2Orchestration},
+		// M6 closes over m4bOut.Endpoint for the M4B_POLICY_ENDPOINT env var
+		// (M6's Next.js UI resolves M4b via the SD-registered host:port).
+		{Key: "m6", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, s services.StageOutputs) (*compute.CloudRunService, error) {
+			return services.NewM6UI(ctx, cfg, in, s, m4bOut.Endpoint)
+		}},
+		{Key: "m4a", Factory: services.NewM4aAnalysis},
+		// M1 closes over m4bOut.Endpoint — captured in the closure.
+		{Key: "m1", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, s services.StageOutputs) (*compute.CloudRunService, error) {
+			return services.NewM1Assignment(ctx, cfg, in, s, m4bOut.Endpoint)
+		}},
+		{Key: "m3", Factory: services.NewM3Metrics},
+		{Key: "m7", Factory: services.NewM7Flags},
+		{Key: "m2-pipeline", Factory: services.NewM2Pipeline},
+		{Key: "m5", Factory: services.NewM5Management},
 	}
-	endpoints["m6"] = m6.URL
-	arns["m6"] = m6.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM6Url", m6.URL)
-	ctx.Export("gcpComputeM6SaEmail", m6.ServiceAccountEmail)
 
-	// ─── M4a Analysis (issue #492) ────────────────────────────────────────
-	// CPU-intensive batch (Rust gRPC). Elevated CPU/memory above the
-	// default Cloud Run sizing; gRPC startup probe verifies the standard
-	// gRPC Health Checking Protocol responds before traffic is routed.
-	// Not in the p99 < 5ms cold-start-sensitive set (only M1/M7 pin
-	// min-instances=1); batch analysis tolerates cold starts.
-	m4a, err := services.NewM4aAnalysis(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	})
+	svcs, err := services.Walk(ctx, cfg, cloudRunInputs, stages, registry)
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
-	endpoints["m4a"] = m4a.URL
-	arns["m4a"] = m4a.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM4aUrl", m4a.URL)
-	ctx.Export("gcpComputeM4aSaEmail", m4a.ServiceAccountEmail)
 
-	// ─── M1 Assignment (issue #488) ───────────────────────────────────────
-	// The platform's strictest latency budget (p99 < 5ms) — MinInstances=1
-	// keeps one warm instance so Cloud Run never cold-starts a request.
-	m1, err := services.NewM1Assignment(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	}, m4bOut.Endpoint)
-	if err != nil {
-		return types.ComputeOutputs{}, err
+	endpoints := make(map[string]pulumi.StringOutput, len(svcs))
+	arns := make(map[string]pulumi.StringOutput, len(svcs))
+	for key, svc := range svcs {
+		endpoints[key] = svc.URL
+		arns[key] = svc.Service.ID().ToStringOutput()
+		ctx.Export("gcpComputeUrl_"+key, svc.URL)
+		ctx.Export("gcpComputeSaEmail_"+key, svc.ServiceAccountEmail)
 	}
-	endpoints["m1"] = m1.URL
-	arns["m1"] = m1.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM1Url", m1.URL)
-	ctx.Export("gcpComputeM1SaEmail", m1.ServiceAccountEmail)
-
-	// ─── M3 Metrics (issue #491) ──────────────────────────────────────────
-	m3, err := services.NewM3Metrics(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m3"] = m3.URL
-	arns["m3"] = m3.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM3Url", m3.URL)
-	ctx.Export("gcpComputeM3SaEmail", m3.ServiceAccountEmail)
-
-	// ─── M7 Flags (issue #495) ────────────────────────────────────────────
-	// Rust feature-flag service (ADR-024) on its gRPC port 50057. Same SLA
-	// profile as M1: min-instances=1 keeps a warm instance so requests never
-	// pay a Cloud Run cold start (spec Compute Model → Cold starts;
-	// p99 < 5ms). Image pulled from the "flags" Artifact Registry repo.
-	//
-	// SecretRef values from gcp.NewSecrets are already the bare
-	// `projects/<P>/secrets/<S>` path that Cloud Run's secretKeyRef and
-	// Secret Manager IAM bindings expect (see gcp.NewSecrets contract note);
-	// they're passed through directly without trimming, matching the M1/M2-
-	// Orch/M3 convention above.
-	m7, err := services.NewM7Flags(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m7"] = m7.URL
-	arns["m7"] = m7.Service.ID().ToStringOutput()
-	// Distinct export key (matches M1/M3/canary convention) — main.go also
-	// emits "cloudRunUrl_m7" by iterating ServiceEndpoints, so this avoids a
-	// silent overwrite duplicate of the same value.
-	ctx.Export("gcpComputeM7Url", m7.URL)
-	ctx.Export("gcpComputeM7SaEmail", m7.ServiceAccountEmail)
-
-	// ─── M2 Pipeline (issue #489) ─────────────────────────────────────────
-	// High-throughput Kafka producer (Rust experimentation-ingest). gRPC
-	// ingest on 50052, elevated max-instances for throughput, MinInstances=0
-	// (no p99 cold-start SLA). Reads KAFKA_BROKERS / SCHEMA_REGISTRY_URL
-	// directly so the same image runs unmodified on AWS and GCP.
-	m2pipe, err := services.NewM2Pipeline(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m2-pipeline"] = m2pipe.URL
-	arns["m2-pipeline"] = m2pipe.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM2PipelineUrl", m2pipe.URL)
-	ctx.Export("gcpComputeM2PipelineSaEmail", m2pipe.ServiceAccountEmail)
-
-	// ─── M5 Management (issue #493) ───────────────────────────────────────
-	// Rust experimentation-management (ADR-025) — CRUD/Postgres + Kafka
-	// publisher for lifecycle events. Default MinInstances (0): M5 carries
-	// no p99 cold-start SLA, so it eats Cloud Run cold starts to save idle
-	// cost. Only M1/M7 override to 1.
-	m5, err := services.NewM5Management(ctx, cfg, cloudRunInputs, services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
-	})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m5"] = m5.URL
-	arns["m5"] = m5.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM5Url", m5.URL)
-	ctx.Export("gcpComputeM5SaEmail", m5.ServiceAccountEmail)
 
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:
