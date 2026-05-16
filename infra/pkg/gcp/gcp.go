@@ -433,38 +433,10 @@ func NewCompute(
 	// the #490 acceptance criterion). Default min-instances (0) — the spec's
 	// Compute Model marks M2-Orch a stateless orchestrator, NOT an M1/M7
 	// cold-start-sensitive service.
-	m2OrchImage, err := serviceImage(cicdOut, "orchestration")
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	m2Orch, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m2-orchestration",
-		&compute.Options{
-			Image:         m2OrchImage,
-			ContainerPort: 50058,
-			MinInstances:  0,
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "LOG_LEVEL", Value: pulumi.String("info")},
-				// Cloud SQL host:port — reachable from the container only
-				// through the Serverless VPC Access connector wired by the
-				// factory (acceptance criterion #3).
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				// Redpanda Kafka-protocol bootstrap brokers for event flow.
-				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
-			},
-			Secrets: []compute.SecretEnv{
-				// secretsOut.*SecretRef is the bare projects/<P>/secrets/<S>
-				// path on GCP (see gcp.NewSecrets contract note); the factory
-				// grants roles/secretmanager.secretAccessor on each — i.e.
-				// "read DB creds, read Kafka creds".
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
-			},
-			// Cloud SQL connection scope. The secret-accessor bindings above
-			// cover credential reads; this grants the IAM scope to open the
-			// connection itself.
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
+	m2Orch, err := services.NewM2Orchestration(ctx, cfg, cloudRunInputs, services.StageOutputs{
+		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+	})
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
