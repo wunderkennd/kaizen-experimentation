@@ -348,6 +348,7 @@ func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutput
 			"orchestration": pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/orchestration").ToStringOutput(),
 			"ui":            pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/ui").ToStringOutput(),
 			"assignment":    pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/assignment").ToStringOutput(),
+			"metrics":       pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/metrics").ToStringOutput(),
 		},
 	}
 	storageOut := types.StorageOutputs{

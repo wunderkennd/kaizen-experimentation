@@ -147,13 +147,22 @@ type ComputeOutputs struct {
 	// ClusterArn is the AWS ECS cluster ARN. Empty on GCP.
 	ClusterArn pulumi.StringOutput
 
-	// ServiceEndpoints maps service name (e.g., "m1-assignment", "m7-flags") to
-	// the internal service URL (Cloud Map FQDN on AWS, Service Directory or
-	// Cloud Run URL on GCP).
+	// ServiceEndpoints maps a short module key to the internal service URL
+	// (Cloud Map FQDN on AWS, Service Directory or Cloud Run URL on GCP).
+	//
+	// Key convention is the short module identifier — e.g. "m1", "m2-orch",
+	// "m3", "m4a", "m6", "m7" — plus "preview-canary" for the hello-world
+	// canary slice. This matches what every per-service deploy registers
+	// (see infra/pkg/gcp/gcp.go and infra/pkg/aws/compute). The fully
+	// qualified Cloud Run service name (e.g. "m3-metrics") is recorded
+	// separately on the Cloud Run resource and as the Service Directory
+	// entry name; ServiceEndpoints is keyed for ergonomic lookup, not for
+	// name parity with the underlying service resource.
 	ServiceEndpoints map[string]pulumi.StringOutput
 
-	// ServiceArns maps service name to the cloud-native service identifier
-	// (ECS service ARN on AWS, Cloud Run service ID on GCP).
+	// ServiceArns maps the same short module key as ServiceEndpoints to the
+	// cloud-native service identifier (ECS service ARN on AWS, Cloud Run
+	// service ID on GCP).
 	ServiceArns map[string]pulumi.StringOutput
 
 	// M4bInstanceId is the dedicated stateful instance identifier

@@ -364,10 +364,10 @@ func TestM4bGcpComputeFacade(t *testing.T) {
 	}
 	// Deploy(gcp) registers one Service Directory entry per Cloud Run service
 	// plus one for M4b: m4b-policy, preview-canary, m2-orchestration (#490),
-	// m6-ui (#494), m4a-analysis (#492), and m1-assignment (#488). Each
-	// subsequent per-service Cloud Run deploy (#489/#491/#493/#495) adds one
-	// as it lands.
-	if got := len(mocks.byType("gcp:servicedirectory/service:Service")); got != 6 {
-		t.Errorf("expected 6 SD Services from Deploy(gcp) (M4b + canary + M2-Orch + M6 + M4a + M1), got %d", got)
+	// m6-ui (#494), m4a-analysis (#492), m1-assignment (#488), and
+	// m3-metrics (#491). Each subsequent per-service Cloud Run deploy
+	// (#489/#493/#495) adds one as it lands.
+	if got := len(mocks.byType("gcp:servicedirectory/service:Service")); got != 7 {
+		t.Errorf("expected 7 SD Services from Deploy(gcp) (M4b + canary + M2-Orch + M6 + M4a + M1 + M3), got %d", got)
 	}
 }

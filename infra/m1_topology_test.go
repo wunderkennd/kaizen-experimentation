@@ -215,6 +215,9 @@ func runM1Compute(t *testing.T) (*m1TopologyMocks, types.ComputeOutputs, string)
 				"analysis": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen-analysis",
 				).ToStringOutput(),
+				"metrics": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen-metrics",
+				).ToStringOutput(),
 			},
 		}
 		dbOut := types.DatabaseOutputs{
