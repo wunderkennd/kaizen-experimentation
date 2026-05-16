@@ -351,6 +351,7 @@ func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutput
 			"metrics":       pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/metrics").ToStringOutput(),
 			"flags":         pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/flags").ToStringOutput(),
 			"pipeline":      pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline").ToStringOutput(),
+			"management":    pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/management").ToStringOutput(),
 		},
 	}
 	storageOut := types.StorageOutputs{

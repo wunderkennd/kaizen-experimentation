@@ -156,7 +156,8 @@ func runM2Compute(t *testing.T) (*m2ComputeMocks, types.ComputeOutputs) {
 		}
 		cicdOut := types.CICDOutputs{
 			RepositoryURLs: map[string]pulumi.StringOutput{
-				"pipeline": pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline").ToStringOutput(),
+				"pipeline":   pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline").ToStringOutput(),
+				"management": pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/management").ToStringOutput(),
 				// NewCompute provisions every wired per-service Cloud Run service
 				// in one call, so this fixture must satisfy each service's image
 				// lookup even when the test is scoped to M2 Pipeline.
