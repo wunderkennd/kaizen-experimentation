@@ -191,22 +191,6 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 	}, nil
 }
 
-// serviceImage resolves a Kaizen service's container image reference from the
-// CICD stage's Artifact Registry repository map and pins the :latest tag.
-// Returns an error (fail-fast at program-build time) when the registry key is
-// absent, rather than letting Cloud Run surface an opaque image-pull failure
-// at apply. registryKey is the pkg/gcp/cicd repository key (e.g.
-// "orchestration"), NOT the ServiceEndpoints map key.
-func serviceImage(cicdOut types.CICDOutputs, registryKey string) (pulumi.StringInput, error) {
-	repoURL, ok := cicdOut.RepositoryURLs[registryKey]
-	if !ok {
-		return nil, fmt.Errorf(
-			"gcp.NewCompute: CICDOutputs.RepositoryURLs missing key %q (Artifact Registry repo not provisioned by gcp.NewCICD)",
-			registryKey)
-	}
-	return pulumi.Sprintf("%s:latest", repoURL), nil
-}
-
 // gcpLabels returns the standard label set for GCP resources. GCP label
 // values must match [a-z0-9_-]+, so we lowercase and substitute the AWS
 // tag values that don't fit. Kept private until a second module needs the
@@ -437,4 +421,3 @@ func NewCompute(
 		ServiceArns:      arns,
 	}, nil
 }
-
