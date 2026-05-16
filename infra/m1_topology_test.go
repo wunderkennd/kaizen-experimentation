@@ -221,6 +221,9 @@ func runM1Compute(t *testing.T) (*m1TopologyMocks, types.ComputeOutputs, string)
 				"flags": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen-flags",
 				).ToStringOutput(),
+				"pipeline": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen-pipeline",
+				).ToStringOutput(),
 			},
 		}
 		dbOut := types.DatabaseOutputs{

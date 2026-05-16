@@ -722,6 +722,20 @@ func NewCompute(
 	ctx.Export("gcpComputeM7Url", m7.URL)
 	ctx.Export("gcpComputeM7SaEmail", m7.ServiceAccountEmail)
 
+	// ─── M2 Pipeline (issue #489) ─────────────────────────────────────────
+	// High-throughput Kafka producer (Rust experimentation-ingest). gRPC
+	// ingest on 50052, elevated max-instances for throughput, MinInstances=0
+	// (no p99 cold-start SLA). Reads KAFKA_BROKERS / SCHEMA_REGISTRY_URL
+	// directly so the same image runs unmodified on AWS and GCP.
+	m2pipe, err := newM2PipelineService(ctx, cfg, cloudRunInputs, cicdOut, streamOut, secretsOut)
+	if err != nil {
+		return types.ComputeOutputs{}, err
+	}
+	endpoints["m2-pipeline"] = m2pipe.URL
+	arns["m2-pipeline"] = m2pipe.Service.ID().ToStringOutput()
+	ctx.Export("gcpComputeM2PipelineUrl", m2pipe.URL)
+	ctx.Export("gcpComputeM2PipelineSaEmail", m2pipe.ServiceAccountEmail)
+
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:
 		// Cloud Run is serverless (no cluster); M4b is a single MIG.
@@ -731,4 +745,51 @@ func NewCompute(
 		ServiceEndpoints: endpoints,
 		ServiceArns:      arns,
 	}, nil
+}
+
+// m2PipelinePort is the gRPC ingest port M2 Pipeline binds to. Matches the
+// AWS Cloud Map registration (pkg/aws/compute/services.go: m2-pipeline →
+// 50052) and the value the experimentation-pipeline container listens on.
+const m2PipelinePort = 50052
+
+// m2PipelineMaxInstances caps M2's Cloud Run autoscaling. M2 is a high-
+// throughput Kafka producer, so its ceiling is raised well above the
+// cost-control default; floor stays at 0 (M2 carries no p99 cold-start SLA).
+const m2PipelineMaxInstances = 100
+
+// newM2PipelineService wires M2 Pipeline (Rust experimentation-ingest) onto
+// Cloud Run via the shared factory. Issue #489. The env-var contract mirrors
+// crates/experimentation-pipeline/src/main.rs (KAFKA_BROKERS) and the AWS
+// service contract so the same image runs unmodified on both clouds.
+func newM2PipelineService(
+	ctx *pulumi.Context,
+	cfg *kconfig.Config,
+	inputs *compute.Inputs,
+	cicdOut types.CICDOutputs,
+	streamOut types.StreamingOutputs,
+	secretsOut types.SecretsOutputs,
+) (*compute.CloudRunService, error) {
+	repoURL, ok := cicdOut.RepositoryURLs["pipeline"]
+	if !ok {
+		return nil, fmt.Errorf(
+			"gcp.NewCompute: cicdOut.RepositoryURLs is missing the \"pipeline\" Artifact Registry repo required by M2")
+	}
+
+	return compute.NewCloudRunService(ctx, cfg, inputs, "m2-pipeline",
+		&compute.Options{
+			Image:         pulumi.Sprintf("%s:latest", repoURL),
+			ContainerPort: m2PipelinePort,
+			MinInstances:  0,
+			MaxInstances:  m2PipelineMaxInstances,
+			EnvVars: []compute.EnvVar{
+				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
+				{Name: "RUST_LOG", Value: pulumi.String("info")},
+				{Name: "KAFKA_BROKERS", Value: streamOut.BootstrapBrokers},
+				{Name: "SCHEMA_REGISTRY_URL", Value: streamOut.SchemaRegistryUrl},
+				{Name: "OTEL_SERVICE_NAME", Value: pulumi.String("m2-pipeline")},
+			},
+			Secrets: []compute.SecretEnv{
+				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
+			},
+		})
 }

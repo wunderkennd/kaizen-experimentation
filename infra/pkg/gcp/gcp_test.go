@@ -176,6 +176,9 @@ func runNewCompute(t *testing.T) (*computeMocks, types.ComputeOutputs) {
 				"flags": pulumi.String(
 					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/flags",
 				).ToStringOutput(),
+				"pipeline": pulumi.String(
+					"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/pipeline",
+				).ToStringOutput(),
 			},
 		}
 		storageOut := types.StorageOutputs{

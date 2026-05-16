@@ -4,9 +4,9 @@ config:
   # streamingProvider=redpanda selects the cloud-agnostic Redpanda Cloud module at
   # infra/pkg/streaming/redpanda.go. The Redpanda Cloud control plane provisions the
   # underlying cluster on GCP and surfaces a Kafka-protocol bootstrap endpoint plus a
-  # built-in Schema Registry. The GCP early-return in Deploy() means the streaming
-  # dispatch is not yet exercised for cloudProvider=gcp; this key is present so that
-  # once the GCP streaming arm lands, this stack picks up Redpanda automatically.
+  # built-in Schema Registry. The GCP streaming arm is wired via Deploy()'s Stage 4
+  # block (#533 onward), and M2 Pipeline (#489) consumes the bootstrap brokers + schema
+  # registry URL through gcp.NewCompute.
   kaizen-experimentation:streamingProvider: redpanda
 
   # Core identification
