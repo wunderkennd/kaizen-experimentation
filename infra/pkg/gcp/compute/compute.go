@@ -3,15 +3,15 @@
 // task-def factory (pkg/aws/compute/services.go::newFargateService) so the
 // GCP and AWS provider arms expose the same operational shape:
 //
-//	1. A dedicated runtime identity (Workload Identity service account here,
-//	   ECS task role on AWS).
-//	2. Consistent VPC wiring (Serverless VPC Access connector here, awsvpc
-//	   network mode + private-subnet ENIs on AWS).
-//	3. Service discovery registration (Service Directory endpoint here,
-//	   Cloud Map service on AWS).
-//	4. Secret injection from the cloud-native secret store
-//	   (Secret Manager here, Secrets Manager on AWS).
-//	5. Bucket / project IAM bindings driven by per-service options.
+//  1. A dedicated runtime identity (Workload Identity service account here,
+//     ECS task role on AWS).
+//  2. Consistent VPC wiring (Serverless VPC Access connector here, awsvpc
+//     network mode + private-subnet ENIs on AWS).
+//  3. Service discovery registration (Service Directory endpoint here,
+//     Cloud Map service on AWS).
+//  4. Secret injection from the cloud-native secret store
+//     (Secret Manager here, Secrets Manager on AWS).
+//  5. Bucket / project IAM bindings driven by per-service options.
 //
 // Out of scope for this PR (issue #486):
 //   - Per-Kaizen-service deploys (M1, M2, ..., M7) — issues #10..#17.
@@ -101,6 +101,43 @@ type SecretEnv struct {
 	Version string
 }
 
+// HealthProbe configures a Cloud Run startup probe so a revision is only
+// marked ready once the container reports healthy — the deployable form of
+// the "health check returns 200" acceptance criterion. nil on Options keeps
+// Cloud Run's implicit TCP-on-container-port startup probe.
+//
+// Type selects the probe mechanism:
+//   - "grpc": uses the standard gRPC Health Checking Protocol. M1/M2/M4a/M7
+//     are tonic gRPC services (AWS parity: grpc_health_probe -addr=:<port>).
+//   - "http": HTTP GET expecting 2xx. M3/M5/M6 expose /healthz on AWS via
+//     wget; the same path maps to a Cloud Run httpGet probe.
+type HealthProbe struct {
+	// Type is "grpc" or "http". Required when HealthProbe is set.
+	Type string
+	// Path is the HTTP path to GET (Type=="http" only). Empty defaults to
+	// "/" — Cloud Run's documented httpGet default.
+	Path string
+	// Port is the container port to probe. 0 defers to the container's
+	// declared ContainerPort (Cloud Run's documented probe default).
+	Port int
+	// Service is the gRPC health service name (Type=="grpc" only). Empty
+	// means overall server health (the conventional ""/SERVING check).
+	Service string
+	// InitialDelaySeconds delays the first probe so slow-starting runtimes
+	// (e.g. Candle model load) aren't killed before they bind. 0 ⇒ Cloud
+	// Run default.
+	InitialDelaySeconds int
+	// PeriodSeconds is the probe interval. 0 ⇒ Cloud Run default.
+	PeriodSeconds int
+	// TimeoutSeconds is the per-probe timeout. 0 ⇒ Cloud Run default.
+	TimeoutSeconds int
+	// FailureThreshold is the consecutive-failure count before the startup
+	// probe gives up and the revision fails to deploy. 0 ⇒ Cloud Run
+	// default. For a CPU-intensive batch service a higher threshold ×
+	// period buys warm-up budget without masking a truly dead container.
+	FailureThreshold int
+}
+
 // Options configures a single Cloud Run service. Passed to NewCloudRunService
 // per service. Fields not set get safe defaults documented inline.
 type Options struct {
@@ -149,6 +186,25 @@ type Options struct {
 	// when ingress allows external callers; M6 UI behind a load balancer
 	// is the typical case where this would be true).
 	AllowPublicInvoke bool
+
+	// CPULimit is the per-container CPU ceiling. Cloud Run only accepts
+	// "1", "2", "4", or "8" (Knative quantity form). Empty leaves the
+	// container at Cloud Run's default sizing — the cost-safe default for
+	// the lightweight stateless services. M4a Analysis sets this above the
+	// default because it is "CPU-intensive batch" per the multi-cloud spec
+	// Compute Model. Setting "4"/"8" requires MemoryLimit (>= 2Gi) per the
+	// Cloud Run resource constraint; validateInputs enforces this.
+	CPULimit string
+
+	// MemoryLimit is the per-container memory ceiling in Knative quantity
+	// form, e.g. "512Mi", "2Gi", "4Gi". Empty leaves the container at Cloud
+	// Run's default. Set together with CPULimit for CPU-heavy services.
+	MemoryLimit string
+
+	// HealthCheck, when set, installs a Cloud Run startup probe so the
+	// revision only takes traffic once the container reports healthy. nil
+	// keeps Cloud Run's implicit TCP-on-container-port probe.
+	HealthCheck *HealthProbe
 }
 
 // CloudRunService is the per-service output bundle returned to callers
@@ -196,16 +252,16 @@ type CloudRunService struct {
 // NewCloudRunService provisions one Cloud Run service plus everything
 // needed for it to function safely:
 //
-//	1. A dedicated Workload Identity service account.
-//	2. roles/secretmanager.secretAccessor on each opts.Secrets entry.
-//	3. roles/storage.objectAdmin on each opts.Buckets entry.
-//	4. Each opts.ProjectRoles role bound at the project level to the SA.
-//	5. The Cloud Run service itself, with the SA on the revision template,
-//	   the VPC connector wired, env vars + secret env vars set, and
-//	   min/max instances configured.
-//	6. A Service Directory service + endpoint that resolves to the Cloud
-//	   Run URL so other services can discover it via the namespace from
-//	   inputs.ServiceDirectoryNamespaceID.
+//  1. A dedicated Workload Identity service account.
+//  2. roles/secretmanager.secretAccessor on each opts.Secrets entry.
+//  3. roles/storage.objectAdmin on each opts.Buckets entry.
+//  4. Each opts.ProjectRoles role bound at the project level to the SA.
+//  5. The Cloud Run service itself, with the SA on the revision template,
+//     the VPC connector wired, env vars + secret env vars set, and
+//     min/max instances configured.
+//  6. A Service Directory service + endpoint that resolves to the Cloud
+//     Run URL so other services can discover it via the namespace from
+//     inputs.ServiceDirectoryNamespaceID.
 //
 // Returns the bundle in CloudRunService. The caller composes URL into
 // types.ComputeOutputs.ServiceEndpoints.
@@ -310,6 +366,20 @@ func NewCloudRunService(
 		scaling.MaxInstanceCount = pulumi.Int(o.MaxInstances)
 	}
 
+	container := &cloudrunv2.ServiceTemplateContainerArgs{
+		Image: o.Image,
+		Ports: &cloudrunv2.ServiceTemplateContainerPortsArgs{
+			ContainerPort: pulumi.Int(o.ContainerPort),
+		},
+		Envs: envs,
+	}
+	if res := buildResources(o.CPULimit, o.MemoryLimit); res != nil {
+		container.Resources = res
+	}
+	if o.HealthCheck != nil {
+		container.StartupProbe = buildStartupProbe(o.HealthCheck, o.ContainerPort)
+	}
+
 	svc, err := cloudrunv2.NewService(
 		ctx,
 		fmt.Sprintf("kaizen-%s-%s-run", cfg.Environment, name),
@@ -342,15 +412,7 @@ func NewCloudRunService(
 					// throughput limit.
 					Egress: pulumi.String("PRIVATE_RANGES_ONLY"),
 				},
-				Containers: cloudrunv2.ServiceTemplateContainerArray{
-					&cloudrunv2.ServiceTemplateContainerArgs{
-						Image: o.Image,
-						Ports: &cloudrunv2.ServiceTemplateContainerPortsArgs{
-							ContainerPort: pulumi.Int(o.ContainerPort),
-						},
-						Envs: envs,
-					},
-				},
+				Containers: cloudrunv2.ServiceTemplateContainerArray{container},
 			},
 		},
 		resourceOpts...,
@@ -494,6 +556,33 @@ func validateInputs(cfg *config.Config, inputs *Inputs, name string, opts *Optio
 			return fmt.Errorf("compute.NewCloudRunService: each opts.EnvVars entry needs Name + Value (service %s)", name)
 		}
 	}
+	if opts.CPULimit != "" {
+		switch opts.CPULimit {
+		case "1", "2", "4", "8":
+		default:
+			return fmt.Errorf("compute.NewCloudRunService: opts.CPULimit %q must be one of \"1\",\"2\",\"4\",\"8\" (Cloud Run constraint, service %s)", opts.CPULimit, name)
+		}
+		// Cloud Run rejects 4/8 vCPU without >= 2Gi memory; we can't compare
+		// Knative quantities cheaply, so require an explicit MemoryLimit and
+		// let Cloud Run enforce the exact floor. Catches the misconfig at
+		// program-build time instead of as an opaque apply-time 400.
+		if (opts.CPULimit == "4" || opts.CPULimit == "8") && opts.MemoryLimit == "" {
+			return fmt.Errorf("compute.NewCloudRunService: opts.CPULimit %q requires opts.MemoryLimit (Cloud Run needs >= 2Gi for 4+ vCPU, service %s)", opts.CPULimit, name)
+		}
+	}
+	if hp := opts.HealthCheck; hp != nil {
+		switch hp.Type {
+		case "grpc", "http":
+		default:
+			return fmt.Errorf("compute.NewCloudRunService: opts.HealthCheck.Type %q must be \"grpc\" or \"http\" (service %s)", hp.Type, name)
+		}
+		if hp.Port < 0 || hp.Port > 65535 {
+			return fmt.Errorf("compute.NewCloudRunService: opts.HealthCheck.Port %d out of range 0..65535 (service %s)", hp.Port, name)
+		}
+		if hp.InitialDelaySeconds < 0 || hp.PeriodSeconds < 0 || hp.TimeoutSeconds < 0 || hp.FailureThreshold < 0 {
+			return fmt.Errorf("compute.NewCloudRunService: opts.HealthCheck timing fields must be >= 0 (service %s)", name)
+		}
+	}
 	return nil
 }
 
@@ -537,6 +626,77 @@ func buildContainerEnvs(literals []EnvVar, secrets []SecretEnv) cloudrunv2.Servi
 		})
 	}
 	return envs
+}
+
+// buildResources returns the per-container resource limits, or nil when the
+// caller asked for neither (so Cloud Run keeps its default sizing — the
+// cost-safe default for the lightweight stateless services).
+//
+// CpuIdle is set explicitly to true: the pulumi-gcp SDK documents that once
+// a resources block is present, cpuIdle no longer defaults to true, so
+// omitting it would silently switch the container to always-allocated CPU
+// billing. true preserves Cloud Run's request-scoped CPU model — heavy
+// compute still gets full CPU *during* an RPC (M4a's analysis runs inside
+// the request), we just don't pay for idle CPU between calls.
+func buildResources(cpu, mem string) *cloudrunv2.ServiceTemplateContainerResourcesArgs {
+	if cpu == "" && mem == "" {
+		return nil
+	}
+	limits := pulumi.StringMap{}
+	if cpu != "" {
+		limits["cpu"] = pulumi.String(cpu)
+	}
+	if mem != "" {
+		limits["memory"] = pulumi.String(mem)
+	}
+	return &cloudrunv2.ServiceTemplateContainerResourcesArgs{
+		Limits:  limits,
+		CpuIdle: pulumi.Bool(true),
+	}
+}
+
+// buildStartupProbe maps a HealthProbe onto Cloud Run's startup probe. A
+// zero Port falls back to the container port so callers that probe the
+// main listener don't have to repeat it. Numeric tuning fields are only
+// emitted when non-zero so Cloud Run's documented defaults apply otherwise.
+func buildStartupProbe(hp *HealthProbe, containerPort int) *cloudrunv2.ServiceTemplateContainerStartupProbeArgs {
+	port := hp.Port
+	if port == 0 {
+		port = containerPort
+	}
+	probe := &cloudrunv2.ServiceTemplateContainerStartupProbeArgs{}
+	switch hp.Type {
+	case "grpc":
+		grpc := &cloudrunv2.ServiceTemplateContainerStartupProbeGrpcArgs{
+			Port: pulumi.Int(port),
+		}
+		if hp.Service != "" {
+			grpc.Service = pulumi.String(hp.Service)
+		}
+		probe.Grpc = grpc
+	case "http":
+		path := hp.Path
+		if path == "" {
+			path = "/"
+		}
+		probe.HttpGet = &cloudrunv2.ServiceTemplateContainerStartupProbeHttpGetArgs{
+			Path: pulumi.String(path),
+			Port: pulumi.Int(port),
+		}
+	}
+	if hp.InitialDelaySeconds > 0 {
+		probe.InitialDelaySeconds = pulumi.Int(hp.InitialDelaySeconds)
+	}
+	if hp.PeriodSeconds > 0 {
+		probe.PeriodSeconds = pulumi.Int(hp.PeriodSeconds)
+	}
+	if hp.TimeoutSeconds > 0 {
+		probe.TimeoutSeconds = pulumi.Int(hp.TimeoutSeconds)
+	}
+	if hp.FailureThreshold > 0 {
+		probe.FailureThreshold = pulumi.Int(hp.FailureThreshold)
+	}
+	return probe
 }
 
 // saAccountID returns the GCP service account local ID for a service.

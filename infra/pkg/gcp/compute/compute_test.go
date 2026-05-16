@@ -324,6 +324,34 @@ func TestValidateInputsRejections(t *testing.T) {
 			},
 			wantErr: "Name + Value",
 		},
+		{
+			name: "invalid CPULimit",
+			mutate: func(_ **config.Config, _ **Inputs, opts **Options, _ *string) {
+				(*opts).CPULimit = "3"
+			},
+			wantErr: `must be one of "1","2","4","8"`,
+		},
+		{
+			name: "4 vCPU without MemoryLimit",
+			mutate: func(_ **config.Config, _ **Inputs, opts **Options, _ *string) {
+				(*opts).CPULimit = "4"
+			},
+			wantErr: "requires opts.MemoryLimit",
+		},
+		{
+			name: "HealthCheck bad Type",
+			mutate: func(_ **config.Config, _ **Inputs, opts **Options, _ *string) {
+				(*opts).HealthCheck = &HealthProbe{Type: "tcp"}
+			},
+			wantErr: `must be "grpc" or "http"`,
+		},
+		{
+			name: "HealthCheck port out of range",
+			mutate: func(_ **config.Config, _ **Inputs, opts **Options, _ *string) {
+				(*opts).HealthCheck = &HealthProbe{Type: "grpc", Port: 70000}
+			},
+			wantErr: "out of range 0..65535",
+		},
 	}
 
 	for _, tc := range cases {
@@ -367,6 +395,9 @@ func TestValidateInputsHappyPath(t *testing.T) {
 		Secrets: []SecretEnv{
 			{EnvName: "DB", SecretID: pulumi.String("kaizen-dev-database")},
 		},
+		CPULimit:    "2",
+		MemoryLimit: "4Gi",
+		HealthCheck: &HealthProbe{Type: "grpc", Port: 50053, FailureThreshold: 6},
 	}
 	if err := validateInputs(cfg, inputs, "m1-assignment", opts); err != nil {
 		t.Errorf("happy-path validation failed: %v", err)

@@ -31,10 +31,10 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
-// m2OrchUpstreams builds the five upstream-stage outputs gcp.NewCompute
-// consumes, with deterministic stand-in values so the recorded Cloud Run
-// resource has resolvable env vars and secret refs.
-func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs) {
+// m2OrchUpstreams builds the upstream-stage outputs gcp.NewCompute consumes,
+// with deterministic stand-in values so the recorded Cloud Run resource has
+// resolvable env vars and secret refs.
+func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs, types.StorageOutputs) {
 	netOut := types.NetworkOutputs{
 		PrivateSubnetIds: pulumi.ToStringArray([]string{
 			"projects/kaizen-experimentation-dev/regions/us-central1/subnetworks/kaizen-dev-private",
@@ -56,6 +56,9 @@ func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseO
 			// lookup even when the test is scoped to M2-Orch.
 			"ui": pulumi.String(
 				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/ui",
+			).ToStringOutput(),
+			"analysis": pulumi.String(
+				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/analysis",
 			).ToStringOutput(),
 		},
 	}
@@ -82,7 +85,11 @@ func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseO
 			"projects/kaizen-experimentation-dev/secrets/kaizen-dev-auth",
 		).ToStringOutput(),
 	}
-	return netOut, cicdOut, dbOut, streamOut, secretsOut
+	storageOut := types.StorageOutputs{
+		DataBucketName: pulumi.String("kaizen-dev-data").ToStringOutput(),
+		DataBucketRef:  pulumi.String("gs://kaizen-dev-data").ToStringOutput(),
+	}
+	return netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut
 }
 
 // runM2OrchCompute exercises gcp.NewCompute under mocks and returns the
@@ -100,8 +107,8 @@ func runM2OrchCompute(t *testing.T) (*computeMocks, map[string]string) {
 			GCPProjectID: "kaizen-experimentation-dev",
 			GCPRegion:    "us-central1",
 		}
-		netOut, cicdOut, dbOut, streamOut, secretsOut := m2OrchUpstreams()
-		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut)
+		netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := m2OrchUpstreams()
+		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
 		if err != nil {
 			return err
 		}

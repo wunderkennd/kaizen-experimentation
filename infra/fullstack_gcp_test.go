@@ -7,6 +7,10 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+
+	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp"
+	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
 // gcpFullstackMocks records all GCP resources Deploy() registers under
@@ -116,8 +120,6 @@ func (m *gcpFullstackMocks) NewResource(args pulumi.MockResourceArgs) (string, r
 			"https://www.googleapis.com/compute/v1/projects/test/regions/us-central1/addresses/" + args.Name)
 
 	// --- Stage 4 streaming: Redpanda Cloud (TF-bridge type tokens) ---
-	// Mirrors infra/test/testutil_test.go so the Stage 4 arm now wired into
-	// the GCP path (#490) resolves bootstrap brokers + schema registry.
 	case "redpanda:index/resourceGroup:ResourceGroup":
 		outputs["id"] = resource.NewStringProperty("rg_" + args.Name)
 	case "redpanda:index/network:Network":
@@ -307,5 +309,193 @@ func TestFullStackDeploy_GCP_RejectsMissingProject(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "gcpProjectId") && !strings.Contains(err.Error(), "GCPProjectID") {
 		t.Fatalf("expected gcpProjectId validation error, got: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Issue #492 — M4a Analysis on Cloud Run
+//
+// M4a is a CPU-intensive batch Rust gRPC service (port 50053). These tests
+// drive gcp.NewCompute directly with the same gcpFullstackMocks the
+// Deploy()-level tests use (it already synthesizes the M4b GCE + Cloud Run +
+// service-account outputs the factory chains on).
+// ---------------------------------------------------------------------------
+
+// gcpComputeInputs returns a representative set of upstream-stage outputs for
+// driving gcp.NewCompute in isolation.
+func gcpComputeInputs() (*kconfig.Config, types.NetworkOutputs, types.CICDOutputs, types.DatabaseOutputs, types.StreamingOutputs, types.SecretsOutputs, types.StorageOutputs) {
+	cfg := &kconfig.Config{
+		Project:      "kaizen",
+		Environment:  "dev",
+		Env:          kconfig.EnvDev,
+		GCPProjectID: "kaizen-experimentation-dev",
+		GCPRegion:    "us-central1",
+	}
+	netOut := types.NetworkOutputs{
+		PrivateSubnetIds: pulumi.StringArray{
+			pulumi.String("projects/kaizen-experimentation-dev/regions/us-central1/subnetworks/kaizen-dev-private"),
+		}.ToStringArrayOutput(),
+		ServiceDiscoveryId: pulumi.ID(
+			"projects/kaizen-experimentation-dev/locations/us-central1/namespaces/kaizen-local").ToIDOutput(),
+		VpcConnectorSelfLink: pulumi.String(
+			"projects/kaizen-experimentation-dev/locations/us-central1/connectors/kaizen-vpc-connector").ToStringOutput(),
+	}
+	// gcp.NewCompute provisions every wired per-service Cloud Run service
+	// in one call, so this fixture must satisfy each service's image lookup.
+	cicdOut := types.CICDOutputs{
+		RepositoryURLs: map[string]pulumi.StringOutput{
+			"analysis":      pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen-dev-analysis/analysis").ToStringOutput(),
+			"orchestration": pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/orchestration").ToStringOutput(),
+			"ui":            pulumi.String("us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/ui").ToStringOutput(),
+		},
+	}
+	storageOut := types.StorageOutputs{
+		DataBucketName: pulumi.String("kaizen-dev-data").ToStringOutput(),
+		DataBucketRef:  pulumi.String("gs://kaizen-dev-data").ToStringOutput(),
+	}
+	dbOut := types.DatabaseOutputs{
+		Endpoint: pulumi.String("10.99.0.3:5432").ToStringOutput(),
+	}
+	streamOut := types.StreamingOutputs{
+		BootstrapBrokers: pulumi.String("seed-0.kaizen-dev.fmc.prd.cloud.redpanda.com:9092").ToStringOutput(),
+	}
+	secretsOut := types.SecretsOutputs{
+		DatabaseSecretRef: pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-database").ToStringOutput(),
+		KafkaSecretRef:    pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-kafka").ToStringOutput(),
+		RedisSecretRef:    pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-redis").ToStringOutput(),
+		AuthSecretRef:     pulumi.String("projects/kaizen-experimentation-dev/secrets/kaizen-dev-auth").ToStringOutput(),
+	}
+	return cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut
+}
+
+func (m *gcpFullstackMocks) cloudRunByName(name string) (fsResource, bool) {
+	for _, r := range m.byType("gcp:cloudrunv2/service:Service") {
+		if v, ok := r.Inputs["name"]; ok && v.HasValue() && v.StringValue() == name {
+			return r, true
+		}
+	}
+	return fsResource{}, false
+}
+
+// Acceptance criterion 1: M4a appears in ComputeOutputs.ServiceEndpoints["m4a"].
+func TestGCPCompute_M4aInServiceEndpoints(t *testing.T) {
+	mocks := &gcpFullstackMocks{}
+	var out types.ComputeOutputs
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := gcpComputeInputs()
+		var e error
+		out, e = gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		return e
+	}, pulumi.WithMocks("kaizen", "dev", mocks))
+	if err != nil {
+		t.Fatalf("gcp.NewCompute failed: %v", err)
+	}
+	if _, ok := out.ServiceEndpoints["m4a"]; !ok {
+		t.Errorf("ComputeOutputs.ServiceEndpoints missing key %q; got keys %v",
+			"m4a", keysOf(out.ServiceEndpoints))
+	}
+	if _, ok := out.ServiceArns["m4a"]; !ok {
+		t.Errorf("ComputeOutputs.ServiceArns missing key %q", "m4a")
+	}
+}
+
+func keysOf(m map[string]pulumi.StringOutput) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}
+
+// Acceptance criterion 2: M4a Cloud Run service is the elevated CPU shape
+// with an end-to-end gRPC health probe on 50053 (the deployable form of
+// "health check returns 200").
+func TestGCPCompute_M4aHealthProbeAndResources(t *testing.T) {
+	mocks := &gcpFullstackMocks{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := gcpComputeInputs()
+		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		return e
+	}, pulumi.WithMocks("kaizen", "dev", mocks))
+	if err != nil {
+		t.Fatalf("gcp.NewCompute failed: %v", err)
+	}
+
+	svc, ok := mocks.cloudRunByName("kaizen-dev-m4a-analysis")
+	if !ok {
+		t.Fatal("no Cloud Run service named kaizen-dev-m4a-analysis registered")
+	}
+	tmpl := svc.Inputs["template"].ObjectValue()
+	container := tmpl["containers"].ArrayValue()[0].ObjectValue()
+
+	res, ok := container["resources"]
+	if !ok || !res.IsObject() {
+		t.Fatal("M4a container.resources missing — not the elevated CPU shape")
+	}
+	limits := res.ObjectValue()["limits"].ObjectValue()
+	if cpu := limits["cpu"]; !cpu.HasValue() || cpu.StringValue() == "" {
+		t.Error("M4a resources.limits.cpu not set")
+	}
+	if mem := limits["memory"]; !mem.HasValue() || mem.StringValue() == "" {
+		t.Error("M4a resources.limits.memory not set")
+	}
+
+	probe, ok := container["startupProbe"]
+	if !ok || !probe.IsObject() {
+		t.Fatal("M4a container.startupProbe missing — health check not verified end-to-end")
+	}
+	grpc, ok := probe.ObjectValue()["grpc"]
+	if !ok || !grpc.IsObject() {
+		t.Fatal("M4a startupProbe.grpc missing — M4a is a gRPC service")
+	}
+	if port := grpc.ObjectValue()["port"]; !port.HasValue() || port.NumberValue() != 50053 {
+		t.Errorf("M4a startupProbe.grpc.port = %v, want 50053", grpc.ObjectValue()["port"])
+	}
+}
+
+// Acceptance criterion 3: M4a can list & write objects in the data bucket
+// (roles/storage.objectAdmin on kaizen-dev-data bound to the M4a runtime SA)
+// and can read its DB credentials secret (roles/secretmanager.secretAccessor).
+func TestGCPCompute_M4aDataBucketAndSecretIAM(t *testing.T) {
+	mocks := &gcpFullstackMocks{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut := gcpComputeInputs()
+		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut)
+		return e
+	}, pulumi.WithMocks("kaizen", "dev", mocks))
+	if err != nil {
+		t.Fatalf("gcp.NewCompute failed: %v", err)
+	}
+
+	wantMember := "serviceAccount:dev-m4a-analysis-run@kaizen-experimentation-dev.iam.gserviceaccount.com"
+
+	bucketBound := false
+	for _, b := range mocks.byType("gcp:storage/bucketIAMMember:BucketIAMMember") {
+		role := b.Inputs["role"]
+		member := b.Inputs["member"]
+		bucket := b.Inputs["bucket"]
+		if role.HasValue() && role.StringValue() == "roles/storage.objectAdmin" &&
+			member.HasValue() && member.StringValue() == wantMember &&
+			bucket.HasValue() && bucket.StringValue() == "kaizen-dev-data" {
+			bucketBound = true
+		}
+	}
+	if !bucketBound {
+		t.Error("no objectAdmin BucketIAMMember on kaizen-dev-data for the M4a runtime SA")
+	}
+
+	secretBound := false
+	for _, s := range mocks.byType("gcp:secretmanager/secretIamMember:SecretIamMember") {
+		role := s.Inputs["role"]
+		member := s.Inputs["member"]
+		sid := s.Inputs["secretId"]
+		if role.HasValue() && role.StringValue() == "roles/secretmanager.secretAccessor" &&
+			member.HasValue() && member.StringValue() == wantMember &&
+			sid.HasValue() && strings.Contains(sid.StringValue(), "database") {
+			secretBound = true
+		}
+	}
+	if !secretBound {
+		t.Error("no secretAccessor SecretIamMember on the database secret for the M4a runtime SA")
 	}
 }
