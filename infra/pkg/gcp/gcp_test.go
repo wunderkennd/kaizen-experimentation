@@ -23,6 +23,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -205,7 +206,10 @@ func runNewCompute(t *testing.T) (*computeMocks, types.ComputeOutputs) {
 		}
 
 		var cerr error
-		out, cerr = NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
+		out, cerr = NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		})
 		return cerr
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {

@@ -28,6 +28,7 @@ import (
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	gcpfacade "github.com/kaizen-experimentation/infra/pkg/gcp"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -251,7 +252,10 @@ func runM1Compute(t *testing.T) (*m1TopologyMocks, types.ComputeOutputs, string)
 		}
 
 		var err error
-		out, err = gcpfacade.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
+		out, err = gcpfacade.NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		})
 		if err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/gcp"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -156,7 +157,10 @@ func runM6Compute(t *testing.T) (*m6Mocks, map[string]string) {
 			Endpoint: pulumi.String("redis://10.99.1.1:6379").ToStringOutput(),
 		}
 
-		out, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
+		out, err := gcp.NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		})
 		if err != nil {
 			return err
 		}

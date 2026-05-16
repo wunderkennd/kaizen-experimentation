@@ -350,13 +350,7 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 func NewCompute(
 	ctx *pulumi.Context,
 	cfg *kconfig.Config,
-	netOut types.NetworkOutputs,
-	cicdOut types.CICDOutputs,
-	dbOut types.DatabaseOutputs,
-	streamOut types.StreamingOutputs,
-	secretsOut types.SecretsOutputs,
-	storageOut types.StorageOutputs,
-	cacheOut types.CacheOutputs,
+	stages services.StageOutputs,
 ) (types.ComputeOutputs, error) {
 	region := cfg.GCPRegion
 	if region == "" {
@@ -364,13 +358,13 @@ func NewCompute(
 	}
 
 	// M4b stays here — stateful GCE/MIG slice, not a Cloud Run service.
-	privateSubnetSelfLink := netOut.PrivateSubnetIds.ApplyT(func(ids []string) string {
+	privateSubnetSelfLink := stages.Net.PrivateSubnetIds.ApplyT(func(ids []string) string {
 		if len(ids) == 0 {
 			return ""
 		}
 		return ids[0]
 	}).(pulumi.StringOutput)
-	namespaceName := netOut.ServiceDiscoveryId.ToStringOutput()
+	namespaceName := stages.Net.ServiceDiscoveryId.ToStringOutput()
 	m4bOut, err := compute.NewM4bInstance(ctx, &compute.M4bArgs{
 		Environment:                   cfg.Environment,
 		Region:                        pulumi.String(region).ToStringOutput(),
@@ -393,13 +387,8 @@ func NewCompute(
 	cloudRunInputs := &compute.Inputs{
 		Project:                     cfg.GCPProjectID,
 		Region:                      cfg.GCPRegion,
-		VpcConnectorSelfLink:        netOut.VpcConnectorSelfLink,
-		ServiceDirectoryNamespaceID: netOut.ServiceDiscoveryId.ToStringOutput(),
-	}
-
-	stages := services.StageOutputs{
-		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
-		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		VpcConnectorSelfLink:        stages.Net.VpcConnectorSelfLink,
+		ServiceDirectoryNamespaceID: stages.Net.ServiceDiscoveryId.ToStringOutput(),
 	}
 
 	// Registry order is the historical order each per-service issue landed.

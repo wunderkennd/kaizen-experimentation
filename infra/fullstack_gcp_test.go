@@ -10,6 +10,7 @@ import (
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/gcp"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
 
@@ -392,7 +393,10 @@ func TestGCPCompute_M4aInServiceEndpoints(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := gcpComputeInputs()
 		var e error
-		out, e = gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
+		out, e = gcp.NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		})
 		return e
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {
@@ -422,7 +426,10 @@ func TestGCPCompute_M4aHealthProbeAndResources(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := gcpComputeInputs()
-		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
+		_, e := gcp.NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		})
 		return e
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {
@@ -468,7 +475,10 @@ func TestGCPCompute_M4aDataBucketAndSecretIAM(t *testing.T) {
 	mocks := &gcpFullstackMocks{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut := gcpComputeInputs()
-		_, e := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, streamOut, secretsOut, storageOut, cacheOut)
+		_, e := gcp.NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+		})
 		return e
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
 	if err != nil {
