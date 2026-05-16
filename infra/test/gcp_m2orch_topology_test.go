@@ -51,6 +51,12 @@ func m2OrchUpstreams() (types.NetworkOutputs, types.CICDOutputs, types.DatabaseO
 			"orchestration": pulumi.String(
 				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/orchestration",
 			).ToStringOutput(),
+			// NewCompute provisions every wired per-service Cloud Run service
+			// in one call, so this fixture must satisfy each service's image
+			// lookup even when the test is scoped to M2-Orch.
+			"ui": pulumi.String(
+				"us-docker.pkg.dev/kaizen-experimentation-dev/kaizen/ui",
+			).ToStringOutput(),
 		},
 	}
 	dbOut := types.DatabaseOutputs{
