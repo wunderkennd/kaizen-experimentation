@@ -522,31 +522,10 @@ func NewCompute(
 	// Secret Manager IAM bindings expect (see gcp.NewSecrets contract note);
 	// they're passed through directly without trimming, matching the M1/M2-
 	// Orch/M3 convention above.
-	flagsRepo, ok := cicdOut.RepositoryURLs["flags"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: CICDOutputs.RepositoryURLs missing \"flags\" repo for M7 — " +
-				"the CICD stage must run before compute")
-	}
-
-	m7, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m7-flags",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", flagsRepo),
-			ContainerPort: 50057,
-			MinInstances:  1, // p99 < 5ms SLA (parity with M1).
-			MaxInstances:  10,
-			EnvVars: []compute.EnvVar{
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				{Name: "REDIS_ENDPOINT", Value: cacheOut.Endpoint},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				{EnvName: "REDIS_SECRET", SecretID: secretsOut.RedisSecretRef, Version: "latest"},
-			},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
+	m7, err := services.NewM7Flags(ctx, cfg, cloudRunInputs, services.StageOutputs{
+		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+	})
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
