@@ -514,35 +514,10 @@ func NewCompute(
 	// ─── M1 Assignment (issue #488) ───────────────────────────────────────
 	// The platform's strictest latency budget (p99 < 5ms) — MinInstances=1
 	// keeps one warm instance so Cloud Run never cold-starts a request.
-	assignmentRepo, ok := cicdOut.RepositoryURLs["assignment"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: CICDOutputs.RepositoryURLs is missing the \"assignment\" repo (required for the M1 image)")
-	}
-	m1Image := assignmentRepo.ApplyT(func(repo string) string {
-		return repo + ":latest"
-	}).(pulumi.StringOutput)
-
-	m1, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m1-assignment",
-		&compute.Options{
-			Image:         m1Image,
-			ContainerPort: 8080,
-			MinInstances:  1, // p99 < 5ms SLA — no cold starts.
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "GRPC_ADDR", Value: pulumi.String("0.0.0.0:50051")},
-				{Name: "HTTP_ADDR", Value: pulumi.String("0.0.0.0:8080")},
-				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
-				{Name: "M4B_ADDR", Value: m4bOut.Endpoint},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				{EnvName: "REDIS_SECRET", SecretID: secretsOut.RedisSecretRef, Version: "latest"},
-				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
-			},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
+	m1, err := services.NewM1Assignment(ctx, cfg, cloudRunInputs, services.StageOutputs{
+		Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+		Stream: streamOut, Secrets: secretsOut, Storage: storageOut,
+	}, m4bOut.Endpoint)
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
