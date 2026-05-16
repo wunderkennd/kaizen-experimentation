@@ -285,8 +285,10 @@ func TestNewComputeM3CloudRunShape(t *testing.T) {
 	}
 }
 
-// TestNewComputeM3EnvVars covers the issue's in-scope literal env vars:
-// DB endpoint + data bucket name + data bucket gs:// ref.
+// TestNewComputeM3EnvVars covers the issue's in-scope literal env vars
+// (DB endpoint + data bucket name + gs:// ref + Kafka brokers) plus the
+// Secret Manager–sourced credentials the M3 Go service reads at startup
+// (services/metrics/cmd/main.go).
 func TestNewComputeM3EnvVars(t *testing.T) {
 	mocks, _ := runNewCompute(t)
 	container := m3ContainerObj(t, m3RunService(t, mocks))
@@ -296,7 +298,7 @@ func TestNewComputeM3EnvVars(t *testing.T) {
 		t.Fatal("M3 container.envs missing")
 	}
 	literals := map[string]bool{}
-	var dbSecretEnv bool
+	secretRefs := map[string]bool{}
 	for _, e := range envs.ArrayValue() {
 		if !e.IsObject() {
 			continue
@@ -309,39 +311,45 @@ func TestNewComputeM3EnvVars(t *testing.T) {
 		if _, isLiteral := obj["value"]; isLiteral {
 			literals[name.StringValue()] = true
 		}
-		if name.StringValue() == "DATABASE_SECRET" {
-			if vs, ok := obj["valueSource"]; ok && vs.IsObject() {
-				if _, hasRef := vs.ObjectValue()["secretKeyRef"]; hasRef {
-					dbSecretEnv = true
-				}
+		if vs, ok := obj["valueSource"]; ok && vs.IsObject() {
+			if _, hasRef := vs.ObjectValue()["secretKeyRef"]; hasRef {
+				secretRefs[name.StringValue()] = true
 			}
 		}
 	}
-	for _, want := range []string{"DATABASE_ENDPOINT", "DATA_BUCKET", "DATA_BUCKET_URI"} {
+	// KAFKA_BROKERS (not KAFKA_BOOTSTRAP_BROKERS) is the name the Go service
+	// reads — see services/metrics/cmd/main.go:57. The alerts publisher and
+	// recalibration consumer both fall back to localhost:9092 without it.
+	for _, want := range []string{"DATABASE_ENDPOINT", "DATA_BUCKET", "DATA_BUCKET_URI", "KAFKA_BROKERS"} {
 		if !literals[want] {
 			t.Errorf("M3 missing literal env %q (have %v)", want, literals)
 		}
 	}
-	if !dbSecretEnv {
-		t.Error("M3 missing DATABASE_SECRET env sourced from Secret Manager (secretKeyRef)")
+	for _, want := range []string{"DATABASE_SECRET", "KAFKA_SECRET"} {
+		if !secretRefs[want] {
+			t.Errorf("M3 missing %q env sourced from Secret Manager (secretKeyRef); have %v", want, secretRefs)
+		}
 	}
 }
 
-// TestNewComputeM3IAMBindings covers "read DB creds" + acceptance criterion
-// 3 (read/write data bucket): every binding must land on the M3 runtime SA.
+// TestNewComputeM3IAMBindings covers "read DB creds" + "read Kafka creds" +
+// acceptance criterion 3 (read/write data bucket): every binding must land
+// on the M3 runtime SA. Each Secret Manager accessor binding is verified
+// against its specific secret reference, not just role+member, so swapping
+// or dropping one secret would be detected.
 func TestNewComputeM3IAMBindings(t *testing.T) {
 	mocks, _ := runNewCompute(t)
 
-	want := []struct {
+	// Project- and bucket-level bindings: one each, identified by role.
+	projectAndBucket := []struct {
 		typeToken string
 		role      string
 		desc      string
 	}{
 		{"gcp:projects/iAMMember:IAMMember", "roles/cloudsql.client", "Cloud SQL access for metric defs"},
-		{"gcp:secretmanager/secretIamMember:SecretIamMember", "roles/secretmanager.secretAccessor", "read DB credentials secret"},
 		{"gcp:storage/bucketIAMMember:BucketIAMMember", "roles/storage.objectAdmin", "list/read/write data bucket"},
 	}
-	for _, tc := range want {
+	for _, tc := range projectAndBucket {
 		t.Run(tc.role, func(t *testing.T) {
 			var found bool
 			for _, r := range mocks.byType(tc.typeToken) {
@@ -359,6 +367,39 @@ func TestNewComputeM3IAMBindings(t *testing.T) {
 			}
 			if !found {
 				t.Errorf("no %s (%s) bound to M3 SA %s [%s]", tc.role, tc.typeToken, m3SAMember, tc.desc)
+			}
+		})
+	}
+
+	// Per-secret accessor bindings: one per Secrets entry. M3 wires
+	// DATABASE_SECRET + KAFKA_SECRET; each must land on the M3 SA with a
+	// secretId pointing at the matching Secret Manager resource. Matching
+	// by secretId — not just role — would catch a copy-paste regression
+	// that bound the same secret twice.
+	wantSecrets := []struct {
+		envName  string
+		secretID string
+		desc     string
+	}{
+		{"DATABASE_SECRET", "projects/kaizen-experimentation-dev/secrets/kaizen-dev-database", "read DB credentials"},
+		{"KAFKA_SECRET", "projects/kaizen-experimentation-dev/secrets/kaizen-dev-kafka", "read Redpanda SASL credentials"},
+	}
+	for _, tc := range wantSecrets {
+		t.Run("secretAccessor/"+tc.envName, func(t *testing.T) {
+			var found bool
+			for _, r := range mocks.byType("gcp:secretmanager/secretIamMember:SecretIamMember") {
+				role, _ := r.Inputs["role"]
+				member, _ := r.Inputs["member"]
+				secretId, _ := r.Inputs["secretId"]
+				if role.HasValue() && role.StringValue() == "roles/secretmanager.secretAccessor" &&
+					member.HasValue() && member.StringValue() == m3SAMember &&
+					secretId.HasValue() && secretId.StringValue() == tc.secretID {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("no SecretIamMember (roles/secretmanager.secretAccessor) on %s bound to M3 SA %s [%s]",
+					tc.secretID, m3SAMember, tc.desc)
 			}
 		})
 	}

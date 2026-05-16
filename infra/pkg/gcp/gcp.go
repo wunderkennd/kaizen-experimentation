@@ -611,9 +611,22 @@ func NewCompute(
 	ctx.Export("gcpComputeM1SaEmail", m1.ServiceAccountEmail)
 
 	// ─── M3 Metrics (issue #491) ──────────────────────────────────────────
-	// Go service. Spark SQL orchestration → Delta Lake on GCS; reads metric
-	// definitions from Cloud SQL. Default min-instances; batch path, not
-	// p99-sensitive. Image from the "metrics" Artifact Registry repo.
+	// Go service. Three runtime paths:
+	//   1. Spark SQL orchestration → Delta Lake on GCS (reads metric defs
+	//      from Cloud SQL).
+	//   2. Guardrail alerts published to Kafka topic "guardrail_alerts"
+	//      (services/metrics/cmd/main.go:62 — alerts.NewKafkaPublisher).
+	//   3. Surrogate recalibration consumer reading M5's requests from Kafka
+	//      (services/metrics/cmd/main.go:84 — recalconsumer.NewConsumer).
+	// Default min-instances; batch path, not p99-sensitive.
+	//
+	// NOTE: AWS M3 exposes a second port 50059 for the Prometheus scrape
+	// endpoint (services/metrics/cmd/main.go:88 — METRICS_PORT default).
+	// Cloud Run v2 supports only one ingress port per container, so 50059 is
+	// not reachable from outside. Follow-up: either merge /metrics onto the
+	// main port (50056), add a sidecar that pushes to Cloud Managed
+	// Prometheus, or use Cloud Run's native metrics integration. Filed as a
+	// GCP-observability follow-up; not blocking #491.
 	m3RepoURL, ok := cicdOut.RepositoryURLs["metrics"]
 	if !ok {
 		return types.ComputeOutputs{}, fmt.Errorf(
@@ -630,9 +643,22 @@ func NewCompute(
 				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
 				{Name: "DATA_BUCKET", Value: storageOut.DataBucketName},
 				{Name: "DATA_BUCKET_URI", Value: storageOut.DataBucketRef},
+				// KAFKA_BROKERS (not KAFKA_BOOTSTRAP_BROKERS) is the name the
+				// Go service code actually reads at services/metrics/cmd/main.go:57
+				// and the convention shared across every Kafka-consuming
+				// service in the repo (Rust crates experimentation-policy,
+				// experimentation-management, experimentation-flags,
+				// experimentation-pipeline, plus services/management Go).
+				// The M1/M2-Orch GCP wiring above currently uses
+				// KAFKA_BOOTSTRAP_BROKERS, which no service reads — that
+				// inconsistency is pre-existing and tracked as a follow-up.
+				{Name: "KAFKA_BROKERS", Value: streamOut.BootstrapBrokers},
 			},
 			Secrets: []compute.SecretEnv{
 				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
+				// SASL credentials for Redpanda Cloud — required by both the
+				// alerts publisher and the recalibration consumer above.
+				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
 			},
 			// roles/storage.objectAdmin on the data bucket (#491 AC3).
 			Buckets: []pulumi.StringInput{storageOut.DataBucketName},
