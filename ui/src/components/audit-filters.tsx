@@ -106,6 +106,7 @@ export function AuditFilters({
         <button
           onClick={onClear}
           className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+          data-testid="clear-filters-toolbar"
         >
           Clear filters
         </button>
