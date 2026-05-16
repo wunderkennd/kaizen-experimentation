@@ -716,7 +716,10 @@ func NewCompute(
 	}
 	endpoints["m7"] = m7.URL
 	arns["m7"] = m7.Service.ID().ToStringOutput()
-	ctx.Export("cloudRunUrl_m7", m7.URL)
+	// Distinct export key (matches M1/M3/canary convention) — main.go also
+	// emits "cloudRunUrl_m7" by iterating ServiceEndpoints, so this avoids a
+	// silent overwrite duplicate of the same value.
+	ctx.Export("gcpComputeM7Url", m7.URL)
 	ctx.Export("gcpComputeM7SaEmail", m7.ServiceAccountEmail)
 
 	return types.ComputeOutputs{
