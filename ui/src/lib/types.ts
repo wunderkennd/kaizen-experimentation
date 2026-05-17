@@ -179,7 +179,53 @@ export interface MetricResult {
   sessionLevelResult?: SessionLevelResult;
   segmentResults?: SegmentResult[];
   ipwResult?: IpwResult;
+  /** ADR-027: present when an equivalence (TOST) test was run for this metric. */
+  equivalenceResult?: EquivalenceResult;
 }
+
+/**
+ * ADR-027: Two One-Sided Tests (TOST) equivalence result for one metric.
+ * Mirrors the `EquivalenceResult` proto message populated by M4a. The UI only
+ * renders these values — all statistics are computed in experimentation-stats.
+ */
+export interface EquivalenceResult {
+  /** Point estimate of treatment − control. */
+  pointEstimate: number;
+  /** Standard error of the difference (Welch form). */
+  stdError: number;
+  /** Welch–Satterthwaite degrees of freedom. */
+  df: number;
+  /** p-value for H₀: diff ≤ −δ. */
+  pLower: number;
+  /** p-value for H₀: diff ≥ +δ. */
+  pUpper: number;
+  /** TOST p-value — max(pLower, pUpper). Equivalence iff pTost < α. */
+  pTost: number;
+  /** Lower bound of the (1 − 2α) confidence interval for the difference. */
+  ciLower: number;
+  /** Upper bound of the (1 − 2α) confidence interval for the difference. */
+  ciUpper: number;
+  /** True iff both one-sided tests reject at α, i.e. CI ⊂ (−δ, +δ). */
+  equivalent: boolean;
+  /** Effective equivalence margin used (post delta_relative resolution). */
+  delta: number;
+  /** Control group mean. */
+  controlMean: number;
+  /** Treatment group mean. */
+  treatmentMean: number;
+  /**
+   * Estimated power at the current sample size given δ, computed by
+   * experimentation-stats. Optional until the M4a/proto carrier lands.
+   */
+  achievedPower?: number;
+}
+
+/**
+ * Derived equivalence verdict for badge/labelling. Green when the CI is fully
+ * inside the margin, yellow when it straddles a boundary, red when the CI lies
+ * entirely outside the equivalence zone.
+ */
+export type EquivalenceStatus = 'EQUIVALENT' | 'INCONCLUSIVE' | 'NOT_EQUIVALENT';
 
 export interface SessionLevelResult {
   naiveSe: number;
