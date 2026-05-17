@@ -19,6 +19,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/gcp/database"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/secrets"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
@@ -190,22 +191,6 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 	}, nil
 }
 
-// serviceImage resolves a Kaizen service's container image reference from the
-// CICD stage's Artifact Registry repository map and pins the :latest tag.
-// Returns an error (fail-fast at program-build time) when the registry key is
-// absent, rather than letting Cloud Run surface an opaque image-pull failure
-// at apply. registryKey is the pkg/gcp/cicd repository key (e.g.
-// "orchestration"), NOT the ServiceEndpoints map key.
-func serviceImage(cicdOut types.CICDOutputs, registryKey string) (pulumi.StringInput, error) {
-	repoURL, ok := cicdOut.RepositoryURLs[registryKey]
-	if !ok {
-		return nil, fmt.Errorf(
-			"gcp.NewCompute: CICDOutputs.RepositoryURLs missing key %q (Artifact Registry repo not provisioned by gcp.NewCICD)",
-			registryKey)
-	}
-	return pulumi.Sprintf("%s:latest", repoURL), nil
-}
-
 // gcpLabels returns the standard label set for GCP resources. GCP label
 // values must match [a-z0-9_-]+, so we lowercase and substitute the AWS
 // tag values that don't fit. Kept private until a second module needs the
@@ -349,37 +334,21 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 func NewCompute(
 	ctx *pulumi.Context,
 	cfg *kconfig.Config,
-	netOut types.NetworkOutputs,
-	cicdOut types.CICDOutputs,
-	dbOut types.DatabaseOutputs,
-	streamOut types.StreamingOutputs,
-	secretsOut types.SecretsOutputs,
-	storageOut types.StorageOutputs,
-	cacheOut types.CacheOutputs,
+	stages services.StageOutputs,
 ) (types.ComputeOutputs, error) {
 	region := cfg.GCPRegion
 	if region == "" {
 		region = "us-central1"
 	}
 
-	// ─── M4b slice (issue #487) ───────────────────────────────────────────
-	// Pick the first (and only — GCP private subnets are regional) self-link
-	// from the network output's array. ApplyT keeps the lazy output chain
-	// intact through the topology test.
-	privateSubnetSelfLink := netOut.PrivateSubnetIds.ApplyT(func(ids []string) string {
+	// M4b stays here — stateful GCE/MIG slice, not a Cloud Run service.
+	privateSubnetSelfLink := stages.Net.PrivateSubnetIds.ApplyT(func(ids []string) string {
 		if len(ids) == 0 {
 			return ""
 		}
 		return ids[0]
 	}).(pulumi.StringOutput)
-
-	// types.NetworkOutputs.ServiceDiscoveryId is documented as the Cloud Map
-	// namespace ID on AWS and the Service Directory namespace *resource name*
-	// on GCP (projects/<P>/locations/<R>/namespaces/<N>). The GCP network
-	// facade populates it from servicedirectory.Namespace.ID(), which is
-	// exactly that resource name.
-	namespaceName := netOut.ServiceDiscoveryId.ToStringOutput()
-
+	namespaceName := stages.Net.ServiceDiscoveryId.ToStringOutput()
 	m4bOut, err := compute.NewM4bInstance(ctx, &compute.M4bArgs{
 		Environment:                   cfg.Environment,
 		Region:                        pulumi.String(region).ToStringOutput(),
@@ -389,366 +358,58 @@ func NewCompute(
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
-
 	ctx.Export("m4bMigName", m4bOut.MigName)
 	ctx.Export("m4bInstanceName", m4bOut.InstanceName)
 	ctx.Export("m4bEndpoint", m4bOut.Endpoint)
 	ctx.Export("m4bServiceDirectoryServiceName", m4bOut.ServiceName)
 	ctx.Export("m4bDataDiskName", m4bOut.DataDiskName)
 
-	// ─── Cloud Run service factory + canary (issue #486) ──────────────────
 	if cfg.GCPProjectID == "" {
 		return types.ComputeOutputs{}, fmt.Errorf(
 			"gcp.NewCompute: cfg.GCPProjectID is required when cloudProvider=gcp")
 	}
-
 	cloudRunInputs := &compute.Inputs{
 		Project:                     cfg.GCPProjectID,
 		Region:                      cfg.GCPRegion,
-		VpcConnectorSelfLink:        netOut.VpcConnectorSelfLink,
-		ServiceDirectoryNamespaceID: netOut.ServiceDiscoveryId.ToStringOutput(),
+		VpcConnectorSelfLink:        stages.Net.VpcConnectorSelfLink,
+		ServiceDirectoryNamespaceID: stages.Net.ServiceDiscoveryId.ToStringOutput(),
 	}
 
-	canary, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "preview-canary",
-		&compute.Options{
-			// Google's public hello-world image — exercises the helper
-			// against `pulumi preview` without depending on a real
-			// build/push of a Kaizen image. Replace per-service in
-			// issues #488..#495 with the matching Artifact Registry URL
-			// from CICDOutputs.RepositoryURLs.
-			Image:         pulumi.String("us-docker.pkg.dev/cloudrun/container/hello"),
-			ContainerPort: 8080,
-			MinInstances:  0,
-		})
+	// Registry order is the historical order each per-service issue landed.
+	registry := []services.RegistryEntry{
+		{Key: "preview-canary", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, _ services.StageOutputs) (*compute.CloudRunService, error) {
+			return services.NewCanary(ctx, cfg, in)
+		}},
+		{Key: "m2-orch", Factory: services.NewM2Orchestration},
+		// M6 closes over m4bOut.Endpoint for the M4B_POLICY_ENDPOINT env var
+		// (M6's Next.js UI resolves M4b via the SD-registered host:port).
+		{Key: "m6", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, s services.StageOutputs) (*compute.CloudRunService, error) {
+			return services.NewM6UI(ctx, cfg, in, s, m4bOut.Endpoint)
+		}},
+		{Key: "m4a", Factory: services.NewM4aAnalysis},
+		// M1 closes over m4bOut.Endpoint — captured in the closure.
+		{Key: "m1", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, s services.StageOutputs) (*compute.CloudRunService, error) {
+			return services.NewM1Assignment(ctx, cfg, in, s, m4bOut.Endpoint)
+		}},
+		{Key: "m3", Factory: services.NewM3Metrics},
+		{Key: "m7", Factory: services.NewM7Flags},
+		{Key: "m2-pipeline", Factory: services.NewM2Pipeline},
+		{Key: "m5", Factory: services.NewM5Management},
+	}
+
+	svcs, err := services.Walk(ctx, cfg, cloudRunInputs, stages, registry)
 	if err != nil {
 		return types.ComputeOutputs{}, err
 	}
 
-	endpoints := map[string]pulumi.StringOutput{
-		"preview-canary": canary.URL,
+	endpoints := make(map[string]pulumi.StringOutput, len(svcs))
+	arns := make(map[string]pulumi.StringOutput, len(svcs))
+	for key, svc := range svcs {
+		endpoints[key] = svc.URL
+		arns[key] = svc.Service.ID().ToStringOutput()
+		ctx.Export("gcpComputeUrl_"+key, svc.URL)
+		ctx.Export("gcpComputeSaEmail_"+key, svc.ServiceAccountEmail)
 	}
-	arns := map[string]pulumi.StringOutput{
-		"preview-canary": canary.Service.ID().ToStringOutput(),
-	}
-
-	ctx.Export("gcpComputeCanaryUrl", canary.URL)
-	ctx.Export("gcpComputeCanarySaEmail", canary.ServiceAccountEmail)
-
-	// ─── M2 Orchestration (issue #490) ────────────────────────────────────
-	// Stateless coordinator. Needs Cloud SQL for orchestration state and
-	// Redpanda for event flow. Service name "m2-orchestration" (matches the
-	// AWS Cloud Map name + the dev-m2-orchestration-run SA convention); the
-	// ServiceEndpoints map key is "m2-orch" (matches the AWS service key and
-	// the #490 acceptance criterion). Default min-instances (0) — the spec's
-	// Compute Model marks M2-Orch a stateless orchestrator, NOT an M1/M7
-	// cold-start-sensitive service.
-	m2OrchImage, err := serviceImage(cicdOut, "orchestration")
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	m2Orch, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m2-orchestration",
-		&compute.Options{
-			Image:         m2OrchImage,
-			ContainerPort: 50058,
-			MinInstances:  0,
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "LOG_LEVEL", Value: pulumi.String("info")},
-				// Cloud SQL host:port — reachable from the container only
-				// through the Serverless VPC Access connector wired by the
-				// factory (acceptance criterion #3).
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				// Redpanda Kafka-protocol bootstrap brokers for event flow.
-				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
-			},
-			Secrets: []compute.SecretEnv{
-				// secretsOut.*SecretRef is the bare projects/<P>/secrets/<S>
-				// path on GCP (see gcp.NewSecrets contract note); the factory
-				// grants roles/secretmanager.secretAccessor on each — i.e.
-				// "read DB creds, read Kafka creds".
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
-			},
-			// Cloud SQL connection scope. The secret-accessor bindings above
-			// cover credential reads; this grants the IAM scope to open the
-			// connection itself.
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m2-orch"] = m2Orch.URL
-	arns["m2-orch"] = m2Orch.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM2OrchUrl", m2Orch.URL)
-	ctx.Export("gcpComputeM2OrchSaEmail", m2Orch.ServiceAccountEmail)
-
-	// ─── M6 UI (issue #494) ────────────────────────────────────────────────
-	// Next.js 14 SSR. Image comes from the "ui" Artifact Registry repo
-	// (#482 created the registry; the CI image pipeline pushes :latest).
-	// Default min-instances (0): M6 is request-driven UI traffic, not a
-	// p99-SLA gRPC path like M1/M7, so cold starts are acceptable and the
-	// scale-to-zero cost saving applies. The factory auto-mints the
-	// roles/secretmanager.secretAccessor binding for the auth secret and
-	// registers m6-ui in Service Directory so peers can resolve it.
-	uiRepoURL, ok := cicdOut.RepositoryURLs["ui"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: cicdOut.RepositoryURLs missing the \"ui\" repo required to deploy M6 (#494)")
-	}
-	m6, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m6-ui",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", uiRepoURL),
-			ContainerPort: 3000, // Next.js SSR port — parity with the AWS M6 Fargate task
-			MinInstances:  0,    // default per #494; UI traffic is request-driven
-			EnvVars: []compute.EnvVar{
-				{Name: "NODE_ENV", Value: pulumi.String("production")},
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				// The one backend that exists at this stage. M4b registered
-				// itself in Service Directory above; M6 reaches it via this
-				// resolvable endpoint. The remaining MX_*_ENDPOINT vars are
-				// added by #488..#493/#495 as those services land.
-				{Name: "M4B_POLICY_ENDPOINT", Value: m4bOut.Endpoint},
-			},
-			Secrets: []compute.SecretEnv{
-				// SSR session layer. SecretID is the bare projects/<P>/secrets/<S>
-				// path so Cloud Run's secretKeyRef.Secret and the auto-created
-				// SecretIamMember both resolve; "latest" tracks rotation.
-				{EnvName: "AUTH_SECRET", SecretID: secretsOut.AuthSecretRef, Version: "latest"},
-			},
-		})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m6"] = m6.URL
-	arns["m6"] = m6.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM6Url", m6.URL)
-	ctx.Export("gcpComputeM6SaEmail", m6.ServiceAccountEmail)
-
-	// ─── M4a Analysis (issue #492) ────────────────────────────────────────
-	// CPU-intensive batch (Rust gRPC). Elevated CPU/memory above the
-	// default Cloud Run sizing; gRPC startup probe verifies the standard
-	// gRPC Health Checking Protocol responds before traffic is routed.
-	// Not in the p99 < 5ms cold-start-sensitive set (only M1/M7 pin
-	// min-instances=1); batch analysis tolerates cold starts.
-	const m4aPort = 50053
-	m4aRepoURL, ok := cicdOut.RepositoryURLs["analysis"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: cicdOut.RepositoryURLs missing \"analysis\" repo for M4a (#492)")
-	}
-	m4a, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m4a-analysis",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", m4aRepoURL),
-			ContainerPort: m4aPort,
-			MinInstances:  0,
-			// 2 vCPU / 4Gi mirrors the AWS Fargate M4a Tier-2 sizing intent.
-			CPULimit:    "2",
-			MemoryLimit: "4Gi",
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				{Name: "DATA_BUCKET", Value: storageOut.DataBucketName},
-				{Name: "DATA_BUCKET_URI", Value: storageOut.DataBucketRef},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-			},
-			Buckets:      []pulumi.StringInput{storageOut.DataBucketName},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-			HealthCheck: &compute.HealthProbe{
-				Type:                "grpc",
-				Port:                m4aPort,
-				InitialDelaySeconds: 10,
-				PeriodSeconds:       10,
-				FailureThreshold:    6,
-			},
-		})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m4a"] = m4a.URL
-	arns["m4a"] = m4a.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM4aUrl", m4a.URL)
-	ctx.Export("gcpComputeM4aSaEmail", m4a.ServiceAccountEmail)
-
-	// ─── M1 Assignment (issue #488) ───────────────────────────────────────
-	// The platform's strictest latency budget (p99 < 5ms) — MinInstances=1
-	// keeps one warm instance so Cloud Run never cold-starts a request.
-	assignmentRepo, ok := cicdOut.RepositoryURLs["assignment"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: CICDOutputs.RepositoryURLs is missing the \"assignment\" repo (required for the M1 image)")
-	}
-	m1Image := assignmentRepo.ApplyT(func(repo string) string {
-		return repo + ":latest"
-	}).(pulumi.StringOutput)
-
-	m1, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m1-assignment",
-		&compute.Options{
-			Image:         m1Image,
-			ContainerPort: 8080,
-			MinInstances:  1, // p99 < 5ms SLA — no cold starts.
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "GRPC_ADDR", Value: pulumi.String("0.0.0.0:50051")},
-				{Name: "HTTP_ADDR", Value: pulumi.String("0.0.0.0:8080")},
-				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
-				{Name: "M4B_ADDR", Value: m4bOut.Endpoint},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				{EnvName: "REDIS_SECRET", SecretID: secretsOut.RedisSecretRef, Version: "latest"},
-				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
-			},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m1"] = m1.URL
-	arns["m1"] = m1.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM1Url", m1.URL)
-	ctx.Export("gcpComputeM1SaEmail", m1.ServiceAccountEmail)
-
-	// ─── M3 Metrics (issue #491) ──────────────────────────────────────────
-	// Go service. Three runtime paths:
-	//   1. Spark SQL orchestration → Delta Lake on GCS (reads metric defs
-	//      from Cloud SQL).
-	//   2. Guardrail alerts published to Kafka topic "guardrail_alerts"
-	//      (services/metrics/cmd/main.go:62 — alerts.NewKafkaPublisher).
-	//   3. Surrogate recalibration consumer reading M5's requests from Kafka
-	//      (services/metrics/cmd/main.go:84 — recalconsumer.NewConsumer).
-	// Default min-instances; batch path, not p99-sensitive.
-	//
-	// NOTE: AWS M3 exposes a second port 50059 for the Prometheus scrape
-	// endpoint (services/metrics/cmd/main.go:88 — METRICS_PORT default).
-	// Cloud Run v2 supports only one ingress port per container, so 50059 is
-	// not reachable from outside. Follow-up: either merge /metrics onto the
-	// main port (50056), add a sidecar that pushes to Cloud Managed
-	// Prometheus, or use Cloud Run's native metrics integration. Filed as a
-	// GCP-observability follow-up; not blocking #491.
-	m3RepoURL, ok := cicdOut.RepositoryURLs["metrics"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: cicdOut.RepositoryURLs missing \"metrics\" key required for M3 deploy (#491)")
-	}
-	m3, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m3-metrics",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", m3RepoURL),
-			ContainerPort: 50056,
-			MinInstances:  0,
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "LOG_LEVEL", Value: pulumi.String("info")},
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				{Name: "DATA_BUCKET", Value: storageOut.DataBucketName},
-				{Name: "DATA_BUCKET_URI", Value: storageOut.DataBucketRef},
-				// KAFKA_BROKERS (not KAFKA_BOOTSTRAP_BROKERS) is the name the
-				// Go service code actually reads at services/metrics/cmd/main.go:57
-				// and the convention shared across every Kafka-consuming
-				// service in the repo (Rust crates experimentation-policy,
-				// experimentation-management, experimentation-flags,
-				// experimentation-pipeline, plus services/management Go).
-				// The M1/M2-Orch GCP wiring above currently uses
-				// KAFKA_BOOTSTRAP_BROKERS, which no service reads — that
-				// inconsistency is pre-existing and tracked as a follow-up.
-				{Name: "KAFKA_BROKERS", Value: streamOut.BootstrapBrokers},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				// SASL credentials for Redpanda Cloud — required by both the
-				// alerts publisher and the recalibration consumer above.
-				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
-			},
-			// roles/storage.objectAdmin on the data bucket (#491 AC3).
-			Buckets: []pulumi.StringInput{storageOut.DataBucketName},
-			// roles/cloudsql.client — connect to Cloud SQL for metric defs.
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m3"] = m3.URL
-	arns["m3"] = m3.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM3Url", m3.URL)
-	ctx.Export("gcpComputeM3SaEmail", m3.ServiceAccountEmail)
-
-	// ─── M7 Flags (issue #495) ────────────────────────────────────────────
-	// Rust feature-flag service (ADR-024) on its gRPC port 50057. Same SLA
-	// profile as M1: min-instances=1 keeps a warm instance so requests never
-	// pay a Cloud Run cold start (spec Compute Model → Cold starts;
-	// p99 < 5ms). Image pulled from the "flags" Artifact Registry repo.
-	//
-	// SecretRef values from gcp.NewSecrets are already the bare
-	// `projects/<P>/secrets/<S>` path that Cloud Run's secretKeyRef and
-	// Secret Manager IAM bindings expect (see gcp.NewSecrets contract note);
-	// they're passed through directly without trimming, matching the M1/M2-
-	// Orch/M3 convention above.
-	flagsRepo, ok := cicdOut.RepositoryURLs["flags"]
-	if !ok {
-		return types.ComputeOutputs{}, fmt.Errorf(
-			"gcp.NewCompute: CICDOutputs.RepositoryURLs missing \"flags\" repo for M7 — " +
-				"the CICD stage must run before compute")
-	}
-
-	m7, err := compute.NewCloudRunService(ctx, cfg, cloudRunInputs, "m7-flags",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", flagsRepo),
-			ContainerPort: 50057,
-			MinInstances:  1, // p99 < 5ms SLA (parity with M1).
-			MaxInstances:  10,
-			EnvVars: []compute.EnvVar{
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				{Name: "REDIS_ENDPOINT", Value: cacheOut.Endpoint},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretsOut.DatabaseSecretRef, Version: "latest"},
-				{EnvName: "REDIS_SECRET", SecretID: secretsOut.RedisSecretRef, Version: "latest"},
-			},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m7"] = m7.URL
-	arns["m7"] = m7.Service.ID().ToStringOutput()
-	// Distinct export key (matches M1/M3/canary convention) — main.go also
-	// emits "cloudRunUrl_m7" by iterating ServiceEndpoints, so this avoids a
-	// silent overwrite duplicate of the same value.
-	ctx.Export("gcpComputeM7Url", m7.URL)
-	ctx.Export("gcpComputeM7SaEmail", m7.ServiceAccountEmail)
-
-	// ─── M2 Pipeline (issue #489) ─────────────────────────────────────────
-	// High-throughput Kafka producer (Rust experimentation-ingest). gRPC
-	// ingest on 50052, elevated max-instances for throughput, MinInstances=0
-	// (no p99 cold-start SLA). Reads KAFKA_BROKERS / SCHEMA_REGISTRY_URL
-	// directly so the same image runs unmodified on AWS and GCP.
-	m2pipe, err := newM2PipelineService(ctx, cfg, cloudRunInputs, cicdOut, streamOut, secretsOut)
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m2-pipeline"] = m2pipe.URL
-	arns["m2-pipeline"] = m2pipe.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM2PipelineUrl", m2pipe.URL)
-	ctx.Export("gcpComputeM2PipelineSaEmail", m2pipe.ServiceAccountEmail)
-
-	// ─── M5 Management (issue #493) ───────────────────────────────────────
-	// Rust experimentation-management (ADR-025) — CRUD/Postgres + Kafka
-	// publisher for lifecycle events. Default MinInstances (0): M5 carries
-	// no p99 cold-start SLA, so it eats Cloud Run cold starts to save idle
-	// cost. Only M1/M7 override to 1.
-	m5, err := newM5ManagementService(ctx, cfg, cloudRunInputs, cicdOut, dbOut, cacheOut, streamOut, secretsOut)
-	if err != nil {
-		return types.ComputeOutputs{}, err
-	}
-	endpoints["m5"] = m5.URL
-	arns["m5"] = m5.Service.ID().ToStringOutput()
-	ctx.Export("gcpComputeM5Url", m5.URL)
-	ctx.Export("gcpComputeM5SaEmail", m5.ServiceAccountEmail)
 
 	return types.ComputeOutputs{
 		// ClusterId / ClusterName / ClusterArn intentionally zero-valued:
@@ -759,115 +420,4 @@ func NewCompute(
 		ServiceEndpoints: endpoints,
 		ServiceArns:      arns,
 	}, nil
-}
-
-// m2PipelinePort is the gRPC ingest port M2 Pipeline binds to. Matches the
-// AWS Cloud Map registration (pkg/aws/compute/services.go: m2-pipeline →
-// 50052) and the value the experimentation-pipeline container listens on.
-const m2PipelinePort = 50052
-
-// m2PipelineMaxInstances caps M2's Cloud Run autoscaling. M2 is a high-
-// throughput Kafka producer, so its ceiling is raised well above the
-// cost-control default; floor stays at 0 (M2 carries no p99 cold-start SLA).
-const m2PipelineMaxInstances = 100
-
-// newM2PipelineService wires M2 Pipeline (Rust experimentation-ingest) onto
-// Cloud Run via the shared factory. Issue #489. The env-var contract mirrors
-// crates/experimentation-pipeline/src/main.rs (KAFKA_BROKERS) and the AWS
-// service contract so the same image runs unmodified on both clouds.
-func newM2PipelineService(
-	ctx *pulumi.Context,
-	cfg *kconfig.Config,
-	inputs *compute.Inputs,
-	cicdOut types.CICDOutputs,
-	streamOut types.StreamingOutputs,
-	secretsOut types.SecretsOutputs,
-) (*compute.CloudRunService, error) {
-	repoURL, ok := cicdOut.RepositoryURLs["pipeline"]
-	if !ok {
-		return nil, fmt.Errorf(
-			"gcp.NewCompute: cicdOut.RepositoryURLs is missing the \"pipeline\" Artifact Registry repo required by M2")
-	}
-
-	return compute.NewCloudRunService(ctx, cfg, inputs, "m2-pipeline",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", repoURL),
-			ContainerPort: m2PipelinePort,
-			MinInstances:  0,
-			MaxInstances:  m2PipelineMaxInstances,
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "KAFKA_BROKERS", Value: streamOut.BootstrapBrokers},
-				{Name: "SCHEMA_REGISTRY_URL", Value: streamOut.SchemaRegistryUrl},
-				{Name: "OTEL_SERVICE_NAME", Value: pulumi.String("m2-pipeline")},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "KAFKA_SECRET", SecretID: secretsOut.KafkaSecretRef, Version: "latest"},
-			},
-		})
-}
-
-// m5ManagementPort is the HTTP/gRPC port M5 Management binds to. Matches the
-// AWS service contract (pkg/aws/compute/services.go) and the value baked into
-// the experimentation-management container per ADR-025.
-const m5ManagementPort = 50055
-
-// newM5ManagementService wires M5 Management (Rust experimentation-management,
-// ADR-025) onto Cloud Run via the shared factory. CRUD/Postgres + Kafka
-// publisher for lifecycle events. Env-var contract mirrors the AWS service
-// contract so the same image runs unmodified on either cloud; credentials
-// arrive via Secret Manager refs (factory mounts secretKeyRef + auto-creates
-// secretAccessor IAM binding on the per-service SA).
-func newM5ManagementService(
-	ctx *pulumi.Context,
-	cfg *kconfig.Config,
-	inputs *compute.Inputs,
-	cicdOut types.CICDOutputs,
-	dbOut types.DatabaseOutputs,
-	cacheOut types.CacheOutputs,
-	streamOut types.StreamingOutputs,
-	secretsOut types.SecretsOutputs,
-) (*compute.CloudRunService, error) {
-	repoURL, ok := cicdOut.RepositoryURLs["management"]
-	if !ok {
-		return nil, fmt.Errorf(
-			"gcp.NewCompute: cicdOut.RepositoryURLs is missing the \"management\" Artifact Registry repo required by M5")
-	}
-
-	// secretIDForRef returns the bare local secret ID Cloud Run's
-	// secretKeyRef.secret + the secretAccessor IAM binding expect, but routes
-	// the value through an ApplyT on the corresponding Stage-4 *SecretRef
-	// output so M5's secret mounts + IAM bindings are ordered after the
-	// Secret Manager secret + version actually exist. The string returned is
-	// deterministic (secrets.SecretID is a pure function of cfg.Env +
-	// component name); the ApplyT exists solely to thread the dependency
-	// edge — see #542 refactor for unifying this across services.
-	secretIDForRef := func(ref pulumi.StringOutput, component string) pulumi.StringInput {
-		return ref.ApplyT(func(string) string {
-			return secrets.SecretID(cfg, component)
-		}).(pulumi.StringOutput)
-	}
-
-	return compute.NewCloudRunService(ctx, cfg, inputs, "m5-management",
-		&compute.Options{
-			Image:         pulumi.Sprintf("%s:latest", repoURL),
-			ContainerPort: m5ManagementPort,
-			MinInstances:  0, // CRUD/Postgres — no p99 < 5ms SLA.
-			EnvVars: []compute.EnvVar{
-				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
-				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "DATABASE_ENDPOINT", Value: dbOut.Endpoint},
-				{Name: "REDIS_ENDPOINT", Value: cacheOut.Endpoint},
-				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: streamOut.BootstrapBrokers},
-				{Name: "OTEL_SERVICE_NAME", Value: pulumi.String("m5-management")},
-			},
-			Secrets: []compute.SecretEnv{
-				{EnvName: "DATABASE_SECRET", SecretID: secretIDForRef(secretsOut.DatabaseSecretRef, "database"), Version: "latest"},
-				{EnvName: "KAFKA_SECRET", SecretID: secretIDForRef(secretsOut.KafkaSecretRef, "kafka"), Version: "latest"},
-				{EnvName: "REDIS_SECRET", SecretID: secretIDForRef(secretsOut.RedisSecretRef, "redis"), Version: "latest"},
-				{EnvName: "AUTH_SECRET", SecretID: secretIDForRef(secretsOut.AuthSecretRef, "auth"), Version: "latest"},
-			},
-			ProjectRoles: []string{"roles/cloudsql.client"},
-		})
 }

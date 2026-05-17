@@ -362,12 +362,9 @@ func TestM4bGcpComputeFacade(t *testing.T) {
 	if got := len(mocks.byType("gcp:compute/disk:Disk")); got != 1 {
 		t.Errorf("expected 1 standalone Disk from Deploy(gcp), got %d", got)
 	}
-	// Deploy(gcp) registers one Service Directory entry per Cloud Run service
-	// plus one for M4b: m4b-policy, preview-canary, m2-orchestration (#490),
-	// m6-ui (#494), m4a-analysis (#492), m1-assignment (#488), m3-metrics
-	// (#491), m7-flags (#495), m2-pipeline (#489), and m5-management (#493) —
-	// the full per-service Cloud Run set is now wired.
+	// 9 per-service Cloud Run SD entries + 1 M4b stateful entry = 10.
+	// The 9-count is canonicalized in pkg/gcp/services/registry_test.go.
 	if got := len(mocks.byType("gcp:servicedirectory/service:Service")); got != 10 {
-		t.Errorf("expected 10 SD Services from Deploy(gcp) (M4b + canary + M2-Orch + M6 + M4a + M1 + M3 + M7 + M2-Pipe + M5), got %d", got)
+		t.Errorf("expected 10 SD Services from Deploy(gcp) (M4b + 9 Cloud Run services), got %d", got)
 	}
 }

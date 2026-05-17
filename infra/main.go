@@ -9,6 +9,7 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/gcp"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	cloudstreaming "github.com/kaizen-experimentation/infra/pkg/streaming"
 	"github.com/kaizen-experimentation/infra/pkg/types"
 )
@@ -167,7 +168,10 @@ func Deploy(ctx *pulumi.Context) error {
 		// Run service factory + canary (#486), and the per-service stateless
 		// Cloud Run deploys as they land — M2 Orchestration via #490. Sibling
 		// services (#488, #489, #491..#495) extend the same call.
-		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, netOut, cicdOut, dbOut, gcpStreamOut, gcpSecretsOut, storageOut, cacheOut)
+		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, services.StageOutputs{
+			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
+			Stream: gcpStreamOut, Secrets: gcpSecretsOut, Storage: storageOut,
+		})
 		if err != nil {
 			return err
 		}
