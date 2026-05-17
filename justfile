@@ -192,6 +192,18 @@ test-flags:
     @echo "  Running Rust flags service tests..."
     {{ cargo }} test -p experimentation-flags
 
+# Run ADR-026 Phase 1 validation + contract tests across Rust M5 + Go M3
+test-adr026:
+    @echo "  Running ADR-026 Phase 1 validation tests..."
+    {{ cargo }} test -p experimentation-management metric
+    @echo "  Running ADR-026 Phase 1 contract tests..."
+    cd {{ services_dir }} && {{ go }} test ./metrics/internal/ -run "TestM3M5|TestM3M4|TestContract_MetricSummaries|TestContract_NewMetricTypes"
+
+# Apply ADR-026 Phase 1 migration to the local dev Postgres
+migrate-adr026:
+    @echo "  Applying ADR-026 Phase 1 migration (011)..."
+    psql $DATABASE_URL -f sql/migrations/011_adr026_phase1_metric_types.sql
+
 # Run integration tests against local infra
 test-integration: infra
     @echo "  Running integration tests..."
