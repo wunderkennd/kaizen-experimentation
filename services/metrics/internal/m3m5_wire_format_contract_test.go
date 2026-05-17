@@ -80,6 +80,10 @@ type m5WireLifecycle struct {
 }
 
 // m5WireMetricDefinition mirrors protojson of common.v1.MetricDefinition.
+//
+// ADR-026 Phase 1 adds three optional oneof type_config arms — FilteredMean,
+// Composite, WindowedCount — which protojson emits at the top level (rather
+// than nested under `typeConfig`) because the oneof itself isn't named.
 type m5WireMetricDefinition struct {
 	MetricID               string  `json:"metricId"`
 	Name                   string  `json:"name"`
@@ -95,7 +99,45 @@ type m5WireMetricDefinition struct {
 	IsQoEMetric            bool    `json:"isQoeMetric,omitempty"`
 	CupedCovariateMetricID string  `json:"cupedCovariateMetricId,omitempty"`
 	MinimumDetectableEffect float64 `json:"minimumDetectableEffect,omitempty"`
+
+	// ADR-026 Phase 1 — oneof type_config arms. Exactly one of these is
+	// non-nil when a Phase 1 metric type is used; legacy 6 types leave all nil.
+	FilteredMean  *m5WireFilteredMeanConfig  `json:"filteredMean,omitempty"`
+	Composite     *m5WireCompositeConfig     `json:"composite,omitempty"`
+	WindowedCount *m5WireWindowedCountConfig `json:"windowedCount,omitempty"`
 }
+
+// m5WireFilteredMeanConfig mirrors protojson of common.v1.FilteredMeanConfig.
+// Populated when MetricDefinition.type == METRIC_TYPE_FILTERED_MEAN.
+type m5WireFilteredMeanConfig struct {
+	FilterSQL   string `json:"filterSql,omitempty"`
+	ValueColumn string `json:"valueColumn,omitempty"`
+}
+
+// m5WireCompositeConfig mirrors protojson of common.v1.CompositeConfig.
+// Populated when MetricDefinition.type == METRIC_TYPE_COMPOSITE.
+type m5WireCompositeConfig struct {
+	Operands []m5WireCompositeOperand `json:"operands,omitempty"`
+	Operator string                   `json:"operator,omitempty"` // e.g., "COMPOSITE_OPERATOR_WEIGHTED_SUM"
+}
+
+// m5WireCompositeOperand mirrors protojson of common.v1.CompositeOperand.
+type m5WireCompositeOperand struct {
+	MetricID string  `json:"metricId"`
+	Weight   float64 `json:"weight,omitempty"` // required > 0 for WEIGHTED_SUM
+}
+
+// m5WireWindowedCountConfig mirrors protojson of common.v1.WindowedCountConfig.
+// Populated when MetricDefinition.type == METRIC_TYPE_WINDOWED_COUNT.
+type m5WireWindowedCountConfig struct {
+	EventType   string `json:"eventType,omitempty"`
+	FilterSQL   string `json:"filterSql,omitempty"`
+	WindowHours int32  `json:"windowHours,omitempty"`
+}
+
+// m5CompositeOperatorPrefix is the proto enum prefix for CompositeOperator.
+// e.g., "COMPOSITE_OPERATOR_WEIGHTED_SUM" → "WEIGHTED_SUM".
+const m5CompositeOperatorPrefix = "COMPOSITE_OPERATOR_"
 
 // m5WireSurrogateModel mirrors protojson of common.v1.SurrogateModelConfig.
 type m5WireSurrogateModel struct {
@@ -544,6 +586,156 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Tests: ADR-026 Phase 1 oneof type_config arms — wire-format round-trip
+// ---------------------------------------------------------------------------
+
+// TestM3M5_WireFormat_FilteredMean verifies that a FILTERED_MEAN metric
+// round-trips through M5's protojson wire format with its FilteredMeanConfig
+// payload intact, and that M3's flat-field MetricConfig captures both
+// filter_sql and value_column.
+func TestM3M5_WireFormat_FilteredMean(t *testing.T) {
+	original := m5WireMetricDefinition{
+		MetricID: "mobile_long_view_avg_duration_ms",
+		Name:     "Mobile Long-View Avg Duration (ms)",
+		Type:     "METRIC_TYPE_FILTERED_MEAN",
+		// FILTERED_MEAN uses the source_event_type for the scan and
+		// AVGs value_column over rows passing filter_sql.
+		SourceEventType: "playback_heartbeat",
+		LowerIsBetter:   false,
+		FilteredMean: &m5WireFilteredMeanConfig{
+			FilterSQL:   "platform = 'mobile' AND duration_ms > 5000",
+			ValueColumn: "duration_ms",
+		},
+	}
+
+	// Round-trip via protojson wire bytes (M5 emits → M3 reads).
+	wire, err := json.Marshal(original)
+	require.NoError(t, err, "marshal to protojson wire format")
+
+	var decoded m5WireMetricDefinition
+	require.NoError(t, json.Unmarshal(wire, &decoded), "unmarshal protojson wire format")
+
+	assert.Equal(t, "METRIC_TYPE_FILTERED_MEAN", decoded.Type,
+		"type must survive protojson round-trip with full enum prefix")
+	require.NotNil(t, decoded.FilteredMean,
+		"FilteredMean oneof arm must survive protojson round-trip")
+	assert.Equal(t, "platform = 'mobile' AND duration_ms > 5000",
+		decoded.FilteredMean.FilterSQL,
+		"FilteredMeanConfig.filter_sql must survive round-trip byte-for-byte")
+	assert.Equal(t, "duration_ms", decoded.FilteredMean.ValueColumn,
+		"FilteredMeanConfig.value_column must survive round-trip byte-for-byte")
+	assert.Nil(t, decoded.Composite, "non-active oneof arms must remain nil")
+	assert.Nil(t, decoded.WindowedCount, "non-active oneof arms must remain nil")
+
+	// Flatten into M3's config view and assert the conversion picked up
+	// both new fields under their snake_case M3 names.
+	m3 := m5MetricToConfig(decoded)
+	assert.Equal(t, "FILTERED_MEAN", m3.Type,
+		"M3 strips METRIC_TYPE_ prefix from FILTERED_MEAN as for legacy types")
+	assert.Equal(t, "platform = 'mobile' AND duration_ms > 5000", m3.FilterSQL,
+		"M3 MetricConfig.filter_sql must be populated from the oneof arm")
+	assert.Equal(t, "duration_ms", m3.ValueColumn,
+		"M3 MetricConfig.value_column must be populated from the oneof arm")
+	assert.Equal(t, "playback_heartbeat", m3.SourceEventType,
+		"FILTERED_MEAN still needs source_event_type to identify the scan table")
+}
+
+// TestM3M5_WireFormat_Composite verifies a COMPOSITE metric (WEIGHTED_SUM
+// with two operands) round-trips through protojson with operand metric_ids,
+// weights, and the operator enum intact.
+func TestM3M5_WireFormat_Composite(t *testing.T) {
+	original := m5WireMetricDefinition{
+		MetricID: "engagement_quality_score",
+		Name:     "Engagement Quality Score",
+		Type:     "METRIC_TYPE_COMPOSITE",
+		Composite: &m5WireCompositeConfig{
+			Operator: "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+			Operands: []m5WireCompositeOperand{
+				{MetricID: "watch_time_minutes", Weight: 0.7},
+				{MetricID: "completion_rate", Weight: 0.3},
+			},
+		},
+	}
+
+	wire, err := json.Marshal(original)
+	require.NoError(t, err, "marshal to protojson wire format")
+
+	var decoded m5WireMetricDefinition
+	require.NoError(t, json.Unmarshal(wire, &decoded), "unmarshal protojson wire format")
+
+	assert.Equal(t, "METRIC_TYPE_COMPOSITE", decoded.Type)
+	require.NotNil(t, decoded.Composite,
+		"Composite oneof arm must survive protojson round-trip")
+	assert.Equal(t, "COMPOSITE_OPERATOR_WEIGHTED_SUM", decoded.Composite.Operator,
+		"CompositeConfig.operator enum must survive round-trip with full prefix")
+	require.Len(t, decoded.Composite.Operands, 2,
+		"both operands must survive round-trip (no array truncation)")
+	assert.Equal(t, "watch_time_minutes", decoded.Composite.Operands[0].MetricID)
+	assert.InDelta(t, 0.7, decoded.Composite.Operands[0].Weight, 1e-9,
+		"WEIGHTED_SUM operand weights must survive as float64")
+	assert.Equal(t, "completion_rate", decoded.Composite.Operands[1].MetricID)
+	assert.InDelta(t, 0.3, decoded.Composite.Operands[1].Weight, 1e-9)
+	assert.Nil(t, decoded.FilteredMean, "non-active oneof arms must remain nil")
+	assert.Nil(t, decoded.WindowedCount, "non-active oneof arms must remain nil")
+
+	// Flatten into M3's config view.
+	m3 := m5MetricToConfig(decoded)
+	assert.Equal(t, "COMPOSITE", m3.Type)
+	assert.Equal(t, "WEIGHTED_SUM", m3.Operator,
+		"M3 strips COMPOSITE_OPERATOR_ prefix to match the renderer's switch arms")
+	require.Len(t, m3.Operands, 2,
+		"M3 MetricConfig.operands must mirror the wire-format array length")
+	assert.Equal(t, "watch_time_minutes", m3.Operands[0].MetricID)
+	assert.InDelta(t, 0.7, m3.Operands[0].Weight, 1e-9)
+	assert.Equal(t, "completion_rate", m3.Operands[1].MetricID)
+	assert.InDelta(t, 0.3, m3.Operands[1].Weight, 1e-9)
+}
+
+// TestM3M5_WireFormat_WindowedCount verifies a WINDOWED_COUNT metric
+// round-trips through protojson with event_type, filter_sql, and window_hours
+// intact, and that M3's flat MetricConfig captures all three.
+func TestM3M5_WireFormat_WindowedCount(t *testing.T) {
+	original := m5WireMetricDefinition{
+		MetricID: "trial_signup_7d_count",
+		Name:     "Trial Signups within 7 days",
+		Type:     "METRIC_TYPE_WINDOWED_COUNT",
+		WindowedCount: &m5WireWindowedCountConfig{
+			EventType:   "trial_signup",
+			FilterSQL:   "country = 'US'",
+			WindowHours: 168, // 7 days
+		},
+	}
+
+	wire, err := json.Marshal(original)
+	require.NoError(t, err, "marshal to protojson wire format")
+
+	var decoded m5WireMetricDefinition
+	require.NoError(t, json.Unmarshal(wire, &decoded), "unmarshal protojson wire format")
+
+	assert.Equal(t, "METRIC_TYPE_WINDOWED_COUNT", decoded.Type)
+	require.NotNil(t, decoded.WindowedCount,
+		"WindowedCount oneof arm must survive protojson round-trip")
+	assert.Equal(t, "trial_signup", decoded.WindowedCount.EventType,
+		"WindowedCountConfig.event_type must survive round-trip")
+	assert.Equal(t, "country = 'US'", decoded.WindowedCount.FilterSQL,
+		"WindowedCountConfig.filter_sql must survive round-trip byte-for-byte")
+	assert.Equal(t, int32(168), decoded.WindowedCount.WindowHours,
+		"WindowedCountConfig.window_hours must survive as int32")
+	assert.Nil(t, decoded.FilteredMean, "non-active oneof arms must remain nil")
+	assert.Nil(t, decoded.Composite, "non-active oneof arms must remain nil")
+
+	// Flatten into M3's config view.
+	m3 := m5MetricToConfig(decoded)
+	assert.Equal(t, "WINDOWED_COUNT", m3.Type)
+	assert.Equal(t, "trial_signup", m3.EventType,
+		"M3 MetricConfig.event_type (distinct from source_event_type)")
+	assert.Equal(t, "country = 'US'", m3.FilterSQL,
+		"M3 MetricConfig.filter_sql is shared between FILTERED_MEAN and WINDOWED_COUNT")
+	assert.Equal(t, int32(168), m3.WindowHours,
+		"M3 MetricConfig.window_hours must preserve the int32 from the wire")
+}
+
 // TestM3M5_MetricWireToConfig_RatioFields verifies RATIO-specific fields map correctly.
 func TestM3M5_MetricWireToConfig_RatioFields(t *testing.T) {
 	wire := m5WireMetricDefinition{
@@ -925,7 +1117,7 @@ func m5ExperimentToConfig(m5 m5WireExperiment) config.ExperimentConfig {
 }
 
 func m5MetricToConfig(m5 m5WireMetricDefinition) config.MetricConfig {
-	return config.MetricConfig{
+	cfg := config.MetricConfig{
 		MetricID:               m5.MetricID,
 		Name:                   m5.Name,
 		Type:                   stripEnumPrefix(m5.Type, m5MetricTypePrefix),
@@ -938,6 +1130,31 @@ func m5MetricToConfig(m5 m5WireMetricDefinition) config.MetricConfig {
 		IsQoEMetric:            m5.IsQoEMetric,
 		CustomSQL:              m5.CustomSQL,
 	}
+
+	// ADR-026 Phase 1 — flatten the oneof type_config into M3's flat fields.
+	if m5.FilteredMean != nil {
+		cfg.FilterSQL = m5.FilteredMean.FilterSQL
+		cfg.ValueColumn = m5.FilteredMean.ValueColumn
+	}
+	if m5.Composite != nil {
+		cfg.Operator = stripEnumPrefix(m5.Composite.Operator, m5CompositeOperatorPrefix)
+		for _, op := range m5.Composite.Operands {
+			cfg.Operands = append(cfg.Operands, config.OperandConfig{
+				MetricID: op.MetricID,
+				Weight:   op.Weight,
+			})
+		}
+	}
+	if m5.WindowedCount != nil {
+		cfg.EventType = m5.WindowedCount.EventType
+		cfg.WindowHours = m5.WindowedCount.WindowHours
+		// WindowedCountConfig.filter_sql shares M3's flat filter_sql column.
+		if m5.WindowedCount.FilterSQL != "" {
+			cfg.FilterSQL = m5.WindowedCount.FilterSQL
+		}
+	}
+
+	return cfg
 }
 
 func m5SurrogateToConfig(m5 m5WireSurrogateModel) config.SurrogateModelConfig {
