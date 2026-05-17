@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -89,5 +90,31 @@ func TestRegistry_WalkProducesEveryService(t *testing.T) {
 	}
 	if got := len(mocks.byType("gcp:servicedirectory/service:Service")); got != 9 {
 		t.Errorf("expected 9 Service Directory services registered, got %d", got)
+	}
+}
+
+// TestRegistry_WalkRejectsDuplicateKeys guards against the silent-overwrite
+// failure mode where a copy-paste mistake in the registry would create two
+// Cloud Run services under the same key — the second entry would clobber the
+// first in the returned map but both factory calls would have already run.
+// Walk now fails fast on the duplicate.
+func TestRegistry_WalkRejectsDuplicateKeys(t *testing.T) {
+	mocks := &scopedMocks{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		registry := []RegistryEntry{
+			{Key: "m3", Factory: NewM3Metrics},
+			{Key: "m3", Factory: NewM3Metrics}, // duplicate key — should fail
+		}
+		_, err := Walk(ctx, scopedCfg(), scopedInputs(), fullStageOutputs(), registry)
+		return err
+	}, pulumi.WithMocks("kaizen", "dev", mocks))
+	if err == nil {
+		t.Fatal("Walk accepted duplicate registry keys; expected an error")
+	}
+	if !strings.Contains(err.Error(), "duplicate registry key") {
+		t.Errorf("error = %q, want substring \"duplicate registry key\"", err.Error())
+	}
+	if !strings.Contains(err.Error(), `"m3"`) {
+		t.Errorf("error = %q, should mention the duplicated key %q", err.Error(), "m3")
 	}
 }

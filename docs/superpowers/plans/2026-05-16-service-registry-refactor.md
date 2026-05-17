@@ -12,6 +12,24 @@
 
 **Branch:** `agent-4/refactor/542-service-registry`
 
+> **⚠️ Implementation note (added post-execution):** This plan was authored before
+> execution. Three snippets in it diverged from what landed in PR #546 — in all
+> three cases the **PR is canonical, not the plan**:
+>
+> 1. **Task 1 `deps.go`** had an unused `pulumi` import — dropped during execution.
+> 2. **Task 11 / 13 registry entries** show `{Key: "canary", Factory: ...}` but
+>    main's `endpoints["preview-canary"]` key is the canonical service name; the
+>    code uses `"preview-canary"`.
+> 3. **Task 4 M6 factory** sketched `M4B_POLICY_ENDPOINT` wired to
+>    `inputs.ServiceDirectoryNamespaceID`, but main actually reads
+>    `m4bOut.Endpoint`. The M6 factory takes `m4bEndpoint pulumi.StringInput`
+>    as a 5th parameter (same closure-capture pattern as M1) — the registry
+>    wraps both M1 and M6 in closures.
+>
+> If you're reading this plan to learn the *architecture*, it's accurate. If
+> you're cross-referencing code, read PR #546 / the final commits on
+> `agent-4/refactor/542-service-registry` instead.
+
 ---
 
 ## Authoritative source snapshots
