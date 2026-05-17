@@ -205,6 +205,13 @@ message Experiment {
 
   // EwL classification. Set by M5 at CONCLUDED→ARCHIVED transition (ADR-019).
   ExperimentLearning learning = 32;
+
+  // ADR-027: TOST equivalence testing configuration. When set, M5 validates
+  // at creation (delta > 0; MEAN/RATIO primary metric if delta_relative set)
+  // and M4a runs the Two One-Sided Tests procedure on the primary metric,
+  // populating MetricResult.equivalence_result. When unset, no equivalence
+  // test is performed and the standard superiority test alone is reported.
+  EquivalenceTestConfig equivalence_test = 33;
 }
 
 // SyntheticControlMethod selects the SCM algorithm M4a applies (ADR-023).
@@ -316,6 +323,29 @@ message VarianceReductionConfig {
   // If false, use standard fixed-horizon CUPED adjustment.
   // Default true.
   bool use_avlm = 3;
+}
+
+// ADR-027: TOST equivalence test configuration.
+// Drives the Two One-Sided Tests procedure for proving a treatment is
+// *equivalent* to control within ±delta (in the metric's natural units).
+// Used by M4a for infrastructure migration experiments where the business
+// question is "safe to ship" rather than "better than control."
+// Carried on Experiment (field 33) so M5 validates at creation and M4a
+// reads it at analysis time; also overridable per-run via RunAnalysisRequest.
+message EquivalenceTestConfig {
+  // Equivalence margin in the metric's natural units. Must be > 0.
+  // Treatment is declared equivalent if the effect lies within [-delta, +delta].
+  double delta = 1;
+  // Optional: express delta as a fraction of the control mean
+  // (e.g., 0.02 = "within 2% of control"). When set, M4a recomputes delta
+  // at analysis time as `delta_relative * control_mean` and uses that in
+  // place of the absolute value above. Only meaningful for MEAN / RATIO metrics.
+  optional double delta_relative = 2;
+  // Per-side significance level. Typical value 0.05 yields a 90% TOST CI.
+  // Each one-sided test is performed at this α; equivalence is declared iff
+  // both tests reject, which is equivalent to the (1 - 2α) CI lying entirely
+  // within (-delta, +delta).
+  double alpha = 3;
 }
 
 // AnnualizedImpact projects the annual business value of a concluded experiment.
