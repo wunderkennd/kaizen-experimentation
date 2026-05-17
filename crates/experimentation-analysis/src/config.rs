@@ -22,7 +22,7 @@ impl AnalysisConfig {
     /// Load configuration from environment variables with sensible defaults.
     pub fn from_env() -> Self {
         Self {
-            grpc_addr: std::env::var("ANALYSIS_GRPC_ADDR").unwrap_or_else(|_| "[::1]:50055".into()),
+            grpc_addr: std::env::var("ANALYSIS_GRPC_ADDR").unwrap_or_else(|_| "[::1]:50053".into()),
             delta_lake_path: std::env::var("DELTA_LAKE_PATH")
                 .unwrap_or_else(|_| "/tmp/delta".into()),
             default_alpha: parse_env("ANALYSIS_DEFAULT_ALPHA", 0.05),
