@@ -1924,6 +1924,7 @@ dependencies = [
  "prost 0.13.5",
  "prost-types",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "sqlx",

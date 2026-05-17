@@ -1067,6 +1067,185 @@ func TestContract_DataShape_UserLevelGranularity(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Contract: delta.metric_summaries — ADR-026 Phase 1 metric types
+// Each new template (FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT) must project
+// the same canonical column set M4a's downstream consumers read:
+//   experiment_id, user_id, variant_id, metric_id, metric_value, computation_date
+// Per-template assertions also check the type-specific aggregation function.
+// ---------------------------------------------------------------------------
+
+func TestContract_MetricSummaries_FilteredMeanTemplate(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderFilteredMean(spark.TemplateParams{
+		ExperimentID:    "exp-1",
+		MetricID:        "mobile_long_view_avg_duration_ms",
+		SourceEventType: "playback_heartbeat",
+		FilterSQL:       "platform = 'mobile' AND duration_ms > 5000",
+		ValueColumn:     "duration_ms",
+		ComputationDate: "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "filtered_mean", cols, metricSummariesRequired)
+	allAllowed := append(metricSummariesRequired, metricSummariesOptional...)
+	assertNoExtraColumns(t, "filtered_mean", cols, allAllowed)
+
+	// FILTERED_MEAN aggregates the configured value_column via AVG().
+	// M4a expects per-user mean as DOUBLE, identical to MEAN's contract.
+	assert.Contains(t, strings.ToUpper(sql), "AVG(",
+		"filtered_mean template must use AVG() — M4a expects per-user mean as DOUBLE")
+	// The filter_sql fragment must appear in the rendered WHERE clause; if it
+	// doesn't, the filter never actually applies and the metric silently
+	// becomes a plain MEAN.
+	assert.Contains(t, sql, "platform = 'mobile' AND duration_ms > 5000",
+		"filtered_mean template must inline the validated filter_sql into WHERE")
+	// The renderer interpolates the column name unquoted — assert it is present
+	// so a column-rename regression is caught here, not at Spark runtime.
+	assert.Contains(t, sql, "duration_ms",
+		"filtered_mean template must reference value_column in the AVG()")
+}
+
+func TestContract_MetricSummaries_CompositeTemplate(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderComposite(spark.TemplateParams{
+		ExperimentID: "exp-1",
+		MetricID:     "engagement_quality_score",
+		Operator:     "WEIGHTED_SUM",
+		Operands: []spark.OperandParam{
+			{MetricID: "watch_time_minutes", Weight: 0.7},
+			{MetricID: "completion_rate", Weight: 0.3},
+		},
+		ComputationDate: "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "composite", cols, metricSummariesRequired)
+	allAllowed := append(metricSummariesRequired, metricSummariesOptional...)
+	assertNoExtraColumns(t, "composite", cols, allAllowed)
+
+	// COMPOSITE reads pre-computed per-user values from delta.metric_summaries —
+	// it must NOT touch delta.metric_events (that would be re-aggregation).
+	assert.Contains(t, sql, "delta.metric_summaries",
+		"composite template must read pre-aggregated values from delta.metric_summaries")
+	assert.NotContains(t, sql, "delta.metric_events",
+		"composite template must not re-scan raw events (operands are already per-user)")
+
+	// WEIGHTED_SUM must inline the operand weights into the metric_value expression.
+	// If a weight is dropped, the metric silently becomes ADD and M4a's analysis
+	// will mis-attribute effect size.
+	assert.Contains(t, sql, "0.7",
+		"composite WEIGHTED_SUM must inline operand[0].weight (0.7) into metric_value")
+	assert.Contains(t, sql, "0.3",
+		"composite WEIGHTED_SUM must inline operand[1].weight (0.3) into metric_value")
+	// Both operand metric_ids must appear so the IN(...) scan and pivot reference them.
+	assert.Contains(t, sql, "watch_time_minutes",
+		"composite must reference operand[0].metric_id")
+	assert.Contains(t, sql, "completion_rate",
+		"composite must reference operand[1].metric_id")
+}
+
+func TestContract_MetricSummaries_WindowedCountTemplate(t *testing.T) {
+	r := newRenderer(t)
+	sql, err := r.RenderWindowedCount(spark.TemplateParams{
+		ExperimentID:    "exp-1",
+		MetricID:        "trial_signup_7d_count",
+		EventType:       "trial_signup",
+		WindowHours:     168, // 7 days
+		ComputationDate: "2024-01-15",
+	})
+	require.NoError(t, err)
+
+	cols := extractSQLColumns(sql)
+	assertColumnsPresent(t, "windowed_count", cols, metricSummariesRequired)
+	allAllowed := append(metricSummariesRequired, metricSummariesOptional...)
+	assertNoExtraColumns(t, "windowed_count", cols, allAllowed)
+
+	// WINDOWED_COUNT must use COUNT() and CAST to DOUBLE so M4a's f64 slices
+	// see uniform types regardless of which underlying metric type produced them.
+	assert.Contains(t, strings.ToUpper(sql), "COUNT(",
+		"windowed_count template must use COUNT() over windowed_events")
+
+	// The exposure-anchored window is the defining property of this metric type.
+	// If the INTERVAL clause regresses, the metric silently becomes a plain COUNT
+	// over all post-exposure events with no upper bound.
+	assert.Contains(t, sql, "exposure_ts",
+		"windowed_count must anchor the window at per-user exposure_ts")
+	assert.Contains(t, sql, "INTERVAL 168 HOURS",
+		"windowed_count must inline window_hours into the SQL INTERVAL")
+	assert.Contains(t, sql, "'trial_signup'",
+		"windowed_count must filter delta.metric_events by the configured event_type")
+}
+
+// TestContract_NewMetricTypes_RenderForType verifies the dispatcher routes
+// each new MetricType enum value to the right template and the resulting SQL
+// still satisfies the canonical metric_summaries column contract. This guards
+// against a future renderer regression where RenderForType silently falls back
+// to a different template arm.
+func TestContract_NewMetricTypes_RenderForType(t *testing.T) {
+	r := newRenderer(t)
+
+	tests := []struct {
+		name     string
+		params   spark.TemplateParams
+		typeName string
+	}{
+		{
+			name:     "FILTERED_MEAN",
+			typeName: "FILTERED_MEAN",
+			params: spark.TemplateParams{
+				ExperimentID:    "exp-1",
+				MetricID:        "m1",
+				SourceEventType: "playback_heartbeat",
+				FilterSQL:       "platform = 'mobile'",
+				ValueColumn:     "duration_ms",
+				ComputationDate: "2024-01-15",
+			},
+		},
+		{
+			name:     "COMPOSITE",
+			typeName: "COMPOSITE",
+			params: spark.TemplateParams{
+				ExperimentID: "exp-1",
+				MetricID:     "m2",
+				Operator:     "ADD",
+				Operands: []spark.OperandParam{
+					{MetricID: "op_a"},
+					{MetricID: "op_b"},
+				},
+				ComputationDate: "2024-01-15",
+			},
+		},
+		{
+			name:     "WINDOWED_COUNT",
+			typeName: "WINDOWED_COUNT",
+			params: spark.TemplateParams{
+				ExperimentID:    "exp-1",
+				MetricID:        "m3",
+				EventType:       "trial_signup",
+				WindowHours:     24,
+				ComputationDate: "2024-01-15",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sql, err := r.RenderForType(tc.typeName, tc.params)
+			require.NoError(t, err, "RenderForType must accept %s", tc.typeName)
+
+			cols := extractSQLColumns(sql)
+			assertColumnsPresent(t, tc.typeName, cols, metricSummariesRequired)
+			// Each rendered SQL must label the metric_id with the configured value
+			// so M4a's per-metric groupings join correctly.
+			assert.Equal(t, tc.params.MetricID, extractMetricIDFromSQL(sql),
+				"%s: rendered SQL must emit 'metric_id = %q'", tc.typeName, tc.params.MetricID)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Additional helpers for Gap 2–4 tests
 // ---------------------------------------------------------------------------
 
