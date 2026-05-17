@@ -92,6 +92,9 @@ See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHA
 **New ADRs (Proposed)**:
 - **ADR-026** (`docs/adrs/026-custom-metrics-layer.md`) — Custom metrics definition layer (composite / derived / joined metrics beyond the six built-in types). Impact: M5, M3, M4a.
 - **ADR-027** (`docs/adrs/027-tost-equivalence-testing.md`) — Two One-Sided Tests for proving equivalence (infra migrations, refactor validation). Impact: M4a, M5, M6. Core impl landed (#443); see `crates/experimentation-stats/src/tost.rs`.
+- **ADR-028** (`docs/adrs/028-m4b-shadow-inference.md`) — M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation). Impact: M4b, M4a, M5, M6.
+- **ADR-029** (`docs/adrs/029-cross-modal-score-calibration.md`) — Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce). Introduces a new `experimentation-calibration` Rust crate owned by Agent-4 and opens cluster **G — Personalization Orchestration**. Impact: M4a, M4b, M5, Personalization service.
+- **ADR-030** (`docs/adrs/030-shadow-experiment-mode.md`) — Shadow mode flag on experiments — run candidate variants on production traffic without user exposure. Impact: M1, M4a, M4b, M5, M6.
 
 **Infrastructure sprint (Pulumi + Go on AWS)**: `infra/` contains Pulumi stacks (`Pulumi.{dev,staging,prod}.yaml`) and a full Go test suite (`fullstack_test.go`). Sprint I.0 (all 13 modules) and I.1/I.2 (wiring + hardening) merged; ECR repos exist for all 9 Kaizen services.
 
