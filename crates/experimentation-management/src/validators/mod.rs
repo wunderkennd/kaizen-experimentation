@@ -23,6 +23,7 @@ use experimentation_proto::experimentation::common::v1::{
 };
 
 pub mod composite_cycle;
+pub mod filter_sql;
 
 // ---------------------------------------------------------------------------
 // Shared identifier regex (used by B2 WINDOWED_COUNT.event_type and, when B3
@@ -345,10 +346,50 @@ fn composite_cfg(m: &MetricDefinition) -> Option<&CompositeConfig> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// FILTERED_MEAN validator (ADR-026 Phase 1, B3)
+// ---------------------------------------------------------------------------
+//
+// Rules enforced here:
+//   * `filtered_mean` oneof arm must be set (callers that pick
+//     `MetricType::FilteredMean` but leave `type_config` empty are misusing
+//     the API).
+//   * `value_column` is a bare lowercase identifier — same shape as B2's
+//     `event_type`. Reuses `filter_sql::is_identifier` so the two paths
+//     can't drift.
+//   * `filter_sql` is REQUIRED — FILTERED_MEAN with an empty filter is just
+//     MEAN; we send the caller to `METRIC_TYPE_MEAN` rather than silently
+//     accepting.
+//   * `filter_sql` passes the positive allowlist in
+//     `filter_sql::validate_filter_sql` (operators / identifiers / literals
+//     only; no functions, subqueries, comments, semicolons, LIKE/BETWEEN/etc.).
 #[allow(clippy::result_large_err)]
-fn validate_filtered_mean(_cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<Status>> {
-    // Filled in by B3 (value_column regex + filter_sql allowlist parser).
-    Ok(())
+fn validate_filtered_mean(cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<Status>> {
+    let cfg = cfg.ok_or_else(|| {
+        Box::new(Status::invalid_argument(
+            "FILTERED_MEAN metric requires filtered_mean config (type_config.filtered_mean)",
+        ))
+    })?;
+
+    if cfg.value_column.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "FILTERED_MEAN requires value_column",
+        )));
+    }
+    if !filter_sql::is_identifier(&cfg.value_column) {
+        return Err(Box::new(Status::invalid_argument(format!(
+            "FILTERED_MEAN value_column must be a bare lowercase identifier matching ^[a-z_][a-z0-9_]*$ (got '{}')",
+            cfg.value_column
+        ))));
+    }
+
+    if cfg.filter_sql.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "filter_sql is required for FILTERED_MEAN; use METRIC_TYPE_MEAN if no filter is needed",
+        )));
+    }
+
+    filter_sql::validate_filter_sql(&cfg.filter_sql)
 }
 
 // ---------------------------------------------------------------------------
@@ -1050,5 +1091,91 @@ mod tests {
                 Err(e) => e,
             }
         }
+    }
+
+    // ---- FILTERED_MEAN validator (B3) -------------------------------------
+
+    fn filtered_mean_metric(value_column: &str, filter_sql: &str) -> MetricDefinition {
+        let mut m = make_metric("fm", "fm", MetricType::FilteredMean);
+        m.type_config = Some(MetricTypeConfig::FilteredMean(FilteredMeanConfig {
+            filter_sql: filter_sql.into(),
+            value_column: value_column.into(),
+        }));
+        m
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_missing_config_rejected() {
+        let mut m = make_metric("fm", "fm", MetricType::FilteredMean);
+        m.type_config = None;
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("filtered_mean"));
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_empty_value_column_rejected() {
+        let m = filtered_mean_metric("", "platform = 'mobile'");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("value_column"));
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_invalid_value_column_rejected() {
+        for bad in ["Duration_ms", "1col", "duration ms", "duration-ms", "DURATION"] {
+            let m = filtered_mean_metric(bad, "platform = 'mobile'");
+            let err = validate_metric_definition(&m, &empty_lookup())
+                .await
+                .unwrap_err_or_else_panic(bad);
+            assert_eq!(err.code(), tonic::Code::InvalidArgument, "expected reject for {bad:?}");
+            assert!(
+                err.message().contains("value_column"),
+                "message for {bad:?} should mention value_column: {}",
+                err.message()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_empty_filter_sql_rejected() {
+        let m = filtered_mean_metric("duration_ms", "");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(
+            err.message().contains("METRIC_TYPE_MEAN"),
+            "empty filter_sql rejection must guide caller to MEAN: {}",
+            err.message()
+        );
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_valid_accepts() {
+        let m = filtered_mean_metric(
+            "duration_ms",
+            "platform = 'mobile' AND duration_ms > 5000",
+        );
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_filter_sql_bad_token_rejected() {
+        // LIKE is not in the operator allowlist (Phase 1 decision).
+        let m = filtered_mean_metric("duration_ms", "platform LIKE 'mobile%'");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(
+            err.message().to_ascii_lowercase().contains("disallowed")
+                || err.message().contains("LIKE"),
+            "expected allowlist-rejection message, got: {}",
+            err.message()
+        );
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_filter_sql_subquery_rejected() {
+        let m = filtered_mean_metric("duration_ms", "user_id IN (SELECT id FROM users)");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert!(err.message().contains("subqueries"));
     }
 }
