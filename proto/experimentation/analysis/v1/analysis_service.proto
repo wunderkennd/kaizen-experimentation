@@ -140,6 +140,11 @@ message EquivalenceResult {
   double control_mean = 11;
   // Treatment group mean (raw, pre-CUPED).
   double treatment_mean = 12;
+  // Estimated power to declare equivalence at the realized standard error,
+  // given delta and the canonical migration design assumption (true
+  // difference = 0). In [0, 1]. Computed by experimentation-stats; the M6
+  // power indicator renders this value (no statistics in TypeScript).
+  double achieved_power = 13;
 }
 
 message SequentialResult {
