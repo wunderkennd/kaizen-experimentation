@@ -173,7 +173,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | --- | --- |
 | This file (agent context) | `CLAUDE.md` (repo root) |
 | Design document | `docs/design/design_doc_v7.0.md` |
-| ADRs (001–027) | `docs/adrs/` |
+| ADRs (001–030) | `docs/adrs/` |
 | ADR index | `docs/adrs/README.md` |
 | Agent definitions (modules) | `.multiclaude/agents/agent-N-*.md` |
 | Agent definitions (infra) | `.multiclaude/agents/infra-{1..5}-*.md` |

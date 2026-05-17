@@ -131,15 +131,24 @@ pub struct JointCalibrator {
 impl JointCalibrator {
     pub fn calibrate_slate(&self, items: &[RawSlateItem]) -> Vec<CalibratedSlateItem> {
         items.iter().map(|item| {
-            let nev = self.calibrators[&item.modality]
-                .calibrate_to_nev(item.raw_score, &item.context);
-            let weighted = nev * self.modality_weights[&item.modality];
+            // Bind the calibrator + weight once per item. The slate path
+            // deliberately bypasses the trait's `calibrate_to_nev` convenience
+            // method and inlines the two-step (calibrate_raw → to_nev) so the
+            // native_calibrated value can be both surfaced in the output AND
+            // reused for to_nev without recomputing — one `calibrate_raw` call
+            // per item, not two.
+            let calibrator = &self.calibrators[&item.modality];
+            let weight = self.modality_weights[&item.modality];
+
+            let native = calibrator.calibrate_raw(item.raw_score, &item.context);
+            let nev = calibrator.to_nev(native, &item.context);
+            let weighted = nev * weight;
             assert_finite!(weighted);  // mandatory per CLAUDE.md fail-fast rule
+
             CalibratedSlateItem {
                 item_id: item.item_id.clone(),
                 modality: item.modality.clone(),
-                native_calibrated: self.calibrators[&item.modality]
-                    .calibrate_raw(item.raw_score, &item.context),
+                native_calibrated: native,
                 nev,
                 weighted_nev: weighted,
             }
