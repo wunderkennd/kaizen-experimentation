@@ -406,13 +406,11 @@ fn validate_filtered_mean(cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<St
 //     exists.
 //   * `window_hours`: in `(0, 8760]`. 8760 = 24 * 365 = 1 year cap.
 //   * `filter_sql`: optional (empty string is the proto3 default and means
-//     "no filter"). When non-empty, B3's allowlist parser is the source of
-//     truth. Until B3 lands, we fall back to a 4096-byte sanity bound so the
-//     field cannot be abused to push arbitrarily large payloads through the
-//     gRPC handler. C1's end-to-end test will catch the gap once B3 ships.
+//     "no filter"). When non-empty, B3's positive allowlist parser
+//     (`filter_sql::validate_filter_sql`) is the source of truth — operator
+//     allowlist, length cap, comment/semicolon/subquery/function-call rejects.
 
 const WINDOWED_COUNT_MAX_HOURS: i32 = 8760;
-const FILTER_SQL_MAX_LEN_FALLBACK: usize = 4096;
 
 #[allow(clippy::result_large_err)]
 fn validate_windowed_count(cfg: Option<&WindowedCountConfig>) -> Result<(), Box<Status>> {
@@ -446,16 +444,11 @@ fn validate_windowed_count(cfg: Option<&WindowedCountConfig>) -> Result<(), Box<
     }
 
     if !cfg.filter_sql.is_empty() {
-        // TODO(B3): replace with filter_sql allowlist parser
-        // (validators::filter_sql::validate_filter_sql). Until B3 lands, the
-        // bound below is a sanity guard, not a real semantic check.
-        if cfg.filter_sql.len() >= FILTER_SQL_MAX_LEN_FALLBACK {
-            return Err(Box::new(Status::invalid_argument(format!(
-                "windowed_count.filter_sql length must be < {} bytes (got {})",
-                FILTER_SQL_MAX_LEN_FALLBACK,
-                cfg.filter_sql.len()
-            ))));
-        }
+        // Delegate to B3's positive-allowlist parser. Identical semantics to
+        // FILTERED_MEAN.filter_sql: operator allowlist (=/!=/</<=/>/>=, AND/OR/
+        // NOT/IN/IS NULL/IS NOT NULL), length cap (4096), and explicit rejects
+        // for semicolons, comments, function calls, and subqueries.
+        filter_sql::validate_filter_sql(&cfg.filter_sql)?;
     }
 
     Ok(())
@@ -1062,20 +1055,57 @@ mod tests {
 
     #[tokio::test]
     async fn windowed_count_with_filter_sql_within_size_bound_accepted() {
-        // Short filter; B3 will tighten this with the allowlist parser later.
+        // B3 allowlist accepts simple `<ident> = '<literal>'` predicates.
         let m = windowed_count_metric("page_view", 24, "platform = 'mobile'");
         assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
     }
 
     #[tokio::test]
     async fn windowed_count_with_oversized_filter_sql_rejected() {
-        // 4096-byte sanity bound (fallback until B3 lands). Exactly at the
-        // cap is rejected; anything below is accepted.
-        let big = "a".repeat(FILTER_SQL_MAX_LEN_FALLBACK);
+        // B3 enforces a 4096-char cap on filter_sql via validate_filter_sql.
+        // 4097 chars of any otherwise-valid identifier overflows the cap.
+        let big = "a".repeat(4097);
         let m = windowed_count_metric("page_view", 24, &big);
         let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
-        assert!(err.message().contains("filter_sql"));
+        // B3's message reads "filter_sql exceeds 4096 character limit".
+        assert!(
+            err.message().contains("4096") || err.message().contains("limit"),
+            "expected length-limit error, got: {}",
+            err.message()
+        );
+    }
+
+    #[tokio::test]
+    async fn windowed_count_with_disallowed_filter_sql_rejected() {
+        // Proves the B2 → B3 wiring: a subquery in WINDOWED_COUNT.filter_sql
+        // must be rejected by the same allowlist that guards FILTERED_MEAN.
+        // (Length alone — the previous fallback — would not have caught this.)
+        let m = windowed_count_metric(
+            "page_view",
+            24,
+            "user_id IN (SELECT id FROM banned_users)",
+        );
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(
+            err.message().contains("subqueries"),
+            "expected subquery rejection from B3, got: {}",
+            err.message()
+        );
+    }
+
+    #[tokio::test]
+    async fn windowed_count_with_function_call_filter_sql_rejected() {
+        // Second wiring proof: function calls reach the B3 allowlist.
+        let m = windowed_count_metric("page_view", 24, "LOWER(country) = 'us'");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(
+            err.message().contains("function call"),
+            "expected function-call rejection from B3, got: {}",
+            err.message()
+        );
     }
 
     // Small helper: panic with a descriptive message inside a loop sub-case.
