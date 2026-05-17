@@ -14,10 +14,47 @@
 use tonic::Status;
 
 use experimentation_proto::experimentation::common::v1::{
-    metric_definition::TypeConfig as MetricTypeConfig, Experiment, ExperimentType,
-    FilteredMeanConfig, MetaExperimentConfig, MetricDefinition, MetricType,
-    QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
+    metric_definition::TypeConfig as MetricTypeConfig, CompositeConfig, CompositeOperator,
+    Experiment, ExperimentType, FilteredMeanConfig, MetaExperimentConfig, MetricDefinition,
+    MetricType, QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
 };
+
+pub mod composite_cycle;
+
+use crate::store::{ManagementStore, StoreError};
+
+// ---------------------------------------------------------------------------
+// MetricLookup — the minimal surface the COMPOSITE validator needs.
+//
+// Both the PG-backed `ManagementStore` and the in-memory `MetricStore`
+// (`contract_test_support`) implement this so `validate_metric_definition`
+// can be called from either side without leaking storage details into the
+// validator. Async because the PG implementation issues queries; the
+// in-memory side just wraps a `RwLock<HashMap>` read.
+// ---------------------------------------------------------------------------
+
+#[tonic::async_trait]
+pub trait MetricLookup: Send + Sync {
+    /// Returns true iff *every* id in `metric_ids` exists in the store.
+    async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError>;
+
+    /// Walk a COMPOSITE row and return its direct operand `metric_id`s in
+    /// declaration order. Implementations should return `StoreError::NotFound`
+    /// when the metric does not exist (the cycle detector treats that as the
+    /// "not-yet-inserted root" case and skips the lookup).
+    async fn get_composite_operands(&self, metric_id: &str) -> Result<Vec<String>, StoreError>;
+}
+
+#[tonic::async_trait]
+impl MetricLookup for ManagementStore {
+    async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError> {
+        ManagementStore::exists_all_metrics(self, metric_ids).await
+    }
+
+    async fn get_composite_operands(&self, metric_id: &str) -> Result<Vec<String>, StoreError> {
+        ManagementStore::get_composite_operands(self, metric_id).await
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -237,13 +274,16 @@ fn validate_quasi_config(cfg: &QuasiExperimentConfig) -> Result<(), Box<Status>>
 // Phase 2 (#436) when the M6 UI fully owns those inputs.
 
 #[allow(clippy::result_large_err)]
-pub fn validate_metric_definition(m: &MetricDefinition) -> Result<(), Box<Status>> {
+pub async fn validate_metric_definition<L: MetricLookup + ?Sized>(
+    m: &MetricDefinition,
+    lookup: &L,
+) -> Result<(), Box<Status>> {
     validate_metric_common_fields(m)?;
     match m.r#type() {
         MetricType::FilteredMean => validate_filtered_mean(filtered_mean_cfg(m)),
-        // COMPOSITE rules (arity, weight, cycle detection) land in B1, which
-        // will also refactor this dispatch to async + take a `&ManagementStore`.
-        MetricType::Composite => Ok(()),
+        MetricType::Composite => {
+            validate_composite(composite_cfg(m), &m.metric_id, lookup).await
+        }
         MetricType::WindowedCount => validate_windowed_count(windowed_count_cfg(m)),
         // Legacy 6 types (MEAN, PROPORTION, RATIO, COUNT, PERCENTILE, CUSTOM)
         // and UNSPECIFIED fall through — existing flat-field validation, if
@@ -284,6 +324,13 @@ fn windowed_count_cfg(m: &MetricDefinition) -> Option<&WindowedCountConfig> {
     }
 }
 
+fn composite_cfg(m: &MetricDefinition) -> Option<&CompositeConfig> {
+    match m.type_config.as_ref()? {
+        MetricTypeConfig::Composite(cfg) => Some(cfg),
+        _ => None,
+    }
+}
+
 #[allow(clippy::result_large_err)]
 fn validate_filtered_mean(_cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<Status>> {
     // Filled in by B3 (value_column regex + filter_sql allowlist parser).
@@ -294,6 +341,116 @@ fn validate_filtered_mean(_cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<S
 fn validate_windowed_count(_cfg: Option<&WindowedCountConfig>) -> Result<(), Box<Status>> {
     // Filled in by B2 (event_type regex + window_hours range + filter_sql).
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// COMPOSITE validator (ADR-026 Phase 1, B1)
+// ---------------------------------------------------------------------------
+//
+// Rules enforced here:
+//   * `composite` oneof arm must be set (callers that pick `MetricType::Composite`
+//     but leave `type_config` empty are misusing the API).
+//   * `operator` must not be UNSPECIFIED.
+//   * Operand arity:
+//       ADD / MULTIPLY / WEIGHTED_SUM: >= 2 operands
+//       SUBTRACT / DIVIDE:             exactly 2 operands
+//   * WEIGHTED_SUM operands must all have `weight > 0`. Other operators ignore
+//     the weight field (we do not require it to be zero — proto3 has no way to
+//     mean "unset" for scalars and clients legitimately leave it at default).
+//   * Every operand `metric_id` exists in the store (single roundtrip via
+//     `exists_all_metrics`).
+//   * No reference cycle, walked via `composite_cycle::check_no_cycles` with a
+//     hard depth cap of 5 (see `DEFAULT_DEPTH_CAP`).
+
+const DEFAULT_DEPTH_CAP: usize = 5;
+
+#[allow(clippy::result_large_err)]
+async fn validate_composite<L: MetricLookup + ?Sized>(
+    cfg: Option<&CompositeConfig>,
+    this_metric_id: &str,
+    lookup: &L,
+) -> Result<(), Box<Status>> {
+    let cfg = cfg.ok_or_else(|| {
+        Box::new(Status::invalid_argument(
+            "COMPOSITE metric requires composite config (type_config.composite)",
+        ))
+    })?;
+
+    let op = CompositeOperator::try_from(cfg.operator).unwrap_or(CompositeOperator::Unspecified);
+    if op == CompositeOperator::Unspecified {
+        return Err(Box::new(Status::invalid_argument(
+            "COMPOSITE metric requires a valid operator (got UNSPECIFIED)",
+        )));
+    }
+
+    let n = cfg.operands.len();
+    match op {
+        CompositeOperator::Add | CompositeOperator::Multiply | CompositeOperator::WeightedSum => {
+            if n < 2 {
+                return Err(Box::new(Status::invalid_argument(format!(
+                    "COMPOSITE {:?} requires at least 2 operands (got {})",
+                    op, n
+                ))));
+            }
+        }
+        CompositeOperator::Subtract | CompositeOperator::Divide => {
+            if n != 2 {
+                return Err(Box::new(Status::invalid_argument(format!(
+                    "COMPOSITE {:?} requires exactly 2 operands (got {})",
+                    op, n
+                ))));
+            }
+        }
+        CompositeOperator::Unspecified => unreachable!("already rejected above"),
+    }
+
+    // WEIGHTED_SUM: every operand needs a strictly-positive weight.
+    if op == CompositeOperator::WeightedSum {
+        for operand in &cfg.operands {
+            if !operand.weight.is_finite() || operand.weight <= 0.0 {
+                return Err(Box::new(Status::invalid_argument(format!(
+                    "COMPOSITE WEIGHTED_SUM operand '{}' has invalid weight {} (must be > 0)",
+                    operand.metric_id, operand.weight
+                ))));
+            }
+        }
+    }
+
+    // Reject empty / self-referential operand ids before any store round trips.
+    for operand in &cfg.operands {
+        if operand.metric_id.trim().is_empty() {
+            return Err(Box::new(Status::invalid_argument(
+                "COMPOSITE operand metric_id must not be empty",
+            )));
+        }
+    }
+
+    // Operand existence — single round trip.
+    let operand_ids: Vec<&str> = cfg.operands.iter().map(|o| o.metric_id.as_str()).collect();
+    let all_present = lookup
+        .exists_all_metrics(&operand_ids)
+        .await
+        .map_err(store_err_to_status)?;
+    if !all_present {
+        return Err(Box::new(Status::invalid_argument(format!(
+            "COMPOSITE metric '{}' references operands that do not exist",
+            this_metric_id
+        ))));
+    }
+
+    // Cycle + depth cap.
+    let owned_ids: Vec<String> = cfg.operands.iter().map(|o| o.metric_id.clone()).collect();
+    composite_cycle::check_no_cycles(this_metric_id, &owned_ids, lookup, DEFAULT_DEPTH_CAP).await?;
+
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+fn store_err_to_status(e: StoreError) -> Box<Status> {
+    Box::new(Status::internal(format!(
+        "metric lookup failed: {}",
+        e
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -425,12 +582,13 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // MetricDefinition skeleton (ADR-026 Phase 1)
+    // MetricDefinition validators (ADR-026 Phase 1)
     // -----------------------------------------------------------------------
 
     use experimentation_proto::experimentation::common::v1::{
-        CompositeConfig, FilteredMeanConfig, WindowedCountConfig,
+        CompositeOperand, CompositeOperator, FilteredMeanConfig, WindowedCountConfig,
     };
+    use std::collections::HashMap;
 
     fn make_metric(metric_id: &str, name: &str, t: MetricType) -> MetricDefinition {
         MetricDefinition {
@@ -441,56 +599,92 @@ mod tests {
         }
     }
 
-    #[test]
-    fn metric_common_fields_reject_empty_metric_id() {
+    /// Map-backed `MetricLookup` for unit tests.
+    ///
+    /// `graph[id]` lists the direct operands of `id`. A leaf metric simply
+    /// has an empty list. Any id present in `graph` is considered to "exist"
+    /// for `exists_all_metrics`.
+    pub(super) struct MockLookup {
+        pub(super) graph: HashMap<String, Vec<String>>,
+    }
+
+    impl MockLookup {
+        pub(super) fn new(graph: HashMap<String, Vec<String>>) -> Self {
+            Self { graph }
+        }
+
+        pub(super) fn with_leaves(ids: &[&str]) -> Self {
+            let mut g = HashMap::new();
+            for id in ids {
+                g.insert((*id).to_string(), Vec::new());
+            }
+            Self::new(g)
+        }
+    }
+
+    #[tonic::async_trait]
+    impl MetricLookup for MockLookup {
+        async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError> {
+            Ok(metric_ids.iter().all(|id| self.graph.contains_key(*id)))
+        }
+
+        async fn get_composite_operands(
+            &self,
+            metric_id: &str,
+        ) -> Result<Vec<String>, StoreError> {
+            self.graph
+                .get(metric_id)
+                .cloned()
+                .ok_or_else(|| StoreError::NotFound(metric_id.to_string()))
+        }
+    }
+
+    fn empty_lookup() -> MockLookup {
+        MockLookup::new(HashMap::new())
+    }
+
+    #[tokio::test]
+    async fn metric_common_fields_reject_empty_metric_id() {
         let m = make_metric("", "Watch time", MetricType::Mean);
-        let err = validate_metric_definition(&m).unwrap_err();
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
         assert!(err.message().contains("metric_id"));
     }
 
-    #[test]
-    fn metric_common_fields_reject_empty_name() {
+    #[tokio::test]
+    async fn metric_common_fields_reject_empty_name() {
         let m = make_metric("watch_time", "", MetricType::Mean);
-        let err = validate_metric_definition(&m).unwrap_err();
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
         assert!(err.message().contains("name"));
     }
 
-    #[test]
-    fn metric_common_fields_reject_whitespace_only() {
+    #[tokio::test]
+    async fn metric_common_fields_reject_whitespace_only() {
         let m = make_metric("   ", "ok", MetricType::Mean);
-        let err = validate_metric_definition(&m).unwrap_err();
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
         assert!(err.message().contains("metric_id"));
     }
 
-    #[test]
-    fn metric_legacy_mean_passes_through() {
+    #[tokio::test]
+    async fn metric_legacy_mean_passes_through() {
         let m = make_metric("watch_time", "Watch time", MetricType::Mean);
-        assert!(validate_metric_definition(&m).is_ok());
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
     }
 
-    #[test]
-    fn metric_filtered_mean_skeleton_passes() {
+    #[tokio::test]
+    async fn metric_filtered_mean_skeleton_passes() {
         // B3 fills in the value_column + filter_sql rules.
         let mut m = make_metric("filtered_dur", "Filtered duration", MetricType::FilteredMean);
         m.type_config = Some(MetricTypeConfig::FilteredMean(FilteredMeanConfig {
             filter_sql: "platform = 'mobile'".into(),
             value_column: "duration_ms".into(),
         }));
-        assert!(validate_metric_definition(&m).is_ok());
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
     }
 
-    #[test]
-    fn metric_composite_skeleton_passes() {
-        // B1 fills in arity, weight, and cycle detection.
-        let mut m = make_metric("composite_a", "Composite A", MetricType::Composite);
-        m.type_config = Some(MetricTypeConfig::Composite(CompositeConfig::default()));
-        assert!(validate_metric_definition(&m).is_ok());
-    }
-
-    #[test]
-    fn metric_windowed_count_skeleton_passes() {
+    #[tokio::test]
+    async fn metric_windowed_count_skeleton_passes() {
         // B2 fills in event_type regex + window_hours range.
         let mut m = make_metric("first_signup", "First signup", MetricType::WindowedCount);
         m.type_config = Some(MetricTypeConfig::WindowedCount(WindowedCountConfig {
@@ -498,6 +692,147 @@ mod tests {
             filter_sql: String::new(),
             window_hours: 24,
         }));
-        assert!(validate_metric_definition(&m).is_ok());
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
+    }
+
+    // ---- COMPOSITE validator (B1) -----------------------------------------
+
+    fn composite_metric(
+        metric_id: &str,
+        operator: CompositeOperator,
+        operands: Vec<(&str, f64)>,
+    ) -> MetricDefinition {
+        let operands = operands
+            .into_iter()
+            .map(|(id, w)| CompositeOperand { metric_id: id.into(), weight: w })
+            .collect();
+        let mut m = make_metric(metric_id, "composite", MetricType::Composite);
+        m.type_config = Some(MetricTypeConfig::Composite(CompositeConfig {
+            operator: operator as i32,
+            operands,
+        }));
+        m
+    }
+
+    #[tokio::test]
+    async fn composite_rejects_missing_config() {
+        let mut m = make_metric("c", "c", MetricType::Composite);
+        m.type_config = None;
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("composite"));
+    }
+
+    #[tokio::test]
+    async fn composite_rejects_unspecified_operator() {
+        let m = composite_metric("c", CompositeOperator::Unspecified, vec![("a", 0.0), ("b", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("UNSPECIFIED"));
+    }
+
+    #[tokio::test]
+    async fn composite_add_rejects_one_operand() {
+        let m = composite_metric("c", CompositeOperator::Add, vec![("a", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("at least 2"));
+    }
+
+    #[tokio::test]
+    async fn composite_add_accepts_two_operands() {
+        let m = composite_metric("c", CompositeOperator::Add, vec![("a", 0.0), ("b", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        assert!(validate_metric_definition(&m, &lookup).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn composite_subtract_rejects_three_operands() {
+        let m = composite_metric(
+            "c",
+            CompositeOperator::Subtract,
+            vec![("a", 0.0), ("b", 0.0), ("d", 0.0)],
+        );
+        let lookup = MockLookup::with_leaves(&["a", "b", "d"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("exactly 2"));
+    }
+
+    #[tokio::test]
+    async fn composite_divide_accepts_two_operands() {
+        let m = composite_metric("c", CompositeOperator::Divide, vec![("a", 0.0), ("b", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        assert!(validate_metric_definition(&m, &lookup).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn composite_weighted_sum_rejects_zero_weight() {
+        let m = composite_metric(
+            "c",
+            CompositeOperator::WeightedSum,
+            vec![("a", 0.0), ("b", 1.0)],
+        );
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("weight"));
+    }
+
+    #[tokio::test]
+    async fn composite_weighted_sum_rejects_negative_weight() {
+        let m = composite_metric(
+            "c",
+            CompositeOperator::WeightedSum,
+            vec![("a", -0.5), ("b", 1.0)],
+        );
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("weight"));
+    }
+
+    #[tokio::test]
+    async fn composite_weighted_sum_accepts_positive_weights() {
+        let m = composite_metric(
+            "c",
+            CompositeOperator::WeightedSum,
+            vec![("a", 1.5), ("b", 0.25)],
+        );
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        assert!(validate_metric_definition(&m, &lookup).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn composite_multiply_ignores_weight_field() {
+        // Non-WEIGHTED_SUM operators do not read `weight`; zeros must not reject.
+        let m = composite_metric("c", CompositeOperator::Multiply, vec![("a", 0.0), ("b", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a", "b"]);
+        assert!(validate_metric_definition(&m, &lookup).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn composite_rejects_missing_operand() {
+        let m = composite_metric("c", CompositeOperator::Add, vec![("a", 0.0), ("ghost", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("operand"));
+    }
+
+    #[tokio::test]
+    async fn composite_rejects_empty_operand_id() {
+        let m = composite_metric("c", CompositeOperator::Add, vec![("a", 0.0), ("", 0.0)]);
+        let lookup = MockLookup::with_leaves(&["a"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("empty"));
+    }
+
+    #[tokio::test]
+    async fn composite_detects_self_reference() {
+        let m = composite_metric("c", CompositeOperator::Add, vec![("c", 0.0), ("a", 0.0)]);
+        let mut graph = HashMap::new();
+        graph.insert("c".to_string(), vec!["c".to_string(), "a".to_string()]);
+        graph.insert("a".to_string(), Vec::new());
+        let lookup = MockLookup::new(graph);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(err.message().contains("cycle"));
     }
 }

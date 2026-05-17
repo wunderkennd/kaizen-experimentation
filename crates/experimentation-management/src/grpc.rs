@@ -1026,7 +1026,9 @@ impl ExperimentManagementService for ManagementServiceHandler {
         // Per-type rules (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT) ship
         // incrementally in B1/B2/B3 — the validator stays the single
         // dispatch point.
-        validators::validate_metric_definition(&metric).map_err(|boxed| *boxed)?;
+        validators::validate_metric_definition(&metric, self.state.store.as_ref())
+            .await
+            .map_err(|boxed| *boxed)?;
 
         let row = self
             .state

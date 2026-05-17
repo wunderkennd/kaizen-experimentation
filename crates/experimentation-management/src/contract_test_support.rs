@@ -170,6 +170,35 @@ impl MetricStore {
     }
 }
 
+// `MetricLookup` bridges the in-memory store to the COMPOSITE validator.
+// Method names + semantics mirror the PG-backed `ManagementStore` so the
+// validator implementation stays storage-agnostic.
+#[tonic::async_trait]
+impl crate::validators::MetricLookup for MetricStore {
+    async fn exists_all_metrics(
+        &self,
+        metric_ids: &[&str],
+    ) -> Result<bool, crate::store::StoreError> {
+        Ok(MetricStore::exists_all_metrics(self, metric_ids))
+    }
+
+    async fn get_composite_operands(
+        &self,
+        metric_id: &str,
+    ) -> Result<Vec<String>, crate::store::StoreError> {
+        let map = self.metrics.read().unwrap();
+        let Some(m) = map.get(metric_id) else {
+            return Err(crate::store::StoreError::NotFound(metric_id.to_string()));
+        };
+        match m.type_config.as_ref() {
+            Some(MetricTypeConfig::Composite(cfg)) => {
+                Ok(cfg.operands.iter().map(|op| op.metric_id.clone()).collect())
+            }
+            _ => Ok(Vec::new()),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Contract test handler
 // ---------------------------------------------------------------------------
@@ -466,7 +495,9 @@ impl ExperimentManagementService for ManagementServiceHandler {
         if metric.metric_id.is_empty() {
             metric.metric_id = Uuid::new_v4().to_string();
         }
-        crate::validators::validate_metric_definition(&metric).map_err(|boxed| *boxed)?;
+        crate::validators::validate_metric_definition(&metric, self.metric_store.as_ref())
+            .await
+            .map_err(|boxed| *boxed)?;
 
         let created = self.metric_store.create_metric(metric)?;
         Ok(Response::new(created))
