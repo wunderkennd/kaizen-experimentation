@@ -125,23 +125,85 @@ fn invalid(msg: impl Into<String>) -> Box<Status> {
 // Pre-tokenization scanners (case-insensitive).
 // ---------------------------------------------------------------------------
 
+/// SQL keywords that are legitimately followed by `(` in our allowlist. The
+/// function-call pre-check exempts these so `country IN('US')` and
+/// `NOT(condition)` (no space) are not flagged as function calls.
+const KEYWORDS_FOLLOWABLE_BY_PAREN: &[&[u8]] = &[b"IN", b"NOT", b"AND", b"OR"];
+
+/// Mask of byte indices that fall inside a single-quoted string literal.
+/// Used by the pre-tokenization scanners so they don't false-positive on
+/// content like `label = 'count(distinct)'` or `name = 'SELECT_v2'`.
+///
+/// Single-quote escape handling matches the tokenizer: a single quote always
+/// terminates the string (no `''` escape and no `\'` escape in Phase 1). If
+/// the input contains an unterminated string literal, the tail to end-of-input
+/// is treated as in-string — the tokenizer will reject the unterminated string
+/// with a clear error later.
+fn string_literal_mask(sql: &str) -> Vec<bool> {
+    let bytes = sql.as_bytes();
+    let mut mask = vec![false; bytes.len()];
+    let mut in_string = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b'\'' {
+            // The quote itself counts as in-string (so prev_was_ident before a
+            // closing quote doesn't accidentally pair with a following `(`).
+            mask[i] = true;
+            in_string = !in_string;
+        } else if in_string {
+            mask[i] = true;
+        }
+    }
+    mask
+}
+
 /// True if `sql` contains `<word>(` where `<word>` is a run of identifier
-/// chars (`[A-Za-z0-9_]+`). Matches `LOWER(`, `COUNT(`, `f1(`, etc.
+/// chars (`[A-Za-z0-9_]+`) AND `<word>` is NOT one of the keywords that
+/// legitimately precede `(` (IN, NOT, AND, OR). String-literal content is
+/// skipped so `name = 'count(distinct)'` is not flagged.
 fn contains_function_call(sql: &str) -> bool {
     let bytes = sql.as_bytes();
-    let mut prev_was_ident = false;
-    for &b in bytes {
-        let is_ident = (b as char).is_ascii_alphanumeric() || b == b'_';
-        if b == b'(' && prev_was_ident {
-            return true;
+    let mask = string_literal_mask(sql);
+    let mut word_start: Option<usize> = None;
+    for (i, &b) in bytes.iter().enumerate() {
+        if mask[i] {
+            word_start = None;
+            continue;
         }
-        prev_was_ident = is_ident;
+        let is_ident = (b as char).is_ascii_alphanumeric() || b == b'_';
+        if is_ident {
+            if word_start.is_none() {
+                word_start = Some(i);
+            }
+        } else {
+            if b == b'(' {
+                if let Some(start) = word_start {
+                    let word = &bytes[start..i];
+                    if !is_keyword_followable_by_paren(word) {
+                        return true;
+                    }
+                }
+            }
+            word_start = None;
+        }
     }
     false
 }
 
+fn is_keyword_followable_by_paren(word: &[u8]) -> bool {
+    KEYWORDS_FOLLOWABLE_BY_PAREN
+        .iter()
+        .any(|kw| eq_ignore_ascii_case(word, kw))
+}
+
+fn eq_ignore_ascii_case(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b.iter())
+            .all(|(x, y)| (*x as char).eq_ignore_ascii_case(&(*y as char)))
+}
+
 /// True if `sql` contains the keyword `SELECT` (case-insensitive, bounded by
-/// non-identifier characters).
+/// non-identifier characters). String-literal content is skipped.
 fn contains_select_keyword(sql: &str) -> bool {
     contains_keyword_ci(sql, "SELECT")
 }
@@ -152,7 +214,12 @@ fn contains_keyword_ci(sql: &str, kw: &str) -> bool {
     if s.len() < k.len() {
         return false;
     }
+    let mask = string_literal_mask(sql);
     'outer: for i in 0..=s.len() - k.len() {
+        // Skip matches that begin inside a string literal.
+        if mask[i] {
+            continue;
+        }
         // boundary before
         if i > 0 {
             let prev = s[i - 1];
@@ -161,7 +228,7 @@ fn contains_keyword_ci(sql: &str, kw: &str) -> bool {
             }
         }
         for (j, &kb) in k.iter().enumerate() {
-            if !(s[i + j] as char).eq_ignore_ascii_case(&(kb as char)) {
+            if mask[i + j] || !(s[i + j] as char).eq_ignore_ascii_case(&(kb as char)) {
                 continue 'outer;
             }
         }
@@ -677,5 +744,58 @@ mod tests {
     fn rejects_is_not_without_null() {
         let err = validate_filter_sql("last_login IS NOT something").unwrap_err();
         assert!(err.message().contains("NULL"));
+    }
+
+    // ── Devin BUG-0001 + BUG-0002 regression tests ──────────────────────────
+
+    // BUG-0001: pre-check must NOT false-positive on string literals
+    // containing `word(`.
+    #[test]
+    fn accepts_string_literal_with_paren_after_word() {
+        // The `count(` inside the quoted string is not a function call.
+        validate_filter_sql("category = 'count(distinct)'").unwrap();
+        validate_filter_sql("name = 'rebuffer_rate(high)'").unwrap();
+        validate_filter_sql("label = 'test(1)'").unwrap();
+    }
+
+    // BUG-0001: pre-check must NOT false-positive on SELECT inside a string.
+    #[test]
+    fn accepts_string_literal_containing_select() {
+        validate_filter_sql("title = 'SELECT all'").unwrap();
+    }
+
+    // BUG-0002: `IN(` without a space is a legitimate SQL pattern; reject
+    // would force users into `IN (` which is awkward.
+    #[test]
+    fn accepts_in_with_no_space_before_paren() {
+        validate_filter_sql("country IN('US', 'CA')").unwrap();
+    }
+
+    #[test]
+    fn accepts_not_with_no_space_before_paren() {
+        validate_filter_sql("NOT(country = 'US')").unwrap();
+    }
+
+    #[test]
+    fn accepts_and_or_with_no_space_before_paren() {
+        // Less common but technically legitimate inside larger expressions.
+        validate_filter_sql("a = 1 AND(b = 2)").unwrap();
+        validate_filter_sql("a = 1 OR(b = 2)").unwrap();
+    }
+
+    // Negative regression: real function calls (non-keyword `word(`) still rejected.
+    #[test]
+    fn still_rejects_real_function_calls_after_bug_fix() {
+        let err = validate_filter_sql("LOWER(country) = 'us'").unwrap_err();
+        assert!(err.message().contains("function call"));
+        let err = validate_filter_sql("custom_fn(x)").unwrap_err();
+        assert!(err.message().contains("function call"));
+    }
+
+    // Negative regression: real subqueries outside string literals still rejected.
+    #[test]
+    fn still_rejects_real_subqueries_after_bug_fix() {
+        let err = validate_filter_sql("user_id IN (SELECT id FROM users)").unwrap_err();
+        assert!(err.message().contains("subqueries"));
     }
 }

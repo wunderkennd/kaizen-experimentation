@@ -118,10 +118,10 @@ impl MetricStore {
         Self::default()
     }
 
-    pub fn create_metric(&self, metric: MetricDefinition) -> Result<MetricDefinition, Status> {
+    pub fn create_metric(&self, metric: MetricDefinition) -> Result<MetricDefinition, Box<Status>> {
         let mut map = self.metrics.write().unwrap();
         if map.contains_key(&metric.metric_id) {
-            return Err(Status::already_exists(metric.metric_id.clone()));
+            return Err(Box::new(Status::already_exists(metric.metric_id.clone())));
         }
         map.insert(metric.metric_id.clone(), metric.clone());
         Ok(metric)
@@ -499,7 +499,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
             .await
             .map_err(|boxed| *boxed)?;
 
-        let created = self.metric_store.create_metric(metric)?;
+        let created = self.metric_store.create_metric(metric).map_err(|boxed| *boxed)?;
         Ok(Response::new(created))
     }
 

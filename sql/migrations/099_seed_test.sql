@@ -33,7 +33,11 @@ VALUES
         NULL,
         'USER',
         'USER',
-        '{"operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM", "operands": [{"metric_id": "watch_time_minutes", "weight": 0.7}, {"metric_id": "metric-1", "weight": 0.3}]}'::jsonb
+        -- operator: COMPOSITE_OPERATOR_WEIGHTED_SUM = 5 (proto enum i32).
+        -- Stored as integer, not the enum string, because
+        -- ManagementStore::metric_type_config_from_json reads operator via
+        -- as_i64() — a string value silently defaults to 0 (Unspecified).
+        '{"operator": 5, "operands": [{"metric_id": "watch_time_minutes", "weight": 0.7}, {"metric_id": "metric-1", "weight": 0.3}]}'::jsonb
     ),
     (
         'signup_24h_count',

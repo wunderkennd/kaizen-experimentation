@@ -81,7 +81,7 @@ pub async fn check_no_cycles<L: MetricLookup + ?Sized>(
     let mut path = vec![start_metric_id.to_string()];
     let mut stack: Vec<Frame> = vec![Frame {
         node: start_metric_id.to_string(),
-        remaining: direct_operands.iter().cloned().collect::<Vec<_>>().into_iter(),
+        remaining: Vec::from(direct_operands).into_iter(),
         depth: 0,
         path: path.clone(),
     }];
