@@ -568,8 +568,17 @@ fn compute_equivalence_result(
     assert_finite(r.ci_lower, "TOST ci_lower");
     assert_finite(r.ci_upper, "TOST ci_upper");
     assert_finite(r.delta, "TOST effective delta");
-    assert_finite(r.control_mean, "TOST control_mean");
-    assert_finite(r.treatment_mean, "TOST treatment_mean");
+    // Proto contract: control_mean / treatment_mean are the RAW, pre-CUPED
+    // means. The CUPED path runs TOST on adjusted samples, so r.control_mean
+    // / r.treatment_mean would be the *adjusted* means — report the raw
+    // values instead, consistent with the raw `control_mean` used above for
+    // delta_relative resolution. (For the non-CUPED path these are identical
+    // to r.control_mean / r.treatment_mean.)
+    let raw_control_mean = control_mean;
+    let raw_treatment_mean =
+        treatment_values.iter().sum::<f64>() / treatment_values.len() as f64;
+    assert_finite(raw_control_mean, "raw control_mean");
+    assert_finite(raw_treatment_mean, "raw treatment_mean");
 
     // ADR-027 §6: power at the current sample size given δ, under the
     // canonical migration design assumption (true difference = 0). Consumes
@@ -602,8 +611,8 @@ fn compute_equivalence_result(
         // Echo the *effective* margin actually used (post delta_relative
         // resolution) — tost.rs sets this to tost_cfg.delta.
         delta: r.delta,
-        control_mean: r.control_mean,
-        treatment_mean: r.treatment_mean,
+        control_mean: raw_control_mean,
+        treatment_mean: raw_treatment_mean,
         achieved_power,
     })
 }
