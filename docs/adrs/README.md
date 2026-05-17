@@ -33,6 +33,9 @@ This directory contains the architectural decisions that shaped the experimentat
 | [025](025-m5-conditional-rust-port.md) | Conditional port of M5 Management Service from Go to Rust | **Proposed (conditional)** | M5 |
 | [026](026-custom-metrics-layer.md) | Custom metrics definition layer (composite, derived, joined metrics beyond the 6 built-in types) | **Proposed** | M5, M3, M4a |
 | [027](027-tost-equivalence-testing.md) | Two One-Sided Tests (TOST) for proving statistical equivalence in infrastructure migrations | **Proposed** | M4a, M5, M6 |
+| [028](028-m4b-shadow-inference.md) | M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation) | **Proposed** | M4b, M4a, M5, M6 |
+| [029](029-cross-modal-score-calibration.md) | Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce) | **Proposed** | M4a, M4b, M5, Personalization service |
+| [030](030-shadow-experiment-mode.md) | Shadow mode flag on experiments — run candidate variants on production traffic without user exposure | **Proposed** | M1, M4a, M4b, M5, M6 |
 
 ## Proposed ADR Clusters
 

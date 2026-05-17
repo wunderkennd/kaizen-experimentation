@@ -30,7 +30,7 @@ acted upon. Netflix's Switchboard explicitly enumerates shadow mode as a first-c
 lifecycle stage for this reason
 ([Netflix Tech Blog, May 2026](https://netflixtechblog.com/state-of-routing-in-model-serving-16e22fe18741)).
 
-ADR-027 establishes shadow mode as a property of an experiment phase: a flag
+ADR-030 establishes shadow mode as a property of an experiment phase: a flag
 `is_shadow` on `Experiment`, with `SHADOWING` and `LIVE` sub-states of `RUNNING`, and
 state transitions between them recorded in the audit trail. This ADR specifies the
 M4b-side mechanism that gives that flag operational meaning for `CONTEXTUAL_BANDIT`
@@ -66,7 +66,7 @@ production LMAX core, with three critical isolation properties:
 The shadow core's arm selections are emitted to a new Kafka topic `shadow_arm_events`,
 consumed by M4a for offline comparison against logged production arm selections.
 
-### Lifecycle integration with ADR-027
+### Lifecycle integration with ADR-030
 
 The shadow core's lifecycle is **driven by M5's experiment state machine**, not by
 direct operator RPCs. This is the key change from earlier drafts: shadow inference is
@@ -85,7 +85,7 @@ The triggers and actions are:
 
 `LoadShadowModel`, `PromoteShadow`, and `UnloadShadow` are M5-internal RPCs on M4b —
 operators do not call them directly. The operator-facing surface is
-`TransitionShadowMode` on M5 (per ADR-027). M4b additionally exposes `GetShadowDiff`
+`TransitionShadowMode` on M5 (per ADR-030). M4b additionally exposes `GetShadowDiff`
 as a read-only RPC for M4a and M6 to query offline comparison results.
 
 ```protobuf
@@ -361,7 +361,7 @@ On M4b startup (cold or post-crash):
 Earlier draft. M4b exposed `LoadShadowModel`, `PromoteShadow`, etc. as
 operator-facing RPCs, with the experiment lifecycle and the shadow lifecycle as
 parallel concerns the operator coordinated manually. Rejected in favor of
-lifecycle-driven shadow management (per ADR-027) — drift between experiment state
+lifecycle-driven shadow management (per ADR-030) — drift between experiment state
 and shadow state was a real and recurring failure mode. The RPCs still exist but
 are M5-internal.
 
@@ -410,7 +410,7 @@ production state.
 - ADR-002 (LMAX bandit core) — extended by this ADR
 - ADR-003 (RocksDB policy state) — extended via column families
 - ADR-011 (Candle ML framework) — applicable to shadow neural bandit inference
-- ADR-027 (Shadow mode for experiments) — companion ADR; defines the experiment-level
+- ADR-030 (Shadow mode for experiments) — companion ADR; defines the experiment-level
   flag, sub-states, and transitions that drive this ADR's lifecycle integration
 - Design doc v5.1, Section 8 (M4b Bandit Policy Service), Section 2.3 (LMAX threading)
 - Netflix Tech Blog, "State of Routing in Model Serving" (May 2026):

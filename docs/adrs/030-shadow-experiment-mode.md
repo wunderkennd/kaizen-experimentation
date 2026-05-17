@@ -1,4 +1,4 @@
-# ADR-027: Shadow Mode for Experiments
+# ADR-030: Shadow Mode for Experiments
 
 ## Status
 
