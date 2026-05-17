@@ -179,6 +179,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Agent definitions (infra) | `.multiclaude/agents/infra-{1..5}-*.md` |
 | Agent onboarding | `docs/onboarding/agent-N-*.md` (incl. `agent-0-coordination.md`) |
 | Module runbooks | `docs/runbooks/m4a-analysis.md`, `docs/runbooks/m4b-policy.md` |
+| Infra runbook (adding a Cloud Run service) | `docs/runbooks/gcp-compute-services.md` (registry pattern at `infra/pkg/gcp/services/`, established by #542 / PR #546) |
 | Work tracking | GitHub Issues (Milestones = Sprints, Issues = Tasks) |
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |
