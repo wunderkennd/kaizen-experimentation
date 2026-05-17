@@ -239,6 +239,13 @@ pub enum Decision {
     Stop,
     /// Extend the experiment for more power.
     Extend,
+    /// ADR-027: equivalence established — the change has no meaningful impact
+    /// and is safe to migrate/ship. (Equivalence inverts superiority: this is
+    /// the success state, replacing "reject H₀ → ship treatment".)
+    SafeToMigrate,
+    /// ADR-027: the effect exceeds ±δ — the change is not equivalent, do not
+    /// migrate.
+    NotEquivalent,
 }
 
 /// Inputs for decision rule evaluation.
@@ -288,6 +295,74 @@ pub fn evaluate_decision(input: &DecisionInput) -> Decision {
     }
 
     // Past halfway with low power → extend.
+    if input.elapsed_fraction >= 0.5 && input.achieved_power < 0.5 {
+        return Decision::Extend;
+    }
+
+    Decision::Continue
+}
+
+// ---------------------------------------------------------------------------
+// Equivalence (TOST) decision rule (ADR-027 §5)
+// ---------------------------------------------------------------------------
+
+/// Inputs for the equivalence (TOST) decision rule.
+///
+/// Equivalence inverts the superiority logic: a non-significant *difference*
+/// is the goal. The decision is "equivalence established → safe to migrate"
+/// rather than "reject H₀ → ship treatment".
+#[derive(Debug, Clone)]
+pub struct EquivalenceDecisionInput {
+    /// TOST verdict — the (1−2α) CI lies entirely within (−δ, +δ).
+    pub equivalent: bool,
+    /// Lower bound of the (1−2α) CI for the difference.
+    pub ci_lower: f64,
+    /// Upper bound of the (1−2α) CI for the difference.
+    pub ci_upper: f64,
+    /// Effective equivalence margin used (post delta_relative resolution).
+    pub delta: f64,
+    /// Estimated power at the current sample size given δ.
+    pub achieved_power: f64,
+    /// Fraction of planned duration elapsed (0.0–1.0).
+    pub elapsed_fraction: f64,
+    /// Whether the experiment has a guardrail breach.
+    pub guardrail_breached: bool,
+}
+
+/// Evaluate the decision rule for a running equivalence experiment.
+///
+/// Returns a recommendation based on the TOST result. Unlike
+/// [`evaluate_decision`], a tight CI around zero is *success*: equivalence
+/// established means the migration is safe to ship.
+pub fn evaluate_equivalence_decision(input: &EquivalenceDecisionInput) -> Decision {
+    assert_finite(input.ci_lower, "ci_lower");
+    assert_finite(input.ci_upper, "ci_upper");
+    assert_finite(input.delta, "delta");
+    assert_finite(input.achieved_power, "achieved_power");
+    assert_finite(input.elapsed_fraction, "elapsed_fraction");
+
+    // Guardrail breach → immediate stop (same as superiority).
+    if input.guardrail_breached {
+        return Decision::Stop;
+    }
+
+    // Equivalence established (CI ⊂ (−δ, +δ)) → safe to migrate.
+    if input.equivalent {
+        return Decision::SafeToMigrate;
+    }
+
+    // CI lies entirely beyond ±δ → the change has a material effect; the
+    // treatment is definitively not equivalent.
+    if input.ci_lower > input.delta || input.ci_upper < -input.delta {
+        return Decision::NotEquivalent;
+    }
+
+    // Inconclusive — the CI straddles a margin boundary.
+    // Past full planned duration with no verdict → stop (underpowered run).
+    if input.elapsed_fraction >= 1.0 {
+        return Decision::Stop;
+    }
+    // Past halfway and underpowered → extend for more data.
     if input.elapsed_fraction >= 0.5 && input.achieved_power < 0.5 {
         return Decision::Extend;
     }
@@ -1172,5 +1247,63 @@ mod tests {
     fn traffic_fraction_full_layer() {
         let exp = make_exp("exp-1", "Test", "layer-1", "m1", 0, 999, 1000);
         assert!((exp.traffic_fraction() - 1.0).abs() < 1e-9);
+    }
+
+    // --- Equivalence (TOST) decision rule tests (ADR-027 §5) ---
+
+    fn equiv_input(equivalent: bool, lo: f64, hi: f64, delta: f64) -> EquivalenceDecisionInput {
+        EquivalenceDecisionInput {
+            equivalent,
+            ci_lower: lo,
+            ci_upper: hi,
+            delta,
+            achieved_power: 0.85,
+            elapsed_fraction: 0.6,
+            guardrail_breached: false,
+        }
+    }
+
+    #[test]
+    fn equivalence_decision_safe_to_migrate_when_equivalent() {
+        let input = equiv_input(true, -0.02, 0.03, 0.05);
+        assert_eq!(evaluate_equivalence_decision(&input), Decision::SafeToMigrate);
+    }
+
+    #[test]
+    fn equivalence_decision_not_equivalent_when_ci_beyond_margin() {
+        // Entire CI above +δ.
+        let input = equiv_input(false, 0.08, 0.15, 0.05);
+        assert_eq!(evaluate_equivalence_decision(&input), Decision::NotEquivalent);
+    }
+
+    #[test]
+    fn equivalence_decision_guardrail_breach_stops() {
+        let mut input = equiv_input(true, -0.01, 0.01, 0.05);
+        input.guardrail_breached = true;
+        assert_eq!(evaluate_equivalence_decision(&input), Decision::Stop);
+    }
+
+    #[test]
+    fn equivalence_decision_inconclusive_stops_at_end() {
+        // CI straddles +δ (not inside, not entirely beyond), planned duration done.
+        let mut input = equiv_input(false, -0.02, 0.08, 0.05);
+        input.elapsed_fraction = 1.0;
+        assert_eq!(evaluate_equivalence_decision(&input), Decision::Stop);
+    }
+
+    #[test]
+    fn equivalence_decision_inconclusive_extends_when_underpowered() {
+        let mut input = equiv_input(false, -0.02, 0.08, 0.05);
+        input.elapsed_fraction = 0.6;
+        input.achieved_power = 0.3;
+        assert_eq!(evaluate_equivalence_decision(&input), Decision::Extend);
+    }
+
+    #[test]
+    fn equivalence_decision_inconclusive_continues_early() {
+        let mut input = equiv_input(false, -0.02, 0.08, 0.05);
+        input.elapsed_fraction = 0.2;
+        input.achieved_power = 0.4;
+        assert_eq!(evaluate_equivalence_decision(&input), Decision::Continue);
     }
 }

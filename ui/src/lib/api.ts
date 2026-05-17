@@ -3,7 +3,7 @@ import type {
   QueryLogEntry, NoveltyAnalysisResult, InterferenceAnalysisResult, InterleavingAnalysisResult,
   BanditDashboardResult, CumulativeHoldoutResult, GuardrailStatusResult, QoeDashboardResult,
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
-  SurrogateProjection, SrmResult, MetricResult, SegmentResult, IpwResult,
+  SurrogateProjection, SrmResult, MetricResult, SegmentResult, IpwResult, EquivalenceResult,
   MetricDefinition, ListMetricDefinitionsResponse,
   Flag, FlagType, ListFlagsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
@@ -416,13 +416,37 @@ function adaptIpwResult(proto: Record<string, unknown>): IpwResult {
   };
 }
 
-/** Adapt proto MetricResult — coerce segmentResults int64 fields + IPW. */
+/** ADR-027: Adapt proto EquivalenceResult — coerce numeric defaults. */
+function adaptEquivalenceResult(proto: Record<string, unknown>): EquivalenceResult {
+  return {
+    pointEstimate: (proto.pointEstimate as number) || 0,
+    stdError: (proto.stdError as number) || 0,
+    df: (proto.df as number) || 0,
+    pLower: (proto.pLower as number) || 0,
+    pUpper: (proto.pUpper as number) || 0,
+    pTost: (proto.pTost as number) || 0,
+    ciLower: (proto.ciLower as number) || 0,
+    ciUpper: (proto.ciUpper as number) || 0,
+    equivalent: (proto.equivalent as boolean) || false,
+    delta: (proto.delta as number) || 0,
+    controlMean: (proto.controlMean as number) || 0,
+    treatmentMean: (proto.treatmentMean as number) || 0,
+    achievedPower: proto.achievedPower as number | undefined,
+  };
+}
+
+/** Adapt proto MetricResult — coerce segmentResults int64 fields + IPW + equivalence. */
 function adaptMetricResult(proto: Record<string, unknown>): MetricResult {
-  const raw = proto as unknown as MetricResult & { segmentResults?: Record<string, unknown>[]; ipwResult?: Record<string, unknown> };
+  const raw = proto as unknown as MetricResult & {
+    segmentResults?: Record<string, unknown>[];
+    ipwResult?: Record<string, unknown>;
+    equivalenceResult?: Record<string, unknown>;
+  };
   return {
     ...raw,
     segmentResults: raw.segmentResults?.map(adaptSegmentResult),
     ipwResult: raw.ipwResult ? adaptIpwResult(raw.ipwResult) : undefined,
+    equivalenceResult: raw.equivalenceResult ? adaptEquivalenceResult(raw.equivalenceResult) : undefined,
   };
 }
 

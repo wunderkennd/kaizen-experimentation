@@ -108,6 +108,18 @@ const AdaptiveNZoneBadge = dynamic(
   () => import('@/components/adaptive-n-zone-badge').then(m => ({ default: m.AdaptiveNZoneBadge })),
   { ssr: false },
 );
+const EquivalenceResultBadge = dynamic(
+  () => import('@/components/equivalence-result-badge').then(m => ({ default: m.EquivalenceResultBadge })),
+  { ssr: false },
+);
+const EquivalenceCiPlot = dynamic(
+  () => import('@/components/charts/equivalence-ci-plot').then(m => ({ default: m.EquivalenceCiPlot })),
+  { ssr: false },
+);
+const EquivalencePowerIndicator = dynamic(
+  () => import('@/components/equivalence-power-indicator').then(m => ({ default: m.EquivalencePowerIndicator })),
+  { ssr: false },
+);
 
 type AnalysisTab = 'overview' | 'novelty' | 'interference' | 'interleaving' | 'surrogate' | 'holdout' | 'guardrails' | 'qoe' | 'lifecycle' | 'session' | 'feedback' | 'switchback' | 'quasi';
 
@@ -466,6 +478,42 @@ export default function ResultsPage() {
                     experimentId={params.id}
                     metricId={m.metricId}
                   />
+                ))}
+            </section>
+          )}
+
+          {/* Equivalence (TOST) results (ADR-027) — shown for migration
+              experiments configured with an equivalence test */}
+          {analysisResult.metricResults.some((m) => m.equivalenceResult) && (
+            <section className="mb-6" data-testid="equivalence-section">
+              <h2 className="mb-1 text-lg font-semibold text-gray-900">
+                Equivalence (TOST)
+              </h2>
+              <p className="mb-3 text-sm text-gray-500">
+                For infrastructure migrations the question is &ldquo;can we prove
+                this change has no meaningful impact?&rdquo; A treatment is
+                <em> equivalent</em> when the (1−2α) confidence interval falls
+                entirely within the ±δ margin.
+              </p>
+              {analysisResult.metricResults
+                .filter((m) => m.equivalenceResult)
+                .map((m) => (
+                  <div
+                    key={`equiv-${m.metricId}`}
+                    className="mb-4 space-y-3"
+                    data-testid={`equivalence-metric-${m.metricId}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-900">
+                        {m.metricId}
+                      </span>
+                      <EquivalenceResultBadge result={m.equivalenceResult} />
+                    </div>
+                    <EquivalenceCiPlot result={m.equivalenceResult!} metricId={m.metricId} />
+                    <EquivalencePowerIndicator
+                      achievedPower={m.equivalenceResult!.achievedPower}
+                    />
+                  </div>
                 ))}
             </section>
           )}

@@ -314,6 +314,62 @@ pub fn tost_sample_size(config: &TostPowerConfig) -> Result<u64> {
     Ok(n as u64)
 }
 
+/// Estimated power of the TOST procedure at the *realized* standard error.
+///
+/// Given the standard error of the treatment − control difference at the
+/// current sample size, the equivalence margin `delta`, an assumed true
+/// difference `true_difference` (0.0 for the canonical migration design),
+/// and the per-side significance `alpha`, returns the probability that both
+/// one-sided tests reject — i.e. the power to declare equivalence.
+///
+/// Uses the standard normal approximation (Chow & Liu; consistent with the
+/// Chow-Shao-Wang form in `tost_sample_size`):
+///
+/// ```text
+///   power ≈ Φ((δ − Δ)/SE − z_{1−α}) + Φ((δ + Δ)/SE − z_{1−α}) − 1
+/// ```
+///
+/// clamped to `[0, 1]`. Because it consumes the realized standard error this
+/// is genuinely the power *at the current sample size*. It is a design-stage
+/// indicator for the M6 power readout, not an inferential statistic.
+///
+/// # Errors
+/// Returns `Error::Validation` for `delta ≤ 0`, non-finite or non-positive
+/// `std_error`, or `alpha ∉ (0, 0.5)`.
+pub fn tost_achieved_power(
+    std_error: f64,
+    delta: f64,
+    true_difference: f64,
+    alpha: f64,
+) -> Result<f64> {
+    if !(delta > 0.0 && delta.is_finite()) {
+        return Err(Error::Validation(
+            "equivalence margin delta must be > 0 and finite".into(),
+        ));
+    }
+    if !(std_error > 0.0 && std_error.is_finite()) {
+        return Err(Error::Validation(
+            "std_error must be > 0 and finite".into(),
+        ));
+    }
+    if !(0.0 < alpha && alpha < 0.5) {
+        return Err(Error::Validation("alpha must lie in (0, 0.5)".into()));
+    }
+    assert_finite(true_difference, "true_difference");
+
+    let z = Normal::new(0.0, 1.0)
+        .map_err(|e| Error::Numerical(format!("failed to create Normal distribution: {e}")))?;
+    let z_alpha = z.inverse_cdf(1.0 - alpha);
+    assert_finite(z_alpha, "z_alpha");
+
+    let lower = (delta - true_difference) / std_error - z_alpha;
+    let upper = (delta + true_difference) / std_error - z_alpha;
+    let power = z.cdf(lower) + z.cdf(upper) - 1.0;
+    assert_finite(power, "tost power");
+
+    Ok(power.clamp(0.0, 1.0))
+}
+
 // ---------------------------------------------------------------------------
 // Internals (shared with the CUPED path)
 // ---------------------------------------------------------------------------
@@ -524,6 +580,45 @@ mod tests {
         assert!(matches!(err, Error::Numerical(_)), "expected Numerical error, got {err:?}");
     }
 
+    // --- achieved power (ADR-027 §6) --------------------------------------
+
+    #[test]
+    fn achieved_power_rises_as_standard_error_shrinks() {
+        let big_se = tost_achieved_power(0.5, 1.0, 0.0, 0.05).unwrap();
+        let small_se = tost_achieved_power(0.1, 1.0, 0.0, 0.05).unwrap();
+        assert!(small_se > big_se, "tighter SE must yield higher power ({small_se} !> {big_se})");
+        assert!((0.0..=1.0).contains(&big_se) && (0.0..=1.0).contains(&small_se));
+    }
+
+    #[test]
+    fn achieved_power_consistent_with_sample_size() {
+        // For a design at the n returned by tost_sample_size, the realized
+        // SE = sqrt(2 σ² / n) should reproduce ≈ the target power (same
+        // normal approximation, inverted).
+        let (delta, variance, alpha, target) = (0.5_f64, 1.0_f64, 0.05_f64, 0.80_f64);
+        let cfg = TostPowerConfig {
+            delta,
+            true_difference: 0.0,
+            variance,
+            alpha,
+            power: target,
+        };
+        let n = tost_sample_size(&cfg).unwrap() as f64;
+        let se = (2.0 * variance / n).sqrt();
+        let power = tost_achieved_power(se, delta, 0.0, alpha).unwrap();
+        assert!(
+            (power - target).abs() < 0.05,
+            "power at design n ({power}) should be ≈ target ({target})"
+        );
+    }
+
+    #[test]
+    fn achieved_power_validates_inputs() {
+        assert!(tost_achieved_power(0.1, 0.0, 0.0, 0.05).is_err()); // delta ≤ 0
+        assert!(tost_achieved_power(0.0, 1.0, 0.0, 0.05).is_err()); // se ≤ 0
+        assert!(tost_achieved_power(0.1, 1.0, 0.0, 0.9).is_err()); // alpha ∉ (0,0.5)
+    }
+
     #[test]
     fn invalid_config_rejected() {
         let x = vec![1.0, 2.0];
@@ -649,6 +744,22 @@ mod tests {
                 prop_assert!(r.p_tost >= r.p_lower - 1e-12);
                 prop_assert!(r.p_tost >= r.p_upper - 1e-12);
             }
+        }
+
+        /// ADR-027 §6 invariant: achieved power ∈ [0,1] and is monotone
+        /// non-increasing in the standard error (more noise ⇒ less power).
+        #[test]
+        fn prop_achieved_power_bounded_and_monotone(
+            se in 0.05f64..2.0f64,
+            bump in 0.01f64..1.0f64,
+            delta in 0.1f64..3.0f64,
+            alpha in 0.01f64..0.2f64,
+        ) {
+            let p_small = tost_achieved_power(se, delta, 0.0, alpha).unwrap();
+            let p_large = tost_achieved_power(se + bump, delta, 0.0, alpha).unwrap();
+            prop_assert!((0.0..=1.0).contains(&p_small));
+            prop_assert!((0.0..=1.0).contains(&p_large));
+            prop_assert!(p_small + 1e-9 >= p_large, "power must not rise as SE grows");
         }
 
         /// ADR-027 §7 invariant: equivalent==true ⟺ (1−2α) CI ⊂ (−δ, +δ).

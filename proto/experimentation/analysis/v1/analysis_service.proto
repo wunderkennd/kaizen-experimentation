@@ -57,29 +57,10 @@ message RunAnalysisRequest {
   // ADR-027: TOST equivalence testing configuration. When set, M4a runs the
   // Two One-Sided Tests procedure on the primary metric in addition to (or
   // instead of) the standard superiority test. Result fields live on the
-  // MetricResult message. When unset, no equivalence test is performed.
-  EquivalenceTestConfig equivalence_test = 6;
-}
-
-// ADR-027: TOST equivalence test configuration.
-// Drives the Two One-Sided Tests procedure for proving a treatment is
-// *equivalent* to control within ±delta (in the metric's natural units).
-// Used by M4a for infrastructure migration experiments where the business
-// question is "safe to ship" rather than "better than control."
-message EquivalenceTestConfig {
-  // Equivalence margin in the metric's natural units. Must be > 0.
-  // Treatment is declared equivalent if the effect lies within [-delta, +delta].
-  double delta = 1;
-  // Optional: express delta as a fraction of the control mean
-  // (e.g., 0.02 = "within 2% of control"). When set, M4a recomputes delta
-  // at analysis time as `delta_relative * control_mean` and uses that in
-  // place of the absolute value above. Only meaningful for MEAN / RATIO metrics.
-  optional double delta_relative = 2;
-  // Per-side significance level. Typical value 0.05 yields a 90% TOST CI.
-  // Each one-sided test is performed at this α; equivalence is declared iff
-  // both tests reject, which is equivalent to the (1 - 2α) CI lying entirely
-  // within (-delta, +delta).
-  double alpha = 3;
+  // MetricResult.equivalence_result message. When unset, no equivalence test
+  // is performed. Per-run override of Experiment.equivalence_test (field 33);
+  // the config message is defined in experimentation/common/v1/experiment.proto.
+  experimentation.common.v1.EquivalenceTestConfig equivalence_test = 6;
 }
 message GetAnalysisResultRequest { string experiment_id = 1; }
 message GetInterleavingAnalysisRequest { string experiment_id = 1; }
@@ -119,6 +100,51 @@ message MetricResult {
   double e_value = 19;
   // Log e-value for numerical stability when e-values are very large.
   double log_e_value = 20;
+
+  // ADR-027: TOST equivalence test result. Populated only when an
+  // EquivalenceTestConfig is supplied (via Experiment.equivalence_test or
+  // RunAnalysisRequest.equivalence_test). Absent for standard superiority-only
+  // analyses. Additive — does not affect the superiority fields above.
+  EquivalenceResult equivalence_result = 21;
+}
+
+// ADR-027: Two One-Sided Tests (TOST) equivalence test result.
+// Mirrors experimentation_stats::tost::TostResult. Populated by M4a on the
+// primary metric when an EquivalenceTestConfig is supplied. Equivalence is
+// declared (equivalent == true) iff the (1 - 2α) CI lies entirely within
+// (-delta, +delta), algebraically identical to p_tost < α.
+message EquivalenceResult {
+  // Point estimate of the difference treatment − control.
+  double point_estimate = 1;
+  // Standard error of the difference (Welch form: √(s²_T/n_T + s²_C/n_C)).
+  double std_error = 2;
+  // Welch-Satterthwaite degrees of freedom.
+  double df = 3;
+  // p-value for H₀₁: diff ≤ −delta (upper-tail one-sided test).
+  double p_lower = 4;
+  // p-value for H₀₂: diff ≥ +delta (lower-tail one-sided test).
+  double p_upper = 5;
+  // TOST p-value — max(p_lower, p_upper). Equivalence iff p_tost < alpha.
+  double p_tost = 6;
+  // Lower bound of the (1 - 2α) confidence interval for the difference.
+  double ci_lower = 7;
+  // Upper bound of the (1 - 2α) confidence interval for the difference.
+  double ci_upper = 8;
+  // True iff both one-sided tests reject at α, i.e. CI ⊂ (-delta, +delta).
+  bool equivalent = 9;
+  // The effective equivalence margin used for this test, after resolving
+  // delta_relative (delta_relative × control_mean) when set; otherwise the
+  // configured absolute delta. Always > 0.
+  double delta = 10;
+  // Control group mean (raw, pre-CUPED).
+  double control_mean = 11;
+  // Treatment group mean (raw, pre-CUPED).
+  double treatment_mean = 12;
+  // Estimated power to declare equivalence at the realized standard error,
+  // given delta and the canonical migration design assumption (true
+  // difference = 0). In [0, 1]. Computed by experimentation-stats; the M6
+  // power indicator renders this value (no statistics in TypeScript).
+  double achieved_power = 13;
 }
 
 message SequentialResult {
