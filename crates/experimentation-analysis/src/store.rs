@@ -10,8 +10,8 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::analysis::v1::{
-    AnalysisResult, InterferenceAnalysisResult, IpwResult as ProtoIpwResult, MetricResult,
-    NoveltyAnalysisResult, SegmentResult, SequentialResult, SessionLevelResult,
+    AnalysisResult, EquivalenceResult, InterferenceAnalysisResult, IpwResult as ProtoIpwResult,
+    MetricResult, NoveltyAnalysisResult, SegmentResult, SequentialResult, SessionLevelResult,
     SrmResult as ProtoSrmResult,
 };
 
@@ -50,6 +50,10 @@ pub struct CachedMetricResult {
     pub session_level_result: Option<CachedSessionLevelResult>,
     #[serde(default)]
     pub ipw_result: Option<CachedIpwResult>,
+    /// ADR-027: TOST equivalence result. `serde(default)` so analysis results
+    /// cached before ADR-027 still deserialize (field absent → None).
+    #[serde(default)]
+    pub equivalence_result: Option<CachedEquivalenceResult>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -89,6 +93,24 @@ pub struct CachedIpwResult {
     pub p_value: f64,
     pub n_clipped: i32,
     pub effective_sample_size: f64,
+}
+
+/// ADR-027: serde mirror of the proto `EquivalenceResult` (TOST).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CachedEquivalenceResult {
+    pub point_estimate: f64,
+    pub std_error: f64,
+    pub df: f64,
+    pub p_lower: f64,
+    pub p_upper: f64,
+    pub p_tost: f64,
+    pub ci_lower: f64,
+    pub ci_upper: f64,
+    pub equivalent: bool,
+    pub delta: f64,
+    pub control_mean: f64,
+    pub treatment_mean: f64,
+    pub achieved_power: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -164,6 +186,10 @@ impl From<&MetricResult> for CachedMetricResult {
                 .as_ref()
                 .map(CachedSessionLevelResult::from),
             ipw_result: m.ipw_result.as_ref().map(CachedIpwResult::from),
+            equivalence_result: m
+                .equivalence_result
+                .as_ref()
+                .map(CachedEquivalenceResult::from),
         }
     }
 }
@@ -194,6 +220,50 @@ impl From<&CachedMetricResult> for MetricResult {
             ipw_result: c.ipw_result.as_ref().map(ProtoIpwResult::from),
             e_value: 0.0,
             log_e_value: 0.0,
+            equivalence_result: c
+                .equivalence_result
+                .as_ref()
+                .map(EquivalenceResult::from),
+        }
+    }
+}
+
+impl From<&EquivalenceResult> for CachedEquivalenceResult {
+    fn from(e: &EquivalenceResult) -> Self {
+        Self {
+            point_estimate: e.point_estimate,
+            std_error: e.std_error,
+            df: e.df,
+            p_lower: e.p_lower,
+            p_upper: e.p_upper,
+            p_tost: e.p_tost,
+            ci_lower: e.ci_lower,
+            ci_upper: e.ci_upper,
+            equivalent: e.equivalent,
+            delta: e.delta,
+            control_mean: e.control_mean,
+            treatment_mean: e.treatment_mean,
+            achieved_power: e.achieved_power,
+        }
+    }
+}
+
+impl From<&CachedEquivalenceResult> for EquivalenceResult {
+    fn from(c: &CachedEquivalenceResult) -> Self {
+        Self {
+            point_estimate: c.point_estimate,
+            std_error: c.std_error,
+            df: c.df,
+            p_lower: c.p_lower,
+            p_upper: c.p_upper,
+            p_tost: c.p_tost,
+            ci_lower: c.ci_lower,
+            ci_upper: c.ci_upper,
+            equivalent: c.equivalent,
+            delta: c.delta,
+            control_mean: c.control_mean,
+            treatment_mean: c.treatment_mean,
+            achieved_power: c.achieved_power,
         }
     }
 }
@@ -599,6 +669,7 @@ mod tests {
                 ipw_result: None,
                 e_value: 0.0,
                 log_e_value: 0.0,
+                equivalence_result: None,
             }],
             srm_result: Some(ProtoSrmResult {
                 chi_squared: 0.1,

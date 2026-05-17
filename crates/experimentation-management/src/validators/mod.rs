@@ -18,8 +18,8 @@ use tonic::Status;
 
 use experimentation_proto::experimentation::common::v1::{
     metric_definition::TypeConfig as MetricTypeConfig, CompositeConfig, CompositeOperator,
-    Experiment, ExperimentType, FilteredMeanConfig, MetaExperimentConfig, MetricDefinition,
-    MetricType, QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
+    EquivalenceTestConfig, Experiment, ExperimentType, FilteredMeanConfig, MetaExperimentConfig,
+    MetricDefinition, MetricType, QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
 };
 
 pub mod composite_cycle;
@@ -83,11 +83,23 @@ pub fn validate_starting(exp: &Experiment) -> Result<(), Box<Status>> {
     let exp_type = ExperimentType::try_from(exp.r#type).unwrap_or(ExperimentType::Unspecified);
 
     match exp_type {
-        ExperimentType::Meta => validate_meta(exp),
-        ExperimentType::Switchback => validate_switchback(exp),
-        ExperimentType::Quasi => validate_quasi(exp),
-        _ => Ok(()),
+        ExperimentType::Meta => validate_meta(exp)?,
+        ExperimentType::Switchback => validate_switchback(exp)?,
+        ExperimentType::Quasi => validate_quasi(exp)?,
+        _ => {}
     }
+
+    // ADR-027: the equivalence (TOST) config is orthogonal to experiment type
+    // — any experiment can carry it. M5 (Rust) has no metric catalog (the
+    // metric-definition RPCs are unimplemented stubs), so the primary-metric
+    // type is not resolvable here; the structural rules below still apply and
+    // the MEAN/RATIO gate is enforced by any caller that can resolve the type
+    // (mirrors the ADR-020 M4a/M5 Delta-only constraint).
+    if let Some(eq) = exp.equivalence_test.as_ref() {
+        validate_equivalence_test_config(eq, None)?;
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +271,74 @@ fn validate_quasi_config(cfg: &QuasiExperimentConfig) -> Result<(), Box<Status>>
             )));
         }
     }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// EQUIVALENCE / TOST validator (ADR-027 §5)
+// ---------------------------------------------------------------------------
+
+/// Validate an experiment's equivalence (TOST) test configuration.
+///
+/// Hard rules (reject the DRAFT→STARTING transition):
+///   - `delta` must be finite and strictly > 0 (the equivalence margin).
+///   - `alpha`, when set (> 0), must lie in (0, 0.5); the proto default 0.0
+///     means "unset" and M4a falls back to the canonical per-side α = 0.05.
+///   - `delta_relative`, when set, must be finite and > 0, and — when the
+///     primary metric type is resolvable (`Some`) — the metric must be MEAN
+///     or RATIO; a relative margin is not meaningful for PERCENTILE/COUNT.
+///
+/// Also emits a non-fatal power warning at creation (ADR-027 §5): equivalence
+/// tests need ~2× the sample size of a same-δ superiority test.
+///
+/// `primary_metric_type` is `None` when the caller cannot resolve it (the
+/// Rust M5 metric-definition RPCs are unimplemented); the structural rules
+/// are still enforced.
+pub fn validate_equivalence_test_config(
+    cfg: &EquivalenceTestConfig,
+    primary_metric_type: Option<MetricType>,
+) -> Result<(), Box<Status>> {
+    if !(cfg.delta.is_finite() && cfg.delta > 0.0) {
+        return Err(Box::new(Status::failed_precondition(format!(
+            "equivalence_test.delta must be finite and > 0 (got {})",
+            cfg.delta
+        ))));
+    }
+
+    // alpha == 0.0 → unset (M4a uses 0.05). Any explicitly set value must be
+    // a valid per-side significance level.
+    if cfg.alpha != 0.0 && !(cfg.alpha > 0.0 && cfg.alpha < 0.5) {
+        return Err(Box::new(Status::failed_precondition(format!(
+            "equivalence_test.alpha must lie in (0, 0.5) when set (got {})",
+            cfg.alpha
+        ))));
+    }
+
+    if let Some(rel) = cfg.delta_relative {
+        if !(rel.is_finite() && rel > 0.0) {
+            return Err(Box::new(Status::failed_precondition(format!(
+                "equivalence_test.delta_relative must be finite and > 0 when set (got {rel})"
+            ))));
+        }
+        if let Some(mt) = primary_metric_type {
+            if mt != MetricType::Mean && mt != MetricType::Ratio {
+                return Err(Box::new(Status::failed_precondition(format!(
+                    "equivalence_test.delta_relative is only valid for MEAN or RATIO \
+                     primary metrics (got {mt:?}); use an absolute delta instead"
+                ))));
+            }
+        }
+    }
+
+    // ADR-027 §5: non-fatal power warning surfaced at creation.
+    tracing::warn!(
+        delta = cfg.delta,
+        delta_relative = ?cfg.delta_relative,
+        "ADR-027: equivalence (TOST) experiment configured — equivalence tests \
+         require ~2x the sample size of a standard superiority test; consider \
+         extending the planned experiment duration."
+    );
 
     Ok(())
 }
@@ -572,7 +652,8 @@ fn store_err_to_status(e: StoreError) -> Box<Status> {
 mod tests {
     use super::*;
     use experimentation_proto::experimentation::common::v1::{
-        BanditAlgorithm, MetaVariantObjective, SyntheticControlMethod,
+        BanditAlgorithm, EquivalenceTestConfig, MetaVariantObjective, MetricType,
+        SyntheticControlMethod,
     };
     use prost_types::Duration;
 
@@ -1207,5 +1288,76 @@ mod tests {
         let m = filtered_mean_metric("duration_ms", "user_id IN (SELECT id FROM users)");
         let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
         assert!(err.message().contains("subqueries"));
+    }
+
+    // --- EQUIVALENCE / TOST (ADR-027 §5) ----------------------------------
+
+    fn equiv(delta: f64, delta_relative: Option<f64>, alpha: f64) -> EquivalenceTestConfig {
+        EquivalenceTestConfig { delta, delta_relative, alpha }
+    }
+
+    #[test]
+    fn equivalence_valid_absolute_delta() {
+        let cfg = equiv(0.05, None, 0.05);
+        assert!(validate_equivalence_test_config(&cfg, None).is_ok());
+    }
+
+    #[test]
+    fn equivalence_alpha_unset_is_ok() {
+        // Proto default alpha == 0.0 means "unset" — M4a falls back to 0.05.
+        let cfg = equiv(0.05, None, 0.0);
+        assert!(validate_equivalence_test_config(&cfg, None).is_ok());
+    }
+
+    #[test]
+    fn equivalence_rejects_non_positive_delta() {
+        let err = validate_equivalence_test_config(&equiv(0.0, None, 0.05), None).unwrap_err();
+        assert!(err.message().contains("delta must be finite and > 0"));
+        let err = validate_equivalence_test_config(&equiv(-1.0, None, 0.05), None).unwrap_err();
+        assert!(err.message().contains("delta must be finite and > 0"));
+    }
+
+    #[test]
+    fn equivalence_rejects_alpha_out_of_range() {
+        let err = validate_equivalence_test_config(&equiv(0.05, None, 0.6), None).unwrap_err();
+        assert!(err.message().contains("alpha must lie in (0, 0.5)"));
+    }
+
+    #[test]
+    fn equivalence_rejects_non_positive_delta_relative() {
+        let err =
+            validate_equivalence_test_config(&equiv(0.05, Some(0.0), 0.05), None).unwrap_err();
+        assert!(err.message().contains("delta_relative must be finite and > 0"));
+    }
+
+    #[test]
+    fn equivalence_delta_relative_requires_mean_or_ratio_when_type_known() {
+        let cfg = equiv(0.05, Some(0.02), 0.05);
+        // Type unknown (M5 has no catalog) → structural pass.
+        assert!(validate_equivalence_test_config(&cfg, None).is_ok());
+        // MEAN / RATIO → pass.
+        assert!(validate_equivalence_test_config(&cfg, Some(MetricType::Mean)).is_ok());
+        assert!(validate_equivalence_test_config(&cfg, Some(MetricType::Ratio)).is_ok());
+        // PERCENTILE / COUNT → reject.
+        let err = validate_equivalence_test_config(&cfg, Some(MetricType::Percentile))
+            .unwrap_err();
+        assert!(err.message().contains("only valid for MEAN or RATIO"));
+        let err =
+            validate_equivalence_test_config(&cfg, Some(MetricType::Count)).unwrap_err();
+        assert!(err.message().contains("only valid for MEAN or RATIO"));
+    }
+
+    #[test]
+    fn validate_starting_runs_equivalence_check() {
+        let mut exp = Experiment {
+            r#type: ExperimentType::Ab as i32,
+            equivalence_test: Some(equiv(-1.0, None, 0.05)),
+            ..Default::default()
+        };
+        let err = validate_starting(&exp).unwrap_err();
+        assert!(err.message().contains("delta must be finite and > 0"));
+
+        exp.equivalence_test = Some(equiv(0.05, None, 0.05));
+        assert!(validate_starting(&exp).is_ok());
     }
 }

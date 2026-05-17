@@ -10,8 +10,9 @@ use experimentation_proto::experimentation::analysis::v1::analysis_service_serve
 };
 use experimentation_proto::experimentation::analysis::v1::{
     AdaptiveNInterimResult, AlgorithmStrength as ProtoAlgorithmStrength, AnalysisResult,
-    GetAnalysisResultRequest, GetInterferenceAnalysisRequest, GetInterleavingAnalysisRequest,
-    GetNoveltyAnalysisRequest, GetOrlAnalysisRequest, GetPortfolioAllocationRequest,
+    EquivalenceResult, GetAnalysisResultRequest, GetInterferenceAnalysisRequest,
+    GetInterleavingAnalysisRequest, GetNoveltyAnalysisRequest, GetOrlAnalysisRequest,
+    GetPortfolioAllocationRequest,
     GetPortfolioAllocationResponse, GetPortfolioPowerAnalysisRequest, GetSwitchbackAnalysisRequest,
     GetSyntheticControlAnalysisRequest, InterferenceAnalysisResult, InterleavingAnalysisResult,
     IpwResult as ProtoIpwResult, MetricResult, NoveltyAnalysisResult,
@@ -20,10 +21,13 @@ use experimentation_proto::experimentation::analysis::v1::{
     SequentialResult, SessionLevelResult, SrmResult as ProtoSrmResult, SwitchbackAnalysisResult,
     SyntheticControlAnalysisResult, TitleSpillover,
 };
-use experimentation_proto::experimentation::common::v1::AdaptiveSampleSizeConfig;
+use experimentation_proto::experimentation::common::v1::{
+    AdaptiveSampleSizeConfig, EquivalenceTestConfig,
+};
+use experimentation_core::error::assert_finite;
 use experimentation_stats::{
     adaptive_n, avlm, cate, clustering, cuped, evalue, interference, interleaving, ipw, novelty, portfolio, srm,
-    switchback, synthetic_control, ttest,
+    switchback, synthetic_control, tost, ttest,
 };
 
 /// Proto enum value for SEQUENTIAL_METHOD_AVLM (ADR-015).
@@ -214,6 +218,7 @@ async fn compute_analysis(
     tau_sq: f64,
     cuped_covariate_metric_id: &str,
     adaptive_config: Option<&AdaptiveSampleSizeConfig>,
+    equivalence_config: Option<&EquivalenceTestConfig>,
 ) -> Result<AnalysisResult, Status> {
     let data = delta_reader::read_metric_summaries(&config.delta_lake_path, experiment_id)
         .await
@@ -246,6 +251,26 @@ async fn compute_analysis(
 
     let mut metric_ids: Vec<&String> = data.metrics.keys().collect();
     metric_ids.sort();
+
+    // ADR-027: the equivalence (TOST) test runs on the *primary metric* only.
+    // M4a reads metric_summaries from Delta Lake and does not fetch the
+    // Experiment, so (consistent with the ADR-020 adaptive-N convention in
+    // `compute_adaptive_n_result`) the primary metric is the first metric
+    // alphabetically that has ≥2 observations in both the control arm and at
+    // least one treatment arm. None when no equivalence config is supplied.
+    let tost_primary_metric: Option<String> = equivalence_config.and_then(|_| {
+        metric_ids
+            .iter()
+            .find(|mid| {
+                let vd = &data.metrics[**mid];
+                let control_ok = vd.get(&control_variant).is_some_and(|c| c.len() >= 2);
+                let treatment_ok = vd
+                    .keys()
+                    .any(|k| *k != control_variant && vd[k].len() >= 2);
+                control_ok && treatment_ok
+            })
+            .map(|s| s.to_string())
+    });
 
     for metric_id in metric_ids {
         let variant_data = &data.metrics[metric_id];
@@ -357,6 +382,28 @@ async fn compute_analysis(
                 (0.0, 0.0)
             };
 
+            // ADR-027: TOST equivalence test on the primary metric only.
+            // Additive — does not touch the superiority fields above. The
+            // standard Welch t-test still runs; equivalence_result is an extra
+            // verdict for "is treatment within ±delta of control?".
+            let equivalence_result = if tost_primary_metric.as_deref() == Some(metric_id.as_str())
+            {
+                equivalence_config.and_then(|cfg| {
+                    compute_equivalence_result(
+                        cfg,
+                        &control_values,
+                        &treatment_values,
+                        control_tuples,
+                        treatment_tuples,
+                        ttest_result.control_mean,
+                        metric_id,
+                        variant_id,
+                    )
+                })
+            } else {
+                None
+            };
+
             metric_results.push(MetricResult {
                 metric_id: metric_id.clone(),
                 variant_id: variant_id.clone(),
@@ -390,6 +437,7 @@ async fn compute_analysis(
                 ),
                 e_value: ev,
                 log_e_value: log_ev,
+                equivalence_result,
             });
         }
     }
@@ -411,6 +459,161 @@ async fn compute_analysis(
         cochran_q_p_value,
         computed_at: Some(now_timestamp()),
         adaptive_n_result,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// TOST equivalence helper (ADR-027)
+// ---------------------------------------------------------------------------
+
+/// Compute the TOST equivalence result for one (primary metric, treatment
+/// variant) pair, given the per-arm observations.
+///
+/// Resolution of `delta_relative` (ADR-027 proto contract): when
+/// `delta_relative` is set, the effective margin is `delta_relative *
+/// control_mean`; otherwise the absolute `delta` is used. The MEAN/RATIO
+/// restriction on `delta_relative` is enforced upstream by M5 at experiment
+/// creation (#423) — M4a has no metric-type signal at analysis time (it reads
+/// only Delta Lake metric_summaries) so it applies the documented resolution
+/// and guards the degenerate case (non-finite or non-positive effective
+/// delta, e.g. when `control_mean ≈ 0`) by skipping TOST with a structured
+/// warning rather than panicking.
+///
+/// Uses CUPED-adjusted TOST when a usable covariate is present in both arms
+/// (same gate as the superiority CUPED path); otherwise plain Welch TOST.
+/// Returns `None` (test skipped, logged) on invalid config or a stats error;
+/// never panics on bad input. All float outputs are fail-fast `assert_finite`
+/// checked before populating the proto message.
+#[allow(clippy::too_many_arguments)]
+fn compute_equivalence_result(
+    cfg: &EquivalenceTestConfig,
+    control_values: &[f64],
+    treatment_values: &[f64],
+    control_tuples: &[(f64, Option<f64>)],
+    treatment_tuples: &[(f64, Option<f64>)],
+    control_mean: f64,
+    metric_id: &str,
+    variant_id: &str,
+) -> Option<EquivalenceResult> {
+    // Resolve the effective equivalence margin.
+    let effective_delta = match cfg.delta_relative {
+        Some(rel) => rel * control_mean,
+        None => cfg.delta,
+    };
+    if !effective_delta.is_finite() || effective_delta <= 0.0 {
+        warn!(
+            metric_id,
+            variant_id,
+            configured_delta = cfg.delta,
+            delta_relative = ?cfg.delta_relative,
+            control_mean,
+            effective_delta,
+            "ADR-027: equivalence test skipped — effective delta is not strictly \
+             positive after delta_relative resolution (delta_relative requires a \
+             non-zero control mean and a MEAN/RATIO primary metric, validated by M5)"
+        );
+        return None;
+    }
+
+    // Proto `double alpha` defaults to 0.0 when unset; fall back to the
+    // canonical per-side α = 0.05 (matching TostConfig::new).
+    let alpha = if cfg.alpha > 0.0 { cfg.alpha } else { 0.05 };
+    let tost_cfg = tost::TostConfig {
+        delta: effective_delta,
+        alpha,
+    };
+
+    // CUPED-adjusted TOST when a usable covariate is present in both arms —
+    // same gate as the superiority CUPED branch above.
+    let control_covs: Vec<f64> = control_tuples.iter().filter_map(|(_, c)| *c).collect();
+    let treatment_covs: Vec<f64> = treatment_tuples.iter().filter_map(|(_, c)| *c).collect();
+    let use_cuped = control_covs.len() == control_values.len()
+        && treatment_covs.len() == treatment_values.len()
+        && control_covs.len() >= 2
+        && treatment_covs.len() >= 2;
+
+    let tost_outcome = if use_cuped {
+        tost::tost_cuped_equivalence_test(
+            control_values,
+            treatment_values,
+            &control_covs,
+            &treatment_covs,
+            &tost_cfg,
+        )
+    } else {
+        tost::tost_equivalence_test(control_values, treatment_values, &tost_cfg)
+    };
+
+    let r = match tost_outcome {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(
+                metric_id,
+                variant_id,
+                cuped = use_cuped,
+                error = %e,
+                "ADR-027: equivalence (TOST) test failed; skipping equivalence_result"
+            );
+            return None;
+        }
+    };
+
+    // Fail-fast on the float outputs before they cross the proto boundary.
+    assert_finite(r.point_estimate, "TOST point_estimate");
+    assert_finite(r.std_error, "TOST std_error");
+    assert_finite(r.df, "TOST df");
+    assert_finite(r.p_lower, "TOST p_lower");
+    assert_finite(r.p_upper, "TOST p_upper");
+    assert_finite(r.p_tost, "TOST p_tost");
+    assert_finite(r.ci_lower, "TOST ci_lower");
+    assert_finite(r.ci_upper, "TOST ci_upper");
+    assert_finite(r.delta, "TOST effective delta");
+    // Proto contract: control_mean / treatment_mean are the RAW, pre-CUPED
+    // means. The CUPED path runs TOST on adjusted samples, so r.control_mean
+    // / r.treatment_mean would be the *adjusted* means — report the raw
+    // values instead, consistent with the raw `control_mean` used above for
+    // delta_relative resolution. (For the non-CUPED path these are identical
+    // to r.control_mean / r.treatment_mean.)
+    let raw_control_mean = control_mean;
+    let raw_treatment_mean =
+        treatment_values.iter().sum::<f64>() / treatment_values.len() as f64;
+    assert_finite(raw_control_mean, "raw control_mean");
+    assert_finite(raw_treatment_mean, "raw treatment_mean");
+
+    // ADR-027 §6: power at the current sample size given δ, under the
+    // canonical migration design assumption (true difference = 0). Consumes
+    // the realized standard error so it is genuinely "power at current n".
+    // Rendered by the M6 power indicator; a failure here is non-fatal.
+    let achieved_power = match tost::tost_achieved_power(r.std_error, r.delta, 0.0, alpha) {
+        Ok(p) => p,
+        Err(e) => {
+            warn!(
+                metric_id,
+                variant_id,
+                error = %e,
+                "ADR-027: achieved-power estimate failed; reporting 0.0"
+            );
+            0.0
+        }
+    };
+    assert_finite(achieved_power, "TOST achieved_power");
+
+    Some(EquivalenceResult {
+        point_estimate: r.point_estimate,
+        std_error: r.std_error,
+        df: r.df,
+        p_lower: r.p_lower,
+        p_upper: r.p_upper,
+        p_tost: r.p_tost,
+        ci_lower: r.ci_lower,
+        ci_upper: r.ci_upper,
+        equivalent: r.equivalent,
+        // Echo the *effective* margin actually used (post delta_relative
+        // resolution) — tost.rs sets this to tost_cfg.delta.
+        delta: r.delta,
+        control_mean: raw_control_mean,
+        treatment_mean: raw_treatment_mean,
+        achieved_power,
     })
 }
 
@@ -831,6 +1034,7 @@ impl AnalysisService for AnalysisServiceHandler {
             req.tau_sq,
             &req.cuped_covariate_metric_id,
             req.adaptive_sample_size_config.as_ref(),
+            req.equivalence_test.as_ref(),
         )
         .await?;
 
@@ -864,8 +1068,10 @@ impl AnalysisService for AnalysisServiceHandler {
             }
         }
 
-        // Cache miss or no store: compute from Delta Lake (fixed-horizon, no sequential method).
-        let result = compute_analysis(&self.config, &experiment_id, 0, 0.0, "", None).await?;
+        // Cache miss or no store: compute from Delta Lake (fixed-horizon, no
+        // sequential method, no equivalence test — TOST is run_analysis-driven).
+        let result =
+            compute_analysis(&self.config, &experiment_id, 0, 0.0, "", None, None).await?;
 
         // Write through to cache.
         if let (Some(store), Some(uuid)) = (&self.store, try_parse_uuid(&experiment_id)) {
@@ -1493,6 +1699,186 @@ mod tests {
             "CUPED should reduce variance, got {}",
             mr.variance_reduction_pct
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // ADR-027: TOST equivalence wiring (RunAnalysisRequest.equivalence_test
+    // -> MetricResult.equivalence_result on the primary metric)
+    // -----------------------------------------------------------------------
+
+    /// Build a 2-arm single-metric experiment with explicit per-arm values.
+    async fn write_two_arm(
+        tmp: &TempDir,
+        metric: &str,
+        control: &[f64],
+        treatment: &[f64],
+    ) {
+        let n = control.len() + treatment.len();
+        let exp_ids: Vec<&str> = vec!["exp-1"; n];
+        let user_ids: Vec<String> = (0..n).map(|i| format!("u{i}")).collect();
+        let user_refs: Vec<&str> = user_ids.iter().map(|s| s.as_str()).collect();
+        let mut variant_ids: Vec<&str> = vec!["control"; control.len()];
+        variant_ids.extend(vec!["treatment"; treatment.len()]);
+        let metric_ids: Vec<&str> = vec![metric; n];
+        let mut values: Vec<f64> = control.to_vec();
+        values.extend_from_slice(treatment);
+        let covariates: Vec<Option<f64>> = vec![None; n];
+        let batch = make_analysis_data(
+            &exp_ids,
+            &user_refs,
+            &variant_ids,
+            &metric_ids,
+            &values,
+            &covariates,
+        );
+        write_table(tmp.path(), "metric_summaries", batch).await;
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_equivalence_equivalent() {
+        let tmp = TempDir::new().unwrap();
+        // Nearly identical arms (means ~10), tight spread → equivalent within a
+        // generous margin (delta = 5).
+        let control = [9.0, 10.0, 11.0, 10.0, 9.5, 10.5, 10.0, 9.8, 10.2, 10.1];
+        let treatment = [10.1, 9.9, 10.2, 9.8, 10.0, 10.3, 9.7, 10.1, 9.9, 10.0];
+        write_two_arm(&tmp, "ctr", &control, &treatment).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+                equivalence_test: Some(EquivalenceTestConfig {
+                    delta: 5.0,
+                    delta_relative: None,
+                    alpha: 0.05,
+                }),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let mr = &resp.into_inner().metric_results[0];
+        let eq = mr
+            .equivalence_result
+            .as_ref()
+            .expect("equivalence_result must be populated on the primary metric");
+        assert!(
+            eq.equivalent,
+            "arms within ±5 should be declared equivalent (p_tost={}, ci=[{}, {}])",
+            eq.p_tost, eq.ci_lower, eq.ci_upper
+        );
+        assert!(eq.p_tost < 0.05, "p_tost should reject, got {}", eq.p_tost);
+        assert!((eq.delta - 5.0).abs() < 1e-12, "effective delta echoed");
+        assert!(eq.std_error > 0.0 && eq.df > 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_equivalence_not_equivalent() {
+        let tmp = TempDir::new().unwrap();
+        // Clearly separated arms (≈+10 effect) with a tiny margin (delta = 0.5)
+        // → not equivalent.
+        let control = [1.0, 2.0, 3.0, 4.0, 5.0, 1.5, 2.5, 3.5, 4.5, 2.0];
+        let treatment = [11.0, 12.0, 13.0, 14.0, 15.0, 11.5, 12.5, 13.5, 14.5, 12.0];
+        write_two_arm(&tmp, "ctr", &control, &treatment).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+                equivalence_test: Some(EquivalenceTestConfig {
+                    delta: 0.5,
+                    delta_relative: None,
+                    alpha: 0.05,
+                }),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let mr = &resp.into_inner().metric_results[0];
+        let eq = mr
+            .equivalence_result
+            .as_ref()
+            .expect("equivalence_result must be populated on the primary metric");
+        assert!(
+            !eq.equivalent,
+            "a +10 effect cannot be equivalent within ±0.5 (p_tost={})",
+            eq.p_tost
+        );
+        // Superiority path must still be intact and detect the difference.
+        assert!(mr.is_significant, "Welch t-test should still flag the effect");
+        assert!((mr.absolute_effect - 10.0).abs() < 1e-9);
+        assert!((eq.delta - 0.5).abs() < 1e-12);
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_equivalence_delta_relative() {
+        let tmp = TempDir::new().unwrap();
+        // Control mean = 100. delta_relative = 0.05 → effective delta = 5.0.
+        let control = [98.0, 100.0, 102.0, 99.0, 101.0, 100.0, 99.5, 100.5, 101.0, 99.0];
+        let treatment = [
+            100.5, 99.5, 101.0, 99.0, 100.0, 100.2, 99.8, 100.1, 99.9, 100.0,
+        ];
+        write_two_arm(&tmp, "ctr", &control, &treatment).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+                equivalence_test: Some(EquivalenceTestConfig {
+                    delta: 0.0, // ignored when delta_relative is set
+                    delta_relative: Some(0.05),
+                    alpha: 0.05,
+                }),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let mr = &resp.into_inner().metric_results[0];
+        let eq = mr
+            .equivalence_result
+            .as_ref()
+            .expect("equivalence_result must be populated");
+        let control_mean = mr.control_mean;
+        // Effective delta = delta_relative * control_mean, echoed in the result.
+        let expected_delta = 0.05 * control_mean;
+        assert!(
+            (eq.delta - expected_delta).abs() < 1e-9,
+            "effective delta should be delta_relative*control_mean = {expected_delta}, got {}",
+            eq.delta
+        );
+        assert!(
+            (control_mean - 100.0).abs() < 1e-9,
+            "control mean should be ~100, got {control_mean}"
+        );
+        assert!(eq.equivalent, "tight arms within ±5 (≈5% of 100)");
+    }
+
+    #[tokio::test]
+    async fn test_run_analysis_no_equivalence_config_leaves_result_none() {
+        // Additive guarantee: without equivalence_test, equivalence_result is
+        // absent and the standard superiority path is unaffected.
+        let tmp = TempDir::new().unwrap();
+        let control = [1.0, 2.0, 3.0, 4.0, 5.0];
+        let treatment = [11.0, 12.0, 13.0, 14.0, 15.0];
+        write_two_arm(&tmp, "ctr", &control, &treatment).await;
+
+        let handler = test_handler(tmp.path().to_str().unwrap());
+        let resp = handler
+            .run_analysis(Request::new(RunAnalysisRequest {
+                experiment_id: "exp-1".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+
+        let mr = &resp.into_inner().metric_results[0];
+        assert!(
+            mr.equivalence_result.is_none(),
+            "equivalence_result must be None when no EquivalenceTestConfig is supplied"
+        );
+        assert!(mr.is_significant);
     }
 
     #[tokio::test]

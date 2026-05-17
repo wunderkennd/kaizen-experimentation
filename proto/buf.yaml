@@ -19,3 +19,6 @@ breaking:
     - FILE
     - PACKAGE
     - WIRE_JSON
+  # ADR-027: EquivalenceTestConfig consolidated into common/v1 (no wire consumers existed); see issue #423
+  ignore:
+    - experimentation/analysis/v1/analysis_service.proto
