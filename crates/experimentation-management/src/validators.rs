@@ -14,7 +14,9 @@
 use tonic::Status;
 
 use experimentation_proto::experimentation::common::v1::{
-    Experiment, ExperimentType, MetaExperimentConfig, QuasiExperimentConfig, SwitchbackConfig,
+    metric_definition::TypeConfig as MetricTypeConfig, Experiment, ExperimentType,
+    FilteredMeanConfig, MetaExperimentConfig, MetricDefinition, MetricType,
+    QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
 };
 
 // ---------------------------------------------------------------------------
@@ -210,6 +212,91 @@ fn validate_quasi_config(cfg: &QuasiExperimentConfig) -> Result<(), Box<Status>>
 }
 
 // ---------------------------------------------------------------------------
+// MetricDefinition validator skeleton (ADR-026 Phase 1)
+// ---------------------------------------------------------------------------
+//
+// `validate_metric_definition` is the gRPC-side entry point invoked by
+// `create_metric_definition`. Phase 1 (#433) ships this skeleton:
+//
+//   - `validate_metric_common_fields` enforces minimum sanity checks
+//     (non-empty `metric_id` + non-empty `name`).
+//   - The 3 per-type validators (`validate_filtered_mean`,
+//     `validate_composite`, `validate_windowed_count`) are intentionally
+//     no-ops at this stage — Phase B fills them in:
+//       * B1 — COMPOSITE operand arity, weight, DFS cycle detection. B1 will
+//         refactor this entry point to async and add a `&ManagementStore`
+//         parameter (operand existence + cycle walk both require store reads).
+//       * B2 — WINDOWED_COUNT event_type regex + window_hours range +
+//         optional filter_sql allowlist.
+//       * B3 — FILTERED_MEAN value_column regex + filter_sql allowlist
+//         parser (positive operator/identifier/literal allowlist).
+//
+// Stakeholder / aggregation_level are NOT enforced here: migration 007
+// defaults both to empty-string when unset, and the existing flat-six
+// metric flow tolerates that. Tightening those checks is deferred until
+// Phase 2 (#436) when the M6 UI fully owns those inputs.
+
+#[allow(clippy::result_large_err)]
+pub fn validate_metric_definition(m: &MetricDefinition) -> Result<(), Box<Status>> {
+    validate_metric_common_fields(m)?;
+    match m.r#type() {
+        MetricType::FilteredMean => validate_filtered_mean(filtered_mean_cfg(m)),
+        // COMPOSITE rules (arity, weight, cycle detection) land in B1, which
+        // will also refactor this dispatch to async + take a `&ManagementStore`.
+        MetricType::Composite => Ok(()),
+        MetricType::WindowedCount => validate_windowed_count(windowed_count_cfg(m)),
+        // Legacy 6 types (MEAN, PROPORTION, RATIO, COUNT, PERCENTILE, CUSTOM)
+        // and UNSPECIFIED fall through — existing flat-field validation, if
+        // any, lives elsewhere or has historically been absent for Phase 1.
+        _ => Ok(()),
+    }
+}
+
+#[allow(clippy::result_large_err)]
+fn validate_metric_common_fields(m: &MetricDefinition) -> Result<(), Box<Status>> {
+    if m.metric_id.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "metric_id is required",
+        )));
+    }
+    if m.name.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "metric.name is required",
+        )));
+    }
+    Ok(())
+}
+
+// Helpers: extract the oneof arm payload for the per-type validators.
+// prost generates `pub type_config: Option<TypeConfig>` (no `pub fn
+// filtered_mean()` accessor), so we destructure manually.
+fn filtered_mean_cfg(m: &MetricDefinition) -> Option<&FilteredMeanConfig> {
+    match m.type_config.as_ref()? {
+        MetricTypeConfig::FilteredMean(cfg) => Some(cfg),
+        _ => None,
+    }
+}
+
+fn windowed_count_cfg(m: &MetricDefinition) -> Option<&WindowedCountConfig> {
+    match m.type_config.as_ref()? {
+        MetricTypeConfig::WindowedCount(cfg) => Some(cfg),
+        _ => None,
+    }
+}
+
+#[allow(clippy::result_large_err)]
+fn validate_filtered_mean(_cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<Status>> {
+    // Filled in by B3 (value_column regex + filter_sql allowlist parser).
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+fn validate_windowed_count(_cfg: Option<&WindowedCountConfig>) -> Result<(), Box<Status>> {
+    // Filled in by B2 (event_type regex + window_hours range + filter_sql).
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -335,5 +422,82 @@ mod tests {
         };
         let err = validate_quasi_config(&cfg).unwrap_err();
         assert!(err.message().contains("at least 2 donor_unit_ids"));
+    }
+
+    // -----------------------------------------------------------------------
+    // MetricDefinition skeleton (ADR-026 Phase 1)
+    // -----------------------------------------------------------------------
+
+    use experimentation_proto::experimentation::common::v1::{
+        CompositeConfig, FilteredMeanConfig, WindowedCountConfig,
+    };
+
+    fn make_metric(metric_id: &str, name: &str, t: MetricType) -> MetricDefinition {
+        MetricDefinition {
+            metric_id: metric_id.into(),
+            name: name.into(),
+            r#type: t as i32,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn metric_common_fields_reject_empty_metric_id() {
+        let m = make_metric("", "Watch time", MetricType::Mean);
+        let err = validate_metric_definition(&m).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("metric_id"));
+    }
+
+    #[test]
+    fn metric_common_fields_reject_empty_name() {
+        let m = make_metric("watch_time", "", MetricType::Mean);
+        let err = validate_metric_definition(&m).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("name"));
+    }
+
+    #[test]
+    fn metric_common_fields_reject_whitespace_only() {
+        let m = make_metric("   ", "ok", MetricType::Mean);
+        let err = validate_metric_definition(&m).unwrap_err();
+        assert!(err.message().contains("metric_id"));
+    }
+
+    #[test]
+    fn metric_legacy_mean_passes_through() {
+        let m = make_metric("watch_time", "Watch time", MetricType::Mean);
+        assert!(validate_metric_definition(&m).is_ok());
+    }
+
+    #[test]
+    fn metric_filtered_mean_skeleton_passes() {
+        // B3 fills in the value_column + filter_sql rules.
+        let mut m = make_metric("filtered_dur", "Filtered duration", MetricType::FilteredMean);
+        m.type_config = Some(MetricTypeConfig::FilteredMean(FilteredMeanConfig {
+            filter_sql: "platform = 'mobile'".into(),
+            value_column: "duration_ms".into(),
+        }));
+        assert!(validate_metric_definition(&m).is_ok());
+    }
+
+    #[test]
+    fn metric_composite_skeleton_passes() {
+        // B1 fills in arity, weight, and cycle detection.
+        let mut m = make_metric("composite_a", "Composite A", MetricType::Composite);
+        m.type_config = Some(MetricTypeConfig::Composite(CompositeConfig::default()));
+        assert!(validate_metric_definition(&m).is_ok());
+    }
+
+    #[test]
+    fn metric_windowed_count_skeleton_passes() {
+        // B2 fills in event_type regex + window_hours range.
+        let mut m = make_metric("first_signup", "First signup", MetricType::WindowedCount);
+        m.type_config = Some(MetricTypeConfig::WindowedCount(WindowedCountConfig {
+            event_type: "signup_completed".into(),
+            filter_sql: String::new(),
+            window_hours: 24,
+        }));
+        assert!(validate_metric_definition(&m).is_ok());
     }
 }

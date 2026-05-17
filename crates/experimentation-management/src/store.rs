@@ -15,8 +15,9 @@ use sqlx::QueryBuilder;
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
-    metric_definition::TypeConfig as MetricTypeConfig, MetricAggregationLevel, MetricDefinition,
-    MetricStakeholder, MetricType,
+    metric_definition::TypeConfig as MetricTypeConfig, CompositeConfig, CompositeOperand,
+    FilteredMeanConfig, MetricAggregationLevel, MetricDefinition, MetricStakeholder, MetricType,
+    WindowedCountConfig,
 };
 
 // ---------------------------------------------------------------------------
@@ -319,6 +320,147 @@ fn build_metric_type_config(m: &MetricDefinition) -> Option<serde_json::Value> {
             "filter_sql": cfg.filter_sql,
             "window_hours": cfg.window_hours,
         })),
+    }
+}
+
+// Inverse of `metric_type_to_sql`: rebuild the proto enum from the PG `type`
+// column string. Unknown strings fall back to `Unspecified`.
+fn metric_type_from_sql(s: &str) -> MetricType {
+    match s {
+        "MEAN" => MetricType::Mean,
+        "PROPORTION" => MetricType::Proportion,
+        "RATIO" => MetricType::Ratio,
+        "COUNT" => MetricType::Count,
+        "PERCENTILE" => MetricType::Percentile,
+        "CUSTOM" => MetricType::Custom,
+        "FILTERED_MEAN" => MetricType::FilteredMean,
+        "COMPOSITE" => MetricType::Composite,
+        "WINDOWED_COUNT" => MetricType::WindowedCount,
+        _ => MetricType::Unspecified,
+    }
+}
+
+fn stakeholder_from_sql(s: &str) -> MetricStakeholder {
+    match s {
+        "USER" => MetricStakeholder::User,
+        "PROVIDER" => MetricStakeholder::Provider,
+        "PLATFORM" => MetricStakeholder::Platform,
+        _ => MetricStakeholder::Unspecified,
+    }
+}
+
+fn aggregation_level_from_sql(s: &str) -> MetricAggregationLevel {
+    match s {
+        "USER" => MetricAggregationLevel::User,
+        "EXPERIMENT" => MetricAggregationLevel::Experiment,
+        "PROVIDER" => MetricAggregationLevel::Provider,
+        _ => MetricAggregationLevel::Unspecified,
+    }
+}
+
+/// Inverse of `build_metric_type_config`: rebuild the proto `TypeConfig`
+/// oneof arm from the JSONB stored in `metric_definitions.type_config`.
+/// Returns `None` for legacy 6 types or rows without a structured payload.
+fn metric_type_config_from_json(
+    ty: MetricType,
+    json: Option<&serde_json::Value>,
+) -> Option<MetricTypeConfig> {
+    let v = json?;
+    match ty {
+        MetricType::FilteredMean => {
+            Some(MetricTypeConfig::FilteredMean(FilteredMeanConfig {
+                filter_sql: v
+                    .get("filter_sql")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                value_column: v
+                    .get("value_column")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            }))
+        }
+        MetricType::Composite => {
+            let operands = v
+                .get("operands")
+                .and_then(|a| a.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|op| CompositeOperand {
+                            metric_id: op
+                                .get("metric_id")
+                                .and_then(|s| s.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            weight: op
+                                .get("weight")
+                                .and_then(|n| n.as_f64())
+                                .unwrap_or(0.0),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            // operator is stored as the i32 enum value
+            let operator = v.get("operator").and_then(|n| n.as_i64()).unwrap_or(0) as i32;
+            Some(MetricTypeConfig::Composite(CompositeConfig {
+                operands,
+                operator,
+            }))
+        }
+        MetricType::WindowedCount => {
+            Some(MetricTypeConfig::WindowedCount(WindowedCountConfig {
+                event_type: v
+                    .get("event_type")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                filter_sql: v
+                    .get("filter_sql")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                window_hours: v
+                    .get("window_hours")
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32,
+            }))
+        }
+        _ => None,
+    }
+}
+
+impl MetricRow {
+    /// Round-trip a stored row back into the proto `MetricDefinition`. Mirrors
+    /// the inverse of `create_metric`'s serialisation: flat columns map to
+    /// their proto siblings, and `type_config` JSONB is rehydrated into the
+    /// oneof arm for the 3 Phase 1 types.
+    pub fn into_proto(self) -> MetricDefinition {
+        let ty = metric_type_from_sql(&self.r#type);
+        let stakeholder = stakeholder_from_sql(&self.stakeholder);
+        let aggregation_level = aggregation_level_from_sql(&self.aggregation_level);
+        let type_config =
+            metric_type_config_from_json(ty, self.type_config.as_ref().map(|j| &j.0));
+
+        MetricDefinition {
+            metric_id: self.metric_id,
+            name: self.name,
+            description: self.description.unwrap_or_default(),
+            r#type: ty as i32,
+            source_event_type: self.source_event_type.unwrap_or_default(),
+            numerator_event_type: self.numerator_event_type.unwrap_or_default(),
+            denominator_event_type: self.denominator_event_type.unwrap_or_default(),
+            percentile: self.percentile.unwrap_or(0.0),
+            custom_sql: self.custom_sql.unwrap_or_default(),
+            lower_is_better: self.lower_is_better,
+            surrogate_target_metric_id: String::new(),
+            is_qoe_metric: self.is_qoe_metric,
+            cuped_covariate_metric_id: self.cuped_covariate_metric_id.unwrap_or_default(),
+            minimum_detectable_effect: self.minimum_detectable_effect.unwrap_or(0.0),
+            stakeholder: stakeholder as i32,
+            aggregation_level: aggregation_level as i32,
+            type_config,
+        }
     }
 }
 
@@ -1004,3 +1146,131 @@ pub async fn experiment_exists(pool: &PgPool, experiment_id: Uuid) -> Result<boo
     .map_err(StoreError::Db)?;
     Ok(row.is_some())
 }
+
+// ---------------------------------------------------------------------------
+// Tests — pure round-trip serialisation (no DB required)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn synth_row(ty: &str, type_config: Option<serde_json::Value>) -> MetricRow {
+        MetricRow {
+            metric_id: "m1".into(),
+            name: "M1".into(),
+            description: None,
+            r#type: ty.into(),
+            source_event_type: None,
+            numerator_event_type: None,
+            denominator_event_type: None,
+            percentile: None,
+            custom_sql: None,
+            lower_is_better: false,
+            is_qoe_metric: false,
+            cuped_covariate_metric_id: None,
+            minimum_detectable_effect: None,
+            stakeholder: String::new(),
+            aggregation_level: String::new(),
+            type_config: type_config.map(sqlx::types::Json),
+            created_at: Utc.timestamp_opt(0, 0).unwrap(),
+        }
+    }
+
+    #[test]
+    fn metric_type_to_sql_round_trip_covers_all_variants() {
+        for t in [
+            MetricType::Mean,
+            MetricType::Proportion,
+            MetricType::Ratio,
+            MetricType::Count,
+            MetricType::Percentile,
+            MetricType::Custom,
+            MetricType::FilteredMean,
+            MetricType::Composite,
+            MetricType::WindowedCount,
+        ] {
+            let s = metric_type_to_sql(t);
+            assert_eq!(metric_type_from_sql(s), t, "{:?} did not round-trip via {}", t, s);
+        }
+    }
+
+    #[test]
+    fn filtered_mean_json_round_trip() {
+        let original = MetricDefinition {
+            metric_id: "fm1".into(),
+            name: "FM1".into(),
+            r#type: MetricType::FilteredMean as i32,
+            type_config: Some(MetricTypeConfig::FilteredMean(FilteredMeanConfig {
+                filter_sql: "platform = 'mobile' AND duration_ms > 5000".into(),
+                value_column: "duration_ms".into(),
+            })),
+            ..Default::default()
+        };
+        let json = build_metric_type_config(&original).unwrap();
+        let row = synth_row("FILTERED_MEAN", Some(json));
+        let mut rebuilt = row.into_proto();
+        // Fields not present in synth_row default to "M1"/"m1"; compare just type_config.
+        rebuilt.metric_id = original.metric_id.clone();
+        rebuilt.name = original.name.clone();
+        assert_eq!(rebuilt.type_config, original.type_config);
+        assert_eq!(rebuilt.r#type, original.r#type);
+    }
+
+    #[test]
+    fn composite_json_round_trip() {
+        let original = MetricDefinition {
+            metric_id: "c1".into(),
+            name: "C1".into(),
+            r#type: MetricType::Composite as i32,
+            type_config: Some(MetricTypeConfig::Composite(CompositeConfig {
+                operator: CompositeOperator::WeightedSum as i32,
+                operands: vec![
+                    CompositeOperand { metric_id: "a".into(), weight: 0.7 },
+                    CompositeOperand { metric_id: "b".into(), weight: 0.3 },
+                ],
+            })),
+            ..Default::default()
+        };
+        let json = build_metric_type_config(&original).unwrap();
+        let row = synth_row("COMPOSITE", Some(json));
+        let mut rebuilt = row.into_proto();
+        rebuilt.metric_id = original.metric_id.clone();
+        rebuilt.name = original.name.clone();
+        assert_eq!(rebuilt.type_config, original.type_config);
+    }
+
+    #[test]
+    fn windowed_count_json_round_trip() {
+        let original = MetricDefinition {
+            metric_id: "wc1".into(),
+            name: "WC1".into(),
+            r#type: MetricType::WindowedCount as i32,
+            type_config: Some(MetricTypeConfig::WindowedCount(WindowedCountConfig {
+                event_type: "signup_completed".into(),
+                filter_sql: "country = 'US'".into(),
+                window_hours: 168,
+            })),
+            ..Default::default()
+        };
+        let json = build_metric_type_config(&original).unwrap();
+        let row = synth_row("WINDOWED_COUNT", Some(json));
+        let mut rebuilt = row.into_proto();
+        rebuilt.metric_id = original.metric_id.clone();
+        rebuilt.name = original.name.clone();
+        assert_eq!(rebuilt.type_config, original.type_config);
+    }
+
+    #[test]
+    fn legacy_mean_has_no_type_config_after_round_trip() {
+        let row = synth_row("MEAN", None);
+        let proto = row.into_proto();
+        assert_eq!(proto.r#type, MetricType::Mean as i32);
+        assert!(proto.type_config.is_none());
+    }
+}
+
+// Needed only for tests' CompositeOperator reference.
+#[cfg(test)]
+use experimentation_proto::experimentation::common::v1::CompositeOperator;

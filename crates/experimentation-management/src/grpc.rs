@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
     Experiment, ExperimentState as ProtoState, ExperimentType, GuardrailAction, Layer,
-    LayerAllocation, MetricDefinition, SurrogateModelConfig, TargetingRule, Variant,
+    LayerAllocation, MetricDefinition, MetricType, SurrogateModelConfig, TargetingRule, Variant,
 };
 use experimentation_proto::experimentation::management::v1::{
     experiment_management_service_server::{
@@ -171,6 +171,25 @@ fn experiment_row_to_proto(row: &ExperimentRow, variants: &[VariantRow]) -> Expe
         started_at: row.started_at.map(|t| t.into_proto()),
         concluded_at: row.concluded_at.map(|t| t.into_proto()),
         ..Default::default()
+    }
+}
+
+/// Mirror of `store::metric_type_to_sql` for use at the gRPC boundary when
+/// translating the `type_filter` enum in `ListMetricDefinitionsRequest` into
+/// the SQL string the store's `MetricFilter::type` expects. Kept in sync with
+/// the CHECK constraint admit-list in migration 011.
+fn metric_type_to_pg_string(t: MetricType) -> &'static str {
+    match t {
+        MetricType::Unspecified => "",
+        MetricType::Mean => "MEAN",
+        MetricType::Proportion => "PROPORTION",
+        MetricType::Ratio => "RATIO",
+        MetricType::Count => "COUNT",
+        MetricType::Percentile => "PERCENTILE",
+        MetricType::Custom => "CUSTOM",
+        MetricType::FilteredMean => "FILTERED_MEAN",
+        MetricType::Composite => "COMPOSITE",
+        MetricType::WindowedCount => "WINDOWED_COUNT",
     }
 }
 
@@ -992,27 +1011,87 @@ impl ExperimentManagementService for ManagementServiceHandler {
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 
-    // --- Metric definitions (stubs — schema validated at DB level) ---
+    // --- Metric definitions (ADR-026 Phase 1) ---
 
     async fn create_metric_definition(
         &self,
-        _request: Request<CreateMetricDefinitionRequest>,
+        request: Request<CreateMetricDefinitionRequest>,
     ) -> Result<Response<MetricDefinition>, Status> {
-        Err(Status::unimplemented("CreateMetricDefinition not yet implemented"))
+        let metric = request
+            .into_inner()
+            .metric
+            .ok_or_else(|| Status::invalid_argument("metric is required"))?;
+
+        // Phase 1 (#433) skeleton: common-field non-empty checks land here.
+        // Per-type rules (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT) ship
+        // incrementally in B1/B2/B3 — the validator stays the single
+        // dispatch point.
+        validators::validate_metric_definition(&metric).map_err(|boxed| *boxed)?;
+
+        let row = self
+            .state
+            .store
+            .create_metric(&metric)
+            .await
+            .map_err(store_err_to_status)?;
+
+        Ok(Response::new(row.into_proto()))
     }
 
     async fn get_metric_definition(
         &self,
-        _request: Request<GetMetricDefinitionRequest>,
+        request: Request<GetMetricDefinitionRequest>,
     ) -> Result<Response<MetricDefinition>, Status> {
-        Err(Status::unimplemented("GetMetricDefinition not yet implemented"))
+        let req = request.into_inner();
+        if req.metric_id.trim().is_empty() {
+            return Err(Status::invalid_argument("metric_id is required"));
+        }
+
+        let row = self
+            .state
+            .store
+            .get_metric(&req.metric_id)
+            .await
+            .map_err(store_err_to_status)?;
+
+        Ok(Response::new(row.into_proto()))
     }
 
     async fn list_metric_definitions(
         &self,
-        _request: Request<ListMetricDefinitionsRequest>,
+        request: Request<ListMetricDefinitionsRequest>,
     ) -> Result<Response<ListMetricDefinitionsResponse>, Status> {
-        Err(Status::unimplemented("ListMetricDefinitions not yet implemented"))
+        let req = request.into_inner();
+
+        // The proto today only carries `type_filter`. Pagination is best-effort:
+        // page_size / page_token are accepted but the underlying store returns
+        // the full set (the metric catalog is small in Phase 1; cursor support
+        // arrives if/when usage warrants).
+        let type_filter = MetricType::try_from(req.type_filter)
+            .unwrap_or(MetricType::Unspecified);
+        let filter = crate::store::MetricFilter {
+            r#type: if type_filter == MetricType::Unspecified {
+                None
+            } else {
+                Some(metric_type_to_pg_string(type_filter).to_string())
+            },
+            ..Default::default()
+        };
+
+        let rows = self
+            .state
+            .store
+            .list_metrics(filter)
+            .await
+            .map_err(store_err_to_status)?;
+
+        let metrics: Vec<MetricDefinition> =
+            rows.into_iter().map(|r| r.into_proto()).collect();
+
+        Ok(Response::new(ListMetricDefinitionsResponse {
+            metrics,
+            next_page_token: String::new(),
+        }))
     }
 
     // --- Layer management ---

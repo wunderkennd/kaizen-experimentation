@@ -13,7 +13,8 @@ use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
-    Experiment, ExperimentState, ExperimentType, Layer, MetricDefinition, TargetingRule,
+    metric_definition::TypeConfig as MetricTypeConfig, Experiment, ExperimentState,
+    ExperimentType, Layer, MetricDefinition, MetricType, TargetingRule,
 };
 use experimentation_proto::experimentation::management::v1::{
     experiment_management_service_server::ExperimentManagementService,
@@ -97,17 +98,108 @@ impl ExperimentStore {
 }
 
 // ---------------------------------------------------------------------------
+// In-memory metric definition store (ADR-026 Phase 1)
+//
+// Parallel to `ExperimentStore` above. The PG-backed implementation lives in
+// `crate::store::ManagementStore`; the contract tests use this DB-free copy
+// so wire-format round-trips can be exercised without a database. Method names
+// match the PG store one-for-one so test fixtures swap in trivially.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Default)]
+pub struct MetricStore {
+    // Keyed by metric_id; insertion-order is not preserved (callers sort by id
+    // when comparing — same behaviour as the PG `ORDER BY metric_id`).
+    metrics: Arc<RwLock<HashMap<String, MetricDefinition>>>,
+}
+
+impl MetricStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn create_metric(&self, metric: MetricDefinition) -> Result<MetricDefinition, Status> {
+        let mut map = self.metrics.write().unwrap();
+        if map.contains_key(&metric.metric_id) {
+            return Err(Status::already_exists(metric.metric_id.clone()));
+        }
+        map.insert(metric.metric_id.clone(), metric.clone());
+        Ok(metric)
+    }
+
+    pub fn get_metric(&self, metric_id: &str) -> Option<MetricDefinition> {
+        self.metrics.read().unwrap().get(metric_id).cloned()
+    }
+
+    pub fn list_metrics(&self, type_filter: Option<MetricType>) -> Vec<MetricDefinition> {
+        let map = self.metrics.read().unwrap();
+        let mut out: Vec<MetricDefinition> = map
+            .values()
+            .filter(|m| match type_filter {
+                None | Some(MetricType::Unspecified) => true,
+                Some(t) => m.r#type == t as i32,
+            })
+            .cloned()
+            .collect();
+        out.sort_by(|a, b| a.metric_id.cmp(&b.metric_id));
+        out
+    }
+
+    pub fn exists_metric(&self, metric_id: &str) -> bool {
+        self.metrics.read().unwrap().contains_key(metric_id)
+    }
+
+    pub fn exists_all_metrics(&self, metric_ids: &[&str]) -> bool {
+        let map = self.metrics.read().unwrap();
+        metric_ids.iter().all(|id| map.contains_key(*id))
+    }
+
+    /// Walk a COMPOSITE row and return the operand metric_ids in declaration
+    /// order. Returns an empty Vec if the metric is missing or not COMPOSITE.
+    pub fn get_composite_operands(&self, metric_id: &str) -> Vec<String> {
+        let map = self.metrics.read().unwrap();
+        let Some(m) = map.get(metric_id) else {
+            return Vec::new();
+        };
+        match m.type_config.as_ref() {
+            Some(MetricTypeConfig::Composite(cfg)) => {
+                cfg.operands.iter().map(|op| op.metric_id.clone()).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Contract test handler
 // ---------------------------------------------------------------------------
 
 #[derive(Clone)]
 pub struct ManagementServiceHandler {
     store: Arc<ExperimentStore>,
+    metric_store: Arc<MetricStore>,
 }
 
 impl ManagementServiceHandler {
     pub fn new(store: Arc<ExperimentStore>) -> Self {
-        Self { store }
+        Self {
+            store,
+            metric_store: Arc::new(MetricStore::new()),
+        }
+    }
+
+    /// Construct with caller-supplied metric store. Lets contract tests share
+    /// a single `MetricStore` across multiple handler instances.
+    pub fn with_metric_store(
+        store: Arc<ExperimentStore>,
+        metric_store: Arc<MetricStore>,
+    ) -> Self {
+        Self { store, metric_store }
+    }
+
+    /// Accessor so contract tests can pre-seed metrics directly.
+    pub fn metric_store(&self) -> &Arc<MetricStore> {
+        &self.metric_store
     }
 
     #[allow(clippy::result_large_err)]
@@ -361,15 +453,23 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         request: Request<CreateMetricDefinitionRequest>,
     ) -> Result<Response<MetricDefinition>, Status> {
-        let req = request.into_inner();
-        let mut metric = req
+        let mut metric = request
+            .into_inner()
             .metric
             .ok_or_else(|| Status::invalid_argument("metric is required"))?;
-        if metric.name.is_empty() {
-            return Err(Status::invalid_argument("metric.name is required"));
+
+        // Mirror the production handler flow: validate via the shared
+        // skeleton, then write to the (in-memory) store. The validator
+        // enforces non-empty metric_id + name; callers in contract tests
+        // that want a server-minted id should pass an empty string and let
+        // the helper below stamp a UUID.
+        if metric.metric_id.is_empty() {
+            metric.metric_id = Uuid::new_v4().to_string();
         }
-        metric.metric_id = Uuid::new_v4().to_string();
-        Ok(Response::new(metric))
+        crate::validators::validate_metric_definition(&metric).map_err(|boxed| *boxed)?;
+
+        let created = self.metric_store.create_metric(metric)?;
+        Ok(Response::new(created))
     }
 
     async fn get_metric_definition(
@@ -380,18 +480,23 @@ impl ExperimentManagementService for ManagementServiceHandler {
         if req.metric_id.is_empty() {
             return Err(Status::invalid_argument("metric_id is required"));
         }
-        Err(Status::not_found(format!(
-            "metric {} not found",
-            req.metric_id
-        )))
+        self.metric_store
+            .get_metric(&req.metric_id)
+            .map(Response::new)
+            .ok_or_else(|| Status::not_found(format!("metric {} not found", req.metric_id)))
     }
 
     async fn list_metric_definitions(
         &self,
-        _request: Request<ListMetricDefinitionsRequest>,
+        request: Request<ListMetricDefinitionsRequest>,
     ) -> Result<Response<ListMetricDefinitionsResponse>, Status> {
+        let req = request.into_inner();
+        let type_filter = MetricType::try_from(req.type_filter)
+            .ok()
+            .filter(|t| *t != MetricType::Unspecified);
+        let metrics = self.metric_store.list_metrics(type_filter);
         Ok(Response::new(ListMetricDefinitionsResponse {
-            metrics: vec![],
+            metrics,
             next_page_token: String::new(),
         }))
     }
