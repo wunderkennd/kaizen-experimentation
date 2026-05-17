@@ -110,6 +110,7 @@ pub struct CachedEquivalenceResult {
     pub delta: f64,
     pub control_mean: f64,
     pub treatment_mean: f64,
+    pub achieved_power: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -242,6 +243,7 @@ impl From<&EquivalenceResult> for CachedEquivalenceResult {
             delta: e.delta,
             control_mean: e.control_mean,
             treatment_mean: e.treatment_mean,
+            achieved_power: e.achieved_power,
         }
     }
 }
@@ -261,6 +263,7 @@ impl From<&CachedEquivalenceResult> for EquivalenceResult {
             delta: c.delta,
             control_mean: c.control_mean,
             treatment_mean: c.treatment_mean,
+            achieved_power: c.achieved_power,
         }
     }
 }

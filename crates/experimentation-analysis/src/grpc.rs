@@ -571,6 +571,24 @@ fn compute_equivalence_result(
     assert_finite(r.control_mean, "TOST control_mean");
     assert_finite(r.treatment_mean, "TOST treatment_mean");
 
+    // ADR-027 §6: power at the current sample size given δ, under the
+    // canonical migration design assumption (true difference = 0). Consumes
+    // the realized standard error so it is genuinely "power at current n".
+    // Rendered by the M6 power indicator; a failure here is non-fatal.
+    let achieved_power = match tost::tost_achieved_power(r.std_error, r.delta, 0.0, alpha) {
+        Ok(p) => p,
+        Err(e) => {
+            warn!(
+                metric_id,
+                variant_id,
+                error = %e,
+                "ADR-027: achieved-power estimate failed; reporting 0.0"
+            );
+            0.0
+        }
+    };
+    assert_finite(achieved_power, "TOST achieved_power");
+
     Some(EquivalenceResult {
         point_estimate: r.point_estimate,
         std_error: r.std_error,
@@ -586,6 +604,7 @@ fn compute_equivalence_result(
         delta: r.delta,
         control_mean: r.control_mean,
         treatment_mean: r.treatment_mean,
+        achieved_power,
     })
 }
 
