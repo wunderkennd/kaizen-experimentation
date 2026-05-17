@@ -35,20 +35,29 @@ Before writing the factory, decide:
 
 ### 1. Does your service read `m4bOut.Endpoint`?
 
-`m4bOut` is the stateful GCE instance and is **not** part of `StageOutputs` (it's created in `NewCompute`'s preamble, not through the registry). If your service references the M4b endpoint (e.g. for direct dial, like M1 and M6 do), use the **5-param closure-capture pattern**. Otherwise use the standard **4-param signature**.
+`m4bOut` is the stateful GCE instance and is **not** part of `StageOutputs` (it's created in `NewCompute`'s preamble, not through the registry). If your service references the M4b endpoint (e.g. for direct dial, like M1 and M6 do), use the **5-param closure-capture pattern**. Otherwise use the standard **4-param signature**. The preview canary is the special case below — it ignores `StageOutputs` entirely because its image is the public hello-world container.
 
 | Signature shape | Used by |
 |----------------|---------|
-| `func NewMx(ctx, cfg, inputs, stages) (*compute.CloudRunService, error)` | canary, M2-Orch, M3, M4a, M5, M7, M2-Pipe |
+| `func NewMx(ctx, cfg, inputs, stages) (*compute.CloudRunService, error)` | M2-Orch, M3, M4a, M5, M7, M2-Pipe |
 | `func NewMx(ctx, cfg, inputs, stages, m4bEndpoint pulumi.StringInput) (*compute.CloudRunService, error)` | M1, M6 |
+| `func NewMx(ctx, cfg, inputs) (*compute.CloudRunService, error)` | canary (no upstream stage outputs) |
 
-5-param factories cannot be assigned to `RegistryEntry.Factory` directly (signature mismatch). The registry entry wraps them in a closure:
+Only the **4-param** form matches `RegistryEntry.Factory` directly; the **3-param canary** and **5-param** M1/M6 factories must be wrapped in a closure that adapts them to the 4-param `Factory` type. The registry has both shapes today:
 
 ```go
+// 5-param M1 — closure passes m4bOut.Endpoint captured from NewCompute's scope.
 {Key: "m1", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, s services.StageOutputs) (*compute.CloudRunService, error) {
     return services.NewM1Assignment(ctx, cfg, in, s, m4bOut.Endpoint)
 }},
+
+// 3-param canary — closure drops the unused stages argument.
+{Key: "preview-canary", Factory: func(ctx *pulumi.Context, cfg *kconfig.Config, in *compute.Inputs, _ services.StageOutputs) (*compute.CloudRunService, error) {
+    return services.NewCanary(ctx, cfg, in)
+}},
 ```
+
+If you're modeling a utility service after canary (no stage inputs, fixed public image), use the 3-param shape + a discarding closure. If you're modeling a real Kaizen service, the 4-param form is the right default.
 
 ### 2. How does your service mount Secret Manager secrets?
 
