@@ -11,6 +11,9 @@
 //! For other types (AB, MAB, etc.) validation is delegated to the existing
 //! CreateExperiment logic (traffic fractions, control variant, etc.).
 
+use std::sync::OnceLock;
+
+use regex::Regex;
 use tonic::Status;
 
 use experimentation_proto::experimentation::common::v1::{
@@ -20,6 +23,17 @@ use experimentation_proto::experimentation::common::v1::{
 };
 
 pub mod composite_cycle;
+
+// ---------------------------------------------------------------------------
+// Shared identifier regex (used by B2 WINDOWED_COUNT.event_type and, when B3
+// lands, FILTERED_MEAN.value_column). Compiled once via OnceLock.
+// ---------------------------------------------------------------------------
+fn identifier_re() -> &'static Regex {
+    static IDENT_RE: OnceLock<Regex> = OnceLock::new();
+    IDENT_RE.get_or_init(|| {
+        Regex::new(r"^[a-z_][a-z0-9_]*$").expect("identifier regex is a compile-time constant")
+    })
+}
 
 use crate::store::{ManagementStore, StoreError};
 
@@ -337,9 +351,72 @@ fn validate_filtered_mean(_cfg: Option<&FilteredMeanConfig>) -> Result<(), Box<S
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// WINDOWED_COUNT validator (ADR-026 Phase 1, B2)
+// ---------------------------------------------------------------------------
+//
+// Rules enforced here:
+//   * `windowed_count` oneof arm must be set (callers that pick
+//     `MetricType::WindowedCount` but leave `type_config` empty are misusing
+//     the API).
+//   * `event_type`: non-empty AND matches the identifier regex
+//     `^[a-z_][a-z0-9_]*$`. We do not consult an event catalog — locked in by
+//     the plan's "Defaults" section: regex-only until a catalog service
+//     exists.
+//   * `window_hours`: in `(0, 8760]`. 8760 = 24 * 365 = 1 year cap.
+//   * `filter_sql`: optional (empty string is the proto3 default and means
+//     "no filter"). When non-empty, B3's allowlist parser is the source of
+//     truth. Until B3 lands, we fall back to a 4096-byte sanity bound so the
+//     field cannot be abused to push arbitrarily large payloads through the
+//     gRPC handler. C1's end-to-end test will catch the gap once B3 ships.
+
+const WINDOWED_COUNT_MAX_HOURS: i32 = 8760;
+const FILTER_SQL_MAX_LEN_FALLBACK: usize = 4096;
+
 #[allow(clippy::result_large_err)]
-fn validate_windowed_count(_cfg: Option<&WindowedCountConfig>) -> Result<(), Box<Status>> {
-    // Filled in by B2 (event_type regex + window_hours range + filter_sql).
+fn validate_windowed_count(cfg: Option<&WindowedCountConfig>) -> Result<(), Box<Status>> {
+    let cfg = cfg.ok_or_else(|| {
+        Box::new(Status::invalid_argument(
+            "windowed_count metric requires WindowedCountConfig",
+        ))
+    })?;
+
+    if cfg.event_type.is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "windowed_count.event_type must not be empty",
+        )));
+    }
+    if !identifier_re().is_match(&cfg.event_type) {
+        return Err(Box::new(Status::invalid_argument(format!(
+            "windowed_count.event_type must match identifier regex ^[a-z_][a-z0-9_]*$, got {}",
+            cfg.event_type
+        ))));
+    }
+
+    if cfg.window_hours <= 0 {
+        return Err(Box::new(Status::invalid_argument(
+            "windowed_count.window_hours must be > 0",
+        )));
+    }
+    if cfg.window_hours > WINDOWED_COUNT_MAX_HOURS {
+        return Err(Box::new(Status::invalid_argument(
+            "windowed_count.window_hours must be <= 8760 (1 year)",
+        )));
+    }
+
+    if !cfg.filter_sql.is_empty() {
+        // TODO(B3): replace with filter_sql allowlist parser
+        // (validators::filter_sql::validate_filter_sql). Until B3 lands, the
+        // bound below is a sanity guard, not a real semantic check.
+        if cfg.filter_sql.len() >= FILTER_SQL_MAX_LEN_FALLBACK {
+            return Err(Box::new(Status::invalid_argument(format!(
+                "windowed_count.filter_sql length must be < {} bytes (got {})",
+                FILTER_SQL_MAX_LEN_FALLBACK,
+                cfg.filter_sql.len()
+            ))));
+        }
+    }
+
     Ok(())
 }
 
@@ -834,5 +911,144 @@ mod tests {
         let lookup = MockLookup::new(graph);
         let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
         assert!(err.message().contains("cycle"));
+    }
+
+    // ---- WINDOWED_COUNT validator (B2) ------------------------------------
+
+    fn windowed_count_metric(
+        event_type: &str,
+        window_hours: i32,
+        filter_sql: &str,
+    ) -> MetricDefinition {
+        let mut m = make_metric("wc", "wc", MetricType::WindowedCount);
+        m.type_config = Some(MetricTypeConfig::WindowedCount(WindowedCountConfig {
+            event_type: event_type.into(),
+            filter_sql: filter_sql.into(),
+            window_hours,
+        }));
+        m
+    }
+
+    #[tokio::test]
+    async fn windowed_count_missing_config_rejected() {
+        let mut m = make_metric("wc", "wc", MetricType::WindowedCount);
+        m.type_config = None;
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("WindowedCountConfig"));
+    }
+
+    #[tokio::test]
+    async fn windowed_count_empty_event_type_rejected() {
+        let m = windowed_count_metric("", 24, "");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("event_type"));
+        assert!(err.message().contains("empty"));
+    }
+
+    #[tokio::test]
+    async fn windowed_count_invalid_event_type_rejected() {
+        // Each sub-case violates the identifier regex differently.
+        for bad in ["Signup", "1signup", "signup completed", "signup-completed", "SIGNUP"] {
+            let m = windowed_count_metric(bad, 24, "");
+            let err = validate_metric_definition(&m, &empty_lookup())
+                .await
+                .unwrap_err_or_else_panic(bad);
+            assert_eq!(err.code(), tonic::Code::InvalidArgument, "expected reject for {bad:?}");
+            assert!(
+                err.message().contains("identifier regex"),
+                "message for {bad:?} missing identifier-regex hint: {}",
+                err.message()
+            );
+            assert!(
+                err.message().contains(bad),
+                "message for {bad:?} should echo offending value: {}",
+                err.message()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn windowed_count_valid_event_type_accepted() {
+        for good in ["signup", "page_view", "c1_clicked", "_internal", "a"] {
+            let m = windowed_count_metric(good, 24, "");
+            assert!(
+                validate_metric_definition(&m, &empty_lookup()).await.is_ok(),
+                "expected accept for {good:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn windowed_count_zero_hours_rejected() {
+        let m = windowed_count_metric("signup", 0, "");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("window_hours"));
+        assert!(err.message().contains("> 0"));
+    }
+
+    #[tokio::test]
+    async fn windowed_count_negative_hours_rejected() {
+        let m = windowed_count_metric("signup", -1, "");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("window_hours"));
+        assert!(err.message().contains("> 0"));
+    }
+
+    #[tokio::test]
+    async fn windowed_count_excessive_hours_rejected() {
+        let m = windowed_count_metric("signup", 8761, "");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("window_hours"));
+        assert!(err.message().contains("8760"));
+    }
+
+    #[tokio::test]
+    async fn windowed_count_one_year_accepted() {
+        let m = windowed_count_metric("signup", 8760, "");
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn windowed_count_one_hour_accepted() {
+        let m = windowed_count_metric("signup", 1, "");
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn windowed_count_with_filter_sql_within_size_bound_accepted() {
+        // Short filter; B3 will tighten this with the allowlist parser later.
+        let m = windowed_count_metric("page_view", 24, "platform = 'mobile'");
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn windowed_count_with_oversized_filter_sql_rejected() {
+        // 4096-byte sanity bound (fallback until B3 lands). Exactly at the
+        // cap is rejected; anything below is accepted.
+        let big = "a".repeat(FILTER_SQL_MAX_LEN_FALLBACK);
+        let m = windowed_count_metric("page_view", 24, &big);
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("filter_sql"));
+    }
+
+    // Small helper: panic with a descriptive message inside a loop sub-case.
+    // (`Result::unwrap_err` swallows the loop index, which makes failures
+    // hard to read.)
+    trait UnwrapErrOrPanic<T, E> {
+        fn unwrap_err_or_else_panic(self, ctx: &str) -> E;
+    }
+    impl<T: std::fmt::Debug, E> UnwrapErrOrPanic<T, E> for Result<T, E> {
+        fn unwrap_err_or_else_panic(self, ctx: &str) -> E {
+            match self {
+                Ok(v) => panic!("expected Err for {ctx:?}, got Ok({v:?})"),
+                Err(e) => e,
+            }
+        }
     }
 }
