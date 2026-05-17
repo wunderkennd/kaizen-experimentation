@@ -25,13 +25,17 @@ function EquivalenceCiPlotInner({ result, metricId }: EquivalenceCiPlotProps) {
   const { delta, ciLower, ciUpper, pointEstimate } = result;
 
   // Single-row horizontal CI: the point estimate with a (1−2α) error bar,
-  // plotted against the shaded [−δ, +δ] equivalence margin.
-  const half = Math.max(ciUpper - pointEstimate, pointEstimate - ciLower, 0);
+  // plotted against the shaded [−δ, +δ] equivalence margin. Welch CIs are
+  // asymmetric around the estimate, so the bar must use distinct low/high
+  // offsets (same convention as forest-plot.tsx) — a symmetric bar would
+  // visually misplace the interval relative to the ±δ margin.
+  const errorLow = Math.max(pointEstimate - ciLower, 0);
+  const errorHigh = Math.max(ciUpper - pointEstimate, 0);
   const chartData = [
     {
       label: metricId,
       estimate: pointEstimate,
-      ci: [half, half] as [number, number],
+      ci: [errorLow, errorHigh] as [number, number],
     },
   ];
 
