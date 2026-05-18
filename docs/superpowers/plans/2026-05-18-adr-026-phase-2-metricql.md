@@ -261,7 +261,7 @@ message MetricDefinition {
   // Stored as TEXT in metric_definitions table (no JSONB needed; the AST is
   // re-parsed on each scheduling pass — parsing is fast and avoids the
   // version-skew tax of storing parsed AST).
-  string metricql_expression = 30;  // next available field number per proto/common/v1/metric.proto
+  string metricql_expression = 20;  // first free field number after MetricDefinition's existing 1-19 range (Devin info on PR #559)
 }
 ```
 
@@ -490,6 +490,10 @@ ALTER TABLE metric_definitions ADD CONSTRAINT metric_definitions_type_check
 -- Enforce mutual exclusion at the row level: at most one of custom_sql,
 -- type_config, metricql_expression may be non-null. M5 and M3 also enforce
 -- this in code — DB constraint is defense-in-depth.
+-- Use DROP-then-ADD with IF EXISTS to make the migration safely replayable
+-- (matches the `metric_definitions_type_check` pattern just above and
+-- migration 011's style). Devin info on PR #559.
+ALTER TABLE metric_definitions DROP CONSTRAINT IF EXISTS metric_definitions_single_definition_source;
 ALTER TABLE metric_definitions ADD CONSTRAINT metric_definitions_single_definition_source
     CHECK (
         (CASE WHEN custom_sql           IS NOT NULL THEN 1 ELSE 0 END +
@@ -817,10 +821,14 @@ Walk the AST. Checks:
 - Every `Source.EventType` matches `^[a-z_][a-z0-9_]*$` (event identifier regex)
 - Every `Source.Field` matches `^[a-z_][a-z0-9_]*$` if non-empty
 - Every `Aggregation` with `Func == AggPercentile` has `0 < Percentile < 100`
-- Every `Aggregation` with `Func == AggCount` or `AggCountDistinct` has empty `Source.Field`
-  (count over events, not over values — `count(stream_start)` valid, `count(heartbeat.value)` rejected with a clear error)
-- Every `Aggregation` with `Func == AggMean` / `AggSum` / `AggPercentile` has non-empty `Source.Field`
-  (need a value to aggregate)
+- Every `Aggregation` with `Func == AggCount` or `AggProportion` has empty `Source.Field`
+  (these aggregate over event *presence*, not a value — `count(stream_start)` valid,
+  `count(heartbeat.value)` rejected; `proportion(stream_start)` valid,
+  `proportion(heartbeat.value)` rejected). Devin BUG-0001/0002 on PR #559.
+- Every `Aggregation` with `Func == AggMean` / `AggSum` / `AggCountDistinct` / `AggPercentile`
+  has non-empty `Source.Field` (need a value to aggregate over or count distinct of —
+  `mean(heartbeat.value)` valid, `mean(stream_start)` rejected;
+  `count_distinct(purchase.product_id)` valid, `count_distinct(stream_start)` rejected)
 - Every `MetricRef.ID` matches `^[a-z_][a-z0-9_]*$`
 - Every `MetricRef.ID` exists in `ctx.KnownMetricIDs` (if non-nil — M5 may pass nil at very-first-creation time and gate this check at update time)
 - Every `Filter.Predicates[].Field` matches identifier regex
@@ -910,8 +918,13 @@ func Compile(source string, ctx CompileContext) (sql string, refs []string, err 
     return sql, refs, err
 }
 
-// ExtractMetricRefs walks the AST and returns the unique @metric_ref IDs in
-// post-order traversal (operands before dependents — matches topo order).
+// ExtractMetricRefs walks the AST and returns the unique @metric_ref IDs
+// present anywhere in the expression. The returned slice is deduplicated
+// but order-unspecified — consumers (dag.go::TopologicalOrder, M5 validator)
+// treat the result as a SET, not a sequence. Inter-metric topological
+// ordering happens in dag.go using these sets as the edge source.
+// (Devin info on PR #559 — the prior "post-order traversal matches topo
+// order" claim was misleading.)
 func ExtractMetricRefs(root Node) []string
 ```
 
@@ -1039,8 +1052,17 @@ func operandIDs(m *config.MetricConfig) ([]string, error) {
     case "METRICQL":
         root, err := metricql.Parse(m.MetricqlExpression)
         if err != nil {
-            // Parse error → metric will fail at compile time anyway; treat as no deps.
-            return nil, nil
+            // Surface the parse error to the DAG builder so it can mark the
+            // metric as Failed upfront (with the parse error as the reason)
+            // rather than letting it appear unscheduled in topo output and
+            // then fail at Compile() with a confusing "operand-missing"-looking
+            // log line. Devin design feedback on PR #559: swallowing the error
+            // here defers user-visible failure to compile time, where the
+            // status_map sees no recorded entry and downstream COMPOSITEs get
+            // marked SkippedUpstreamFailure for a reason that's actually a
+            // parse error — wrong observable. Propagating gives a single,
+            // clearer Failed row with reason "metricql: parse: <msg>".
+            return nil, fmt.Errorf("metricql parse for %s: %w", m.MetricID, err)
         }
         return metricql.ExtractMetricRefs(root), nil
     }
@@ -1049,6 +1071,18 @@ func operandIDs(m *config.MetricConfig) ([]string, error) {
 ```
 
 Replace the existing `if m.Type != "COMPOSITE"` branch in `TopologicalOrder` to use `operandIDs(m)` instead. Add `MetricqlExpression string` field to `config.MetricConfig`.
+
+**Handling parse errors from `operandIDs`:** When `operandIDs` returns a non-nil error
+(only possible for METRICQL parse failures, per the helper above), `TopologicalOrder` must
+**not abort the whole pass** — instead, record the failing metric in the existing
+`skippedCycle` map's sibling: a new `failedParse map[string]error` return. The scheduler's
+deferred status flush (#475) then writes a `status.Failed` row with the parse error
+as the reason, and any downstream COMPOSITE / METRICQL that referenced this metric gets
+`SkippedUpstreamFailure` via the existing `markUnvisitedCompositesAsSkipped` pass. This
+keeps the parse error single-source (it lands in `status_map` once, at DAG build time)
+and avoids the confusing "operand-missing"-looking log that motivated Devin's design
+feedback. Update the `TopologicalOrder` return signature to
+`(sorted, skippedCycle, failedParse, err)` accordingly.
 
 - [ ] **Step 3: Add tests for METRICQL DAG ordering**
 
