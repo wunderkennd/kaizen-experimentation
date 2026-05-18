@@ -12,6 +12,7 @@ import {
 } from '@/components/metrics/metric-form-shell';
 import { MetricTypeSelect } from '@/components/metrics/metric-type-select';
 import { FilteredMeanSection } from '@/components/metrics/filtered-mean-section';
+import { CompositeSection } from '@/components/metrics/composite-section';
 import { WindowedCountSection } from '@/components/metrics/windowed-count-section';
 import type {
   MetricType,
@@ -142,10 +143,11 @@ export default function NewMetricPage() {
               />
             )}
             {state.type === 'COMPOSITE' && (
-              <p>
-                <code className="font-mono">{'<CompositeSection />'}</code> — coming in B2
-                (operator + operand picker).
-              </p>
+              <CompositeSection
+                value={state.composite}
+                onChange={(next) => dispatch({ type: 'SET_COMPOSITE', value: next })}
+                disabled={state.submitting}
+              />
             )}
             {state.type === 'WINDOWED_COUNT' && (
               <WindowedCountSection
