@@ -1,6 +1,8 @@
 'use client';
 
+import { useRef } from 'react';
 import type { AuditAction } from '@/lib/types';
+import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 
 const ALL_ACTIONS: AuditAction[] = [
   'CREATED', 'UPDATED', 'STARTED', 'PAUSED', 'RESUMED',
@@ -44,6 +46,9 @@ export function AuditFilters({
   onClear,
   hasActiveFilters,
 }: AuditFiltersProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useSearchShortcut(inputRef);
+
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
       {/* Experiment name search */}
@@ -58,13 +63,19 @@ export function AuditFilters({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
+          ref={inputRef}
           type="text"
           placeholder="Search by experiment..."
           value={experimentQuery}
           onChange={(e) => onExperimentQueryChange(e.target.value)}
-          className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-10 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           aria-label="Search by experiment name"
         />
+        <div className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center">
+          <span className="flex h-5 w-5 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[10px] font-medium text-gray-500">
+            /
+          </span>
+        </div>
       </div>
 
       {/* Action filter */}

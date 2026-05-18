@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import type { ExperimentState, ExperimentType } from '@/lib/types';
 import { STATE_CONFIG, TYPE_LABELS } from '@/lib/utils';
 import type { ExperimentFilters as Filters } from '@/lib/use-experiment-filters';
+import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 
 interface ExperimentFiltersProps {
   filters: Filters;
@@ -22,21 +23,7 @@ const ALL_TYPES: ExperimentType[] = [
 
 export function ExperimentFiltersToolbar({ filters, totalCount, filteredCount }: ExperimentFiltersProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.key === '/' &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '') &&
-        !(document.activeElement as HTMLElement)?.isContentEditable
-      ) {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  useSearchShortcut(inputRef);
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
