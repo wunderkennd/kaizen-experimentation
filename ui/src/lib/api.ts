@@ -664,7 +664,7 @@ function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition
  * payload (matches proto3 scalar default semantics — absent == zero value).
  * The discriminated `typeConfig` is expanded to its nested camelCase key.
  */
-function marshalMetricDefinition(metric: MetricDefinition): Record<string, unknown> {
+export function marshalMetricDefinition(metric: MetricDefinition): Record<string, unknown> {
   const out: Record<string, unknown> = {
     metricId: metric.metricId,
     name: metric.name,

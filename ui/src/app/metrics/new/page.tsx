@@ -14,8 +14,16 @@ import { MetricTypeSelect } from '@/components/metrics/metric-type-select';
 import { FilteredMeanSection } from '@/components/metrics/filtered-mean-section';
 import { CompositeSection } from '@/components/metrics/composite-section';
 import { WindowedCountSection } from '@/components/metrics/windowed-count-section';
+import { MetricFormPreview } from '@/components/metrics/metric-form-preview';
+import { createMetricDefinition, marshalMetricDefinition } from '@/lib/api';
+import {
+  validateFilteredMeanConfig,
+  validateCompositeConfig,
+  validateWindowedCountConfig,
+} from '@/lib/validation';
 import type {
   MetricType,
+  MetricDefinition,
   FilteredMeanConfig,
   CompositeConfig,
   WindowedCountConfig,
@@ -23,9 +31,9 @@ import type {
 
 interface MetricFormState extends MetricFormShellState {
   type: MetricType;
-  // Per-type configs: only the one matching `type` is read by the marshaller
-  // in B4. Keeping them as separate optional fields avoids reducer-action
-  // explosion (see ADR-026 Phase 1 plan "Risks + mitigations").
+  // Per-type configs: only the one matching `type` is read by the marshaller.
+  // Keeping them as separate optional fields avoids reducer-action explosion
+  // (see ADR-026 Phase 1 plan "Risks + mitigations").
   filteredMean?: FilteredMeanConfig;
   composite?: CompositeConfig;
   windowedCount?: WindowedCountConfig;
@@ -60,7 +68,7 @@ function reducer(state: MetricFormState, action: Action): MetricFormState {
       return { ...state, [action.key]: action.value };
     case 'SET_TYPE':
       // Clear type-specific configs so stale data from a previously selected
-      // type cannot leak into the marshalled submit payload (B4).
+      // type cannot leak into the marshalled submit payload.
       return {
         ...state,
         type: action.value,
@@ -81,6 +89,72 @@ function reducer(state: MetricFormState, action: Action): MetricFormState {
   }
 }
 
+/**
+ * Marshal the form state into the wire shape of `MetricDefinition`.
+ *
+ * The reducer keeps the 3 per-type configs as separate optional fields; this
+ * function reads only the one that matches `state.type`. Legacy 6 types
+ * leave `typeConfig` undefined (the server validates flat fields like
+ * `sourceEventType` / `numeratorEventType` / `percentile`, which the Phase 1
+ * UI doesn't author — adopting the legacy types in this form is out of scope
+ * for ADR-026 Phase 1 per `docs/superpowers/plans/2026-05-17-adr-026-phase-1-m6-ui.md`).
+ */
+function buildMetricFromState(state: MetricFormState): MetricDefinition {
+  const base: MetricDefinition = {
+    metricId: state.metricId,
+    name: state.name,
+    description: state.description,
+    type: state.type,
+    // The form shell does not yet author `sourceEventType` / `isQoeMetric`
+    // (those belong to the legacy 6 types which Phase 1 leaves alone).
+    // Pass empty/false; the server applies its defaults and echoes back.
+    sourceEventType: '',
+    lowerIsBetter: state.lowerIsBetter,
+    isQoeMetric: false,
+  };
+
+  switch (state.type) {
+    case 'FILTERED_MEAN':
+      if (state.filteredMean) {
+        return { ...base, typeConfig: { case: 'filteredMean', value: state.filteredMean } };
+      }
+      return base;
+    case 'COMPOSITE':
+      if (state.composite) {
+        return { ...base, typeConfig: { case: 'composite', value: state.composite } };
+      }
+      return base;
+    case 'WINDOWED_COUNT':
+      if (state.windowedCount) {
+        return { ...base, typeConfig: { case: 'windowedCount', value: state.windowedCount } };
+      }
+      return base;
+    default:
+      return base;
+  }
+}
+
+/**
+ * Whole-form validity gate for the submit button. Common fields must be
+ * non-empty and the per-type config (if any) must pass its inline validator.
+ * Legacy 6 types have no client-side config to validate — the server gates.
+ */
+function isFormValid(state: MetricFormState): boolean {
+  if (!state.metricId || state.metricId.trim().length === 0) return false;
+  if (!state.name || state.name.trim().length === 0) return false;
+
+  switch (state.type) {
+    case 'FILTERED_MEAN':
+      return !!state.filteredMean && validateFilteredMeanConfig(state.filteredMean).valid;
+    case 'COMPOSITE':
+      return !!state.composite && validateCompositeConfig(state.composite).valid;
+    case 'WINDOWED_COUNT':
+      return !!state.windowedCount && validateWindowedCountConfig(state.windowedCount).valid;
+    default:
+      return true;
+  }
+}
+
 export default function NewMetricPage() {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -89,12 +163,25 @@ export default function NewMetricPage() {
     router.push('/metrics');
   };
 
-  // Submit handler is intentionally a no-op in A3 — the per-type sections
-  // (B1/B2/B3) and the marshaller (B4) land in follow-up commits. The button
-  // is also `disabled` so this branch only runs if a user bypasses the UI.
-  const handleSubmit = (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-  };
+    dispatch({ type: 'SET_SUBMITTING', value: true });
+    dispatch({ type: 'SET_SERVER_ERROR', value: undefined });
+
+    const metric = buildMetricFromState(state);
+
+    try {
+      const created = await createMetricDefinition(metric);
+      router.push(`/metrics?created=${encodeURIComponent(created.metricId)}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Submission failed';
+      dispatch({ type: 'SET_SERVER_ERROR', value: message });
+      dispatch({ type: 'SET_SUBMITTING', value: false });
+    }
+  }
+
+  const previewMetric = buildMetricFromState(state);
+  const formValid = isFormValid(state);
 
   return (
     <div>
@@ -167,13 +254,18 @@ export default function NewMetricPage() {
             )}
           </section>
 
+          <section>
+            <h2 className="mb-2 text-lg font-semibold text-gray-900">Preview</h2>
+            <MetricFormPreview metric={previewMetric} marshal={marshalMetricDefinition} />
+          </section>
+
           {state.serverError && (
             <div
               role="alert"
               className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700"
               data-testid="metric-server-error"
             >
-              {state.serverError}
+              <strong>Server rejected:</strong> {state.serverError}
             </div>
           )}
 
@@ -188,12 +280,11 @@ export default function NewMetricPage() {
             </button>
             <button
               type="submit"
-              disabled
-              title="Submit wires up in B4 — A3 ships the form shell + type dropdown only."
+              disabled={state.submitting || !formValid}
               className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300"
               data-testid="metric-submit-button"
             >
-              Create Metric
+              {state.submitting ? 'Creating…' : 'Create Metric'}
             </button>
           </div>
         </div>

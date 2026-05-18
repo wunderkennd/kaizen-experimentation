@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import type { MetricDefinition, MetricType } from '@/lib/types';
+import { CompositeOperator } from '@/lib/types';
 import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { CopyButton } from '@/components/copy-button';
@@ -25,11 +27,92 @@ const METRIC_TYPE_BADGE: Record<MetricType, string> = {
   COUNT: 'bg-gray-100 text-gray-800',
   PERCENTILE: 'bg-amber-100 text-amber-800',
   CUSTOM: 'bg-orange-100 text-orange-800',
-  // ADR-026 Phase 1
-  FILTERED_MEAN: 'bg-cyan-100 text-cyan-800',
-  COMPOSITE: 'bg-pink-100 text-pink-800',
-  WINDOWED_COUNT: 'bg-teal-100 text-teal-800',
+  // ADR-026 Phase 1 — colors per plan: teal / indigo / rose.
+  FILTERED_MEAN: 'bg-teal-100 text-teal-800',
+  COMPOSITE: 'bg-indigo-100 text-indigo-800',
+  WINDOWED_COUNT: 'bg-rose-100 text-rose-800',
 };
+
+const COMPOSITE_OPERATOR_NAME: Record<CompositeOperator, string> = {
+  [CompositeOperator.UNSPECIFIED]: 'UNSPECIFIED',
+  [CompositeOperator.ADD]: 'ADD',
+  [CompositeOperator.SUBTRACT]: 'SUBTRACT',
+  [CompositeOperator.MULTIPLY]: 'MULTIPLY',
+  [CompositeOperator.DIVIDE]: 'DIVIDE',
+  [CompositeOperator.WEIGHTED_SUM]: 'WEIGHTED_SUM',
+};
+
+/**
+ * Inline detail-row renderer for the ADR-026 Phase 1 `typeConfig` oneof.
+ * Kept inline (not extracted) — the existing detail row is hand-rolled and
+ * this block follows the same `<dl><div><dt>/<dd></div></dl>` pattern.
+ */
+function TypeConfigDetail({ metric }: { metric: MetricDefinition }) {
+  const cfg = metric.typeConfig;
+  if (!cfg) return null;
+  switch (cfg.case) {
+    case 'filteredMean':
+      return (
+        <>
+          <div>
+            <dt className="font-medium text-gray-500">Value Column</dt>
+            <dd className="text-gray-900"><code className="text-xs">{cfg.value.valueColumn}</code></dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="font-medium text-gray-500">Filter SQL</dt>
+            <dd className="mt-1">
+              <SqlHighlighter sql={cfg.value.filterSql} />
+            </dd>
+          </div>
+        </>
+      );
+    case 'composite':
+      return (
+        <>
+          <div>
+            <dt className="font-medium text-gray-500">Operator</dt>
+            <dd className="text-gray-900">{COMPOSITE_OPERATOR_NAME[cfg.value.operator]}</dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="font-medium text-gray-500">Operands</dt>
+            <dd className="mt-1">
+              <ul className="list-disc pl-5 text-gray-900">
+                {cfg.value.operands.map((op, idx) => (
+                  <li key={`${op.metricId}-${idx}`} data-testid={`composite-operand-${idx}`}>
+                    <code className="text-xs">{op.metricId}</code>
+                    {cfg.value.operator === CompositeOperator.WEIGHTED_SUM && (
+                      <span className="ml-2 text-xs text-gray-500">weight: {op.weight}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        </>
+      );
+    case 'windowedCount':
+      return (
+        <>
+          <div>
+            <dt className="font-medium text-gray-500">Event Type</dt>
+            <dd className="text-gray-900"><code className="text-xs">{cfg.value.eventType}</code></dd>
+          </div>
+          <div>
+            <dt className="font-medium text-gray-500">Window (hours)</dt>
+            <dd className="text-gray-900">{cfg.value.windowHours}</dd>
+          </div>
+          {cfg.value.filterSql && (
+            <div className="col-span-2">
+              <dt className="font-medium text-gray-500">Filter SQL</dt>
+              <dd className="mt-1">
+                <SqlHighlighter sql={cfg.value.filterSql} />
+              </dd>
+            </div>
+          )}
+        </>
+      );
+  }
+}
 
 const ALL_METRIC_TYPES: MetricType[] = [
   'MEAN',
@@ -193,6 +276,7 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
                   </dd>
                 </div>
               )}
+              <TypeConfigDetail metric={metric} />
             </dl>
           </td>
         </tr>
@@ -271,13 +355,22 @@ function MetricBrowserContent() {
         { label: 'Metrics' },
       ]} />
 
-      <div className="mb-6 flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Metric Definitions</h1>
-        {!isEmpty && (
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="metric-count">
-            {filtered.length}
-          </span>
-        )}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">Metric Definitions</h1>
+          {!isEmpty && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="metric-count">
+              {filtered.length}
+            </span>
+          )}
+        </div>
+        <Link
+          href="/metrics/new"
+          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+          data-testid="new-metric-button"
+        >
+          New Metric
+        </Link>
       </div>
 
       {isEmpty ? (
