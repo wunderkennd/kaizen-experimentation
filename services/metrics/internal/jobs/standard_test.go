@@ -669,3 +669,126 @@ func TestStandardJob_Run_FailFastStillMarksDownstreamComposite(t *testing.T) {
 	assert.Contains(t, skipped.Reason, "op_a",
 		"comp_b skip reason should mention the blocking operand")
 }
+
+// TestStandardJob_Run_CompositeRunsAfterOperands is the ADR-026 #475 happy-path
+// guard for topo-order scheduling: a COMPOSITE metric whose operands are
+// independent non-COMPOSITE metrics must have its daily-metric SQL executed
+// strictly AFTER both operand queries, because composite.sql.tmpl reads from
+// delta.metric_summaries and would return NULL if scheduled before its
+// operands wrote their rows. The ordering between unrelated operands is
+// intentionally unconstrained (statusMap / topo-order do not promise stable
+// ordering for siblings).
+func TestStandardJob_Run_CompositeRunsAfterOperands(t *testing.T) {
+	// Inline fixture: three metrics on a single experiment.
+	//   session_score   -- MEAN over heartbeat events
+	//   click_rate      -- PROPORTION over click events (single source_event_type
+	//                      matches how PROPORTION is wired in seed_config.json;
+	//                      numerator/denominator fields belong to RATIO)
+	//   engagement_index -- COMPOSITE WEIGHTED_SUM(session_score*0.6 + click_rate*0.4)
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_composite_happy_path.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000aa01",
+				"name": "composite_happy_path",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "engagement_index",
+				"secondary_metric_ids": ["session_score", "click_rate"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "session_score",
+				"name": "Session score (MEAN)",
+				"type": "MEAN",
+				"source_event_type": "session_end",
+				"value_column": "session_score"
+			},
+			{
+				"metric_id": "click_rate",
+				"name": "Click rate (PROPORTION)",
+				"type": "PROPORTION",
+				"source_event_type": "click"
+			},
+			{
+				"metric_id": "engagement_index",
+				"name": "Engagement index (COMPOSITE)",
+				"type": "COMPOSITE",
+				"source_event_type": "n/a",
+				"operator": "WEIGHTED_SUM",
+				"operands": [
+					{"metric_id": "session_score", "weight": 0.6},
+					{"metric_id": "click_rate", "weight": 0.4}
+				]
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(500)
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, runErr := job.Run(context.Background(), "e0000000-0000-0000-0000-00000000aa01")
+	require.NoError(t, runErr, "happy path must not surface any error")
+
+	// Locate the index of each metric's daily-metric SQL in the executor's
+	// recorded call list. Every daily-metric template (mean, proportion,
+	// composite) emits `'<metric_id>' AS metric_id` in its projection, which
+	// uniquely identifies the originating render. Daily-treatment-effect SQL
+	// also references metric IDs but uses `ms.metric_id = '...'` (qualified)
+	// so it does not collide with the literal-projection search below.
+	calls := executor.GetCalls()
+	dailyIdxOf := func(metricID string) int {
+		needle := "'" + metricID + "' AS metric_id"
+		for i, c := range calls {
+			if strings.Contains(c.SQL, needle) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	idxSession := dailyIdxOf("session_score")
+	idxClick := dailyIdxOf("click_rate")
+	idxComposite := dailyIdxOf("engagement_index")
+
+	require.NotEqual(t, -1, idxSession, "session_score daily-metric SQL must be executed")
+	require.NotEqual(t, -1, idxClick, "click_rate daily-metric SQL must be executed")
+	require.NotEqual(t, -1, idxComposite, "engagement_index COMPOSITE SQL must be executed")
+
+	// Topological invariant: both operands strictly precede the COMPOSITE.
+	// Order between session_score and click_rate is intentionally unconstrained.
+	assert.Less(t, idxSession, idxComposite,
+		"session_score must execute before engagement_index (COMPOSITE reads operand rows from delta.metric_summaries)")
+	assert.Less(t, idxClick, idxComposite,
+		"click_rate must execute before engagement_index (COMPOSITE reads operand rows from delta.metric_summaries)")
+
+	// All three metrics must be recorded as Completed in metric_computation_status.
+	snap := statusWriter.Snapshot()
+	byMetric := make(map[string]status.Entry, len(snap))
+	for _, e := range snap {
+		byMetric[e.MetricID] = e
+	}
+	for _, id := range []string{"session_score", "click_rate", "engagement_index"} {
+		entry, ok := byMetric[id]
+		require.Truef(t, ok, "%s must have a status row in the happy path", id)
+		assert.Equalf(t, status.Completed, entry.Status,
+			"%s status must be Completed (got %v)", id, entry.Status)
+	}
+}
