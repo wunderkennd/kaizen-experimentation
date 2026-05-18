@@ -12,7 +12,12 @@
 import { describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
-import { listMetricDefinitions } from '@/lib/api';
+import {
+  createMetricDefinition,
+  getMetricDefinition,
+  listMetricDefinitions,
+  marshalMetricDefinition,
+} from '@/lib/api';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 
@@ -235,5 +240,96 @@ describe('Metric definition wire format', () => {
 
     const result = await listMetricDefinitions();
     expect(result.metrics[0].type).toBe('UNSPECIFIED');
+  });
+
+  // --- Devin BUG-0001/0002/0003 regression tests (PR #555) -----------------
+
+  it('marshalMetricDefinition serializes stakeholder + aggregationLevel with full enum names (BUG-0001)', () => {
+    const wire = marshalMetricDefinition({
+      metricId: 'm1',
+      name: 'Provider GMV',
+      description: '',
+      type: 'MEAN',
+      sourceEventType: 'purchase',
+      lowerIsBetter: false,
+      isQoeMetric: false,
+      stakeholder: 'PROVIDER',
+      aggregationLevel: 'EXPERIMENT',
+    });
+    expect(wire.stakeholder).toBe('METRIC_STAKEHOLDER_PROVIDER');
+    expect(wire.aggregationLevel).toBe('METRIC_AGGREGATION_LEVEL_EXPERIMENT');
+  });
+
+  it('createMetricDefinition reads MetricDefinition response directly without {metric} envelope (BUG-0002)', async () => {
+    server.use(
+      http.post(`${MGMT_SVC}/CreateMetricDefinition`, () =>
+        HttpResponse.json({
+          // Server returns MetricDefinition directly — NOT wrapped in {metric: ...}.
+          metricId: 'mobile_watch_time',
+          name: 'Mobile Watch Time',
+          type: 'METRIC_TYPE_FILTERED_MEAN',
+          sourceEventType: 'heartbeat',
+          stakeholder: 'METRIC_STAKEHOLDER_USER',
+          aggregationLevel: 'METRIC_AGGREGATION_LEVEL_USER',
+        }),
+      ),
+    );
+
+    const created = await createMetricDefinition({
+      metricId: 'mobile_watch_time',
+      name: 'Mobile Watch Time',
+      description: '',
+      type: 'FILTERED_MEAN',
+      sourceEventType: 'heartbeat',
+      lowerIsBetter: false,
+      isQoeMetric: false,
+      stakeholder: 'USER',
+      aggregationLevel: 'USER',
+    });
+    expect(created.metricId).toBe('mobile_watch_time');
+    expect(created.name).toBe('Mobile Watch Time');
+    expect(created.type).toBe('FILTERED_MEAN');
+    expect(created.stakeholder).toBe('USER');
+  });
+
+  it('getMetricDefinition reads MetricDefinition response directly without {metric} envelope (BUG-0003)', async () => {
+    server.use(
+      http.post(`${MGMT_SVC}/GetMetricDefinition`, () =>
+        HttpResponse.json({
+          metricId: 'engagement_composite',
+          name: 'Engagement Composite',
+          type: 'METRIC_TYPE_COMPOSITE',
+          sourceEventType: '',
+        }),
+      ),
+    );
+
+    const fetched = await getMetricDefinition('engagement_composite');
+    expect(fetched.metricId).toBe('engagement_composite');
+    expect(fetched.name).toBe('Engagement Composite');
+    expect(fetched.type).toBe('COMPOSITE');
+  });
+
+  it('adaptMetricDefinition strips METRIC_STAKEHOLDER_ + METRIC_AGGREGATION_LEVEL_ prefixes (BUG-0001 read path)', async () => {
+    server.use(
+      http.post(`${MGMT_SVC}/ListMetricDefinitions`, () =>
+        HttpResponse.json({
+          metrics: [
+            {
+              metricId: 'm1',
+              name: 'Provider metric',
+              type: 'METRIC_TYPE_MEAN',
+              sourceEventType: 'e',
+              stakeholder: 'METRIC_STAKEHOLDER_PROVIDER',
+              aggregationLevel: 'METRIC_AGGREGATION_LEVEL_PROVIDER',
+            },
+          ],
+          nextPageToken: '',
+        }),
+      ),
+    );
+    const result = await listMetricDefinitions();
+    expect(result.metrics[0].stakeholder).toBe('PROVIDER');
+    expect(result.metrics[0].aggregationLevel).toBe('PROVIDER');
   });
 });

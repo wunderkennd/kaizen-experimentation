@@ -111,6 +111,11 @@ function buildMetricFromState(state: MetricFormState): MetricDefinition {
     sourceEventType: '',
     lowerIsBetter: state.lowerIsBetter,
     isQoeMetric: false,
+    // ADR-014 multi-stakeholder fields. Collected by MetricFormShell — must
+    // round-trip to the server or every metric gets categorized UNSPECIFIED
+    // (Devin BUG-0001 on PR #555).
+    stakeholder: state.stakeholder,
+    aggregationLevel: state.aggregationLevel,
   };
 
   switch (state.type) {

@@ -18,7 +18,10 @@ import type {
   SlateAssignmentResponse, SlateOpeResult, SlateHeatmapResult,
   SwitchbackResult, SyntheticControlResult,
 } from './types';
-import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
+import type {
+  ExperimentState, ExperimentType, MetricType, LifecycleSegment,
+  MetricStakeholder, MetricAggregationLevel,
+} from './types';
 import { CompositeOperator } from './types';
 
 // In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
@@ -636,6 +639,8 @@ function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition
     (proto.type as string) || 'MEAN',
     'METRIC_TYPE_',
   ) as MetricType;
+  const stakeholderRaw = proto.stakeholder as string | undefined;
+  const aggregationRaw = proto.aggregationLevel as string | undefined;
 
   return {
     metricId: (proto.metricId as string) || '',
@@ -652,6 +657,12 @@ function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition
     isQoeMetric: (proto.isQoeMetric as boolean) || false,
     cupedCovariateMetricId: proto.cupedCovariateMetricId as string | undefined,
     minimumDetectableEffect: proto.minimumDetectableEffect as number | undefined,
+    stakeholder: stakeholderRaw
+      ? (stripEnumPrefix(stakeholderRaw, 'METRIC_STAKEHOLDER_') as MetricStakeholder)
+      : undefined,
+    aggregationLevel: aggregationRaw
+      ? (stripEnumPrefix(aggregationRaw, 'METRIC_AGGREGATION_LEVEL_') as MetricAggregationLevel)
+      : undefined,
     typeConfig: adaptMetricTypeConfig(proto),
   };
 }
@@ -681,6 +692,10 @@ export function marshalMetricDefinition(metric: MetricDefinition): Record<string
   if (metric.surrogateTargetMetricId !== undefined) out.surrogateTargetMetricId = metric.surrogateTargetMetricId;
   if (metric.cupedCovariateMetricId !== undefined) out.cupedCovariateMetricId = metric.cupedCovariateMetricId;
   if (metric.minimumDetectableEffect !== undefined) out.minimumDetectableEffect = metric.minimumDetectableEffect;
+  // ADR-014: stakeholder + aggregation_level enums. Sent as full proto-name
+  // strings so the M5 Rust handler's prost JSON decoder routes them correctly.
+  if (metric.stakeholder !== undefined) out.stakeholder = `METRIC_STAKEHOLDER_${metric.stakeholder}`;
+  if (metric.aggregationLevel !== undefined) out.aggregationLevel = `METRIC_AGGREGATION_LEVEL_${metric.aggregationLevel}`;
 
   if (metric.typeConfig) {
     switch (metric.typeConfig.case) {
@@ -746,22 +761,26 @@ export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilte
  * server-echoed definition (with any backend-applied defaults).
  */
 export async function createMetricDefinition(metric: MetricDefinition): Promise<MetricDefinition> {
+  // CreateMetricDefinition returns the MetricDefinition DIRECTLY (not wrapped in
+  // `{ metric: ... }`). Mirror the defensive fallback pattern used by
+  // `createExperiment` above so future servers wrapping the response don't
+  // silently empty the returned object.
   const raw = await callRpc<
     { metric: Record<string, unknown> },
-    { metric?: Record<string, unknown> }
+    Record<string, unknown> & { metric?: Record<string, unknown> }
   >(MGMT_URL, MGMT_SVC, 'CreateMetricDefinition', { metric: marshalMetricDefinition(metric) }, {
     clearCacheOnSuccess: true,
   });
-  return adaptMetricDefinition(raw.metric || {});
+  return adaptMetricDefinition(raw.metric ?? raw);
 }
 
 /** Fetch one metric definition by id (ADR-026 Phase 1). */
 export async function getMetricDefinition(metricId: string): Promise<MetricDefinition> {
   const raw = await callRpc<
     { metricId: string },
-    { metric?: Record<string, unknown> }
+    Record<string, unknown> & { metric?: Record<string, unknown> }
   >(MGMT_URL, MGMT_SVC, 'GetMetricDefinition', { metricId });
-  return adaptMetricDefinition(raw.metric || {});
+  return adaptMetricDefinition(raw.metric ?? raw);
 }
 
 export interface ListAuditLogFilters {

@@ -3,19 +3,14 @@
 /**
  * Common metric-creation fields shared by every metric type (ADR-026 Phase 1).
  *
- * MetricStakeholder / MetricAggregationLevel are defined locally here as string
- * unions because `ui/src/lib/types.ts` deliberately omits them (see the
- * ADR-026 Phase 1 comment at the top of the metrics section in types.ts —
- * the hand-rolled local shape currently mirrors only the subset of
- * MetricDefinition fields the M6 read path uses). The follow-up migration to
- * generated proto-es types (#issue) will replace these with the generated
- * enums; the string values here match the proto enum identifier names
- * (proto/experimentation/common/v1/metric.proto:7-30).
+ * MetricStakeholder / MetricAggregationLevel are imported from `@/lib/types`
+ * so the wire-format marshaller in `api.ts` and the form components agree on
+ * the union members. (Earlier hand-rolled local definitions silently dropped
+ * these from the wire payload — see Devin BUG-0001 on PR #555.)
  */
 
-export type MetricStakeholder = 'USER' | 'PROVIDER' | 'PLATFORM';
-
-export type MetricAggregationLevel = 'USER' | 'EXPERIMENT' | 'PROVIDER';
+import type { MetricStakeholder, MetricAggregationLevel } from '@/lib/types';
+export type { MetricStakeholder, MetricAggregationLevel };
 
 export interface MetricFormShellState {
   metricId: string;

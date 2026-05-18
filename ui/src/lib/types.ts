@@ -586,9 +586,19 @@ export interface MetricDefinition {
   isQoeMetric: boolean;
   cupedCovariateMetricId?: string;
   minimumDetectableEffect?: number;
+  /** ADR-014: stakeholder this metric measures. Drives multi-stakeholder analysis in M4a. */
+  stakeholder?: MetricStakeholder;
+  /** ADR-014: unit of observation for M3 computation pipeline selection. */
+  aggregationLevel?: MetricAggregationLevel;
   /** ADR-026 Phase 1 per-type config (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT). */
   typeConfig?: MetricTypeConfig;
 }
+
+/** Proto: `MetricStakeholder` enum on `MetricDefinition` (ADR-014). */
+export type MetricStakeholder = 'USER' | 'PROVIDER' | 'PLATFORM';
+
+/** Proto: `MetricAggregationLevel` enum on `MetricDefinition` (ADR-014). */
+export type MetricAggregationLevel = 'USER' | 'EXPERIMENT' | 'PROVIDER';
 
 export interface ListMetricDefinitionsResponse {
   metrics: MetricDefinition[];
