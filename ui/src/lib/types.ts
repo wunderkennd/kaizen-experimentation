@@ -481,8 +481,95 @@ export interface LayerAllocation {
 }
 
 // --- Metric Definitions (M6 metric browser) ---
+//
+// ADR-026 Phase 1 (#434) — hybrid type strategy:
+//
+// The generated TypeScript stubs at `proto/gen/ts/experimentation/common/v1/`
+// (`protoc-gen-es@2.12.0`) require `@bufbuild/protobuf@^2.0.0`. The UI is
+// pinned to `@bufbuild/protobuf@1.10.1` (transitive via `@connectrpc/connect@^1.5`),
+// so the generated module does not type-check inside `ui/`. Bumping protobuf-es
+// to v2 implies a connectrpc 2.x migration that is out of scope for A1.
+//
+// We instead hand-roll local types that mirror the generated shapes **field
+// for field** (camelCase, same union discriminator keys, same scalar types),
+// so the migration to generated types in a future PR is a mechanical re-export.
+// The wire format on `CreateMetricDefinition` / `GetMetricDefinition` /
+// `ListMetricDefinitions` is the same proto JSON the M5 Rust handler
+// (#552, #433) expects; `adaptMetricDefinition` and `marshalMetricDefinition`
+// in `ui/src/lib/api.ts` translate between this local shape and the wire form.
+//
+// Follow-up: TODO(#issue) — migrate `MetricDefinition` / `MetricType` to the
+// generated proto-es types once `ui/` is on `@bufbuild/protobuf@^2 + connectrpc@^2`.
 
-export type MetricType = 'MEAN' | 'PROPORTION' | 'RATIO' | 'COUNT' | 'PERCENTILE' | 'CUSTOM';
+/** ADR-026 Phase 1 — mirrors `proto/.../FilteredMeanConfig`. */
+export interface FilteredMeanConfig {
+  filterSql: string;
+  valueColumn: string;
+}
+
+/** ADR-026 Phase 1 — mirrors `proto/.../CompositeOperand`. */
+export interface CompositeOperand {
+  metricId: string;
+  /**
+   * Coefficient. Required for WEIGHTED_SUM (must be > 0); ignored for other operators.
+   * Proto3 default is 0.0 (NOT 1.0); the M5 validator rejects `weight <= 0` for WEIGHTED_SUM.
+   */
+  weight: number;
+}
+
+/**
+ * ADR-026 Phase 1 — mirrors the proto enum `CompositeOperator`.
+ * Values match the proto enum ordinals exactly (UNSPECIFIED=0, ADD=1, ..., WEIGHTED_SUM=5).
+ * We use a TS enum (not a string union) because the M5 Rust handler decodes the
+ * `operator` field as an `i32` (proto JSON int form is the safer encoding —
+ * string form defaults silently caused BUG-0003 in #552).
+ */
+export enum CompositeOperator {
+  UNSPECIFIED = 0,
+  ADD = 1,
+  SUBTRACT = 2,
+  MULTIPLY = 3,
+  DIVIDE = 4,
+  WEIGHTED_SUM = 5,
+}
+
+/** ADR-026 Phase 1 — mirrors `proto/.../CompositeConfig`. */
+export interface CompositeConfig {
+  operands: CompositeOperand[];
+  operator: CompositeOperator;
+}
+
+/** ADR-026 Phase 1 — mirrors `proto/.../WindowedCountConfig`. */
+export interface WindowedCountConfig {
+  eventType: string;
+  filterSql: string;
+  windowHours: number;
+}
+
+export type MetricType =
+  | 'MEAN'
+  | 'PROPORTION'
+  | 'RATIO'
+  | 'COUNT'
+  | 'PERCENTILE'
+  | 'CUSTOM'
+  | 'FILTERED_MEAN'
+  | 'COMPOSITE'
+  | 'WINDOWED_COUNT';
+
+/**
+ * Discriminated union for the `MetricDefinition.type_config` proto oneof
+ * (ADR-026 Phase 1). The case names (`filteredMean`, `composite`,
+ * `windowedCount`) match the connect-es generated shape exactly so the
+ * follow-up migration to generated types is a mechanical swap.
+ *
+ * For the absent oneof, leave `MetricDefinition.typeConfig` as `undefined`
+ * (NOT `{ case: undefined }`).
+ */
+export type MetricTypeConfig =
+  | { case: 'filteredMean'; value: FilteredMeanConfig }
+  | { case: 'composite'; value: CompositeConfig }
+  | { case: 'windowedCount'; value: WindowedCountConfig };
 
 export interface MetricDefinition {
   metricId: string;
@@ -499,6 +586,8 @@ export interface MetricDefinition {
   isQoeMetric: boolean;
   cupedCovariateMetricId?: string;
   minimumDetectableEffect?: number;
+  /** ADR-026 Phase 1 per-type config (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT). */
+  typeConfig?: MetricTypeConfig;
 }
 
 export interface ListMetricDefinitionsResponse {

@@ -25,9 +25,24 @@ const METRIC_TYPE_BADGE: Record<MetricType, string> = {
   COUNT: 'bg-gray-100 text-gray-800',
   PERCENTILE: 'bg-amber-100 text-amber-800',
   CUSTOM: 'bg-orange-100 text-orange-800',
+  // ADR-026 Phase 1
+  FILTERED_MEAN: 'bg-cyan-100 text-cyan-800',
+  COMPOSITE: 'bg-pink-100 text-pink-800',
+  WINDOWED_COUNT: 'bg-teal-100 text-teal-800',
 };
 
-const ALL_METRIC_TYPES: MetricType[] = ['MEAN', 'PROPORTION', 'RATIO', 'COUNT', 'PERCENTILE', 'CUSTOM'];
+const ALL_METRIC_TYPES: MetricType[] = [
+  'MEAN',
+  'PROPORTION',
+  'RATIO',
+  'COUNT',
+  'PERCENTILE',
+  'CUSTOM',
+  // ADR-026 Phase 1
+  'FILTERED_MEAN',
+  'COMPOSITE',
+  'WINDOWED_COUNT',
+];
 
 function MetricRow({ metric }: { metric: MetricDefinition }) {
   const [expanded, setExpanded] = useState(false);

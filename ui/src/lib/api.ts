@@ -5,6 +5,7 @@ import type {
   GstTrajectoryResult, CateAnalysisResult, Layer, LayerAllocation,
   SurrogateProjection, SrmResult, MetricResult, SegmentResult, IpwResult, EquivalenceResult,
   MetricDefinition, ListMetricDefinitionsResponse,
+  MetricTypeConfig, FilteredMeanConfig, CompositeConfig, CompositeOperand, WindowedCountConfig,
   Flag, FlagType, ListFlagsResponse,
   InterleavingConfig, SessionConfig, BanditExperimentConfig, QoeConfig,
   AuditLogEntry, AuditAction, ListAuditLogResponse,
@@ -18,6 +19,7 @@ import type {
   SwitchbackResult, SyntheticControlResult,
 } from './types';
 import type { ExperimentState, ExperimentType, MetricType, LifecycleSegment } from './types';
+import { CompositeOperator } from './types';
 
 // In the browser, default to relative proxy paths (Next.js rewrites handle CORS).
 // In tests, vitest.config.ts sets NEXT_PUBLIC_*_URL to absolute URLs so MSW can intercept.
@@ -552,6 +554,82 @@ export async function getLayerAllocations(
   return raw.allocations || [];
 }
 
+// ---- MetricDefinition wire-format helpers ----
+//
+// `adaptMetricDefinition` (wire → local) and `marshalMetricDefinition`
+// (local → wire) are inverses. ADR-026 Phase 1 (#434) introduces the
+// `type_config` proto oneof; the proto JSON encoding nests the populated
+// case under its camelCase field name (`filteredMean` | `composite` |
+// `windowedCount`) and leaves the others absent.
+//
+// Encoding choices on the local→wire path:
+//   * `MetricType`: stays a string ('MEAN', 'FILTERED_MEAN', ...) — the M5
+//     Rust handler accepts proto JSON enum string form, prefixed with
+//     `METRIC_TYPE_`. Matches `typeFilter` in `listMetricDefinitions`.
+//   * `CompositeOperator`: emitted as an integer (proto enum ordinal). The
+//     Rust validator does `CompositeOperator::try_from(cfg.operator)`; the
+//     int form avoids the BUG-0003 silent string-default trap from #552.
+//   * Empty strings / 0.0 numerics in `CompositeOperand.weight`, etc., are
+//     left in place (proto3 scalar defaults are the wire representation).
+
+/** Decode the proto JSON `type_config` oneof into the local discriminated union. */
+function adaptMetricTypeConfig(
+  proto: Record<string, unknown>,
+): MetricTypeConfig | undefined {
+  const fm = proto.filteredMean as Record<string, unknown> | undefined;
+  if (fm) {
+    return {
+      case: 'filteredMean',
+      value: {
+        filterSql: (fm.filterSql as string) || '',
+        valueColumn: (fm.valueColumn as string) || '',
+      },
+    };
+  }
+  const cp = proto.composite as Record<string, unknown> | undefined;
+  if (cp) {
+    const rawOperator = cp.operator;
+    // proto JSON tolerates both int and string forms — accept both on read.
+    let operator: CompositeOperator;
+    if (typeof rawOperator === 'number') {
+      operator = rawOperator as CompositeOperator;
+    } else if (typeof rawOperator === 'string') {
+      operator = COMPOSITE_OPERATOR_FROM_STRING[rawOperator] ?? CompositeOperator.UNSPECIFIED;
+    } else {
+      operator = CompositeOperator.UNSPECIFIED;
+    }
+    const operands = ((cp.operands as Record<string, unknown>[] | undefined) || []).map(
+      (op): CompositeOperand => ({
+        metricId: (op.metricId as string) || '',
+        weight: (op.weight as number | undefined) ?? 0,
+      }),
+    );
+    return { case: 'composite', value: { operands, operator } };
+  }
+  const wc = proto.windowedCount as Record<string, unknown> | undefined;
+  if (wc) {
+    return {
+      case: 'windowedCount',
+      value: {
+        eventType: (wc.eventType as string) || '',
+        filterSql: (wc.filterSql as string) || '',
+        windowHours: (wc.windowHours as number | undefined) ?? 0,
+      },
+    };
+  }
+  // Legacy 6 metric types: absent oneof → undefined (NOT { case: undefined }).
+  return undefined;
+}
+
+const COMPOSITE_OPERATOR_FROM_STRING: Record<string, CompositeOperator> = {
+  COMPOSITE_OPERATOR_UNSPECIFIED: CompositeOperator.UNSPECIFIED,
+  COMPOSITE_OPERATOR_ADD: CompositeOperator.ADD,
+  COMPOSITE_OPERATOR_SUBTRACT: CompositeOperator.SUBTRACT,
+  COMPOSITE_OPERATOR_MULTIPLY: CompositeOperator.MULTIPLY,
+  COMPOSITE_OPERATOR_DIVIDE: CompositeOperator.DIVIDE,
+  COMPOSITE_OPERATOR_WEIGHTED_SUM: CompositeOperator.WEIGHTED_SUM,
+};
+
 /** Convert proto JSON metric definition to local MetricDefinition type. */
 function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition {
   const type = stripEnumPrefix(
@@ -574,7 +652,64 @@ function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition
     isQoeMetric: (proto.isQoeMetric as boolean) || false,
     cupedCovariateMetricId: proto.cupedCovariateMetricId as string | undefined,
     minimumDetectableEffect: proto.minimumDetectableEffect as number | undefined,
+    typeConfig: adaptMetricTypeConfig(proto),
   };
+}
+
+/**
+ * Inverse of `adaptMetricDefinition`: convert local MetricDefinition to the
+ * proto JSON wire shape the M5 `CreateMetricDefinition` RPC expects.
+ *
+ * Optional string/number fields with undefined values are omitted from the
+ * payload (matches proto3 scalar default semantics — absent == zero value).
+ * The discriminated `typeConfig` is expanded to its nested camelCase key.
+ */
+function marshalMetricDefinition(metric: MetricDefinition): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    metricId: metric.metricId,
+    name: metric.name,
+    description: metric.description,
+    type: `METRIC_TYPE_${metric.type}`,
+    sourceEventType: metric.sourceEventType,
+    lowerIsBetter: metric.lowerIsBetter,
+    isQoeMetric: metric.isQoeMetric,
+  };
+  if (metric.numeratorEventType !== undefined) out.numeratorEventType = metric.numeratorEventType;
+  if (metric.denominatorEventType !== undefined) out.denominatorEventType = metric.denominatorEventType;
+  if (metric.percentile !== undefined) out.percentile = metric.percentile;
+  if (metric.customSql !== undefined) out.customSql = metric.customSql;
+  if (metric.surrogateTargetMetricId !== undefined) out.surrogateTargetMetricId = metric.surrogateTargetMetricId;
+  if (metric.cupedCovariateMetricId !== undefined) out.cupedCovariateMetricId = metric.cupedCovariateMetricId;
+  if (metric.minimumDetectableEffect !== undefined) out.minimumDetectableEffect = metric.minimumDetectableEffect;
+
+  if (metric.typeConfig) {
+    switch (metric.typeConfig.case) {
+      case 'filteredMean': {
+        const v: FilteredMeanConfig = metric.typeConfig.value;
+        out.filteredMean = { filterSql: v.filterSql, valueColumn: v.valueColumn };
+        break;
+      }
+      case 'composite': {
+        const v: CompositeConfig = metric.typeConfig.value;
+        out.composite = {
+          operands: v.operands.map((op) => ({ metricId: op.metricId, weight: op.weight })),
+          // Emit as integer (proto enum ordinal). String form silently defaulted in BUG-0003 (#552).
+          operator: v.operator as number,
+        };
+        break;
+      }
+      case 'windowedCount': {
+        const v: WindowedCountConfig = metric.typeConfig.value;
+        out.windowedCount = {
+          eventType: v.eventType,
+          filterSql: v.filterSql,
+          windowHours: v.windowHours,
+        };
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 export interface ListMetricDefinitionsFilters {
@@ -602,6 +737,31 @@ export async function listMetricDefinitions(filters?: ListMetricDefinitionsFilte
     metrics: (raw.metrics || []).map(adaptMetricDefinition),
     nextPageToken: raw.nextPageToken || '',
   };
+}
+
+/**
+ * Create a new metric definition (ADR-026 Phase 1).
+ *
+ * Sends `CreateMetricDefinitionRequest{ metric }` to M5 and returns the
+ * server-echoed definition (with any backend-applied defaults).
+ */
+export async function createMetricDefinition(metric: MetricDefinition): Promise<MetricDefinition> {
+  const raw = await callRpc<
+    { metric: Record<string, unknown> },
+    { metric?: Record<string, unknown> }
+  >(MGMT_URL, MGMT_SVC, 'CreateMetricDefinition', { metric: marshalMetricDefinition(metric) }, {
+    clearCacheOnSuccess: true,
+  });
+  return adaptMetricDefinition(raw.metric || {});
+}
+
+/** Fetch one metric definition by id (ADR-026 Phase 1). */
+export async function getMetricDefinition(metricId: string): Promise<MetricDefinition> {
+  const raw = await callRpc<
+    { metricId: string },
+    { metric?: Record<string, unknown> }
+  >(MGMT_URL, MGMT_SVC, 'GetMetricDefinition', { metricId });
+  return adaptMetricDefinition(raw.metric || {});
 }
 
 export interface ListAuditLogFilters {
