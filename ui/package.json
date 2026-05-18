@@ -11,6 +11,10 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.0",
     "@connectrpc/connect": "^1.5.0",
     "@connectrpc/connect-web": "^1.5.0",
     "next": "^14.2.0",
