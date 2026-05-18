@@ -459,10 +459,10 @@ This is what M6 (#436) renders inline in the expression editor.
 
   // ADR-026 Phase 2: MetricQL expression source text.
   // Mutually exclusive with `custom_sql` and `type_config`.
-  string metricql_expression = 30;
+  string metricql_expression = 20;
 ```
 
-Use the next available field number — confirm by reading existing fields in `metric.proto` before picking. If 30 is taken, use the next free integer ≥ 30.
+Use field number **20** — first free after `MetricDefinition`'s existing 1-19 range. Confirm by reading `proto/experimentation/common/v1/metric.proto` before picking; if 20 has been taken by some other change since this plan was written, fall back to the next free integer ≥ 20. This must match Lock 3 (line 264) — they are the same contract artifact. Devin BUG-0001 on PR #559 round 2 (internal contradiction with Lock 3).
 
 - [ ] **Step 2: Regenerate proto bindings**
 
@@ -833,6 +833,15 @@ Walk the AST. Checks:
 - Every `MetricRef.ID` exists in `ctx.KnownMetricIDs` (if non-nil — M5 may pass nil at very-first-creation time and gate this check at update time)
 - Every `Filter.Predicates[].Field` matches identifier regex
 - Every `Window.N > 0` and `Window.Unit` is non-zero (lexer should catch but defense-in-depth)
+- **Reject top-level bare `*MetricRef` or `*Literal`** — the grammar admits these as
+  `composite_expr → term → factor → metric_ref | NUMBER`, so the parser accepts
+  `@watch_time` or `42` as a complete expression. Both are semantically nonsensical
+  as a standalone metric definition. Reject with a clear error like "a metric
+  definition must be an aggregation or arithmetic expression, not a bare ref / literal".
+  `lower()` also catches this as defense-in-depth, but the analyzer is the primary
+  rejection site so the error message comes with a `Span` for editor display.
+  (Devin info on PR #559 round 2 — `lower()` comment previously claimed Analyze
+  caught this; now it actually does.)
 
 - [ ] **Step 3: Table-driven tests for each rejection path**
 
@@ -1070,7 +1079,7 @@ func operandIDs(m *config.MetricConfig) ([]string, error) {
 }
 ```
 
-Replace the existing `if m.Type != "COMPOSITE"` branch in `TopologicalOrder` to use `operandIDs(m)` instead. Add `MetricqlExpression string` field to `config.MetricConfig`.
+Replace the existing `if m.Type != "COMPOSITE"` branch in `TopologicalOrder` to use `operandIDs(m)` instead. Add `MetricqlExpression string` field to `config.MetricConfig` with JSON tag `json:"metricql_expression,omitempty"` so seed config files (`services/metrics/internal/jobs/testdata/seed_*.json`) can deserialize it. The empty seed files don't need updates today, but the field must be JSON-tagged for future test fixtures (and for the C-phase happy-path test in T8 which writes inline fixtures). Devin info on PR #559 round 2.
 
 **Handling parse errors from `operandIDs`:** When `operandIDs` returns a non-nil error
 (only possible for METRICQL parse failures, per the helper above), `TopologicalOrder` must
@@ -1095,8 +1104,14 @@ func TestTopologicalOrder_MetricqlChain(t *testing.T) {
         {MetricID: "watch_time", Type: "MEAN"},
         {MetricID: "ctr",        Type: "PROPORTION"},
     }
-    sorted, skipped, err := TopologicalOrder(metrics)
-    if err != nil || len(skipped) != 0 { t.Fatalf("err=%v skipped=%v", err, skipped) }
+    // T7's signature lock for TopologicalOrder is
+    //   (sorted []*config.MetricConfig, skippedCycle map[string]bool,
+    //    failedParse map[string]error, err error)
+    // Destructure all four — happy path expects everything empty except `sorted`.
+    sorted, skipped, failedParse, err := TopologicalOrder(metrics)
+    if err != nil || len(skipped) != 0 || len(failedParse) != 0 {
+        t.Fatalf("err=%v skipped=%v failedParse=%v", err, skipped, failedParse)
+    }
     if sorted[2].MetricID != "weighted" {
         t.Fatalf("weighted must be last; got order %v", idsOf(sorted))
     }
