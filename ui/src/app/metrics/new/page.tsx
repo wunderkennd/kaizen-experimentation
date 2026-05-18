@@ -11,6 +11,7 @@ import {
   type MetricAggregationLevel,
 } from '@/components/metrics/metric-form-shell';
 import { MetricTypeSelect } from '@/components/metrics/metric-type-select';
+import { FilteredMeanSection } from '@/components/metrics/filtered-mean-section';
 import type {
   MetricType,
   FilteredMeanConfig,
@@ -133,10 +134,11 @@ export default function NewMetricPage() {
             className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600"
           >
             {state.type === 'FILTERED_MEAN' && (
-              <p>
-                <code className="font-mono">{'<FilteredMeanSection />'}</code> — coming in B1
-                (filter_sql + value_column).
-              </p>
+              <FilteredMeanSection
+                value={state.filteredMean}
+                onChange={(next) => dispatch({ type: 'SET_FILTERED_MEAN', value: next })}
+                disabled={state.submitting}
+              />
             )}
             {state.type === 'COMPOSITE' && (
               <p>
