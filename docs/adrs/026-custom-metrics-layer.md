@@ -9,7 +9,7 @@
 | Phase | Scope | Status | PR |
 |-------|-------|--------|----|
 | **Phase 1** | Tier 1 structured types: `FILTERED_MEAN`, `COMPOSITE`, `WINDOWED_COUNT`. M5 Rust validators (cycle detection, filter_sql allowlist), Rust `ManagementStore` CRUD, PG migration 011, M3↔M5 + M3↔M4a contract tests | **Implemented** (Closes #433) | PR opened by this branch |
-| Phase 1 (M6 UI) | Metric creation form support for new types | Proposed | #434 |
+| Phase 1 (M6 UI) | Metric creation form for new types + operator runbook | **Implemented** (Closes #434) | PR #NNN (this branch) |
 | Phase 2 | Tier 2 MetricQL DSL: lexer/parser/AST/codegen, `@metric_ref` resolution, M5 expression validation, M6 expression editor | Proposed | #435, #436 |
 | Phase 3 | Deprecate `METRIC_TYPE_CUSTOM`: migrate existing CUSTOM metrics, deprecation warnings, UI removal | Proposed | #437 |
 
