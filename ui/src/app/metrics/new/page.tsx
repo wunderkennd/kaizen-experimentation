@@ -12,6 +12,7 @@ import {
 } from '@/components/metrics/metric-form-shell';
 import { MetricTypeSelect } from '@/components/metrics/metric-type-select';
 import { FilteredMeanSection } from '@/components/metrics/filtered-mean-section';
+import { WindowedCountSection } from '@/components/metrics/windowed-count-section';
 import type {
   MetricType,
   FilteredMeanConfig,
@@ -147,10 +148,11 @@ export default function NewMetricPage() {
               </p>
             )}
             {state.type === 'WINDOWED_COUNT' && (
-              <p>
-                <code className="font-mono">{'<WindowedCountSection />'}</code> — coming in B3
-                (event_type + window_hours + optional filter_sql).
-              </p>
+              <WindowedCountSection
+                value={state.windowedCount}
+                onChange={(next) => dispatch({ type: 'SET_WINDOWED_COUNT', value: next })}
+                disabled={state.submitting}
+              />
             )}
             {state.type !== 'FILTERED_MEAN'
               && state.type !== 'COMPOSITE'
