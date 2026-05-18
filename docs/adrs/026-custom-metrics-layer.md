@@ -1,15 +1,16 @@
 # ADR-026: Custom Metrics Definition Layer
 
-- **Status**: Phase 1 Implemented (Rust M5) · Phase 2 / Phase 3 Proposed
-- **Date**: 2026-03-17 (proposed) · 2026-05-17 (Phase 1 implemented)
+- **Status**: Phase 1 Implemented (Rust M5 + M6 UI + M3 topo-order scheduling) · Phase 2 / Phase 3 Proposed
+- **Date**: 2026-03-17 (proposed) · 2026-05-17 (Phase 1 implemented) · 2026-05-18 (M3 dependency ordering)
 - **Author**: Agent-6 / Devin (requested by @wunderkennd)
 
 ## Implementation status
 
 | Phase | Scope | Status | PR |
 |-------|-------|--------|----|
-| **Phase 1** | Tier 1 structured types: `FILTERED_MEAN`, `COMPOSITE`, `WINDOWED_COUNT`. M5 Rust validators (cycle detection, filter_sql allowlist), Rust `ManagementStore` CRUD, PG migration 011, M3↔M5 + M3↔M4a contract tests | **Implemented** (Closes #433) | PR opened by this branch |
-| Phase 1 (M6 UI) | Metric creation form for new types + operator runbook | **Implemented** (Closes #434) | PR #555 |
+| **Phase 1** | Tier 1 structured types: `FILTERED_MEAN`, `COMPOSITE`, `WINDOWED_COUNT`. M5 Rust validators (cycle detection, filter_sql allowlist), Rust `ManagementStore` CRUD, PG migration 011, M3↔M5 + M3↔M4a contract tests | **Implemented** (Closes #433) | #552 |
+| Phase 1 (M6 UI) | Metric creation form for new types + operator runbook | **Implemented** (Closes #434) | #555 |
+| **Phase 1 (M3 dependency ordering)** | M3 scheduler computes a topological DAG over COMPOSITE operand dependencies (Kahn's algorithm with defense-in-depth cycle detection); new `metric_computation_status` table (migration 012) so M4a can distinguish `skipped_upstream_failure` from `missing`; downstream COMPOSITEs marked skipped even when fail-fast short-circuits the loop | **Implemented** (Closes #475) | PR opened by this branch |
 | Phase 2 | Tier 2 MetricQL DSL: lexer/parser/AST/codegen, `@metric_ref` resolution, M5 expression validation, M6 expression editor | Proposed | #435, #436 |
 | Phase 3 | Deprecate `METRIC_TYPE_CUSTOM`: migrate existing CUSTOM metrics, deprecation warnings, UI removal | Proposed | #437 |
 
