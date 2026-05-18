@@ -769,6 +769,10 @@ export async function createMetricDefinition(metric: MetricDefinition): Promise<
     { metric: Record<string, unknown> },
     Record<string, unknown> & { metric?: Record<string, unknown> }
   >(MGMT_URL, MGMT_SVC, 'CreateMetricDefinition', { metric: marshalMetricDefinition(metric) }, {
+    // Mirror the mutation pattern used by `createExperiment` / `updateExperiment`
+    // / `createFlag` etc. — bypass the read cache on the inbound path, and clear
+    // it on success so any stale `ListMetricDefinitions` response is dropped.
+    skipCache: true,
     clearCacheOnSuccess: true,
   });
   return adaptMetricDefinition(raw.metric ?? raw);

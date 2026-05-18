@@ -212,7 +212,14 @@ describe('Metric definition wire format', () => {
     // Verify enum prefix was stripped
     for (const m of result.metrics) {
       expect(m.type).not.toContain('METRIC_TYPE_');
-      expect(['MEAN', 'PROPORTION', 'RATIO', 'COUNT', 'PERCENTILE', 'CUSTOM']).toContain(m.type);
+      // Legacy 6 + ADR-026 Phase 1 (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT) — kept
+      // in lockstep with the `MetricType` union in `lib/types.ts`. If you add a new
+      // type to the union, add it here too (or any seeded metric of that type breaks
+      // this assertion). Devin info-only finding on PR #555.
+      expect([
+        'MEAN', 'PROPORTION', 'RATIO', 'COUNT', 'PERCENTILE', 'CUSTOM',
+        'FILTERED_MEAN', 'COMPOSITE', 'WINDOWED_COUNT',
+      ]).toContain(m.type);
     }
 
     // Verify zero-value booleans default to false
