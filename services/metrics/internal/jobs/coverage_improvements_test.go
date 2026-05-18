@@ -42,7 +42,7 @@ func TestStandardJob_Run_QoEEngagementCorrelation_MixedExperiment(t *testing.T) 
 	// mixed_qoe_engagement_test (e7) has ttff_mean (QoE) + watch_time_minutes (non-QoE MEAN).
 	// It also has session_level=true and lifecycle_stratification_enabled=true.
 	// This exercises: QoE-engagement correlation, session-level, and lifecycle paths.
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	result, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000007")
@@ -142,7 +142,7 @@ func TestMockInputMetricsProvider_WithInputs(t *testing.T) {
 func TestStandardJob_Run_QoEMetricRendering(t *testing.T) {
 	// playback_qoe_test (e4) has only QoE metrics.
 	// Verify the QoE rendering path is exercised.
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	result, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000004")
@@ -172,7 +172,7 @@ func TestStandardJob_Run_QoEMetricRendering(t *testing.T) {
 func TestStandardJob_Run_LifecycleMetrics(t *testing.T) {
 	// playback_qoe_test (e4) has lifecycle_stratification_enabled=true.
 	// QoE metrics are excluded from lifecycle segmentation.
-	job, _, qlWriter := setupTestJob(t)
+	job, _, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000004")

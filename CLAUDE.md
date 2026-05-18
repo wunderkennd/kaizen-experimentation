@@ -90,7 +90,7 @@ See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHA
 ## Active Work (Post-Phase 5)
 
 **New ADRs (Proposed)**:
-- **ADR-026** (`docs/adrs/026-custom-metrics-layer.md`) — Custom metrics definition layer (composite / derived / joined metrics beyond the six built-in types). Impact: M5, M3, M4a. **Phase 1 implemented** (Rust M5 + M6 UI — FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #552, #555); Phase 2 (MetricQL DSL, #435/#436) and Phase 3 (CUSTOM deprecation, #437) remain Proposed.
+- **ADR-026** (`docs/adrs/026-custom-metrics-layer.md`) — Custom metrics definition layer (composite / derived / joined metrics beyond the six built-in types). Impact: M5, M3, M4a. **Phase 1 implemented** (Rust M5 + M6 UI + M3 topo-order scheduling — FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #552, #555, #475 — M3 dependency ordering via Kahn's algorithm with `metric_computation_status` table); Phase 2 (MetricQL DSL, #435/#436) and Phase 3 (CUSTOM deprecation, #437) remain Proposed.
 - **ADR-027** (`docs/adrs/027-tost-equivalence-testing.md`) — Two One-Sided Tests for proving equivalence (infra migrations, refactor validation). Impact: M4a, M5, M6. Core impl landed (#443); see `crates/experimentation-stats/src/tost.rs`.
 - **ADR-028** (`docs/adrs/028-m4b-shadow-inference.md`) — M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation). Impact: M4b, M4a, M5, M6.
 - **ADR-029** (`docs/adrs/029-cross-modal-score-calibration.md`) — Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce). Introduces a new `experimentation-calibration` Rust crate owned by Agent-4 and opens cluster **G — Personalization Orchestration**. Impact: M4a, M4b, M5, Personalization service.

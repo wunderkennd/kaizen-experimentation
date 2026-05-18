@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -38,6 +41,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	"github.com/org/experimentation-platform/services/metrics/internal/status"
 	"github.com/org/experimentation-platform/services/metrics/internal/surrogate"
 )
 
@@ -905,5 +909,173 @@ func TestAllSQLTemplatesRenderWithoutError(t *testing.T) {
 			assert.Contains(t, strings.ToUpper(sql), "SELECT",
 				"rendered SQL should contain a SELECT statement")
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test: ADR-026 #475 — topo-order COMPOSITE scheduling is deterministic
+// across multiple back-to-back scheduling cycles.
+//
+// Acceptance criterion (#475): COMPOSITE metric with two operand chains runs
+// correctly and produces deterministic output across multiple scheduling
+// cycles. This test exercises the real status.PgWriter round-trip (the
+// MockWriter path is covered by standard_test.go) so a regression in the
+// upsert (e.g., losing ON CONFLICT, accidentally INSERT-only) would surface
+// as a uniqueness violation or duplicated rows on cycle 2/3.
+// ---------------------------------------------------------------------------
+
+func TestComputeMetrics_CompositeOrdering_MultiCycle(t *testing.T) {
+	ctx := context.Background()
+
+	pool, err := pgxpool.New(ctx, defaultDSN)
+	require.NoError(t, err, "cannot connect to PostgreSQL — is docker-compose.test.yml running?")
+	t.Cleanup(pool.Close)
+	require.NoError(t, pool.Ping(ctx), "PostgreSQL ping failed")
+
+	// Graceful skip if migration 012 hasn't been applied. The status table has
+	// no FK to experiments and is independent of the rest of the schema, so a
+	// fresh DB without `just migrate` will be missing only this table. Probe
+	// information_schema rather than catching the SQL error at write time so
+	// the skip reason is unambiguous.
+	var probe int
+	probeErr := pool.QueryRow(ctx,
+		`SELECT 1 FROM information_schema.tables WHERE table_name = 'metric_computation_status' LIMIT 1`,
+	).Scan(&probe)
+	if probeErr != nil || probe != 1 {
+		t.Skip("metric_computation_status table not present; run `just migrate` to apply migration 012")
+	}
+
+	// Inline JSON fixture seeded into t.TempDir() — same pattern the unit
+	// tests in jobs/standard_test.go use (TestStandardJob_Run_CompositeRunsAfterOperands).
+	// Three metrics on a single experiment:
+	//   it_session_score    MEAN over session_end events (value_column session_score)
+	//   it_click_rate       PROPORTION over click events
+	//   it_engagement_index COMPOSITE WEIGHTED_SUM(session*0.6 + click*0.4)
+	// The `it_` prefix keeps the cleanup query unambiguous if a previous run
+	// left rows behind.
+	const expIDStr = "exp-475-cycle"
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_475_multicycle.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "exp-475-cycle",
+				"name": "adr026_475_multicycle",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "it_engagement_index",
+				"secondary_metric_ids": ["it_session_score", "it_click_rate"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "it_session_score",
+				"name": "IT session score (MEAN)",
+				"type": "MEAN",
+				"source_event_type": "session_end",
+				"value_column": "session_score"
+			},
+			{
+				"metric_id": "it_click_rate",
+				"name": "IT click rate (PROPORTION)",
+				"type": "PROPORTION",
+				"source_event_type": "click"
+			},
+			{
+				"metric_id": "it_engagement_index",
+				"name": "IT engagement index (COMPOSITE)",
+				"type": "COMPOSITE",
+				"source_event_type": "n/a",
+				"operator": "WEIGHTED_SUM",
+				"operands": [
+					{"metric_id": "it_session_score", "weight": 0.6},
+					{"metric_id": "it_click_rate", "weight": 0.4}
+				]
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(500)
+	// Use an in-memory query log writer: the query_log PG table has an FK to
+	// experiments(experiment_id UUID), and we deliberately use a TEXT
+	// experiment_id here so the status writer is exercised standalone. The
+	// status table has no FK — that decoupling is what lets this test run
+	// without seeding a layer/experiment row.
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewPgWriter(pool)
+
+	job := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter, jobs.WithStatusWriter(statusWriter))
+
+	// Always clean status rows for this experiment_id on entry and exit so a
+	// previous interrupted run does not poison the determinism check.
+	cleanup := func() {
+		_, _ = pool.Exec(context.Background(),
+			`DELETE FROM metric_computation_status WHERE experiment_id = $1`, expIDStr)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	// snapshotKeys reads "metric_id=status" rows for this experiment in a
+	// stable ORDER BY so the result is byte-comparable across cycles.
+	snapshotKeys := func(t *testing.T) []string {
+		t.Helper()
+		rows, err := pool.Query(ctx, `
+			SELECT metric_id, status FROM metric_computation_status
+			WHERE experiment_id = $1
+			ORDER BY metric_id
+		`, expIDStr)
+		require.NoError(t, err)
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var mid, st string
+			require.NoError(t, rows.Scan(&mid, &st))
+			out = append(out, mid+"="+st)
+		}
+		require.NoError(t, rows.Err())
+		return out
+	}
+
+	const cycles = 3
+	snapshots := make([][]string, 0, cycles)
+	for i := 0; i < cycles; i++ {
+		_, runErr := job.Run(ctx, expIDStr)
+		require.NoErrorf(t, runErr, "cycle %d: Run must succeed", i+1)
+		snap := snapshotKeys(t)
+		snapshots = append(snapshots, snap)
+	}
+
+	// All three snapshots must be byte-identical: ON CONFLICT upsert means
+	// repeated runs overwrite rather than duplicate, and topo-order scheduling
+	// guarantees the same per-metric outcome each cycle.
+	require.Len(t, snapshots[0], 3,
+		"snapshot must contain exactly one row per metric (got %v)", snapshots[0])
+	for i := 1; i < cycles; i++ {
+		assert.Truef(t,
+			reflect.DeepEqual(snapshots[0], snapshots[i]),
+			"cycle 1 snapshot != cycle %d snapshot\n  cycle 1: %v\n  cycle %d: %v",
+			i+1, snapshots[0], i+1, snapshots[i])
+	}
+
+	// COMPOSITE must land `completed` in every cycle — never skipped_*. If
+	// topo-order regressed (COMPOSITE scheduled before operands) the gate in
+	// StandardJob.Run would mark it skipped_upstream_failure because the
+	// operands would not yet be in the statusMap.
+	const compositeExpected = "it_engagement_index=completed"
+	for i, snap := range snapshots {
+		assert.Containsf(t, snap, compositeExpected,
+			"cycle %d: COMPOSITE must be completed, got snapshot %v", i+1, snap)
 	}
 }
