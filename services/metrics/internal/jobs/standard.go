@@ -123,6 +123,15 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 	// Flush statuses to PG after the loop (or after an early-return failure).
 	defer func() {
+		// ADR-026 #475: if Run early-returns on a non-COMPOSITE failure, any
+		// downstream COMPOSITE in `sortedMetrics` was never visited and thus
+		// has no entry in `sm` — but topo order guarantees operands run before
+		// COMPOSITEs, so the COMPOSITE *would* have been gated by `blockerFor`
+		// had we reached it. Mirror that gate here so the status table reflects
+		// SkippedUpstreamFailure rather than silently omitting the row (which
+		// M4a would interpret as "missing", not "failed-upstream").
+		markUnvisitedCompositesAsSkipped(sortedMetrics, sm)
+
 		if flushErr := j.flushStatus(ctx, experimentID, computationDate, sm); flushErr != nil {
 			slog.Error("status flush failed (non-fatal)",
 				"experiment_id", experimentID,
@@ -562,6 +571,32 @@ func (j *StandardJob) flushStatus(
 		}
 	}
 	return nil
+}
+
+// markUnvisitedCompositesAsSkipped scans the topo-ordered metric list and, for
+// any COMPOSITE whose status is unrecorded in `sm`, marks it
+// SkippedUpstreamFailure if its operands include at least one non-Completed
+// status. Called from the deferred flush so early-return paths (fail-fast on a
+// non-COMPOSITE) still surface downstream COMPOSITEs to M4a — otherwise the
+// COMPOSITE would have no row in metric_computation_status, indistinguishable
+// from a metric that was never scheduled.
+//
+// COMPOSITEs whose operands all completed (e.g., the early-return happened on
+// an unrelated metric later in topo order) are intentionally left unrecorded:
+// "not yet computed" is the right signal for M4a in that case, not "skipped".
+func markUnvisitedCompositesAsSkipped(sortedMetrics []*config.MetricConfig, sm *statusMap) {
+	for _, mPtr := range sortedMetrics {
+		if strings.ToUpper(mPtr.Type) != "COMPOSITE" {
+			continue
+		}
+		if _, recorded := sm.entries[mPtr.MetricID]; recorded {
+			// Already Completed / SkippedUpstreamFailure / SkippedCycle.
+			continue
+		}
+		if blocker, blocked := sm.blockerFor(mPtr.Operands); blocked {
+			sm.markSkippedUpstream(mPtr.MetricID, blocker)
+		}
+	}
 }
 
 // toSparkOperands converts config-layer OperandConfig values to the

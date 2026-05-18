@@ -2,6 +2,9 @@ package jobs
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -571,4 +574,98 @@ func TestStandardJob_Run_ADR026Phase1_NewTypes(t *testing.T) {
 			"legacy MEAN metric should produce lifecycle_metric SQL when lifecycle_stratification is enabled")
 		// Note: legacy_watch_time has no cuped_covariate_metric_id, so no cuped_covariate entry expected.
 	})
+}
+
+// TestStandardJob_Run_FailFastStillMarksDownstreamComposite is the regression
+// guard for the ADR-026 #475 fail-fast follow-up. When a non-COMPOSITE operand
+// fails, Run still early-returns the wrapped error (preserving the chaos suite
+// contract), but the deferred status flush must now also mark any downstream
+// COMPOSITE as SkippedUpstreamFailure so M4a can distinguish "failed-upstream"
+// from "never scheduled" in metric_computation_status.
+func TestStandardJob_Run_FailFastStillMarksDownstreamComposite(t *testing.T) {
+	// Build a minimal inline fixture with a non-COMPOSITE operand `op_a` and a
+	// COMPOSITE `comp_b` that depends on it. Both belong to the same experiment
+	// so topo-order schedules op_a first, comp_b second.
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_failfast_composite.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000ff01",
+				"name": "failfast_composite_smoke",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "op_a",
+				"secondary_metric_ids": ["comp_b"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "op_a",
+				"name": "Operand A (MEAN)",
+				"type": "MEAN",
+				"source_event_type": "heartbeat"
+			},
+			{
+				"metric_id": "comp_b",
+				"name": "Downstream composite",
+				"type": "COMPOSITE",
+				"source_event_type": "n/a",
+				"operator": "WEIGHTED_SUM",
+				"operands": [
+					{"metric_id": "op_a", "weight": 1.0}
+				]
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	// Fail on the very first executor call so op_a (first in topo order) fails
+	// before comp_b is even reached. This is the canonical fail-fast scenario.
+	sentinel := fmt.Errorf("spark cluster unreachable")
+	executor := NewFailingExecutor(0, sentinel)
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, runErr := job.Run(context.Background(), "e0000000-0000-0000-0000-00000000ff01")
+
+	// 1. Fail-fast contract preserved: Run returns the wrapped operand error.
+	require.Error(t, runErr)
+	assert.Contains(t, runErr.Error(), "jobs: execute metric op_a",
+		"error must identify the failing operand")
+	assert.ErrorIs(t, runErr, sentinel, "original sentinel error must remain in the wrap chain")
+
+	// 2. Status table now records BOTH the failed operand AND the downstream
+	//    COMPOSITE — the latter as SkippedUpstreamFailure so M4a can distinguish
+	//    "failed upstream" from "never scheduled".
+	snap := statusWriter.Snapshot()
+	byMetric := make(map[string]status.Entry, len(snap))
+	for _, e := range snap {
+		byMetric[e.MetricID] = e
+	}
+
+	failed, hasFailed := byMetric["op_a"]
+	require.True(t, hasFailed, "op_a must have a status row recording the failure")
+	assert.Equal(t, status.Failed, failed.Status, "op_a status must be Failed")
+
+	skipped, hasSkipped := byMetric["comp_b"]
+	require.True(t, hasSkipped,
+		"comp_b must have a status row even though Run early-returned before visiting it (ADR-026 #475)")
+	assert.Equal(t, status.SkippedUpstreamFailure, skipped.Status,
+		"comp_b status must be SkippedUpstreamFailure, not omitted")
+	assert.Contains(t, skipped.Reason, "op_a",
+		"comp_b skip reason should mention the blocking operand")
 }
