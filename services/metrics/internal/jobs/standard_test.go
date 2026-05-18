@@ -792,3 +792,92 @@ func TestStandardJob_Run_CompositeRunsAfterOperands(t *testing.T) {
 			"%s status must be Completed (got %v)", id, entry.Status)
 	}
 }
+
+// TestStandardJob_Run_SkippedCompositeDoesNotPostProcess is the Devin BUG-0002
+// regression on #556: when a COMPOSITE is skipped (operand missing/failed,
+// cycle, etc.), the post-processing loops at standard.go:436 (daily treatment
+// effects) and standard.go:478 (QoE-engagement correlation) must NOT iterate
+// over it. Before the fix, both loops walked the unfiltered `metrics` slice
+// and rendered post-processing SQL that read from delta.metric_summaries for
+// the skipped COMPOSITE — writing empty/stale rows to
+// delta.daily_treatment_effects.
+func TestStandardJob_Run_SkippedCompositeDoesNotPostProcess(t *testing.T) {
+	// Inline fixture: a COMPOSITE whose operands are NOT in this experiment's
+	// metric list, so the topo-order gate marks it SkippedUpstreamFailure. The
+	// experiment has a control variant so the daily-treatment-effect post-pass
+	// would otherwise fire for every entry in `metrics`.
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_skipped_no_post.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000bb02",
+				"name": "skip_no_post",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "session_score",
+				"secondary_metric_ids": ["engagement_index"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "session_score",
+				"name": "Session score (MEAN)",
+				"type": "MEAN",
+				"source_event_type": "session_end",
+				"value_column": "session_score"
+			},
+			{
+				"metric_id": "engagement_index",
+				"name": "Engagement (COMPOSITE, operands OUT of pass)",
+				"type": "COMPOSITE",
+				"source_event_type": "n/a",
+				"operator": "WEIGHTED_SUM",
+				"operands": [
+					{"metric_id": "watch_time_minutes", "weight": 0.6},
+					{"metric_id": "stream_start_rate", "weight": 0.4}
+				]
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(500)
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, runErr := job.Run(context.Background(), "e0000000-0000-0000-0000-00000000bb02")
+	require.NoError(t, runErr)
+
+	// The COMPOSITE must be recorded as SkippedUpstreamFailure.
+	snap := statusWriter.Snapshot()
+	byMetric := make(map[string]status.Entry, len(snap))
+	for _, e := range snap {
+		byMetric[e.MetricID] = e
+	}
+	require.Equal(t, status.SkippedUpstreamFailure, byMetric["engagement_index"].Status,
+		"COMPOSITE with out-of-pass operands must land SkippedUpstreamFailure")
+	require.Equal(t, status.Completed, byMetric["session_score"].Status,
+		"sibling metric should still complete")
+
+	// Inspect every recorded executor call. No call's SQL should reference the
+	// skipped COMPOSITE's metric_id. Daily-treatment-effect SQL has the form
+	// `... WHERE ms.metric_id = '<id>' ...` so a substring check is sufficient.
+	for _, call := range executor.GetCalls() {
+		assert.NotContainsf(t, call.SQL, "'engagement_index'",
+			"post-processing must not iterate over skipped COMPOSITE (call SQL: %s)", call.SQL)
+	}
+}

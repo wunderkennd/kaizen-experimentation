@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	"strings"
+
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
 )
 
@@ -41,7 +43,13 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 		if _, ok := inDeg[m.MetricID]; !ok {
 			inDeg[m.MetricID] = 0
 		}
-		if m.Type != "COMPOSITE" {
+		// Case-insensitive match: standard.go, renderer.go, and isLegacyStyle
+		// all normalize via strings.ToUpper. A lowercase / mixed-case "composite"
+		// in a metric config would silently skip edge-building here while the
+		// scheduler loop still gates on operand status — the COMPOSITE would land
+		// before its operands in topo order and get marked SkippedUpstreamFailure
+		// even though every operand would have succeeded. Devin BUG-0001 on #556.
+		if strings.ToUpper(m.Type) != "COMPOSITE" {
 			continue
 		}
 		for _, op := range m.Operands {

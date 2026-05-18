@@ -192,6 +192,11 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		} else {
 			rendered, err := j.renderer.RenderForType(m.Type, params)
 			if err != nil {
+				// Record the render failure in the status table so M4a can
+				// distinguish it from "metric was never scheduled". Mirrors the
+				// markFailed call on the execute-error path below. Devin
+				// observability finding on #556.
+				sm.markFailed(m.MetricID, fmt.Sprintf("render: %v", err))
 				slog.Warn("skipping metric: render error",
 					"metric_id", m.MetricID, "type", m.Type, "error", err)
 				continue
@@ -426,9 +431,23 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		)
 	}
 
+	// Filter to metrics that actually wrote rows to delta.metric_summaries.
+	// Post-processing (daily treatment effects + QoE-engagement correlation)
+	// reads from that table — running it against skipped / cycle-excluded /
+	// failed COMPOSITE metrics would write empty or stale results to
+	// delta.daily_treatment_effects. Before #475 this was rare (render errors
+	// only); the COMPOSITE skip path makes it a normal operational outcome.
+	// Devin BUG-0002 on #556.
+	completedMetrics := make([]config.MetricConfig, 0, len(metrics))
+	for _, m := range metrics {
+		if sm.entries[m.MetricID] == status.Completed {
+			completedMetrics = append(completedMetrics, m)
+		}
+	}
+
 	// Post-processing: compute daily treatment effects for each metric.
 	if controlVariantID != "" {
-		for _, m := range metrics {
+		for _, m := range completedMetrics {
 			teParams := spark.TemplateParams{
 				ExperimentID:     exp.ExperimentID,
 				MetricID:         m.MetricID,
@@ -468,9 +487,11 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 	}
 
 	// Post-processing: compute QoE-engagement correlation for experiments with QoE metrics.
+	// Uses `completedMetrics` for the same reason as daily treatment effects above —
+	// correlations against a skipped metric read empty rows from delta.metric_summaries.
 	var qoeMetrics []config.MetricConfig
 	var engagementMetrics []config.MetricConfig
-	for _, m := range metrics {
+	for _, m := range completedMetrics {
 		if m.IsQoEMetric {
 			qoeMetrics = append(qoeMetrics, m)
 		} else if !m.IsQoEMetric && m.Type != "RATIO" {

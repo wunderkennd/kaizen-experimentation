@@ -72,6 +72,31 @@ func TestTopologicalOrder_CycleIsSkipped(t *testing.T) {
 	}
 }
 
+func TestTopologicalOrder_LowercaseCompositeType(t *testing.T) {
+	// Devin BUG-0001 regression on #556: the loader / renderer / scheduler all
+	// normalize Type via strings.ToUpper, so a config with "composite" must
+	// build the same DAG as "COMPOSITE". Before the fix, edges weren't built
+	// for lowercase entries — the COMPOSITE landed before its operands in
+	// topo order and was wrongly marked SkippedUpstreamFailure at runtime.
+	metrics := []*config.MetricConfig{
+		{MetricID: "engagement", Type: "composite", Operands: []config.OperandConfig{
+			{MetricID: "watch_time", Weight: 1.0},
+		}},
+		{MetricID: "watch_time", Type: "mean"},
+	}
+	sorted, skipped, err := TopologicalOrder(metrics)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(skipped) != 0 {
+		t.Fatalf("expected no skipped, got %v", skipped)
+	}
+	if len(sorted) != 2 || sorted[0].MetricID != "watch_time" || sorted[1].MetricID != "engagement" {
+		ids := []string{sorted[0].MetricID, sorted[1].MetricID}
+		t.Fatalf("expected [watch_time, engagement], got %v", ids)
+	}
+}
+
 func TestTopologicalOrder_OperandOutsidePass(t *testing.T) {
 	// c references operand x that's not in this scheduling pass — c remains
 	// in-degree 0 (Kahn's emits it). The caller's status_map gates skipping on
