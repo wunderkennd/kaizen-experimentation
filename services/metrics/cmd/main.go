@@ -26,6 +26,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/recalconsumer"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	"github.com/org/experimentation-platform/services/metrics/internal/status"
 	"github.com/org/experimentation-platform/services/metrics/internal/surrogate"
 )
 
@@ -43,17 +44,21 @@ func main() {
 	baseExecutor := spark.NewMockExecutor(500)
 	executor := spark.NewRetryExecutor(baseExecutor, spark.DefaultRetryConfig())
 	var qlWriter querylog.Writer
+	var statusWriter status.Writer
 	pgURL := os.Getenv("POSTGRES_URL")
 	if pgURL != "" {
 		pool, err := pgxpool.New(context.Background(), pgURL)
 		if err != nil { slog.Error("failed to connect to PostgreSQL", "error", err); os.Exit(1) }
 		defer pool.Close()
 		qlWriter = querylog.NewPgWriter(pool)
+		// ADR-026 #475: same pool feeds the metric_computation_status writer.
+		statusWriter = status.NewPgWriter(pool)
 	} else {
 		qlWriter = querylog.NewMemWriter()
-		slog.Warn("POSTGRES_URL not set, using in-memory query log")
+		statusWriter = status.NewMockWriter()
+		slog.Warn("POSTGRES_URL not set, using in-memory query log + status writer")
 	}
-	stdJob := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter)
+	stdJob := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter, jobs.WithStatusWriter(statusWriter))
 	kafkaBrokers := os.Getenv("KAFKA_BROKERS")
 	if kafkaBrokers == "" {
 		kafkaBrokers = "localhost:9092"

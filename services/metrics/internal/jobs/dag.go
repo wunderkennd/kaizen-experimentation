@@ -56,10 +56,14 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 	}
 
 	// Kahn's: seed queue with in-degree-zero nodes, peel layers.
+	// Iterate the original `metrics` slice rather than `inDeg` so the output
+	// order is stable across runs (Go map iteration is randomized). Downstream
+	// tests assert that non-COMPOSITE metrics keep their seed-file ordering;
+	// only COMPOSITE metrics get reshuffled to land after their operands.
 	queue := make([]string, 0, len(metrics))
-	for id, d := range inDeg {
-		if d == 0 {
-			queue = append(queue, id)
+	for _, m := range metrics {
+		if inDeg[m.MetricID] == 0 {
+			queue = append(queue, m.MetricID)
 		}
 	}
 

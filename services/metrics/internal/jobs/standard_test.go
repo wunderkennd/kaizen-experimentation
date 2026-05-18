@@ -11,9 +11,10 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	"github.com/org/experimentation-platform/services/metrics/internal/status"
 )
 
-func setupTestJob(t *testing.T) (*StandardJob, *spark.MockExecutor, *querylog.MemWriter) {
+func setupTestJob(t *testing.T) (*StandardJob, *spark.MockExecutor, *querylog.MemWriter, *status.MockWriter) {
 	t.Helper()
 
 	cfgStore, err := config.LoadFromFile("../config/testdata/seed_config.json")
@@ -24,13 +25,14 @@ func setupTestJob(t *testing.T) (*StandardJob, *spark.MockExecutor, *querylog.Me
 
 	executor := spark.NewMockExecutor(500)
 	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
 
-	job := NewStandardJob(cfgStore, renderer, executor, qlWriter)
-	return job, executor, qlWriter
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+	return job, executor, qlWriter, statusWriter
 }
 
 func TestStandardJob_Run(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	result, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
@@ -77,7 +79,7 @@ func TestStandardJob_Run(t *testing.T) {
 }
 
 func TestStandardJob_Run_CorrectSQLTypes(t *testing.T) {
-	job, executor, _ := setupTestJob(t)
+	job, executor, _, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
@@ -125,7 +127,7 @@ func TestStandardJob_Run_CorrectSQLTypes(t *testing.T) {
 }
 
 func TestStandardJob_Run_CupedPreExperimentWindow(t *testing.T) {
-	job, executor, _ := setupTestJob(t)
+	job, executor, _, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
@@ -158,7 +160,7 @@ func TestStandardJob_Run_CupedPreExperimentWindow(t *testing.T) {
 }
 
 func TestStandardJob_Run_NotFound(t *testing.T) {
-	job, _, _ := setupTestJob(t)
+	job, _, _, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	_, err := job.Run(ctx, "nonexistent")
@@ -166,7 +168,7 @@ func TestStandardJob_Run_NotFound(t *testing.T) {
 }
 
 func TestStandardJob_Run_DailyTreatmentEffects(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
@@ -201,7 +203,7 @@ func TestStandardJob_Run_DailyTreatmentEffects(t *testing.T) {
 }
 
 func TestStandardJob_Run_SessionLevelMetrics(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	// playback_qoe_test has session_level: true
@@ -230,7 +232,7 @@ func TestStandardJob_Run_SessionLevelMetrics(t *testing.T) {
 }
 
 func TestStandardJob_Run_QoEEngagementCorrelation(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	// playback_qoe_test: ttff_mean (QoE) + rebuffer_ratio_mean (QoE), no engagement metrics
@@ -257,7 +259,7 @@ func TestStandardJob_Run_MixedQoEAndEngagement(t *testing.T) {
 	// We use homepage_recs_v2 which has 4 metrics: ctr (PROPORTION), watch_time (MEAN),
 	// stream_start (PROPORTION), rebuffer_rate (RATIO). None are QoE, so no correlation.
 	// This test verifies the "no QoE metrics" path.
-	job, _, qlWriter := setupTestJob(t)
+	job, _, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	_, err := job.Run(ctx, "e0000000-0000-0000-0000-000000000001")
@@ -273,7 +275,7 @@ func TestStandardJob_Run_MixedQoEAndEngagement(t *testing.T) {
 }
 
 func TestStandardJob_Run_PercentileMetricType(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	// latency_percentile_test experiment uses latency_p50_ms (PERCENTILE type)
@@ -313,7 +315,7 @@ func TestStandardJob_Run_PercentileMetricType(t *testing.T) {
 }
 
 func TestStandardJob_Run_CustomMetricType(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	// custom_metric_test experiment uses power_users_watch_time (CUSTOM type)
@@ -354,7 +356,7 @@ func TestStandardJob_Run_CustomMetricType(t *testing.T) {
 }
 
 func TestStandardJob_Run_MLRATECrossFitting(t *testing.T) {
-	job, executor, qlWriter := setupTestJob(t)
+	job, executor, qlWriter, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	// mlrate_crossfit_test (e...0008): mlrate_enabled=true, mlrate_folds=3
@@ -405,7 +407,7 @@ func TestStandardJob_Run_MLRATECrossFitting(t *testing.T) {
 }
 
 func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
-	job, executor, _ := setupTestJob(t)
+	job, executor, _, _ := setupTestJob(t)
 	ctx := context.Background()
 
 	// Run for search_ranking_interleave
@@ -470,13 +472,18 @@ func TestStandardJob_Run_ADR026Phase1_NewTypes(t *testing.T) {
 
 	executor := spark.NewMockExecutor(123)
 	qlWriter := querylog.NewMemWriter()
-	job := NewStandardJob(cfgStore, renderer, executor, qlWriter)
+	statusWriter := status.NewMockWriter()
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
 
 	ctx := context.Background()
 	result, err := job.Run(ctx, "e0000000-0000-0000-0000-0000000adr26")
 	require.NoError(t, err)
-	assert.Equal(t, 4, result.MetricsComputed,
-		"all 4 metrics (3 new-type + 1 legacy) should compute primary SQL successfully")
+	// ADR-026 #475: composite_engagement is now correctly skipped because its
+	// operands (watch_time_minutes, stream_start_rate) live in a different
+	// experiment's metric list and are not part of this scheduling pass. Only
+	// the 3 metrics whose dependencies resolve will run primary SQL.
+	assert.Equal(t, 3, result.MetricsComputed,
+		"3 metrics (2 new-type with no operands + 1 legacy) compute; COMPOSITE skipped due to upstream-missing operands")
 
 	calls := executor.GetCalls()
 	require.GreaterOrEqual(t, len(calls), 3, "executor should receive >= 3 SQL calls (one per metric, plus any post-processing)")
@@ -502,15 +509,24 @@ func TestStandardJob_Run_ADR026Phase1_NewTypes(t *testing.T) {
 			"FILTERED_MEAN SQL must reference the configured value_column")
 	})
 
-	t.Run("composite SQL", func(t *testing.T) {
-		sql, ok := sqlByMetric["composite_engagement"]
-		require.True(t, ok, "COMPOSITE metric must have produced SQL")
-		assert.Contains(t, sql, "operand_rows",
-			"COMPOSITE template must produce an `operand_rows` CTE")
-		assert.Contains(t, sql, "delta.metric_summaries",
-			"COMPOSITE template must read from delta.metric_summaries")
-		assert.Contains(t, sql, "0.7", "WEIGHTED_SUM SQL must inline operand weights")
-		assert.Contains(t, sql, "0.3", "WEIGHTED_SUM SQL must inline operand weights")
+	t.Run("composite skipped (operands out of scheduling pass)", func(t *testing.T) {
+		// ADR-026 #475: COMPOSITE references operands that don't belong to this
+		// experiment's metric list, so the scheduler marks it
+		// SkippedUpstreamFailure rather than rendering against missing inputs.
+		_, ran := sqlByMetric["composite_engagement"]
+		assert.False(t, ran,
+			"COMPOSITE with out-of-pass operands must NOT produce daily_metric SQL under topo-order gating")
+
+		var composite *status.Entry
+		for i := range statusWriter.Entries {
+			if statusWriter.Entries[i].MetricID == "composite_engagement" {
+				composite = &statusWriter.Entries[i]
+				break
+			}
+		}
+		require.NotNil(t, composite, "composite_engagement must have a recorded status entry")
+		assert.Equal(t, status.SkippedUpstreamFailure, composite.Status,
+			"composite skipped because operands aren't part of this scheduling pass")
 	})
 
 	t.Run("windowed_count SQL", func(t *testing.T) {
@@ -538,7 +554,9 @@ func TestStandardJob_Run_ADR026Phase1_NewTypes(t *testing.T) {
 	}
 
 	t.Run("new types skip legacy post-processing", func(t *testing.T) {
-		newTypeIDs := []string{"mobile_avg_watch_time", "composite_engagement", "stream_starts_24h"}
+		// composite_engagement is excluded here because it is now skipped
+		// at the topo-order gate before any post-processing could run.
+		newTypeIDs := []string{"mobile_avg_watch_time", "stream_starts_24h"}
 		for _, id := range newTypeIDs {
 			assert.Empty(t, postProcByMetric[id],
 				"%s (new ADR-026 Phase 1 type) should NOT emit any session-level / lifecycle / cuped_covariate SQL", id)

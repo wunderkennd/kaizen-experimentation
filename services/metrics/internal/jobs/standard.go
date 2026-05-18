@@ -12,6 +12,7 @@ import (
 	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	"github.com/org/experimentation-platform/services/metrics/internal/status"
 )
 
 // JobResult summarizes the outcome of a computation run.
@@ -24,28 +25,60 @@ type JobResult struct {
 
 // StandardJob orchestrates daily metric computation for a single experiment.
 type StandardJob struct {
-	config   *config.ConfigStore
-	renderer *spark.SQLRenderer
-	executor spark.SQLExecutor
-	queryLog querylog.Writer
+	config       *config.ConfigStore
+	renderer     *spark.SQLRenderer
+	executor     spark.SQLExecutor
+	queryLog     querylog.Writer
+	statusWriter status.Writer // ADR-026 #475: per-metric outcome flushed to PG; nil → flush is a no-op.
 }
 
-// NewStandardJob creates a new standard metric computation job.
+// StandardJobOption configures optional StandardJob behavior (ADR-026 #475).
+// Functional options keep the legacy 4-arg constructor wire-compatible while
+// letting cmd/main.go inject the production status.PgWriter.
+type StandardJobOption func(*StandardJob)
+
+// WithStatusWriter wires a status.Writer for per-metric computation outcome
+// recording. When unset (the default for existing tests), status flushes are
+// no-ops — the topo-order scheduling and skip-on-upstream-failure semantics
+// still apply, but nothing is persisted.
+func WithStatusWriter(w status.Writer) StandardJobOption {
+	return func(j *StandardJob) { j.statusWriter = w }
+}
+
+// NewStandardJob creates a new standard metric computation job. Options are
+// optional and additive; the 4-arg form is preserved for backwards-compatibility
+// with the dozen+ test sites still using it.
 func NewStandardJob(
 	cfg *config.ConfigStore,
 	renderer *spark.SQLRenderer,
 	executor spark.SQLExecutor,
 	ql querylog.Writer,
+	opts ...StandardJobOption,
 ) *StandardJob {
-	return &StandardJob{
+	j := &StandardJob{
 		config:   cfg,
 		renderer: renderer,
 		executor: executor,
 		queryLog: ql,
 	}
+	for _, opt := range opts {
+		opt(j)
+	}
+	return j
 }
 
 // Run computes all metrics for the given experiment.
+//
+// ADR-026 #475: metrics are executed in topological order so that COMPOSITE
+// metrics run after every operand they reference. If any operand fails (or is
+// missing from this scheduling pass), the dependent COMPOSITE is marked
+// SkippedUpstreamFailure rather than attempted — preserving the operator
+// expectation that a COMPOSITE never silently aggregates incomplete inputs.
+//
+// Fail-fast semantics for non-COMPOSITE errors are preserved: render/execute
+// failures still return the first wrapped error to the caller (the chaos suite
+// asserts this). The deferred status flush ensures statuses recorded up to the
+// failure are still persisted.
 func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult, error) {
 	exp, err := j.config.GetExperiment(experimentID)
 	if err != nil {
@@ -65,7 +98,59 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 	controlVariantID := exp.ControlVariantID()
 
-	for _, m := range metrics {
+	// ADR-026 #475: topo-order scheduling for COMPOSITE metrics.
+	// metrics is []config.MetricConfig (by value); TopologicalOrder takes
+	// []*config.MetricConfig — adapt with pointer slice.
+	ordered := make([]*config.MetricConfig, len(metrics))
+	for i := range metrics {
+		ordered[i] = &metrics[i]
+	}
+	sortedMetrics, cycleNodes, err := TopologicalOrder(ordered)
+	if err != nil {
+		return nil, fmt.Errorf("jobs: topological sort: %w", err)
+	}
+
+	sm := newStatusMap()
+	// Record cycle-skipped nodes upfront so the deferred flush has them.
+	for id := range cycleNodes {
+		sm.markSkippedCycle(id)
+		slog.Warn("metric skipped (cycle)",
+			"experiment_id", experimentID,
+			"metric_id", id,
+			"computation_date", computationDate,
+		)
+	}
+
+	// Flush statuses to PG after the loop (or after an early-return failure).
+	defer func() {
+		if flushErr := j.flushStatus(ctx, experimentID, computationDate, sm); flushErr != nil {
+			slog.Error("status flush failed (non-fatal)",
+				"experiment_id", experimentID,
+				"computation_date", computationDate,
+				"err", flushErr,
+			)
+		}
+	}()
+
+	for _, mPtr := range sortedMetrics {
+		// COMPOSITE: gate on operand status BEFORE attempting execution.
+		if strings.ToUpper(mPtr.Type) == "COMPOSITE" {
+			if blocker, blocked := sm.blockerFor(mPtr.Operands); blocked {
+				sm.markSkippedUpstream(mPtr.MetricID, blocker)
+				slog.Warn("composite skipped (operand failed or missing)",
+					"experiment_id", experimentID,
+					"metric_id", mPtr.MetricID,
+					"blocker", blocker,
+					"computation_date", computationDate,
+				)
+				continue
+			}
+		}
+
+		// Dereference into a local value so the existing loop body — written
+		// against a value `m` — keeps working unchanged below.
+		m := *mPtr
+
 		params := spark.TemplateParams{
 			ExperimentID:         exp.ExperimentID,
 			MetricID:             m.MetricID,
@@ -108,6 +193,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 		result, err := j.executor.ExecuteAndWrite(ctx, sql, "delta.metric_summaries")
 		if err != nil {
+			sm.markFailed(m.MetricID, fmt.Sprintf("execute: %v", err))
 			return nil, fmt.Errorf("jobs: execute metric %s: %w", m.MetricID, err)
 		}
 		m3metrics.SparkQueryDuration.WithLabelValues(jobType).Observe(result.Duration.Seconds())
@@ -121,6 +207,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			DurationMs:   result.Duration.Milliseconds(),
 			JobType:      jobType,
 		}); err != nil {
+			sm.markFailed(m.MetricID, fmt.Sprintf("query_log: %v", err))
 			return nil, fmt.Errorf("jobs: log query for metric %s: %w", m.MetricID, err)
 		}
 
@@ -320,6 +407,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			}
 		}
 
+		sm.markCompleted(m.MetricID)
 		slog.Info("computed metric",
 			"experiment_id", experimentID,
 			"metric_id", m.MetricID,
@@ -445,6 +533,35 @@ func isLegacyStyle(metricType string) bool {
 		return true
 	}
 	return false
+}
+
+// flushStatus persists every recorded statusMap entry via the injected
+// status.Writer. When no writer is configured (i.e., the legacy 4-arg ctor was
+// used by existing tests), this is a no-op so behaviour stays unchanged.
+// Individual write failures are surfaced to the caller; the caller logs them
+// as non-fatal — losing a status row must not fail the whole pass.
+func (j *StandardJob) flushStatus(
+	ctx context.Context,
+	experimentID, computationDate string,
+	sm *statusMap,
+) error {
+	if j.statusWriter == nil {
+		return nil
+	}
+	for id, st := range sm.entries {
+		entry := status.Entry{
+			ExperimentID:    experimentID,
+			MetricID:        id,
+			ComputationDate: computationDate,
+			Status:          st,
+			Reason:          sm.reasonOf(id),
+			RecordedAt:      time.Now(),
+		}
+		if err := j.statusWriter.Write(ctx, entry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // toSparkOperands converts config-layer OperandConfig values to the
