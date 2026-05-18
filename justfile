@@ -203,6 +203,15 @@ test-adr026:
 migrate-adr026:
     @echo "  Applying ADR-026 Phase 1 migration (011)..."
     psql $DATABASE_URL -f sql/migrations/011_adr026_phase1_metric_types.sql
+    @echo "  Applying ADR-026 Phase 1 #475 migration (012)..."
+    psql $DATABASE_URL -f sql/migrations/012_metric_computation_status.sql
+
+# Run ADR-026 Phase 1 #475 M3 dependency-ordering tests (unit + integration)
+test-adr026-m3:
+    @echo "  Running ADR-026 #475 M3 scheduler unit tests..."
+    cd {{ services_dir }} && {{ go }} test ./metrics/internal/jobs/ -run "TestTopologicalOrder|TestStatusMap|TestStandardJob_Run_Composite|TestStandardJob_Run_FailFast" -v
+    @echo "  Running ADR-026 #475 multi-cycle integration test (requires migration 012 + test DB up)..."
+    cd {{ services_dir }} && {{ go }} test -tags=integration ./metrics/internal/ -run "TestComputeMetrics_CompositeOrdering" -v
 
 # Run integration tests against local infra
 test-integration: infra
