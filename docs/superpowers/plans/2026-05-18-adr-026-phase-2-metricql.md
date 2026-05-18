@@ -6,7 +6,7 @@
 
 **Goal:** Ship MetricQL — a hand-rolled, recursive-descent expression language compiled to Spark SQL — so operators can define composed/windowed/filtered metrics declaratively without writing raw SQL. Covers the ~35% of CUSTOM use cases that Phase 1 structured types don't.
 
-**Architecture:** New Go package `services/metrics/pkg/metricql/` containing lexer + recursive-descent parser + typed AST + Spark SQL code generator. M3's existing `RenderForType` dispatch gets a new arm: when `MetricDefinition.metricql_expression` is set, M3 parses → analyzes → compiles instead of consuming structured `type_config`. Cycle detection at parse time mirrors the M5 DFS algorithm (`crates/experimentation-management/src/validators/composite_cycle.rs`) translated to Go.
+**Architecture:** New Go package `services/metrics/internal/metricql/` containing lexer + recursive-descent parser + typed AST + Spark SQL code generator. M3's existing `RenderForType` dispatch gets a new arm: when `MetricDefinition.metricql_expression` is set, M3 parses → analyzes → compiles instead of consuming structured `type_config`. Cycle detection at parse time mirrors the M5 DFS algorithm (`crates/experimentation-management/src/validators/composite_cycle.rs`) translated to Go.
 
 **Tech Stack:** Go 1.22 (M3 = `services/metrics/`), no parser-library dependencies. Spark SQL output via `text/template`. Hand-written lexer + parser to keep the surface tight and error messages first-class.
 
@@ -81,7 +81,7 @@ STRING           := '\'' [^']* '\''      # single-quoted; no escapes in Phase 2
 - Time-decay weighting in composites
 - Cross-experiment metric refs (mirrors Phase 1 #475 scope decision)
 
-### Lock 2: AST Go types (`services/metrics/pkg/metricql/ast.go`)
+### Lock 2: AST Go types (`services/metrics/internal/metricql/ast.go`)
 
 ```go
 package metricql
@@ -104,7 +104,14 @@ type Span struct {
 // Aggregation: agg_func '(' source ')' filter? window?
 type Aggregation struct {
     Func       AggFunc
-    Percentile float64    // valid iff Func == AggPercentile; 0 < Percentile < 100
+    // Percentile is the human-friendly 0-100 scale (matches how the source
+    // text reads — `percentile(95)(latency.value)`). Validity range: 0 < Percentile < 100.
+    // NOTE convention mismatch with the existing proto field
+    // `MetricDefinition.percentile` which uses 0-1 (`0.95`). MetricQL uses 0-100
+    // in the AST because that's what users write; the codegen template in T6
+    // divides by 100 before emitting `percentile_approx(col, 0.95)` for Spark.
+    // Devin info on PR #559 round 3.
+    Percentile float64
     Source     Source
     Filter     *Filter    // nil if no where-clause
     Window     *Window    // nil if no within-clause
@@ -274,9 +281,9 @@ The persistence column gets added in migration `013_adr026_phase2_metricql_expre
 | Decision | Choice | Why |
 |----------|--------|-----|
 | Parser approach | **Hand-rolled recursive-descent** | Grammar has 11 rules; hand-rolled is ~500 LOC, zero deps, exact match to intent, best error messages. Generator overhead not justified. |
-| Cycle detection | **Port M5's DFS 3-color from Rust to Go** | Algorithm is proven (#552); ~80 LOC; lives in `pkg/metricql/cycle.go`. Mirror exact semantics so M5 + M3 agree on what's a cycle. |
+| Cycle detection | **Port M5's DFS 3-color from Rust to Go** | Algorithm is proven (#552); ~80 LOC; lives in `internal/metricql/cycle.go`. Mirror exact semantics so M5 + M3 agree on what's a cycle. |
 | Event catalog source | **Phase 1 punt: skip catalog validation** | No event catalog service exists (per Phase 1 plan §"Defaults for open questions"). Validate `event_type` matches `^[a-z_][a-z0-9_]*$` only. File a follow-up when catalog service ships. |
-| Semantic analyzer location | **Same package, separate file** (`pkg/metricql/analyze.go`) | Tight coupling to AST; no reason to split |
+| Semantic analyzer location | **Same package, separate file** (`internal/metricql/analyze.go`) | Tight coupling to AST; no reason to split |
 | Spark SQL codegen | **`text/template`-based** mirroring `internal/spark/templates/*.tmpl` | Reuses existing template loader/renderer; consistent with Phase 1 types |
 | Output table | **`delta.metric_summaries` (same as other types)** | M4a contract unchanged; MetricQL is opaque to M4a |
 | MetricQL row in M3 scheduler | **Routes through the same Run() loop as other types; reuses #475 topo-order** | MetricQL metrics with `@metric_ref` are effectively COMPOSITEs — they slot into the existing DAG cleanly via the `metric_ref` → operand edges |
@@ -290,7 +297,7 @@ The persistence column gets added in migration `013_adr026_phase2_metricql_expre
 
 | Pattern | Source | Usage in this plan |
 |---------|--------|--------------------|
-| DFS 3-color cycle detection | `crates/experimentation-management/src/validators/composite_cycle.rs` (Rust, ~160 LOC) | Port to Go in `pkg/metricql/cycle.go` — identical algorithm, identical semantics |
+| DFS 3-color cycle detection | `crates/experimentation-management/src/validators/composite_cycle.rs` (Rust, ~160 LOC) | Port to Go in `internal/metricql/cycle.go` — identical algorithm, identical semantics |
 | Spark SQL template loader | `services/metrics/internal/spark/renderer.go::loadTemplates` | Reuse for the new `metricql.sql.tmpl` family (aggregation / ratio / composite) |
 | Topo-order scheduling | `services/metrics/internal/jobs/dag.go::TopologicalOrder` (#475) | MetricQL metrics with `@metric_ref` declare operand edges the same way COMPOSITE metrics do — extend `Operands` derivation to include MetricQL-parsed refs |
 | Renderer dispatch | `services/metrics/internal/spark/renderer.go::RenderForType` (line 173-244) | Add a `case "METRICQL"` arm that delegates to `metricql.Compile(expr) (sql string, err error)` |
@@ -305,7 +312,7 @@ The persistence column gets added in migration `013_adr026_phase2_metricql_expre
 ### New package layout under `services/metrics/`
 
 ```
-pkg/metricql/
+internal/metricql/
   ast.go                  # NEW — Node interface + concrete types (see Lock 2)
   lexer.go                # NEW — hand-rolled token scanner
   lexer_test.go           # NEW — table-driven token tests
@@ -342,7 +349,7 @@ proto/experimentation/common/v1/
 ### Public API surface (everything else is unexported)
 
 ```go
-// pkg/metricql/compile.go
+// internal/metricql/compile.go
 package metricql
 
 // CompileContext provides per-scheduling-pass inputs the compiler needs.
@@ -377,7 +384,7 @@ type AnalyzeContext struct {
 ### Error type
 
 ```go
-// pkg/metricql/errors.go
+// internal/metricql/errors.go
 package metricql
 
 // Error is a structured parse / analysis / compile error with source position.
@@ -494,6 +501,30 @@ ALTER TABLE metric_definitions ADD CONSTRAINT metric_definitions_type_check
 -- (matches the `metric_definitions_type_check` pattern just above and
 -- migration 011's style). Devin info on PR #559.
 ALTER TABLE metric_definitions DROP CONSTRAINT IF EXISTS metric_definitions_single_definition_source;
+
+-- Defensive pre-check: prior to migration 013 there was NO DB-level mutual-exclusion
+-- between `custom_sql` and `type_config`. If any existing row violates the new
+-- single-source rule, the ADD CONSTRAINT below will fail and roll back the whole
+-- migration. Surface the bad rows first so operators see a clear error message
+-- before the constraint failure noise. Devin 🚩 finding on PR #559 round 3.
+DO $$
+DECLARE
+    bad_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO bad_count
+    FROM metric_definitions
+    WHERE (CASE WHEN custom_sql          IS NOT NULL THEN 1 ELSE 0 END +
+           CASE WHEN type_config         IS NOT NULL THEN 1 ELSE 0 END +
+           CASE WHEN metricql_expression IS NOT NULL THEN 1 ELSE 0 END) > 1;
+
+    IF bad_count > 0 THEN
+        RAISE EXCEPTION 'migration 013: % existing metric_definitions row(s) have more than one of '
+            '(custom_sql, type_config, metricql_expression) set. Resolve manually before re-running '
+            '(query: SELECT metric_id FROM metric_definitions WHERE ... — see migration source) '
+            'or null out the field that should not be authoritative.', bad_count;
+    END IF;
+END $$;
+
 ALTER TABLE metric_definitions ADD CONSTRAINT metric_definitions_single_definition_source
     CHECK (
         (CASE WHEN custom_sql           IS NOT NULL THEN 1 ELSE 0 END +
@@ -518,8 +549,8 @@ git commit -m "feat(proto): ADR-026 Phase 2 — metricql_expression field + migr
 ### Task T1: AST types
 
 **Files:**
-- Create: `services/metrics/pkg/metricql/ast.go`
-- Create: `services/metrics/pkg/metricql/ast_test.go`
+- Create: `services/metrics/internal/metricql/ast.go`
+- Create: `services/metrics/internal/metricql/ast_test.go`
 
 - [ ] **Step 1: Write a test asserting Node interface implementations**
 
@@ -551,21 +582,21 @@ Copy the AST types from the Phase 2 Contract (Lock 2) into `ast.go` verbatim. No
 
 - [ ] **Step 3: Run tests**
 
-Run: `cd services && go test ./metrics/pkg/metricql/ -v`
+Run: `cd services && go test ./metrics/internal/metricql/ -v`
 Expected: PASS
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add services/metrics/pkg/metricql/ast.go services/metrics/pkg/metricql/ast_test.go
+git add services/metrics/internal/metricql/ast.go services/metrics/internal/metricql/ast_test.go
 git commit -m "feat(metricql): AST types + Node interface (#435)"
 ```
 
 ### Task T2: Lexer
 
 **Files:**
-- Create: `services/metrics/pkg/metricql/lexer.go`
-- Create: `services/metrics/pkg/metricql/lexer_test.go`
+- Create: `services/metrics/internal/metricql/lexer.go`
+- Create: `services/metrics/internal/metricql/lexer_test.go`
 
 - [ ] **Step 1: Define token types + Lexer struct**
 
@@ -674,14 +705,14 @@ func TestLexer_SpansAreAccurate(t *testing.T) {
 
 - [ ] **Step 5: Run + commit**
 
-Run: `cd services && go test ./metrics/pkg/metricql/ -v` → all PASS
+Run: `cd services && go test ./metrics/internal/metricql/ -v` → all PASS
 Commit: `feat(metricql): hand-rolled lexer + token tests (#435)`
 
 ### Task T3: Parser
 
 **Files:**
-- Create: `services/metrics/pkg/metricql/parser.go`
-- Create: `services/metrics/pkg/metricql/parser_test.go`
+- Create: `services/metrics/internal/metricql/parser.go`
+- Create: `services/metrics/internal/metricql/parser_test.go`
 
 - [ ] **Step 1: Define Parser struct + Parse() entry point**
 
@@ -788,7 +819,7 @@ func TestParser_ErrorMessages(t *testing.T) {
 
 - [ ] **Step 5: Run + commit**
 
-`cd services && go test ./metrics/pkg/metricql/ -v` → all PASS
+`cd services && go test ./metrics/internal/metricql/ -v` → all PASS
 Commit: `feat(metricql): recursive-descent parser + sad-path error tests (#435)`
 
 ---
@@ -798,8 +829,8 @@ Commit: `feat(metricql): recursive-descent parser + sad-path error tests (#435)`
 ### Task T4: Semantic analyzer
 
 **Files:**
-- Create: `services/metrics/pkg/metricql/analyze.go`
-- Create: `services/metrics/pkg/metricql/analyze_test.go`
+- Create: `services/metrics/internal/metricql/analyze.go`
+- Create: `services/metrics/internal/metricql/analyze_test.go`
 
 - [ ] **Step 1: Define AnalyzeContext + Analyze entry**
 
@@ -849,14 +880,14 @@ One test per rejection rule, asserting the rejected source produces the expected
 
 - [ ] **Step 4: Run + commit**
 
-`cd services && go test ./metrics/pkg/metricql/ -v` → all PASS
+`cd services && go test ./metrics/internal/metricql/ -v` → all PASS
 Commit: `feat(metricql): semantic analyzer (#435)`
 
 ### Task T5: Cycle detector (port from Rust M5)
 
 **Files:**
-- Create: `services/metrics/pkg/metricql/cycle.go`
-- Create: `services/metrics/pkg/metricql/cycle_test.go`
+- Create: `services/metrics/internal/metricql/cycle.go`
+- Create: `services/metrics/internal/metricql/cycle_test.go`
 
 - [ ] **Step 1: Read M5's cycle algorithm**
 
@@ -896,11 +927,11 @@ Commit: `feat(metricql): DFS 3-color cycle detector ported from M5 (#435)`
 ### Task T6: Spark SQL codegen + Compile entry
 
 **Files:**
-- Create: `services/metrics/pkg/metricql/compile.go`
-- Create: `services/metrics/pkg/metricql/compile_test.go`
-- Create: `services/metrics/pkg/metricql/templates/aggregation.sql.tmpl`
-- Create: `services/metrics/pkg/metricql/templates/ratio.sql.tmpl`
-- Create: `services/metrics/pkg/metricql/templates/composite.sql.tmpl`
+- Create: `services/metrics/internal/metricql/compile.go`
+- Create: `services/metrics/internal/metricql/compile_test.go`
+- Create: `services/metrics/internal/metricql/templates/aggregation.sql.tmpl`
+- Create: `services/metrics/internal/metricql/templates/ratio.sql.tmpl`
+- Create: `services/metrics/internal/metricql/templates/composite.sql.tmpl`
 
 - [ ] **Step 1: Define Compile() entry**
 
@@ -1003,12 +1034,12 @@ var updateGolden = flag.Bool("update", false, "update golden SQL files")
 
 - [ ] **Step 5: Generate the golden files**
 
-Run: `cd services && go test ./metrics/pkg/metricql/ -run TestCompile_Golden -update`
+Run: `cd services && go test ./metrics/internal/metricql/ -run TestCompile_Golden -update`
 Then hand-review each `testdata/*.golden.sql` for correctness BEFORE committing — golden files are the contract.
 
 - [ ] **Step 6: Re-run without -update to confirm**
 
-Run: `cd services && go test ./metrics/pkg/metricql/ -run TestCompile_Golden` → all PASS
+Run: `cd services && go test ./metrics/internal/metricql/ -run TestCompile_Golden` → all PASS
 
 - [ ] **Step 7: Commit**
 
@@ -1044,7 +1075,7 @@ The topo-order DAG (#475) builds edges from `MetricConfig.Operands`. For METRICQ
 
 ```go
 // dag.go (excerpt)
-import "github.com/org/experimentation-platform/services/metrics/pkg/metricql"
+import "github.com/org/experimentation-platform/services/metrics/internal/metricql"
 
 // operandIDs returns the metric IDs that the given metric depends on.
 // For COMPOSITE: m.Operands.
@@ -1092,6 +1123,23 @@ keeps the parse error single-source (it lands in `status_map` once, at DAG build
 and avoids the confusing "operand-missing"-looking log that motivated Devin's design
 feedback. Update the `TopologicalOrder` return signature to
 `(sorted, skippedCycle, failedParse, err)` accordingly.
+
+**Call sites to update for the 3→4 return-value signature change** (search before
+editing — list may have shifted by the time T7 lands):
+
+- `services/metrics/internal/jobs/standard.go::Run` — the one production caller
+  (~line 110 today per the #475 commit). Add a third destructured value for
+  `failedParse`; pre-mark every entry as `status.Failed` with the parse error
+  as the reason before the main loop, so the downstream `blockerFor` gate
+  treats them identically to executor failures.
+- `services/metrics/internal/jobs/dag_test.go` — every existing
+  `TestTopologicalOrder_*` test (linear chain, nested COMPOSITE, cycle skip,
+  lowercase composite type, operand outside pass — 5 tests as of `dd3c0a9`).
+  Each needs the extra destructured `failedParse` return + an
+  `assert len(failedParse) == 0` on the happy paths.
+
+Devin info on PR #559 round 3 — flagged that this is a breaking internal API
+change; this note enumerates the call sites so the implementer doesn't miss any.
 
 - [ ] **Step 3: Add tests for METRICQL DAG ordering**
 
@@ -1160,7 +1208,7 @@ Commit: `feat(metrics): METRICQL integration into StandardJob.Run (#435)`
 ### Task T9: Golden-file expansion (overnight grindable)
 
 **Files:**
-- Modify: `services/metrics/pkg/metricql/testdata/*.golden.sql`
+- Modify: `services/metrics/internal/metricql/testdata/*.golden.sql`
 - Add: 20+ additional golden cases (one per grammar rule × representative variant)
 
 - [ ] **Step 1: Enumerate cases worth a golden test**
@@ -1176,7 +1224,7 @@ Aim for ≥1 golden per:
 
 - [ ] **Step 2: Generate golden files**
 
-Run: `cd services && go test ./metrics/pkg/metricql/ -run TestCompile_Golden -update`
+Run: `cd services && go test ./metrics/internal/metricql/ -run TestCompile_Golden -update`
 
 - [ ] **Step 3: Hand-review every new golden file**
 
@@ -1184,7 +1232,7 @@ This is the contract. A typo in a golden file becomes a permanent bug.
 
 - [ ] **Step 4: Re-run without -update**
 
-Run: `cd services && go test ./metrics/pkg/metricql/ -run TestCompile_Golden` → all PASS
+Run: `cd services && go test ./metrics/internal/metricql/ -run TestCompile_Golden` → all PASS
 
 - [ ] **Step 5: Commit**
 
@@ -1195,7 +1243,7 @@ Commit: `test(metricql): expand golden-file SQL coverage (#435)`
 - [ ] **Step 1: Update ADR-026 status block**
 
 ```markdown
-| **Phase 2 (#435)** | MetricQL parser + AST + Spark SQL compiler in M3 (`services/metrics/pkg/metricql/`); proto field `metricql_expression`; migration 013; topo-order integration with #475 | **Implemented** (Closes #435) | PR opened by this branch |
+| **Phase 2 (#435)** | MetricQL parser + AST + Spark SQL compiler in M3 (`services/metrics/internal/metricql/`); proto field `metricql_expression`; migration 013; topo-order integration with #475 | **Implemented** (Closes #435) | PR opened by this branch |
 ```
 
 - [ ] **Step 2: Update CLAUDE.md Active Work line**
@@ -1206,7 +1254,7 @@ Extend the Phase 2 status from "Proposed" to "Phase 2 #435 implemented (M3 Metri
 
 ```just
 test-adr026-phase2: # ADR-026 Phase 2 #435 — MetricQL parser/compiler tests
-    cd {{ services_dir }} && {{ go }} test ./metrics/pkg/metricql/... -v
+    cd {{ services_dir }} && {{ go }} test ./metrics/internal/metricql/... -v
     cd {{ services_dir }} && {{ go }} test ./metrics/internal/jobs/ -run "TestTopologicalOrder_Metricql|TestStandardJob_Run_Metricql" -v
 
 migrate-adr026:
@@ -1219,7 +1267,7 @@ migrate-adr026:
 git push -u origin agent-3/feat/adr-026-phase-2-metricql
 gh pr create --title "feat(metrics): ADR-026 Phase 2 — MetricQL parser + compiler (Closes #435)" --body "$(cat <<EOF
 ## Summary
-- Hand-rolled MetricQL lexer + recursive-descent parser + typed AST in services/metrics/pkg/metricql/
+- Hand-rolled MetricQL lexer + recursive-descent parser + typed AST in services/metrics/internal/metricql/
 - Semantic analyzer + DFS 3-color cycle detector (ported from M5 Rust)
 - Spark SQL codegen via text/template, mirroring Phase 1 COMPOSITE template shape
 - Proto field metricql_expression + migration 013 (mutually exclusive with custom_sql / type_config)
@@ -1229,7 +1277,7 @@ gh pr create --title "feat(metrics): ADR-026 Phase 2 — MetricQL parser + compi
 Closes #435. Sister issue #436 (M5 validation + M6 editor) gets its own PR after this merges.
 
 ## Test plan
-- [ ] cd services && go test ./metrics/pkg/metricql/... -count=1 -v — full parser + analyzer + cycle + codegen suite
+- [ ] cd services && go test ./metrics/internal/metricql/... -count=1 -v — full parser + analyzer + cycle + codegen suite
 - [ ] cd services && go test ./metrics/internal/... -count=1 — no M3 regression
 - [ ] just migrate-adr026 — migration 013 applies cleanly; metric_definitions.metricql_expression column exists
 - [ ] just test-adr026-phase2 — bundled regression suite
@@ -1245,14 +1293,14 @@ EOF
 |------|-----------|-------|
 | `proto/experimentation/common/v1/metric.proto` | Modify (+`metricql_expression` field) | T0 |
 | `sql/migrations/013_adr026_phase2_metricql_expression.sql` | **Create** | T0 |
-| `services/metrics/pkg/metricql/ast.go` | **Create** | T1 |
-| `services/metrics/pkg/metricql/lexer.go` + `_test.go` | **Create** | T2 |
-| `services/metrics/pkg/metricql/parser.go` + `_test.go` | **Create** | T3 |
-| `services/metrics/pkg/metricql/analyze.go` + `_test.go` | **Create** | T4 |
-| `services/metrics/pkg/metricql/cycle.go` + `_test.go` | **Create** | T5 |
-| `services/metrics/pkg/metricql/compile.go` + `_test.go` | **Create** | T6 |
-| `services/metrics/pkg/metricql/templates/*.sql.tmpl` | **Create** | T6 |
-| `services/metrics/pkg/metricql/testdata/*.golden.sql` | **Create** | T6, T9 |
+| `services/metrics/internal/metricql/ast.go` | **Create** | T1 |
+| `services/metrics/internal/metricql/lexer.go` + `_test.go` | **Create** | T2 |
+| `services/metrics/internal/metricql/parser.go` + `_test.go` | **Create** | T3 |
+| `services/metrics/internal/metricql/analyze.go` + `_test.go` | **Create** | T4 |
+| `services/metrics/internal/metricql/cycle.go` + `_test.go` | **Create** | T5 |
+| `services/metrics/internal/metricql/compile.go` + `_test.go` | **Create** | T6 |
+| `services/metrics/internal/metricql/templates/*.sql.tmpl` | **Create** | T6 |
+| `services/metrics/internal/metricql/testdata/*.golden.sql` | **Create** | T6, T9 |
 | `services/metrics/internal/spark/renderer.go` | Modify (METRICQL arm) | T7 |
 | `services/metrics/internal/jobs/dag.go` + `_test.go` | Modify (ref extraction) | T7 |
 | `services/metrics/internal/jobs/standard.go` + `_test.go` | Modify (Compile wiring) | T8 |
@@ -1274,11 +1322,11 @@ EOF
 
 | Gate | Command | Expected |
 |------|---------|----------|
-| Lexer unit | `cd services && go test ./metrics/pkg/metricql/ -run TestLexer -v` | All PASS |
-| Parser unit (happy + sad) | `cd services && go test ./metrics/pkg/metricql/ -run TestParser -v` | All PASS, error messages match expectations |
-| Analyzer unit | `cd services && go test ./metrics/pkg/metricql/ -run TestAnalyze -v` | All rejection paths fire |
-| Cycle parity with M5 | `cd services && go test ./metrics/pkg/metricql/ -run TestCheckNoCycles -v` | Same accept/reject set as Rust M5 |
-| Codegen golden | `cd services && go test ./metrics/pkg/metricql/ -run TestCompile_Golden` | All golden files match |
+| Lexer unit | `cd services && go test ./metrics/internal/metricql/ -run TestLexer -v` | All PASS |
+| Parser unit (happy + sad) | `cd services && go test ./metrics/internal/metricql/ -run TestParser -v` | All PASS, error messages match expectations |
+| Analyzer unit | `cd services && go test ./metrics/internal/metricql/ -run TestAnalyze -v` | All rejection paths fire |
+| Cycle parity with M5 | `cd services && go test ./metrics/internal/metricql/ -run TestCheckNoCycles -v` | Same accept/reject set as Rust M5 |
+| Codegen golden | `cd services && go test ./metrics/internal/metricql/ -run TestCompile_Golden` | All golden files match |
 | M3 integration | `cd services && go test ./metrics/internal/jobs/ -v` | METRICQL + COMPOSITE + structured types all coexist; topo order respected |
 | Migration | `just migrate-adr026` | Migration 013 applies cleanly; `\d metric_definitions` shows new column |
 | ADR-026 bundle | `just test-adr026-phase2` | All of the above bundled |
