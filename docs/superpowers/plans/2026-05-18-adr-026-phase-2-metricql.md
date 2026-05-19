@@ -46,8 +46,11 @@ value            := STRING | NUMBER | '[' value ( ',' value )* ']' ;
 window           := 'within' NUMBER ( 'hours' | 'days' ) 'of' 'exposure' ;
 
 # Composite: arithmetic over metric refs / literals / ratio calls, with precedence.
+# Unary minus is a grammar production (not a lexical NUMBER prefix) so the lexer
+# can always emit TokMinus for '-'; this removes the `@a - 3` vs `@a -3` ambiguity.
 composite_expr   := term ( ( '+' | '-' ) term )* ;
-term             := factor ( ( '*' | '/' ) factor )* ;
+term             := unary ( ( '*' | '/' ) unary )* ;
+unary            := '-'? factor ;
 factor           := metric_ref | NUMBER | '(' composite_expr ')' | ratio_expr ;
 metric_ref       := '@' IDENTIFIER ;
 
@@ -56,7 +59,7 @@ ratio_expr       := 'ratio' '(' metric_ref ',' metric_ref ')' ;
 
 # Lexical tokens
 IDENTIFIER       := [a-z_][a-z0-9_]*   # lowercase only; matches Phase 1 metric_id regex
-NUMBER           := -? [0-9]+ ('.' [0-9]+)?
+NUMBER           := [0-9]+ ('.' [0-9]+)?   # unsigned; negation is the `unary` production above
 STRING           := '\'' [^']* '\''      # single-quoted; no escapes in Phase 2
 ```
 
@@ -69,6 +72,7 @@ STRING           := '\'' [^']* '\''      # single-quoted; no escapes in Phase 2
 | `field_ref := 'properties.' IDENTIFIER \| IDENTIFIER` | `IDENTIFIER ( '.' IDENTIFIER )?` | Generalized namespacing; `properties` is one of many possible namespaces (`context`, `event`) |
 | `ratio` listed under `aggregation` | Top-level form, composable inside `factor` | Structurally different from event-aggregations; composition is the win |
 | No `(...)` in `composite` | Parens included | Standard precedence override |
+| `NUMBER` carried optional `-?` sign | Sign removed; `unary := '-'? factor` production added | Signed-NUMBER token collides with binary `-`: `@a - 3` would mis-lex as `@a` `NUMBER(-3)`. Unary negation belongs in the parser, not the lexer (standard recursive-descent practice) |
 
 **Default — redirectable.** If you want `LIKE`, OR-predicates, or string escapes in v1, redirect this lock.
 
@@ -745,7 +749,8 @@ One Go function per EBNF production:
 - `parseExpression() → aggregation_expr | composite_expr`
 - `parseAggregation()`
 - `parseComposite()` (handles `+`/`-` precedence via left-associative loop)
-- `parseTerm()` (handles `*`/`/`)
+- `parseTerm()` (handles `*`/`/`, recurses into `parseUnary`)
+- `parseUnary()` (consumes an optional leading `TokMinus`, wraps the factor in a negation AST node; this is the *only* place `-` becomes negation — every other `-` is binary subtraction in `parseComposite`)
 - `parseFactor()`
 - `parseFilter()`, `parsePredicate()`, `parseValue()`
 - `parseWindow()`
@@ -1117,12 +1122,60 @@ Replace the existing `if m.Type != "COMPOSITE"` branch in `TopologicalOrder` to 
 **not abort the whole pass** — instead, record the failing metric in the existing
 `skippedCycle` map's sibling: a new `failedParse map[string]error` return. The scheduler's
 deferred status flush (#475) then writes a `status.Failed` row with the parse error
-as the reason, and any downstream COMPOSITE / METRICQL that referenced this metric gets
-`SkippedUpstreamFailure` via the existing `markUnvisitedCompositesAsSkipped` pass. This
-keeps the parse error single-source (it lands in `status_map` once, at DAG build time)
-and avoids the confusing "operand-missing"-looking log that motivated Devin's design
-feedback. Update the `TopologicalOrder` return signature to
-`(sorted, skippedCycle, failedParse, err)` accordingly.
+as the reason. Update the `TopologicalOrder` return signature to
+`(sorted, skippedCycle, failedParse, err)` accordingly. This keeps the parse error
+single-source (it lands in `status_map` once, at DAG build time) and avoids the confusing
+"operand-missing"-looking log that motivated Devin's earlier design feedback.
+
+**⚠️ `markUnvisitedCompositesAsSkipped` is COMPOSITE-only and must be generalized
+(Devin PR #559 round-4 BUG-0001).** The existing skip-propagation pass at
+`services/metrics/internal/jobs/standard.go:608-621` is *not* type-agnostic: its loop
+guard is `if strings.ToUpper(mPtr.Type) != "COMPOSITE" { continue }`, so it never visits
+METRICQL metrics, and its blocker check is `sm.blockerFor(mPtr.Operands)`, which reads the
+config `Operands` slice — METRICQL has no `Operands`; its dependencies live in the parsed
+`@metric_ref`s. Left as-is, a METRICQL metric downstream of a failed/parse-failed metric
+would get **no** `metric_computation_status` row, and M4a would read that as "never
+scheduled" rather than "skipped due to upstream failure" — a wrong observable. T7 Step 2a
+(below) makes this pass dependency-shaped instead of type-shaped.
+
+- [ ] **Step 2a: Generalize the skip-propagation pass to METRICQL**
+
+  Add a refs-based blocker check to `statusMap`, sibling to the existing
+  operand-based one:
+
+  ```go
+  // statusmap.go (excerpt) — sibling of the existing
+  //   func (sm *statusMap) blockerFor(operands []config.OperandConfig) string
+  // blockerForRefs returns the first ref ID whose status is not Completed
+  // (i.e. the blocking upstream), or "" if every ref completed. Used for
+  // METRICQL, whose deps are parsed @metric_refs, not config.Operands.
+  func (sm *statusMap) blockerForRefs(refIDs []string) string {
+      for _, id := range refIDs {
+          if st, ok := sm.entries[id]; !ok || st.Status != status.Completed {
+              return id
+          }
+      }
+      return ""
+  }
+  ```
+
+  Then rewrite `markUnvisitedCompositesAsSkipped` so it is keyed on *having
+  dependencies*, not on `Type == "COMPOSITE"`:
+
+  - Replace the `Type != "COMPOSITE"` continue-guard with a call to
+    `operandIDs(mPtr)` (the same helper from Step 2). `nil`/empty ⇒ leaf metric,
+    `continue` as before. Non-empty ⇒ a dependent metric (COMPOSITE *or* METRICQL).
+  - For the blocker check, dispatch on the deps source: COMPOSITE keeps
+    `sm.blockerFor(mPtr.Operands)`; METRICQL uses `sm.blockerForRefs(refs)` where
+    `refs` is the `operandIDs(mPtr)` result already in hand. (METRICQL metrics that
+    were themselves `failedParse` are already `status.Failed` and are skipped by
+    the unvisited filter, so re-parsing is not a concern here.)
+  - Rename the function to `markUnvisitedDependentsAsSkipped` and update its one
+    caller in `standard.go::Run`; leave a one-line doc comment noting it now
+    covers COMPOSITE **and** METRICQL.
+
+  This is a hard prerequisite for the T8 gate (BUG-0002) — both paths share
+  `blockerForRefs`.
 
 **Call sites to update for the 3→4 return-value signature change** (search before
 editing — list may have shifted by the time T7 lands):
@@ -1130,8 +1183,9 @@ editing — list may have shifted by the time T7 lands):
 - `services/metrics/internal/jobs/standard.go::Run` — the one production caller
   (~line 110 today per the #475 commit). Add a third destructured value for
   `failedParse`; pre-mark every entry as `status.Failed` with the parse error
-  as the reason before the main loop, so the downstream `blockerFor` gate
-  treats them identically to executor failures.
+  as the reason before the main loop, so both downstream gates
+  (`blockerFor` for COMPOSITE, `blockerForRefs` for METRICQL — T8 Step 1a)
+  treat them identically to executor failures.
 - `services/metrics/internal/jobs/dag_test.go` — every existing
   `TestTopologicalOrder_*` test (linear chain, nested COMPOSITE, cycle skip,
   lowercase composite type, operand outside pass — 5 tests as of `dd3c0a9`).
@@ -1177,13 +1231,53 @@ Commit: `feat(metrics): METRICQL renderer + topo-order ref extraction (#435)`
 - Modify: `services/metrics/internal/jobs/standard.go`
 - Modify: `services/metrics/internal/jobs/standard_test.go`
 
-- [ ] **Step 1: Wire Compile into the Run loop**
+- [ ] **Step 1: Add the METRICQL upstream-failure gate, then wire Compile into the Run loop**
 
-In the existing per-metric loop body (`standard.go::Run`), for METRICQL metrics call `metricql.Compile(m.MetricqlExpression, ctx)` where `ctx` is a `CompileContext` populated with the current pass's experiment ID, computation date, and the `KnownMetricIDs` set (built from `sm.entries` keys at loop entry).
+  **1a — Upstream-dependency gate (Devin PR #559 round-4 BUG-0002).** COMPOSITE
+  metrics already have an upstream gate in the Run loop at
+  `services/metrics/internal/jobs/standard.go:146-157`: when
+  `strings.ToUpper(mPtr.Type) == "COMPOSITE"`, it calls
+  `sm.blockerFor(mPtr.Operands)` and, if a blocker is returned, marks the metric
+  `SkippedUpstreamFailure` and `continue`s **before** any SQL is built or
+  executed. METRICQL needs the symmetric gate, or an expression like
+  `0.7 * @watch_time + 0.3 * @ctr` would compile and execute against
+  `delta.metric_summaries` rows that don't exist (or are stale from a prior pass)
+  when `watch_time`/`ctr` failed — silently wrong numbers, not an error.
 
-On compile error: `sm.markFailed(m.MetricID, "metricql: " + err.Error())`; continue. Same shape as render-error path (#556 fix).
+  Add, immediately alongside the existing COMPOSITE branch:
 
-On compile success: pass `sql` to `executor.ExecuteAndWrite(ctx, sql, "delta.metric_summaries")` — exactly as for all other types.
+  ```go
+  if strings.ToUpper(mPtr.Type) == "METRICQL" {
+      refs, err := operandIDs(mPtr) // same helper used by dag.go (T7 Step 2)
+      if err != nil {
+          // parse failure — already recorded as failedParse at DAG build;
+          // defensive: mark + skip rather than execute a half-parsed expr.
+          sm.markFailed(mPtr.MetricID, "metricql: parse: "+err.Error())
+          continue
+      }
+      if blocker := sm.blockerForRefs(refs); blocker != "" {
+          sm.markSkippedUpstreamFailure(mPtr.MetricID, blocker)
+          continue
+      }
+  }
+  ```
+
+  `blockerForRefs` is the `statusMap` helper added in T7 Step 2a — the gate and
+  the skip-propagation pass deliberately share it so "blocked" means the same
+  thing in both places. Prefer factoring the COMPOSITE and METRICQL branches into
+  one `if blocker := sm.blockerForMetric(mPtr); blocker != "" { … }` dispatcher
+  (COMPOSITE → `blockerFor(Operands)`, METRICQL → `blockerForRefs(operandIDs)`)
+  if the surrounding code in #475 makes that clean; the two-branch form above is
+  the floor.
+
+  **1b — Compile + execute.** For METRICQL metrics that pass the gate, call
+  `metricql.Compile(m.MetricqlExpression, ctx)` where `ctx` is a `CompileContext`
+  populated with the current pass's experiment ID, computation date, and the
+  `KnownMetricIDs` set (built from `sm.entries` keys at loop entry).
+
+  On compile error: `sm.markFailed(m.MetricID, "metricql: " + err.Error())`; continue. Same shape as render-error path (#556 fix).
+
+  On compile success: pass `sql` to `executor.ExecuteAndWrite(ctx, sql, "delta.metric_summaries")` — exactly as for all other types.
 
 - [ ] **Step 2: Add end-to-end test for METRICQL happy path**
 
@@ -1196,7 +1290,30 @@ Inline JSON fixture pattern (matches the C1 test from #475). Metrics: `watch_tim
 
 Metric with `metricql_expression = "mean(x"` (deliberate parse error). Assert Status.Failed with reason containing "expected ')'".
 
-- [ ] **Step 4: Run + commit**
+- [ ] **Step 4: Add test for METRICQL upstream-failure path (Devin PR #559 round-5 ANALYSIS-0005)**
+
+Mirrors the COMPOSITE coverage in `TestStandardJob_Run_CompositeRunsAfterOperands`
+and friends, which has no METRICQL analogue today. Inline fixture: `ok_metric`
+(MEAN, succeeds), `failing_metric` (MEAN, executor returns an error for it), and
+`weighted` (METRICQL `"0.7 * @failing_metric + 0.3 * @ok_metric"`). Drive the
+executor stub to fail only `failing_metric`. Assert:
+
+- `failing_metric` → `Status.Failed`
+- `weighted` → `Status.SkippedUpstreamFailure`, with the blocker recorded as
+  `failing_metric` (proves the T8 Step 1a gate fired via `blockerForRefs`, **not**
+  a downstream SQL/exec error)
+- `weighted`'s SQL was **never** handed to `executor.ExecuteAndWrite` (assert on
+  the stub's call log — this is the regression that catches a missing/!shared
+  gate: without 1a the expression would compile and execute)
+- `ok_metric` → `Status.Completed` (the failure is scoped to the blocked branch)
+
+Also add the skip-propagation variant: a second METRICQL metric `meta`
+(`"@weighted * 2"`) downstream of `weighted`; assert it is
+`SkippedUpstreamFailure` too — this exercises the generalized
+`markUnvisitedDependentsAsSkipped` pass (T7 Step 2a), proving METRICQL→METRICQL
+skip chaining works, not just COMPOSITE→METRICQL.
+
+- [ ] **Step 5: Run + commit**
 
 `cd services && go test ./metrics/internal/jobs/ -v` → all PASS
 Commit: `feat(metrics): METRICQL integration into StandardJob.Run (#435)`
