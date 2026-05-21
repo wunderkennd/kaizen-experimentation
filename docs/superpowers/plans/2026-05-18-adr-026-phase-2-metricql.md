@@ -138,11 +138,12 @@ const (
 
 // --- Composite (arithmetic over leaves, with precedence) ----------------------
 
-// Composite is a binary arithmetic node. Leaves are MetricRef / Literal / Ratio.
+// Composite is a binary arithmetic node. Children may themselves be
+// Composite | Negate | MetricRef | Literal | Ratio.
 type Composite struct {
     Op    ArithOp
-    Left  Node       // Composite | MetricRef | Literal | Ratio
-    Right Node       // Composite | MetricRef | Literal | Ratio
+    Left  Node       // Composite | Negate | MetricRef | Literal | Ratio
+    Right Node       // Composite | Negate | MetricRef | Literal | Ratio
     span  Span
 }
 
@@ -157,6 +158,20 @@ const (
     OpMul
     OpDiv
 )
+
+// Negate is the AST node for unary minus produced by `parseUnary` (grammar
+// production `unary := '-'? factor`). Wrapping a factor rather than rewriting
+// to `Literal{0} - x` keeps source spans accurate (the span covers the leading
+// `-` plus the operand) and lets the renderer emit `(-expr)` without spurious
+// zeros. Devin info on PR #559 round 6 — Lock 2 must carry a node for unary
+// negation or `parseUnary` has nothing to return.
+type Negate struct {
+    Operand Node       // Composite | Negate | MetricRef | Literal | Ratio
+    span    Span
+}
+
+func (*Negate) isNode() {}
+func (n *Negate) Span() Span { return n.span }
 
 type MetricRef struct {
     ID   string  // identifier without the leading '@'
@@ -567,6 +582,7 @@ import "testing"
 func TestAST_AllNodeTypesImplementNodeInterface(t *testing.T) {
     var _ Node = &Aggregation{}
     var _ Node = &Composite{}
+    var _ Node = &Negate{}
     var _ Node = &MetricRef{}
     var _ Node = &Literal{}
     var _ Node = &Ratio{}
@@ -989,6 +1005,7 @@ func lower(root Node, ctx CompileContext) (string, error) {
     switch n := root.(type) {
     case *Aggregation:    return lowerAggregation(n, ctx)
     case *Composite:      return lowerComposite(n, ctx)
+    case *Negate:         return lowerNegate(n, ctx)        // unary minus
     case *Ratio:          return lowerRatio(n, ctx)
     // Top-level MetricRef / Literal are nonsensical — caught by Analyze, but
     // double-check here so a future Analyze bug doesn't produce silent garbage.
@@ -996,6 +1013,18 @@ func lower(root Node, ctx CompileContext) (string, error) {
         return "", &Error{Kind: ErrCompile, Message: "top-level expression cannot be a bare ref / literal"}
     }
     return "", fmt.Errorf("metricql: unknown node type %T", root)
+}
+
+// lowerNegate emits `(-<operand>)` so precedence is preserved when Negate
+// appears inside a Composite. lowerComposite recurses via lower(), so this
+// one clause covers both nested (`@a + -@b`) and top-level (`-@a`) cases.
+// Devin info on PR #559 round 6.
+func lowerNegate(n *Negate, ctx CompileContext) (string, error) {
+    sub, err := lower(n.Operand, ctx)
+    if err != nil {
+        return "", err
+    }
+    return "(-" + sub + ")", nil
 }
 ```
 
