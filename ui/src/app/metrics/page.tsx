@@ -10,6 +10,8 @@ import { listMetricDefinitions } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
 import { CopyButton } from '@/components/copy-button';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { useAuth } from '@/lib/auth-context';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const SqlHighlighter = dynamic(
   () => import('@/components/sql-highlighter').then((m) => ({ default: m.SqlHighlighter })),
@@ -287,6 +289,7 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
 }
 
 function MetricBrowserContent() {
+  const { canAtLeast, user } = useAuth();
   const [metrics, setMetrics] = useState<MetricDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -367,18 +370,39 @@ function MetricBrowserContent() {
             </span>
           )}
         </div>
-        <Link
-          href="/metrics/new"
-          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
-          data-testid="new-metric-button"
-        >
-          New Metric
-        </Link>
+        {canAtLeast('experimenter') ? (
+          <Link
+            href="/metrics/new"
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+            data-testid="new-metric-button"
+          >
+            New Metric
+          </Link>
+        ) : (
+          <span
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
+            data-testid="new-metric-disabled"
+          >
+            New Metric
+          </span>
+        )}
       </div>
 
       {isEmpty ? (
         <div className="py-12 text-center" data-testid="empty-state">
           <p className="text-sm text-gray-500">No metric definitions found.</p>
+          {canAtLeast('experimenter') && (
+            <div className="mt-6">
+              <Link
+                href="/metrics/new"
+                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+                data-testid="create-first-metric"
+              >
+                Create your first metric
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <>
