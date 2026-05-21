@@ -1,0 +1,92 @@
+sequenceDiagram
+    autonumber
+    actor U as Viewer
+    participant App as Video App<br/>(iOS / Android / Web SDK)
+    participant M7 as M7 Flags<br/>:50057
+    participant M1 as M1 Assignment<br/>:50051
+    participant Pers as Personalization<br/>(customer service)
+    participant M4b as M4b Bandit<br/>:50054
+    participant Player as Video Player<br/>+ CDN
+    participant M2 as M2 Ingest (Rust)<br/>:50052
+    participant K as Kafka / Redpanda<br/>(7 topics)
+    participant M3 as M3 Metrics<br/>(Spark + Go) :50056
+    participant M4a as M4a Analysis<br/>:50053
+    participant M5 as M5 Management<br/>:50055
+    participant M6 as M6 Analyst UI<br/>:3000
+
+    rect rgb(255, 243, 224)
+    Note over U,M1: 1. App launch — flag check + experiment assignment
+    U->>App: open app
+    App->>App: ResilientProvider chain<br/>(Remote → Local WASM → static default)
+    App->>M7: EvaluateFlag(key="home_glass_ui", context)
+    M7-->>App: { enabled: true, rollout_pct: 25, reason: "TARGETING_MATCH" }
+    App->>M1: GetAssignment(experiment="home_redesign_2026q2",<br/>unit=userId, attrs={country, device, tier})
+    M1->>M1: MurmurHash3(salt ⊕ userId) → bucket ∈ [0, 10000)<br/>bucket-reuse check across overlapping experiments
+    M1-->>App: { variant: "treatment_glass_ui",<br/>exposure_id, propensity: null,<br/>arm_id: null }
+    App->>M2: ExposureEvent(exposure_id, experiment_id, variant,<br/>unit_id, attrs, ts)
+    M2->>M2: validate(proto) + Bloom-filter dedup
+    M2->>K: produce → topic "exposures"
+    end
+
+    rect rgb(232, 245, 233)
+    Note over U,M4b: 2. Personalized rail — contextual bandit arm selection
+    App->>Pers: GetRail(userId, surface="home",<br/>row="because_you_watched")
+    Pers->>M4b: SelectArm(policy_id="rail_ranker_v3",<br/>ctx_features={genre_affinity, dwell_history, ...})
+    M4b->>M4b: LMAX single-thread core<br/>Thompson / LinUCB / Neural (Candle)
+    M4b-->>Pers: { arm_id: "ranker_v7",<br/>propensity: 0.42 (for IPW debiasing) }
+    Pers->>Pers: rank candidate titles via arm_id
+    Pers-->>App: ranked titles[]
+    App->>M2: ExposureEvent(arm_id, propensity, slot_index)
+    M2->>K: produce → topic "exposures"
+    end
+
+    rect rgb(225, 245, 254)
+    Note over U,K: 3. Playback + QoE telemetry (heartbeat sessionization)
+    U->>App: tap title
+    App->>M2: ClickEvent(title_id, slot, ts)
+    M2->>K: produce → topic "metric_events"
+    App->>Player: play(title_id, requested_bitrate)
+    Player-->>U: stream manifest + segments via CDN
+    loop every 10s while playing
+        Player->>M2: PlaybackHeartbeat(session_id,<br/>played_ms, buffered_ms,<br/>bitrate, dropped_frames)
+        M2->>M2: HeartbeatSessionizer aggregates<br/>→ derive PlaybackMetrics<br/>→ detect EBVS (exit before video start)
+        M2->>K: produce → topic "qoe_events"
+    end
+    U->>App: watch ≥ 30s threshold (engagement)
+    App->>M2: RewardEvent(experiment, variant, reward=1.0,<br/>arm_id, propensity)
+    M2->>K: produce → topic "reward_events"
+    end
+
+    rect rgb(255, 224, 230)
+    Note over K,M4b: 4. Reward feedback loop — bandit posterior update
+    K-->>M4b: consume reward_events
+    M4b->>M4b: update posterior (Thompson) /<br/>features (LinUCB) /<br/>weights (Neural)
+    M4b->>M4b: persist RocksDB snapshot<br/>(crash-safe)
+    Note over M4b: New arm selections immediately reflect updated policy
+    end
+
+    rect rgb(243, 229, 245)
+    Note over K,M6: 5. Offline analysis + ship decision
+    K-->>M3: consume exposures, metric_events, qoe_events
+    M3->>M3: Spark SQL — daily standard metrics,<br/>hourly guardrail metrics,<br/>QoE rollups (rebuffer ratio, EBVS rate, P95 startup)
+    M3->>M3: write Delta Lake + query_log
+    M3->>M4a: signal "rollup ready" (per-experiment)
+    M4a->>M4a: CUPED variance reduction + AVLM (always-valid)<br/>TOST equivalence (ADR-027)<br/>e-values + online FDR
+    M4a->>M5: write results to PostgreSQL
+    M6->>M5: GET /experiments/{id}/results
+    M6-->>U: analyst dashboard rendered
+    Note over M6,M5: Analyst reviews → clicks "Ship Treatment"
+    M6->>M5: TransitionState(experiment, "shipped")
+    M5->>M7: reconcile flag rollout → 100%
+    M5->>M1: update assignment config<br/>(disable bucket reuse for this experiment)
+    end
+
+    rect rgb(255, 235, 235)
+    Note over M3,M1: Exception path — guardrail auto-pause
+    M3->>K: GuardrailBreach (rebuffer_ratio +32% vs control)<br/>→ topic "guardrail_alerts"
+    K-->>M5: consume guardrail_alerts
+    M5->>M5: state machine: ACTIVE → PAUSED
+    M5->>M1: assignment config flip — serve control to 100%
+    M5->>M7: reconcile flag → disabled
+    M5-->>M6: emit notification banner
+    end
