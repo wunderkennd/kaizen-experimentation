@@ -157,6 +157,7 @@ function FlagListContent() {
               <button
                 onClick={() => setSearch('')}
                 className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+                data-testid="clear-filters-empty"
               >
                 Clear filters
               </button>
