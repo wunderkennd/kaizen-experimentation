@@ -417,8 +417,11 @@ readable.
 
 - `docs/design/streaming_video_sequence.mermaid` — single-file sequence
   diagram (the source of the embedded views above).
+- `docs/design/offline_evaluation_sequence.mermaid` — companion sequence
+  for the offline policy-evaluation flow (researcher → MLflow → M3 slice
+  → M4a doubly-robust OPE → ship/shadow/reject decision).
 - `docs/design/system_architecture.mermaid` — static architecture
-  (modules and storage), not flow.
+  (modules, SDKs, storage, infrastructure), not flow.
 - `docs/design/data_flow.mermaid` — data-flow view (Kafka topics +
   storage), not flow.
 - `docs/design/sdk_provider.mermaid` — SDK resilience chain
