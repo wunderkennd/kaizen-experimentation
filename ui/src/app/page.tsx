@@ -34,14 +34,24 @@ function SortableHeader({
       <button
         type="button"
         onClick={() => onToggle(field)}
-        className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-gray-700"
+        className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 outline-none rounded-sm"
+        title={`Sort by ${label}`}
       >
         {label}
-        {isActive && (
-          <span aria-hidden="true" className="text-indigo-600">{currentDir === 'asc' ? '\u25B2' : '\u25BC'}</span>
-        )}
-        {!isActive && (
-          <span aria-hidden="true" className="text-gray-300">{'\u25B2'}</span>
+        {isActive ? (
+          currentDir === 'asc' ? (
+            <svg className="ml-1 h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            </svg>
+          ) : (
+            <svg className="ml-1 h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          )
+        ) : (
+          <svg className="ml-1 h-3 w-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
         )}
       </button>
     </th>
@@ -148,6 +158,7 @@ export default function ExperimentListPage() {
           <button
             onClick={filters.clearFilters}
             className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+            data-testid="clear-filters-empty"
           >
             Clear filters
           </button>
