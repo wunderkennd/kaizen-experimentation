@@ -49,6 +49,35 @@ func TestCompile_Golden(t *testing.T) {
 		{"composite_with_ratio", "0.5 * @a + 0.5 * ratio(@b, @c)", "m_composite_with_ratio"},
 		{"filter_in_list", "mean(heartbeat.value) where properties.platform in ['mobile', 'web']", "m_filter_in"},
 		{"filter_multi", "sum(purchase.amount) where country = 'us' and tier != 'free'", "m_filter_multi"},
+
+		// T9 expansion — every comparison operator gets a golden so the
+		// renderer contract is locked end-to-end (Lock 1 grammar arm × codegen).
+		{"filter_op_lt", "mean(latency.value) where score < 50", "m_filter_lt"},
+		{"filter_op_lte", "mean(latency.value) where score <= 50", "m_filter_lte"},
+		{"filter_op_gt", "mean(latency.value) where score > 50", "m_filter_gt"},
+		{"filter_op_gte", "mean(latency.value) where score >= 50", "m_filter_gte"},
+		{"filter_three_predicates", "mean(heartbeat.value) where country = 'us' and platform = 'mobile' and tier != 'free'", "m_filter_three"},
+		{"filter_in_numbers", "count(stream_start) where status in [200, 201]", "m_filter_in_num"},
+		{"filter_namespaced", "mean(heartbeat.value) where properties.os = 'ios'", "m_filter_ns"},
+
+		// T9 expansion — both window units get goldens (days covered above).
+		{"count_windowed_hours", "count(stream_start) within 24 hours of exposure", "m_count_hours"},
+		{"mean_within_hours", "mean(heartbeat.value) within 12 hours of exposure", "m_mean_hours"},
+
+		// T9 expansion — agg × filter combinations.
+		{"sum_filtered", "sum(purchase.amount) where country = 'us'", "m_sum_filtered"},
+		{"count_filtered", "count(stream_start) where platform = 'mobile'", "m_count_filtered"},
+		{"percentile_filtered", "percentile(95)(latency.value) where status = 200", "m_p95_filtered"},
+		{"proportion_filtered", "proportion(stream_start) where platform = 'mobile'", "m_proportion_filtered"},
+		{"percentile_50", "percentile(50)(latency.value)", "m_p50"},
+
+		// T9 expansion — composite shapes.
+		{"nested_composite_parens", "(0.5 * @a + 0.5 * @b) * 2", "m_nested_parens"},
+		{"composite_subtraction", "@watch_time - @ctr", "m_subtraction"},
+		{"composite_literal_mul", "@watch_time * 2.5", "m_lit_mul"},
+		{"nested_arithmetic_deep", "((@a + @b) * @c) / @c", "m_nested_deep"},
+		{"composite_two_ratios", "ratio(@a, @b) + ratio(@a, @c)", "m_two_ratios"},
+		{"negate_double", "@watch_time - -@ctr", "m_negate_double"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
