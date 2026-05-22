@@ -37,11 +37,14 @@ sequenceDiagram
     end
 
     rect rgb(232, 245, 233)
-    Note over BFF,Cat: 2. Recommendations fan-out (bandit + catalog hydration)
+    Note over BFF,Cat: 2. Recommendations fan-out (bandit via M1 delegation + catalog hydration)
     BFF->>Recs: GetRails(userId, surface="home",<br/>layout_variant, slot_budget)
-    Recs->>M4b: SelectArm(policy_id="rail_ranker_v3",<br/>ctx_features={genre_affinity,<br/>dwell_history, tod, ...})
+    Note over Recs,M1: Recs calls M1 (not M4b directly) —<br/>M1 owns bucketing, targeting, lifecycle, timeout fallback
+    Recs->>M1: GetAssignment(experiment="rail_ranker_v3",<br/>unit=userId, policy_type=BANDIT,<br/>ctx_features={genre_affinity, dwell_history, tod, ...})
+    M1->>M4b: SelectArm (internal delegation, p99 < 15ms)
     M4b->>M4b: LMAX single-thread core<br/>Thompson / LinUCB / Neural (Candle)
-    M4b-->>Recs: { arm_id: "ranker_v7",<br/>propensity: 0.42 (for IPW) }
+    M4b-->>M1: { arm_id: "ranker_v7", propensity: 0.42 }
+    M1-->>Recs: { variant, arm_id, propensity,<br/>exposure_id } (M1 falls back on M4b timeout)
     Recs->>Cat: GetTitles(candidate_ids[], locale)
     Cat-->>Recs: hydrated title metadata<br/>(artwork, runtime, badges)
     Recs->>Recs: rank via arm_id → build rails
@@ -98,7 +101,8 @@ sequenceDiagram
     M3->>M3: write Delta Lake + query_log
     M3->>M4a: rollup_ready(experiment_id)
     M4a->>M4a: CUPED + AVLM (ADR-015)<br/>TOST equivalence (ADR-027)<br/>e-values + online FDR (ADR-018)
-    M4a->>M5: write results to PostgreSQL
+    M4a->>M4a: write results to PostgreSQL<br/>(point estimate, CI, equivalence verdict)
+    M4a->>M5: results_ready(experiment_id)
     M6->>M5: GET /experiments/{id}/results
     M6-->>U: analyst dashboard rendered
     Note over M6,M5: Analyst reviews → clicks "Ship Treatment"

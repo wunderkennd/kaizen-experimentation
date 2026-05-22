@@ -10,7 +10,7 @@ flowchart TB
         REC["Recommendations"]
         CAT["Catalog / Metadata"]
         PB["Playback Authorization<br/>+ DRM"]
-        CDN["Video Player + CDN"]
+        PLR["Video Player + CDN"]
     end
 
     %% =========================================================
@@ -30,7 +30,7 @@ flowchart TB
     BFF --> REC
     BFF --> CAT
     REC --> CAT
-    APP --> CDN
+    APP --> PLR
 
     %% =========================================================
     %% LAYER 3 — Control plane (real-time gRPC, Rust)
@@ -46,8 +46,8 @@ flowchart TB
     CLISDK -.gRPC.-> M7
     SRVSDK -->|gRPC| M1
     SRVSDK -->|gRPC| M7
-    REC -->|gRPC| M4b
     PB -->|gRPC| M1
+    M1 -.->|arm delegation<br/>p99 < 15ms<br/>internal Kaizen call| M4b
 
     %% =========================================================
     %% LAYER 4 — Event ingestion + streaming bus
@@ -61,7 +61,7 @@ flowchart TB
 
     APP -->|client events| M2R
     SRVSDK -->|server exposures| M2R
-    CDN -->|heartbeats| M2R
+    PLR -->|player heartbeats<br/>(QoE telemetry)| M2R
     M2R --> K
     K --> M2G
 
@@ -151,5 +151,5 @@ flowchart TB
     class M6 ts
     class K,ECR,ECS,OBS,NET,ML infra
     class CLISDK,SRVSDK client
-    class APP,AUTH,BFF,REC,CAT,PB,CDN customer
+    class APP,AUTH,BFF,REC,CAT,PB,PLR customer
     class DL,PG,RD,RDB storage

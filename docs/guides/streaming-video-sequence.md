@@ -30,7 +30,7 @@ the SDKs in `sdks/` plus Kafka topics in `proto/`.
 | Video App (iOS/Android/Web) | Client surface, render, in-app events                    | Kaizen **Client SDK** (`sdks/{ios, android, web}`) |
 | Identity / Auth             | Login, refresh, account graph, plan tier                 | None — supplies the `userId` / cohort attrs that Kaizen hashes |
 | Page Orchestration / BFF    | Assembles per-device home/detail pages from N microservices | Kaizen **Server SDK** (`sdks/server-go` or `server-python`) — calls M7 + M1 |
-| Recommendations             | Generates per-user rails, slates, search ranking         | Server SDK — calls M4b for arm selection |
+| Recommendations             | Generates per-user rails, slates, search ranking         | Server SDK — calls M1 with policy_type=BANDIT; M1 internally delegates to M4b |
 | Catalog / Metadata          | Title, episode, artwork, badges                          | None — hydrates rail/detail payloads |
 | Playback Authorization      | Entitlement check, manifest selection, DRM license       | Server SDK — calls M1 for encoding-ladder / codec experiments |
 | Video Player + CDN          | Manifest fetch, segment streaming, QoE telemetry         | Emits heartbeats directly to M2 |
@@ -65,7 +65,7 @@ client or the server?" In an SVOD architecture with a BFF, the answer is
 | Decision type | SDK lives where | Why |
 | --- | --- | --- |
 | Page-level layout / UI variant | **Server SDK on the BFF** | BFF assembles the response; emitting the exposure server-side guarantees it lines up with what was actually returned |
-| Rail / slate ranker (bandit arm) | **Server SDK on Recommendations** | The ranker is the experiment; the rec service has the propensity |
+| Rail / slate ranker (bandit arm) | **Server SDK on Recommendations** (calling M1, which delegates to M4b) | The ranker is the experiment; Recs is the caller. M4b is internal and only reachable through M1. |
 | Encoding ladder / codec / DRM strategy | **Server SDK on Playback Authorization** | Playback authz owns manifest selection — the experiment lives where the decision is made |
 | Client-only feature gate (e.g. new gesture, in-app debug overlay) | **Client SDK** | No server involvement needed; flag eval is local |
 | Click / engagement / playback completion events | **Client SDK** | These are client-observable behaviors; the client knows when they happen |
@@ -83,7 +83,7 @@ the same bucket they were already in.
 The canonical flow covers five phases plus one exception branch.
 
 1. **Session start + page assembly** — Auth, then BFF fan-out to M7 + M1.
-2. **Recommendations fan-out** — BFF → Recs → M4b + Catalog.
+2. **Recommendations fan-out** — BFF → Recs → M1 (→ M4b internally) + Catalog.
 3. **Title detail → Playback auth → Streaming + QoE** — App → Catalog,
    App → Playback Authorization → M1, then CDN streams while M2
    sessionizes heartbeats.
@@ -151,6 +151,7 @@ sequenceDiagram
     autonumber
     participant BFF as BFF
     participant Recs as Recommendations
+    participant M1 as M1 Assignment :50051
     participant M4b as M4b Bandit :50054
     participant Cat as Catalog
     participant M2 as M2 Ingest
@@ -158,9 +159,11 @@ sequenceDiagram
     participant App as Video App
 
     BFF->>Recs: GetRails(userId, surface, layout_variant)
-    Recs->>M4b: SelectArm(policy_id, ctx_features)
+    Recs->>M1: GetAssignment(experiment, policy_type=BANDIT, ctx_features)
+    M1->>M4b: SelectArm (internal delegation)
     M4b->>M4b: LMAX core — Thompson / LinUCB / Neural
-    M4b-->>Recs: { arm_id, propensity }
+    M4b-->>M1: { arm_id, propensity }
+    M1-->>Recs: { variant, arm_id, propensity, exposure_id }
     Recs->>Cat: GetTitles(candidate_ids[], locale)
     Cat-->>Recs: hydrated metadata
     Recs->>Recs: rank via arm_id → build rails
@@ -172,10 +175,19 @@ sequenceDiagram
 
 Why each hop matters:
 
-- **The bandit lives behind the recommendations service, not the BFF.**
-  Different surfaces (home, search, detail-page-rails, end-of-episode)
-  have different rankers and different bandit policies. Recs is where
-  that catalog of policies lives.
+- **Recs calls M1, not M4b directly.** M4b's `BanditPolicyService` is an
+  **internal** Kaizen service — the proto comment says so explicitly
+  (`proto/experimentation/bandit/v1/bandit_service.proto`: "Called by M1
+  Assignment Service"). The Server SDKs do not expose an M4b client.
+  Routing through `M1.GetAssignment` is what gives bandit experiments
+  the same bucketing, targeting, lifecycle gating, and timeout fallback
+  that static experiments get. M1 internally delegates to M4b via a
+  low-latency gRPC call (p99 < 15ms) — see
+  `crates/experimentation-assignment/src/bandit_client.rs`.
+- **Different surfaces, different bandit policies.** Home, search,
+  detail-page-rails, end-of-episode — each surface has its own ranker
+  and policy. The policy registry lives in M4b; M5 owns the lifecycle
+  binding from experiment → policy.
 - **Propensity is the cost of being honest later.** The bandit emits an
   **IPW (inverse-propensity-weighted) probability** alongside the arm.
   M4a uses it for off-policy evaluation (ADR-017 — TC/JIVE surrogate
