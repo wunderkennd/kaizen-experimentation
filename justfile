@@ -1030,6 +1030,7 @@ autonomous-sprint sprint_num:
       3|5.3) LABEL="sprint-5.3"; MS="Sprint 5.3: Constraints & New Experiment Types" ;;
       4|5.4) LABEL="sprint-5.4"; MS="Sprint 5.4: Slate Bandits & Meta-Experiments" ;;
       5|5.5) LABEL="sprint-5.5"; MS="Sprint 5.5: Advanced & Integration" ;;
+      6|5.6) LABEL="sprint-5.6"; MS="Sprint 5.6: Metric Definition Layer" ;;
       I.0) LABEL="sprint-I.0"; MS="Sprint I.0: Scaffold + Foundation" ;;
       I.1) LABEL="sprint-I.1"; MS="Sprint I.1: Services + Wiring" ;;
       I.2) LABEL="sprint-I.2"; MS="Sprint I.2: Integration + Hardening" ;;
@@ -1039,7 +1040,7 @@ autonomous-sprint sprint_num:
       tc.2) LABEL="sprint-tc-2"; MS="TC.2: Service Binaries" ;;
       tc.3) LABEL="sprint-tc-3"; MS="TC.3: Contract Backfill" ;;
       tc.4) LABEL="sprint-tc-4"; MS="TC.4: UI E2E + Hygiene" ;;
-      *) echo "Unknown sprint: {{sprint_num}}. Use 0-5, 5.0-5.5, I.0-I.3, or tc.0-tc.4."; exit 1 ;;
+      *) echo "Unknown sprint: {{sprint_num}}. Use 0-6, 5.0-5.6, I.0-I.3, or tc.0-tc.4."; exit 1 ;;
     esac
     echo "=== Launching workers for: $MS ==="
     # Use _ready to filter blocked or in-flight issues.
