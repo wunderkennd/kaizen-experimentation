@@ -199,12 +199,21 @@ test-adr026:
     @echo "  Running ADR-026 Phase 1 contract tests..."
     cd {{ services_dir }} && {{ go }} test ./metrics/internal/ -run "TestM3M5|TestM3M4|TestContract_MetricSummaries|TestContract_NewMetricTypes"
 
-# Apply ADR-026 Phase 1 migration to the local dev Postgres
+# Apply ADR-026 migrations to the local dev Postgres (Phase 1 + Phase 2)
 migrate-adr026:
     @echo "  Applying ADR-026 Phase 1 migration (011)..."
     psql $DATABASE_URL -f sql/migrations/011_adr026_phase1_metric_types.sql
     @echo "  Applying ADR-026 Phase 1 #475 migration (012)..."
     psql $DATABASE_URL -f sql/migrations/012_metric_computation_status.sql
+    @echo "  Applying ADR-026 Phase 2 #435 migration (013)..."
+    psql $DATABASE_URL -f sql/migrations/013_adr026_phase2_metricql_expression.sql
+
+# Run ADR-026 Phase 2 #435 MetricQL parser/compiler tests + M3 integration
+test-adr026-phase2:
+    @echo "  Running ADR-026 Phase 2 MetricQL package tests..."
+    cd {{ services_dir }} && {{ go }} test ./metrics/internal/metricql/... -v
+    @echo "  Running ADR-026 Phase 2 M3 integration tests..."
+    cd {{ services_dir }} && {{ go }} test ./metrics/internal/jobs/ -run "TestTopologicalOrder_Metricql|TestStandardJob_Run_Metricql" -v
 
 # Run ADR-026 Phase 1 #475 M3 dependency-ordering tests (unit + integration)
 test-adr026-m3:
