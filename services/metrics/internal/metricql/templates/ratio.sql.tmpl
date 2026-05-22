@@ -1,0 +1,25 @@
+WITH operand_rows AS (
+    SELECT user_id, variant_id, metric_id, metric_value
+    FROM delta.metric_summaries
+    WHERE experiment_id = '{{.ExperimentID}}'
+      AND computation_date = CAST('{{.ComputationDate}}' AS DATE)
+      AND metric_id IN ('{{.NumeratorID}}', '{{.DenominatorID}}')
+),
+pivoted AS (
+    SELECT
+        user_id,
+        variant_id,
+        MAX(CASE WHEN metric_id = '{{.NumeratorID}}'   THEN metric_value END) AS numerator,
+        MAX(CASE WHEN metric_id = '{{.DenominatorID}}' THEN metric_value END) AS denominator
+    FROM operand_rows
+    GROUP BY user_id, variant_id
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    user_id,
+    variant_id,
+    '{{.MetricID}}' AS metric_id,
+    CASE WHEN denominator = 0.0 THEN 0.0 ELSE numerator / denominator END AS metric_value,
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    1.0 AS assignment_probability
+FROM pivoted;
