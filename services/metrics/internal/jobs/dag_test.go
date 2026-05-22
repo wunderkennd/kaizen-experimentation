@@ -15,7 +15,10 @@ func TestTopologicalOrder_LinearChain(t *testing.T) {
 		{MetricID: "watch_time", Type: "MEAN"},
 	}
 
-	sorted, skipped, err := TopologicalOrder(metrics)
+	sorted, skipped, failedParse, err := TopologicalOrder(metrics)
+	if len(failedParse) != 0 {
+		t.Fatalf("expected no parse failures, got %v", failedParse)
+	}
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -40,7 +43,10 @@ func TestTopologicalOrder_NestedComposite(t *testing.T) {
 		{MetricID: "b", Type: "COMPOSITE", Operands: []config.OperandConfig{{MetricID: "a", Weight: 1}}},
 		{MetricID: "a", Type: "MEAN"},
 	}
-	sorted, skipped, _ := TopologicalOrder(metrics)
+	sorted, skipped, failedParse, _ := TopologicalOrder(metrics)
+	if len(failedParse) != 0 {
+		t.Fatalf("expected no parse failures, got %v", failedParse)
+	}
 	if len(skipped) != 0 {
 		t.Fatalf("expected no skipped, got %v", skipped)
 	}
@@ -60,7 +66,10 @@ func TestTopologicalOrder_CycleIsSkipped(t *testing.T) {
 		{MetricID: "b", Type: "COMPOSITE", Operands: []config.OperandConfig{{MetricID: "a", Weight: 1}}},
 		{MetricID: "c", Type: "MEAN"},
 	}
-	sorted, skipped, err := TopologicalOrder(metrics)
+	sorted, skipped, failedParse, err := TopologicalOrder(metrics)
+	if len(failedParse) != 0 {
+		t.Fatalf("expected no parse failures, got %v", failedParse)
+	}
 	if err != nil {
 		t.Fatalf("expected no error (cycles are reported via skipped map), got %v", err)
 	}
@@ -84,7 +93,10 @@ func TestTopologicalOrder_LowercaseCompositeType(t *testing.T) {
 		}},
 		{MetricID: "watch_time", Type: "mean"},
 	}
-	sorted, skipped, err := TopologicalOrder(metrics)
+	sorted, skipped, failedParse, err := TopologicalOrder(metrics)
+	if len(failedParse) != 0 {
+		t.Fatalf("expected no parse failures, got %v", failedParse)
+	}
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,6 +109,58 @@ func TestTopologicalOrder_LowercaseCompositeType(t *testing.T) {
 	}
 }
 
+// TestTopologicalOrder_MetricqlChain verifies that a METRICQL metric's
+// @metric_refs feed the DAG just like a COMPOSITE's Operands -- a METRICQL
+// expression "0.7 * @watch_time + 0.3 * @ctr" must land after both operands
+// in topo order. ADR-026 Phase 2 (#435).
+func TestTopologicalOrder_MetricqlChain(t *testing.T) {
+	metrics := []*config.MetricConfig{
+		{MetricID: "weighted", Type: "METRICQL", MetricqlExpression: "0.7 * @watch_time + 0.3 * @ctr"},
+		{MetricID: "watch_time", Type: "MEAN", SourceEventType: "heartbeat", ValueColumn: "value"},
+		{MetricID: "ctr", Type: "PROPORTION", SourceEventType: "click"},
+	}
+	sorted, skipped, failedParse, err := TopologicalOrder(metrics)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(skipped) != 0 {
+		t.Fatalf("expected no skipped, got %v", skipped)
+	}
+	if len(failedParse) != 0 {
+		t.Fatalf("expected no parse failures, got %v", failedParse)
+	}
+	if len(sorted) != 3 {
+		t.Fatalf("expected 3 sorted, got %d: %v", len(sorted), sorted)
+	}
+	if sorted[2].MetricID != "weighted" {
+		ids := []string{sorted[0].MetricID, sorted[1].MetricID, sorted[2].MetricID}
+		t.Fatalf("weighted must be last in topo order; got %v", ids)
+	}
+}
+
+// TestTopologicalOrder_MetricqlParseFailure verifies that a METRICQL metric
+// with malformed source text is reported in `failedParse` and excluded from
+// edge-building, while the rest of the pass proceeds normally.
+func TestTopologicalOrder_MetricqlParseFailure(t *testing.T) {
+	metrics := []*config.MetricConfig{
+		{MetricID: "bad", Type: "METRICQL", MetricqlExpression: "mean( oops"}, // intentional syntax error
+		{MetricID: "good", Type: "MEAN", SourceEventType: "heartbeat", ValueColumn: "value"},
+	}
+	sorted, skipped, failedParse, err := TopologicalOrder(metrics)
+	if err != nil {
+		t.Fatalf("expected no error (parse failures are reported via failedParse), got %v", err)
+	}
+	if len(skipped) != 0 {
+		t.Fatalf("expected no cycle-skipped, got %v", skipped)
+	}
+	if _, ok := failedParse["bad"]; !ok {
+		t.Fatalf("expected 'bad' in failedParse, got %v", failedParse)
+	}
+	if len(sorted) != 2 {
+		t.Fatalf("expected both metrics in sorted output (failed-parse landing in in-degree 0), got %d", len(sorted))
+	}
+}
+
 func TestTopologicalOrder_OperandOutsidePass(t *testing.T) {
 	// c references operand x that's not in this scheduling pass — c remains
 	// in-degree 0 (Kahn's emits it). The caller's status_map gates skipping on
@@ -104,7 +168,10 @@ func TestTopologicalOrder_OperandOutsidePass(t *testing.T) {
 	metrics := []*config.MetricConfig{
 		{MetricID: "c", Type: "COMPOSITE", Operands: []config.OperandConfig{{MetricID: "x", Weight: 1}}},
 	}
-	sorted, skipped, _ := TopologicalOrder(metrics)
+	sorted, skipped, failedParse, _ := TopologicalOrder(metrics)
+	if len(failedParse) != 0 {
+		t.Fatalf("expected no parse failures, got %v", failedParse)
+	}
 	if len(skipped) != 0 {
 		t.Fatalf("expected no skipped, got %v", skipped)
 	}

@@ -8,39 +8,39 @@ import (
 )
 
 type VariantConfig struct {
-	VariantID      string  `json:"variant_id"`
-	Name           string  `json:"name"`
+	VariantID       string  `json:"variant_id"`
+	Name            string  `json:"name"`
 	TrafficFraction float64 `json:"traffic_fraction"`
-	IsControl      bool    `json:"is_control"`
+	IsControl       bool    `json:"is_control"`
 }
 
 type GuardrailConfig struct {
-	MetricID                   string  `json:"metric_id"`
-	Threshold                  float64 `json:"threshold"`
+	MetricID                    string  `json:"metric_id"`
+	Threshold                   float64 `json:"threshold"`
 	ConsecutiveBreachesRequired int     `json:"consecutive_breaches_required"`
 }
 
 type ExperimentConfig struct {
-	ExperimentID                 string            `json:"experiment_id"`
-	Name                         string            `json:"name"`
-	Type                         string            `json:"type"`
-	State                        string            `json:"state"`
-	StartedAt                    string            `json:"started_at,omitempty"`
-	PrimaryMetricID              string            `json:"primary_metric_id"`
-	SecondaryMetricIDs           []string          `json:"secondary_metric_ids"`
-	Variants                     []VariantConfig   `json:"variants"`
-	GuardrailConfigs             []GuardrailConfig `json:"guardrail_configs,omitempty"`
-	GuardrailAction              string            `json:"guardrail_action,omitempty"`
-	LifecycleStratificationEnabled bool            `json:"lifecycle_stratification_enabled,omitempty"`
-	LifecycleSegments            []string          `json:"lifecycle_segments,omitempty"`
-	SurrogateModelID             string            `json:"surrogate_model_id,omitempty"`
+	ExperimentID                   string            `json:"experiment_id"`
+	Name                           string            `json:"name"`
+	Type                           string            `json:"type"`
+	State                          string            `json:"state"`
+	StartedAt                      string            `json:"started_at,omitempty"`
+	PrimaryMetricID                string            `json:"primary_metric_id"`
+	SecondaryMetricIDs             []string          `json:"secondary_metric_ids"`
+	Variants                       []VariantConfig   `json:"variants"`
+	GuardrailConfigs               []GuardrailConfig `json:"guardrail_configs,omitempty"`
+	GuardrailAction                string            `json:"guardrail_action,omitempty"`
+	LifecycleStratificationEnabled bool              `json:"lifecycle_stratification_enabled,omitempty"`
+	LifecycleSegments              []string          `json:"lifecycle_segments,omitempty"`
+	SurrogateModelID               string            `json:"surrogate_model_id,omitempty"`
 	// Interleaving-specific fields
-	CreditAssignment             string            `json:"credit_assignment,omitempty"`       // "binary_win", "proportional", or "weighted"
-	EngagementEventType          string            `json:"engagement_event_type,omitempty"`   // event_type to join for engagement
-	SessionLevel                 bool              `json:"session_level,omitempty"`           // whether metrics are session-level
+	CreditAssignment    string `json:"credit_assignment,omitempty"`     // "binary_win", "proportional", or "weighted"
+	EngagementEventType string `json:"engagement_event_type,omitempty"` // event_type to join for engagement
+	SessionLevel        bool   `json:"session_level,omitempty"`         // whether metrics are session-level
 	// MLRATE cross-fitting fields (ADR-015 Phase 2)
-	MLRATEEnabled                bool              `json:"mlrate_enabled,omitempty"`          // enable MLRATE cross-fitting for AVLM covariates
-	MLRATEFolds                  int               `json:"mlrate_folds,omitempty"`            // K-fold count (default 5)
+	MLRATEEnabled bool `json:"mlrate_enabled,omitempty"` // enable MLRATE cross-fitting for AVLM covariates
+	MLRATEFolds   int  `json:"mlrate_folds,omitempty"`   // K-fold count (default 5)
 }
 
 type SurrogateModelConfig struct {
@@ -53,23 +53,23 @@ type SurrogateModelConfig struct {
 	CalibrationRSquared   float64  `json:"calibration_r_squared"`
 	MLflowModelURI        string   `json:"mlflow_model_uri,omitempty"`
 	// For mock linear models: coefficients per input metric
-	Coefficients          map[string]float64 `json:"coefficients,omitempty"`
-	Intercept             float64            `json:"intercept,omitempty"`
+	Coefficients map[string]float64 `json:"coefficients,omitempty"`
+	Intercept    float64            `json:"intercept,omitempty"`
 }
 
 type MetricConfig struct {
-	MetricID             string `json:"metric_id"`
-	Name                 string `json:"name"`
-	Type                 string `json:"type"`
-	SourceEventType      string `json:"source_event_type"`
-	NumeratorEventType   string `json:"numerator_event_type,omitempty"`
-	DenominatorEventType string `json:"denominator_event_type,omitempty"`
+	MetricID               string  `json:"metric_id"`
+	Name                   string  `json:"name"`
+	Type                   string  `json:"type"`
+	SourceEventType        string  `json:"source_event_type"`
+	NumeratorEventType     string  `json:"numerator_event_type,omitempty"`
+	DenominatorEventType   string  `json:"denominator_event_type,omitempty"`
 	CupedCovariateMetricID string  `json:"cuped_covariate_metric_id,omitempty"`
 	Percentile             float64 `json:"percentile,omitempty"`
 	LowerIsBetter          bool    `json:"lower_is_better,omitempty"`
-	IsQoEMetric          bool   `json:"is_qoe_metric,omitempty"`
-	QoEField             string `json:"qoe_field,omitempty"`
-	CustomSQL            string `json:"custom_sql,omitempty"`
+	IsQoEMetric            bool    `json:"is_qoe_metric,omitempty"`
+	QoEField               string  `json:"qoe_field,omitempty"`
+	CustomSQL              string  `json:"custom_sql,omitempty"`
 	// MLRATE cross-fitting fields (ADR-015 Phase 2)
 	MLRATEFeatureEventTypes []string `json:"mlrate_feature_event_types,omitempty"` // pre-experiment event types as LightGBM features
 	MLRATEModelURI          string   `json:"mlrate_model_uri,omitempty"`           // MLflow model URI prefix (fold models at {uri}/fold_{k})
@@ -84,8 +84,13 @@ type MetricConfig struct {
 	Operator string          `json:"operator,omitempty"` // ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM
 
 	// ADR-026 Phase 1 — WINDOWED_COUNT
-	EventType   string `json:"event_type,omitempty"`   // distinct from SourceEventType
+	EventType   string `json:"event_type,omitempty"` // distinct from SourceEventType
 	WindowHours int32  `json:"window_hours,omitempty"`
+
+	// ADR-026 Phase 2 — METRICQL. Raw source text of the MetricQL expression.
+	// Mutually exclusive with custom_sql and the Phase 1 oneof fields (M5 + M3
+	// enforce). Parsed + compiled to Spark SQL at scheduling time by M3.
+	MetricqlExpression string `json:"metricql_expression,omitempty"`
 }
 
 // OperandConfig is the config-layer representation of one operand of a

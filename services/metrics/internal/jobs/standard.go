@@ -105,7 +105,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 	for i := range metrics {
 		ordered[i] = &metrics[i]
 	}
-	sortedMetrics, cycleNodes, err := TopologicalOrder(ordered)
+	sortedMetrics, cycleNodes, failedParse, err := TopologicalOrder(ordered)
 	if err != nil {
 		return nil, fmt.Errorf("jobs: topological sort: %w", err)
 	}
@@ -121,6 +121,22 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		)
 	}
 
+	// ADR-026 Phase 2 (#435): pre-mark METRICQL parse failures as status.Failed
+	// so downstream gates (blockerFor for COMPOSITE, blockerForRefs for METRICQL)
+	// treat them identically to executor failures. Without this, a parse failure
+	// would land the metric in `sorted` with no recorded status, and its
+	// dependents would be marked SkippedUpstreamFailure for what's actually a
+	// parse error -- the wrong observable.
+	for id, parseErr := range failedParse {
+		sm.markFailed(id, "metricql: parse: "+parseErr.Error())
+		slog.Warn("metric failed (metricql parse)",
+			"experiment_id", experimentID,
+			"metric_id", id,
+			"computation_date", computationDate,
+			"err", parseErr,
+		)
+	}
+
 	// Flush statuses to PG after the loop (or after an early-return failure).
 	defer func() {
 		// ADR-026 #475: if Run early-returns on a non-COMPOSITE failure, any
@@ -130,7 +146,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		// had we reached it. Mirror that gate here so the status table reflects
 		// SkippedUpstreamFailure rather than silently omitting the row (which
 		// M4a would interpret as "missing", not "failed-upstream").
-		markUnvisitedCompositesAsSkipped(sortedMetrics, sm)
+		markUnvisitedDependentsAsSkipped(sortedMetrics, sm)
 
 		if flushErr := j.flushStatus(ctx, experimentID, computationDate, sm); flushErr != nil {
 			slog.Error("status flush failed (non-fatal)",
@@ -176,6 +192,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			EventType:   m.EventType,
 			WindowHours: m.WindowHours,
 			Operands:    toSparkOperands(m.Operands),
+			// ADR-026 Phase 2 (#435)
+			MetricqlExpression: m.MetricqlExpression,
 		}
 
 		// QoE metrics use a separate template reading from delta.qoe_events.
@@ -502,9 +520,9 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		for _, qm := range qoeMetrics {
 			for _, em := range engagementMetrics {
 				corrParams := spark.TemplateParams{
-					ExperimentID:       exp.ExperimentID,
-					ComputationDate:    computationDate,
-					QoEFieldA:          qm.QoEField,
+					ExperimentID:         exp.ExperimentID,
+					ComputationDate:      computationDate,
+					QoEFieldA:            qm.QoEField,
 					EngagementSourceType: em.SourceEventType,
 				}
 
@@ -594,27 +612,43 @@ func (j *StandardJob) flushStatus(
 	return nil
 }
 
-// markUnvisitedCompositesAsSkipped scans the topo-ordered metric list and, for
-// any COMPOSITE whose status is unrecorded in `sm`, marks it
-// SkippedUpstreamFailure if its operands include at least one non-Completed
-// status. Called from the deferred flush so early-return paths (fail-fast on a
-// non-COMPOSITE) still surface downstream COMPOSITEs to M4a — otherwise the
-// COMPOSITE would have no row in metric_computation_status, indistinguishable
-// from a metric that was never scheduled.
+// markUnvisitedDependentsAsSkipped scans the topo-ordered metric list and, for
+// any dependent metric (COMPOSITE or METRICQL) whose status is unrecorded in
+// `sm`, marks it SkippedUpstreamFailure if its dependencies include at least
+// one non-Completed status. Called from the deferred flush so early-return
+// paths (fail-fast on an unrelated failure) still surface downstream dependents
+// to M4a — otherwise the dependent would have no row in
+// metric_computation_status, indistinguishable from a metric that was never
+// scheduled.
 //
-// COMPOSITEs whose operands all completed (e.g., the early-return happened on
-// an unrelated metric later in topo order) are intentionally left unrecorded:
-// "not yet computed" is the right signal for M4a in that case, not "skipped".
-func markUnvisitedCompositesAsSkipped(sortedMetrics []*config.MetricConfig, sm *statusMap) {
+// Generalized from the pre-ADR-026-Phase-2 markUnvisitedCompositesAsSkipped
+// (round-4 BUG-0001): the loop guard is now dependency-shaped, not type-shaped.
+// COMPOSITE deps come from m.Operands; METRICQL deps come from parsed
+// @metric_refs via operandIDs. Both feed `blockerForRefs` for the blocker check.
+//
+// Dependents whose dependencies all completed (e.g., the early-return happened
+// on an unrelated metric later in topo order) are intentionally left
+// unrecorded: "not yet computed" is the right signal for M4a in that case,
+// not "skipped".
+func markUnvisitedDependentsAsSkipped(sortedMetrics []*config.MetricConfig, sm *statusMap) {
 	for _, mPtr := range sortedMetrics {
-		if strings.ToUpper(mPtr.Type) != "COMPOSITE" {
-			continue
-		}
 		if _, recorded := sm.entries[mPtr.MetricID]; recorded {
-			// Already Completed / SkippedUpstreamFailure / SkippedCycle.
+			// Already Completed / Failed / SkippedUpstreamFailure / SkippedCycle.
 			continue
 		}
-		if blocker, blocked := sm.blockerFor(mPtr.Operands); blocked {
+		refs, err := operandIDs(mPtr)
+		if err != nil {
+			// METRICQL parse failure encountered here would normally already
+			// be recorded via the pre-loop pre-mark from failedParse; if not,
+			// surface it as Failed (defense-in-depth).
+			sm.markFailed(mPtr.MetricID, "metricql: parse: "+err.Error())
+			continue
+		}
+		if len(refs) == 0 {
+			// Leaf metric -- no dependencies to fail on; nothing to skip.
+			continue
+		}
+		if blocker := sm.blockerForRefs(refs); blocker != "" {
 			sm.markSkippedUpstream(mPtr.MetricID, blocker)
 		}
 	}
