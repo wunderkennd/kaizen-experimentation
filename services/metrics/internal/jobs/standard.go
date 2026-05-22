@@ -172,6 +172,41 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			}
 		}
 
+		// ADR-026 Phase 2 (#435) — METRICQL: symmetric gate on @metric_ref
+		// status BEFORE attempting compile/execute. Without this, an
+		// expression like "0.7 * @watch_time + 0.3 * @ctr" would compile
+		// and execute against delta.metric_summaries rows that don't exist
+		// (or are stale from a prior pass) when watch_time/ctr failed --
+		// silently wrong numbers, not an error. Round-4 BUG-0002 fix.
+		// blockerForRefs is shared with markUnvisitedDependentsAsSkipped
+		// so "blocked" means the same thing in both places.
+		if strings.ToUpper(mPtr.Type) == "METRICQL" {
+			refs, parseErr := operandIDs(mPtr)
+			if parseErr != nil {
+				// Parse failure -- already recorded as Failed via the
+				// failedParse pre-mark; defensive re-mark in case the
+				// expression text changed between DAG build and gate.
+				sm.markFailed(mPtr.MetricID, "metricql: parse: "+parseErr.Error())
+				slog.Warn("metricql skipped (parse failure)",
+					"experiment_id", experimentID,
+					"metric_id", mPtr.MetricID,
+					"err", parseErr,
+					"computation_date", computationDate,
+				)
+				continue
+			}
+			if blocker := sm.blockerForRefs(refs); blocker != "" {
+				sm.markSkippedUpstream(mPtr.MetricID, blocker)
+				slog.Warn("metricql skipped (ref failed or missing)",
+					"experiment_id", experimentID,
+					"metric_id", mPtr.MetricID,
+					"blocker", blocker,
+					"computation_date", computationDate,
+				)
+				continue
+			}
+		}
+
 		// Dereference into a local value so the existing loop body — written
 		// against a value `m` — keeps working unchanged below.
 		m := *mPtr

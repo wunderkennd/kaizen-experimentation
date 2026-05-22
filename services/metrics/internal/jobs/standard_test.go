@@ -670,6 +670,403 @@ func TestStandardJob_Run_FailFastStillMarksDownstreamComposite(t *testing.T) {
 		"comp_b skip reason should mention the blocking operand")
 }
 
+// TestStandardJob_Run_MetricqlRunsAfterRefs is the ADR-026 Phase 2 #435
+// happy-path guard mirroring TestStandardJob_Run_CompositeRunsAfterOperands:
+// a METRICQL metric whose @metric_refs are independent non-METRICQL metrics
+// must have its compiled SQL executed strictly AFTER both ref queries.
+//
+// "0.7 * @watch_time + 0.3 * @ctr" -- the canonical Phase 2 use case --
+// reads watch_time and ctr from delta.metric_summaries via the composite
+// CTE+pivot shape; scheduled before its refs writes nulls.
+func TestStandardJob_Run_MetricqlRunsAfterRefs(t *testing.T) {
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_metricql_happy.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000cc01",
+				"name": "metricql_happy_path",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "engagement",
+				"secondary_metric_ids": ["watch_time", "ctr"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "watch_time",
+				"name": "Watch time (MEAN)",
+				"type": "MEAN",
+				"source_event_type": "heartbeat",
+				"value_column": "value"
+			},
+			{
+				"metric_id": "ctr",
+				"name": "Click-through rate (PROPORTION)",
+				"type": "PROPORTION",
+				"source_event_type": "click"
+			},
+			{
+				"metric_id": "engagement",
+				"name": "Engagement index (METRICQL)",
+				"type": "METRICQL",
+				"source_event_type": "n/a",
+				"metricql_expression": "0.7 * @watch_time + 0.3 * @ctr"
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(500)
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, runErr := job.Run(context.Background(), "e0000000-0000-0000-0000-00000000cc01")
+	require.NoError(t, runErr, "happy path must not surface any error")
+
+	calls := executor.GetCalls()
+	dailyIdxOf := func(metricID string) int {
+		needle := "'" + metricID + "' AS metric_id"
+		for i, c := range calls {
+			if strings.Contains(c.SQL, needle) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	idxWatchTime := dailyIdxOf("watch_time")
+	idxCTR := dailyIdxOf("ctr")
+	idxEngagement := dailyIdxOf("engagement")
+
+	require.NotEqual(t, -1, idxWatchTime, "watch_time SQL must be executed")
+	require.NotEqual(t, -1, idxCTR, "ctr SQL must be executed")
+	require.NotEqual(t, -1, idxEngagement, "engagement METRICQL SQL must be executed")
+
+	assert.Less(t, idxWatchTime, idxEngagement,
+		"watch_time must execute before engagement (METRICQL reads ref rows from delta.metric_summaries)")
+	assert.Less(t, idxCTR, idxEngagement,
+		"ctr must execute before engagement (METRICQL reads ref rows from delta.metric_summaries)")
+
+	snap := statusWriter.Snapshot()
+	byMetric := make(map[string]status.Entry, len(snap))
+	for _, e := range snap {
+		byMetric[e.MetricID] = e
+	}
+	for _, id := range []string{"watch_time", "ctr", "engagement"} {
+		entry, ok := byMetric[id]
+		require.Truef(t, ok, "%s must have a status row in the happy path", id)
+		assert.Equalf(t, status.Completed, entry.Status,
+			"%s status must be Completed (got %v)", id, entry.Status)
+	}
+}
+
+// TestStandardJob_Run_MetricqlParseFailureMarksFailed is the ADR-026 Phase 2
+// regression for failedParse pre-mark: a METRICQL metric whose source text
+// is malformed should land in status.Failed with the parse error as reason
+// -- single source, single row, no confusion with "operand-missing".
+func TestStandardJob_Run_MetricqlParseFailureMarksFailed(t *testing.T) {
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_metricql_parse_fail.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000cc02",
+				"name": "metricql_parse_fail",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "bad_metric",
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "bad_metric",
+				"name": "Malformed expression",
+				"type": "METRICQL",
+				"source_event_type": "n/a",
+				"metricql_expression": "mean(x"
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(500)
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, _ = job.Run(context.Background(), "e0000000-0000-0000-0000-00000000cc02")
+
+	// Critical assertion: the parse-failed metric is NOT handed to the
+	// executor. blockerForRefs gate fires before any compile/execute attempt.
+	for _, c := range executor.GetCalls() {
+		assert.NotContains(t, c.SQL, "'bad_metric' AS metric_id",
+			"bad_metric must never reach the executor: %s", c.SQL)
+	}
+
+	snap := statusWriter.Snapshot()
+	var bad *status.Entry
+	for i, e := range snap {
+		if e.MetricID == "bad_metric" {
+			bad = &snap[i]
+			break
+		}
+	}
+	require.NotNil(t, bad, "bad_metric must have a status row")
+	assert.Equal(t, status.Failed, bad.Status, "bad_metric must be Failed (parse error)")
+	assert.Contains(t, bad.Reason, "metricql: parse:",
+		"reason should identify the parse failure source")
+}
+
+// metricSelectiveExecutor fails calls whose SQL projects a specific
+// `'<metric_id>' AS metric_id` literal. All other calls succeed normally.
+// Used to drive per-metric failures in METRICQL upstream-failure tests.
+type metricSelectiveExecutor struct {
+	failOnMetricID string
+	failErr        error
+	calls          []spark.MockCall
+}
+
+func (e *metricSelectiveExecutor) ExecuteSQL(ctx context.Context, sql string) (*spark.SQLResult, error) {
+	e.calls = append(e.calls, spark.MockCall{SQL: sql})
+	if strings.Contains(sql, "'"+e.failOnMetricID+"' AS metric_id") {
+		return nil, e.failErr
+	}
+	return &spark.SQLResult{RowCount: 100, Duration: 0}, nil
+}
+
+func (e *metricSelectiveExecutor) ExecuteAndWrite(ctx context.Context, sql string, target string) (*spark.SQLResult, error) {
+	e.calls = append(e.calls, spark.MockCall{SQL: sql, TargetTable: target})
+	if strings.Contains(sql, "'"+e.failOnMetricID+"' AS metric_id") {
+		return nil, e.failErr
+	}
+	return &spark.SQLResult{RowCount: 100, Duration: 0}, nil
+}
+
+// TestStandardJob_Run_MetricqlSkippedOnFailingRef is the ADR-026 Phase 2
+// round-4 BUG-0002 regression: a METRICQL metric must be SkippedUpstreamFailure
+// (not executed) when any of its @metric_refs failed. The critical assertion
+// is that executor.ExecuteAndWrite was NEVER called for the dependent metric
+// -- if the gate is missing, the METRICQL expression would compile and read
+// from delta.metric_summaries rows that don't exist, returning silently
+// wrong numbers.
+func TestStandardJob_Run_MetricqlSkippedOnFailingRef(t *testing.T) {
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_metricql_upstream_fail.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000cc03",
+				"name": "metricql_upstream_fail",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "ok_metric",
+				"secondary_metric_ids": ["failing_metric", "weighted"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "ok_metric",
+				"name": "OK operand",
+				"type": "MEAN",
+				"source_event_type": "heartbeat",
+				"value_column": "value"
+			},
+			{
+				"metric_id": "failing_metric",
+				"name": "Operand that fails at exec",
+				"type": "MEAN",
+				"source_event_type": "click",
+				"value_column": "value"
+			},
+			{
+				"metric_id": "weighted",
+				"name": "Weighted blend (METRICQL)",
+				"type": "METRICQL",
+				"source_event_type": "n/a",
+				"metricql_expression": "0.7 * @failing_metric + 0.3 * @ok_metric"
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	sentinel := fmt.Errorf("spark error for failing_metric")
+	executor := &metricSelectiveExecutor{failOnMetricID: "failing_metric", failErr: sentinel}
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, runErr := job.Run(context.Background(), "e0000000-0000-0000-0000-00000000cc03")
+	// fail-fast contract: the run returns the operand error.
+	require.Error(t, runErr, "expected wrapped operand error")
+	assert.ErrorIs(t, runErr, sentinel)
+
+	// THE CRITICAL ASSERTION: weighted must never be handed to the executor.
+	// blockerForRefs is the only thing preventing it; if T8 Step 1a regresses,
+	// this assertion fires.
+	for _, c := range executor.calls {
+		assert.NotContains(t, c.SQL, "'weighted' AS metric_id",
+			"weighted must never reach the executor when a ref failed: %s", c.SQL)
+	}
+
+	snap := statusWriter.Snapshot()
+	byMetric := make(map[string]status.Entry, len(snap))
+	for _, e := range snap {
+		byMetric[e.MetricID] = e
+	}
+
+	// failing_metric → Failed
+	failed, hasFailed := byMetric["failing_metric"]
+	require.True(t, hasFailed, "failing_metric must have a status row")
+	assert.Equal(t, status.Failed, failed.Status)
+
+	// weighted → SkippedUpstreamFailure, blocker = failing_metric
+	weighted, hasWeighted := byMetric["weighted"]
+	require.True(t, hasWeighted, "weighted must have a status row even on fail-fast")
+	assert.Equal(t, status.SkippedUpstreamFailure, weighted.Status,
+		"weighted must be SkippedUpstreamFailure (gate via blockerForRefs)")
+	assert.Contains(t, weighted.Reason, "failing_metric",
+		"weighted skip reason must identify the blocking ref")
+
+	// ok_metric: may or may not be Completed depending on whether the
+	// fail-fast happened before ok_metric was visited. Topo-order treats
+	// the two MEAN operands as siblings, so either ordering is valid.
+	// Don't assert here; ok_metric's status is a no-op for the BUG-0002
+	// invariant under test.
+}
+
+// TestStandardJob_Run_MetricqlChainSkipPropagation exercises the
+// markUnvisitedDependentsAsSkipped generalization (T7 Step 2a): a METRICQL
+// metric (meta) that references another METRICQL metric (weighted) must
+// also be SkippedUpstreamFailure when the chain head's ref fails. This is
+// the METRICQL→METRICQL skip-chaining case, distinct from COMPOSITE→METRICQL.
+func TestStandardJob_Run_MetricqlChainSkipPropagation(t *testing.T) {
+	dir := t.TempDir()
+	fixturePath := filepath.Join(dir, "seed_metricql_chain_skip.json")
+	const fixture = `{
+		"experiments": [
+			{
+				"experiment_id": "e0000000-0000-0000-0000-00000000cc04",
+				"name": "metricql_chain_skip",
+				"type": "STANDARD",
+				"state": "RUNNING",
+				"started_at": "2026-05-01",
+				"primary_metric_id": "ok_metric",
+				"secondary_metric_ids": ["failing_metric", "weighted", "meta"],
+				"variants": [
+					{"variant_id": "control", "name": "Control", "traffic_fraction": 0.5, "is_control": true},
+					{"variant_id": "treatment", "name": "Treatment", "traffic_fraction": 0.5, "is_control": false}
+				]
+			}
+		],
+		"metrics": [
+			{
+				"metric_id": "ok_metric",
+				"name": "OK operand",
+				"type": "MEAN",
+				"source_event_type": "heartbeat",
+				"value_column": "value"
+			},
+			{
+				"metric_id": "failing_metric",
+				"name": "Operand that fails at exec",
+				"type": "MEAN",
+				"source_event_type": "click",
+				"value_column": "value"
+			},
+			{
+				"metric_id": "weighted",
+				"name": "Weighted blend (METRICQL)",
+				"type": "METRICQL",
+				"source_event_type": "n/a",
+				"metricql_expression": "0.7 * @failing_metric + 0.3 * @ok_metric"
+			},
+			{
+				"metric_id": "meta",
+				"name": "Meta METRICQL referencing weighted",
+				"type": "METRICQL",
+				"source_event_type": "n/a",
+				"metricql_expression": "@weighted * 2"
+			}
+		]
+	}`
+	require.NoError(t, os.WriteFile(fixturePath, []byte(fixture), 0o600))
+
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	sentinel := fmt.Errorf("spark error for failing_metric (chain)")
+	executor := &metricSelectiveExecutor{failOnMetricID: "failing_metric", failErr: sentinel}
+	qlWriter := querylog.NewMemWriter()
+	statusWriter := status.NewMockWriter()
+
+	job := NewStandardJob(cfgStore, renderer, executor, qlWriter, WithStatusWriter(statusWriter))
+
+	_, _ = job.Run(context.Background(), "e0000000-0000-0000-0000-00000000cc04")
+
+	// Neither weighted nor meta should have reached the executor.
+	for _, c := range executor.calls {
+		assert.NotContains(t, c.SQL, "'weighted' AS metric_id",
+			"weighted must never reach executor: %s", c.SQL)
+		assert.NotContains(t, c.SQL, "'meta' AS metric_id",
+			"meta must never reach executor (METRICQL→METRICQL skip chain): %s", c.SQL)
+	}
+
+	snap := statusWriter.Snapshot()
+	byMetric := make(map[string]status.Entry, len(snap))
+	for _, e := range snap {
+		byMetric[e.MetricID] = e
+	}
+
+	// meta status: must be SkippedUpstreamFailure via the deferred
+	// markUnvisitedDependentsAsSkipped pass (Run early-returned before
+	// reaching meta in the main loop; the defer rescues the status row).
+	meta, hasMeta := byMetric["meta"]
+	require.True(t, hasMeta, "meta must have a status row (T7 Step 2a generalization)")
+	assert.Equal(t, status.SkippedUpstreamFailure, meta.Status,
+		"meta must be SkippedUpstreamFailure -- METRICQL→METRICQL skip chain")
+}
+
 // TestStandardJob_Run_CompositeRunsAfterOperands is the ADR-026 #475 happy-path
 // guard for topo-order scheduling: a COMPOSITE metric whose operands are
 // independent non-COMPOSITE metrics must have its daily-metric SQL executed
