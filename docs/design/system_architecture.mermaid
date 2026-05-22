@@ -1,66 +1,155 @@
 flowchart TB
-    subgraph Clients["Client SDKs (TypeScript, Swift, Kotlin, Python, Go)"]
+    %% =========================================================
+    %% LAYER 1 — Customer-side streaming services (outside Kaizen)
+    %% =========================================================
+    subgraph L1["Customer-side Streaming Services"]
         direction LR
-        RP["RemoteProvider"]
-        LP["LocalProvider<br/>(WASM/UniFFI hash)"]
-        MP["MockProvider<br/>(unit tests)"]
+        APP["Video App<br/>iOS · Android · Web"]
+        AUTH["Identity / Auth"]
+        BFF["Page Orchestration<br/>(BFF)"]
+        REC["Recommendations"]
+        CAT["Catalog / Metadata"]
+        PB["Playback Authorization<br/>+ DRM"]
+        PLR["Video Player + CDN"]
     end
 
-    subgraph Rust["Rust Services (Cargo Workspace)"]
-        M1["<b>M1: Assignment Service</b><br/>Static, Session, Interleaving<br/>Bucket Reuse"]
-        M2R["<b>M2: Event Ingestion</b><br/>Validation, Dedup, Kafka Publish<br/>Crash-Only"]
-        M4A["<b>M4a: Analysis Engine</b><br/>Frequentist, mSPRT, GST<br/>Novelty, Interference<br/>proptest validated"]
-        M4B["<b>M4b: Bandit Policy</b><br/>Thompson, LinUCB, Neural<br/>LMAX Single-Thread Core<br/>RocksDB Snapshots"]
+    %% =========================================================
+    %% LAYER 2 — Kaizen SDKs
+    %% =========================================================
+    subgraph L2["Kaizen SDKs (sdks/)"]
+        direction LR
+        CLISDK["Client SDKs<br/>iOS (Swift) · Android (Kotlin) · Web (TS)<br/>UniFFI / WASM hash"]
+        SRVSDK["Server SDKs<br/>server-go · server-python<br/>CGo / PyO3 hash"]
     end
 
-    subgraph Go["Go Services"]
-        M2G["<b>M2: Orchestration</b><br/>SQL Query Logging"]
-        M3["<b>M3: Metric Engine</b><br/>Spark SQL, Surrogates<br/>Lifecycle, QoE, Interleaving"]
-        M5["<b>M5: Management</b><br/>CRUD, State Machine<br/>Auto-Pause Guardrails<br/>Bucket Reuse Mgmt"]
-        M7["<b>M7: Feature Flags</b><br/>Progressive Delivery<br/>CGo Hash Bridge"]
+    APP --- CLISDK
+    AUTH -. userId / cohort .- BFF
+    BFF --- SRVSDK
+    REC --- SRVSDK
+    PB --- SRVSDK
+    BFF --> REC
+    BFF --> CAT
+    REC --> CAT
+    APP --> PLR
+
+    %% =========================================================
+    %% LAYER 3 — Control plane (real-time gRPC, Rust)
+    %% =========================================================
+    subgraph L3["Control Plane (Rust gRPC services)"]
+        direction LR
+        M7["M7 Flags :50057<br/>experimentation-flags<br/>(ADR-024 — Rust port)"]
+        M1["M1 Assignment :50051<br/>experimentation-assignment<br/>MurmurHash3 · bucket reuse · interleaving"]
+        M4b["M4b Bandit :50054<br/>experimentation-bandit<br/>Thompson · LinUCB · Neural (Candle)<br/>LMAX single-thread core"]
     end
 
-    subgraph UI["TypeScript (UI Only)"]
-        M6["<b>M6: Decision Support UI</b><br/>Dashboards, View SQL<br/>Export to Notebook<br/>No Backend Computation"]
+    CLISDK -.gRPC.-> M1
+    CLISDK -.gRPC.-> M7
+    SRVSDK -->|gRPC| M1
+    SRVSDK -->|gRPC| M7
+    PB -->|gRPC| M1
+    M1 -.->|arm delegation<br/>p99 < 15ms<br/>internal Kaizen call| M4b
+
+    %% =========================================================
+    %% LAYER 4 — Event ingestion + streaming bus
+    %% =========================================================
+    subgraph L4["Event Plane"]
+        direction LR
+        M2R["M2 Ingest (Rust) :50052<br/>experimentation-ingest<br/>proto validate · Bloom dedup<br/>HeartbeatSessionizer · EBVS"]
+        K[("Kafka / Redpanda<br/>7 topics<br/>exposures · metric_events<br/>reward_events · qoe_events<br/>guardrail_alerts<br/>model_retraining_events<br/>model_training_requests")]
+        M2G["M2 Orchestration (Go) :50058<br/>services/orchestration<br/>query log + Spark dispatch"]
     end
 
-    subgraph Infra["Infrastructure"]
-        K["Kafka Topics<br/>exposures, metric_events<br/>reward_events, qoe_events<br/>guardrail_alerts"]
-        DL["Delta Lake<br/>+ MLflow"]
-        PG["PostgreSQL<br/>Config, Results, query_log"]
-        R["Redis Cluster<br/>Feature Store"]
-        RDB["RocksDB<br/>Policy Snapshots"]
-    end
-
-    RP -->|gRPC| M1
-    LP -.->|cached config| M1
-    Clients -->|events| M2R
-
-    M1 -->|arm selection| M4B
+    APP -->|client events| M2R
+    SRVSDK -->|server exposures| M2R
+    PLR -->|player heartbeats<br/>(QoE telemetry)| M2R
     M2R --> K
-    K --> M3
-    K -->|rewards| M4B
-    M3 -->|metric summaries| DL
-    M3 -->|SQL| PG
-    M4A -->|reads| DL
-    M4A -->|results| PG
-    M4B --> RDB
-    M5 -->|config| M1
-    M5 -->|lifecycle| PG
-    M5 -->|auto-pause| K
-    M6 -->|reads| PG
-    M6 -->|reads| M5
-    M7 -->|CGo hash| M1
-    M3 --> R
+    K --> M2G
 
+    %% =========================================================
+    %% LAYER 5 — Analytics + ML processing
+    %% =========================================================
+    subgraph L5["Analytics & ML Plane"]
+        direction TB
+        M3["M3 Metrics :50056 (Go + Spark)<br/>services/metrics<br/>standard · guardrail · QoE rollups<br/>topo-order custom metrics (ADR-026 P1)<br/>lifecycle segmentation · interleaving"]
+        M4a["M4a Analysis :50053 (Rust)<br/>experimentation-stats<br/>CUPED · AVLM · TOST · e-values<br/>switchback · synthetic control<br/>OPE (DR + TC/JIVE) · adaptive-N · MAD"]
+        ML[("MLflow Registry<br/>Candle / ONNX artifacts")]
+    end
+
+    K --> M3
+    K -->|reward_events| M4b
+    M3 -->|rollup_ready| M4a
+    M4a <-->|load_model| ML
+    M4b <-->|policy artifacts| ML
+
+    %% =========================================================
+    %% LAYER 6 — Management + UI
+    %% =========================================================
+    subgraph L6["Management & UI"]
+        direction LR
+        M5["M5 Management :50055 (Rust)<br/>experimentation-management<br/>CRUD · state machine · RBAC<br/>guardrails · bucket reuse<br/>portfolio · adaptive-N scheduler<br/>(ADR-025 — Rust port)"]
+        M6["M6 Analyst UI :3000<br/>Next.js 14 · React 18 · Recharts · D3<br/>shadcn/ui — display only, no math"]
+    end
+
+    M5 -->|config| M1
+    M5 -->|policy| M4b
+    M5 -->|flag rollout| M7
+    M5 -->|auto-pause| K
+    M6 --> M5
+    M4a -->|results| M5
+
+    %% =========================================================
+    %% LAYER 7 — Persistence
+    %% =========================================================
+    subgraph L7["Storage"]
+        direction LR
+        DL[("Delta Lake<br/>+ query_log")]
+        PG[("PostgreSQL<br/>config · results<br/>state · ACL")]
+        RD[("Redis Cluster<br/>feature store")]
+        RDB[("RocksDB<br/>bandit snapshots")]
+    end
+
+    M3 --> DL
+    M3 --> RD
+    M4a --> PG
+    M4a --> DL
+    M5 --> PG
+    M6 -. reads .- PG
+    M4b --> RDB
+
+    %% =========================================================
+    %% LAYER 8 — Infrastructure (Pulumi + AWS Go IaC, infra/)
+    %% =========================================================
+    subgraph L8["Infrastructure — Pulumi Go IaC on AWS"]
+        direction LR
+        ECR[("ECR Repos × 9<br/>one per Kaizen service")]
+        ECS["ECS Fargate / EKS<br/>services + sidecars"]
+        OBS["Observability<br/>OpenTelemetry · Prometheus<br/>Grafana · CloudWatch"]
+        NET["Networking<br/>VPC · Subnets · NAT<br/>ALB · WAF · Route53"]
+    end
+
+    ECR -.image pull.-> ECS
+    ECS -.runs.-> L3
+    ECS -.runs.-> L4
+    ECS -.runs.-> L5
+    ECS -.runs.-> L6
+    ECS -.telemetry.-> OBS
+    NET -.ingress.-> ECS
+
+    %% =========================================================
+    %% Styling — language-coded
+    %% =========================================================
     classDef rust fill:#deb887,stroke:#8b4513,color:#000
     classDef golang fill:#7fb3d8,stroke:#2c5f8a,color:#000
     classDef ts fill:#c5e1a5,stroke:#558b2f,color:#000
     classDef infra fill:#e0e0e0,stroke:#757575,color:#000
     classDef client fill:#fff3e0,stroke:#e65100,color:#000
+    classDef customer fill:#f3e5f5,stroke:#6a1b9a,color:#000
+    classDef storage fill:#fff9c4,stroke:#f9a825,color:#000
 
-    class M1,M2R,M4A,M4B rust
-    class M2G,M3,M5,M7 golang
+    class M1,M2R,M4a,M4b,M7,M5 rust
+    class M2G,M3 golang
     class M6 ts
-    class K,DL,PG,R,RDB infra
-    class RP,LP,MP client
+    class K,ECR,ECS,OBS,NET,ML infra
+    class CLISDK,SRVSDK client
+    class APP,AUTH,BFF,REC,CAT,PB,PLR customer
+    class DL,PG,RD,RDB storage

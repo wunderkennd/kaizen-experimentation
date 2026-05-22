@@ -1,0 +1,83 @@
+sequenceDiagram
+    autonumber
+    actor R as Researcher / DS
+    participant Note as Jupyter Notebook<br/>(or M6 UI)
+    participant ML as MLflow Registry
+    participant M5 as M5 Management<br/>:50055
+    participant M3 as M3 Metrics :50056<br/>(Go + Spark)
+    participant DL as Delta Lake
+    participant M4a as M4a Analysis :50053<br/>(experimentation-stats)
+    participant PG as PostgreSQL
+    participant M6 as M6 Analyst UI<br/>:3000
+    participant M4b as M4b Bandit<br/>:50054
+    participant M1 as M1 Assignment<br/>:50051
+
+    rect rgb(255, 243, 224)
+    Note over R,M5: 1. Register candidate policy + create eval job
+    R->>Note: develop candidate ranker / policy
+    Note->>ML: log_model(candidate, params, deps,<br/>training_dataset_hash)
+    ML-->>Note: { model_uri: "models:/ranker/v8", version: 3 }
+    Note->>M5: CreateOfflineEvalJob(<br/>candidate_uri,<br/>baseline_uri="models:/ranker/v7",<br/>eval_window=[T-30d, T],<br/>metrics=[engagement, watch_time, ebvs_rate],<br/>cluster_unit=user, eval_unit=session)
+    M5->>M5: validate scope, dedupe job_hash,<br/>check researcher RBAC
+    M5-->>Note: { job_id, status: QUEUED }
+    end
+
+    rect rgb(232, 245, 233)
+    Note over M5,DL: 2. Build immutable eval slice (data prep)
+    M5->>M3: BuildEvalSlice(job_id, window, eval_unit)
+    M3->>DL: query exposures × metric_events × qoe_events<br/>+ pre-period covariates (CUPED)<br/>+ cluster keys (user_id for clustered SE)
+    DL-->>M3: logged tuples<br/>(state, action, reward, π_old)
+    M3->>M3: propensity sanity:<br/>min(π_old) > floor, no degenerate ties,<br/>action space coverage
+    M3->>DL: write eval_slice/{job_id}/<br/>(immutable parquet snapshot)
+    M3->>M5: slice_ready(row_count, schema_hash,<br/>min_propensity, max_propensity)
+    end
+
+    rect rgb(225, 245, 254)
+    Note over M5,M4a: 3. Score + estimate (doubly-robust OPE — ADR-017)
+    M5->>M4a: EstimatePolicyValue(job_id,<br/>estimators=[DM, IPW, DR],<br/>variance_reduction=[CUPED, JIVE])
+    M4a->>ML: load_model(candidate_uri)
+    ML-->>M4a: model artifact<br/>(Candle / ONNX / coefficient vector)
+    M4a->>DL: read eval_slice + covariates
+    loop per logged exposure
+        M4a->>M4a: π_new(state) → action probs
+        M4a->>M4a: importance weight w = π_new / π_old<br/>(clip at τ to bound variance)
+    end
+    M4a->>M4a: Direct Method (DM):<br/>Q̂(s,a) regression on (state, action) → reward
+    M4a->>M4a: IPW: V̂_IPW = Σ w · reward / N
+    M4a->>M4a: Doubly-Robust:<br/>V̂_DR = Σ [Q̂(s, π_new(s)) + w · (reward − Q̂(s,a))] / N
+    M4a->>M4a: TC/JIVE surrogate fix<br/>(short-horizon proxy → long-horizon target)
+    M4a->>M4a: CUPED variance reduction<br/>via pre-period covariates
+    M4a->>M4a: cluster-bootstrap SEs<br/>(user-level resampling)
+    M4a->>M4a: TOST equivalence (ADR-027) vs baseline<br/>+ AVLM always-valid bounds (ADR-015)
+    M4a->>PG: write offline_eval_results<br/>(point, CI, equivalence verdict,<br/>per-segment lift, diagnostics)
+    M4a->>M5: results_ready(job_id)
+    end
+
+    rect rgb(243, 229, 245)
+    Note over M4a,M6: 4. Trustworthiness diagnostics
+    M4a->>M4a: effective sample size<br/>ESS = (Σw)² / Σw²
+    M4a->>M4a: propensity overlap<br/>(PS clipping rate, support diagnostic)
+    M4a->>M4a: covariate balance pre/post weighting
+    M4a->>M4a: cross-validate DR (estimator stability)
+    M4a->>PG: write diagnostics_card(job_id)
+    Note over M4a: If ESS < ESS_floor OR overlap < overlap_floor<br/>→ flag verdict = UNRELIABLE
+    end
+
+    rect rgb(255, 224, 230)
+    Note over R,M1: 5. Review + decision
+    M5-->>R: notify(job_id, status=READY)
+    R->>M6: open Offline Eval dashboard
+    M6->>M5: GET /offline_evals/{job_id}
+    M6->>PG: read results + diagnostics
+    M6-->>R: render lift, CI, equivalence verdict,<br/>per-segment breakouts,<br/>diagnostics health card
+    alt Promote to shadow (ADR-030)
+        R->>M5: PromoteToShadow(candidate, traffic_pct)
+        M5->>M4b: enroll arm in shadow mode<br/>(no user impact, telemetry only)
+    else Promote to live A/B
+        R->>M5: PromoteToExperiment(candidate, control)
+        M5->>M4b: enroll as new arm in policy
+        M5->>M1: create experiment config<br/>(salt, bucket allocation, guardrails)
+    else Reject / iterate
+        R->>Note: refine candidate,<br/>re-train, re-submit
+    end
+    end
