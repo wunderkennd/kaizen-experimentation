@@ -52,11 +52,11 @@ async fn main() {
     let mut commit = false;
     let mut db_url = None;
 
-    for i in 1..args.len() {
-        if args[i] == "--commit" {
+    for arg in args.iter().skip(1) {
+        if arg == "--commit" {
             commit = true;
-        } else if args[i].starts_with("--database-url=") {
-            db_url = Some(args[i].replace("--database-url=", ""));
+        } else if arg.starts_with("--database-url=") {
+            db_url = Some(arg.replace("--database-url=", ""));
         }
     }
 
@@ -105,7 +105,7 @@ async fn main() {
         println!("Raw SQL:    \x1b[33m{}\x1b[0m", raw_sql);
 
         // Perform translation matching
-        match translate_custom_sql(&metric) {
+        match translate_custom_sql(metric) {
             Some(target) => {
                 migrated_count += 1;
                 print_migration_target(&target);

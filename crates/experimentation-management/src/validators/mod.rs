@@ -417,8 +417,20 @@ async fn validate_metricql(m: &MetricDefinition) -> Result<(), Box<Status>> {
         metric_computation_service_client::MetricComputationServiceClient,
         ValidateMetricqlRequest,
     };
+    use tonic::transport::Endpoint;
+    use std::time::Duration;
 
-    let mut client = MetricComputationServiceClient::connect(metrics_addr)
+    let endpoint = Endpoint::from_shared(metrics_addr)
+        .map_err(|e| {
+            Box::new(Status::invalid_argument(format!(
+                "invalid metrics service address: {}",
+                e
+            )))
+        })?
+        .timeout(Duration::from_secs(5))
+        .connect_timeout(Duration::from_secs(5));
+
+    let mut client = MetricComputationServiceClient::connect(endpoint)
         .await
         .map_err(|e| {
             Box::new(Status::internal(format!(
