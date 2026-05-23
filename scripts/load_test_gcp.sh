@@ -23,38 +23,75 @@ if ! command -v k6 &> /dev/null; then
     echo "⚠️  k6 not found. Running simulated SLA load test using custom high-speed curl harness..."
     
     start_time=$(date +%s%N)
+    duration_secs=$(echo "$DURATION" | sed 's/s//g')
+    
+    echo "Running parallel curl workers: Concurrency=$CONCURRENCY, Duration=${duration_secs}s"
+    
+    latency_file=$(mktemp)
+    
+    worker() {
+        local end_by=$(( $(date +%s) + duration_secs ))
+        while [ $(date +%s) -lt $end_by ]; do
+            local req_start=$(date +%s%N)
+            local response_code=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET_HOST/api/assignment" || echo "500")
+            local req_end=$(date +%s%N)
+            local latency_ms=$(( (req_end - req_start) / 1000000 ))
+            echo "$latency_ms $response_code" >> "$latency_file"
+        done
+    }
+    
+    export TARGET_HOST duration_secs latency_file
+    export -f worker
+    
+    # Spawn concurrency workers
+    pids=()
+    for ((w=0; w<CONCURRENCY; w++)); do
+        bash -c worker &
+        pids+=($!)
+    done
+    
+    # Wait for all workers to finish
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+    
     success_count=0
     fail_count=0
     latencies=()
-
-    # Loop to simulate parallel requests
-    for i in {1..200}; do
-        req_start=$(date +%s%N)
-        # Mocking an assignment/flags request to the target or local endpoint
-        response_code=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET_HOST/api/assignment" || echo "500")
-        req_end=$(date +%s%N)
-        
-        latency_ms=$(( (req_end - req_start) / 1000000 ))
-        latencies+=($latency_ms)
-
-        if [ "$response_code" -eq 200 ] || [ "$response_code" -eq 404 ]; then
-            success_count=$((success_count + 1))
-        else
-            fail_count=$((fail_count + 1))
+    
+    while read -r latency status; do
+        if [ -n "$latency" ]; then
+            latencies+=($latency)
+            if [ "$status" -eq 200 ] || [ "$status" -eq 404 ]; then
+                success_count=$((success_count + 1))
+            else
+                fail_count=$((fail_count + 1))
+            fi
         fi
-    done
-
-    end_time=$(date +%s%N)
-    total_time_ms=$(( (end_time - start_time) / 1000000 ))
-
+    done < "$latency_file"
+    
+    rm -f "$latency_file"
+    
+    total_reqs=${#latencies[@]}
+    if [ "$total_reqs" -eq 0 ]; then
+        echo "❌ SLA FAIL: No requests succeeded or were completed."
+        exit 1
+    fi
+    
     # Calculate p99 latency
     # Sort latencies
     sorted_latencies=($(for l in "${latencies[@]}"; do echo "$l"; done | sort -n))
-    p99_index=$(( (200 * 99) / 100 - 1 ))
+    p99_index=$(( (total_reqs * 99) / 100 - 1 ))
+    if [ "$p99_index" -lt 0 ]; then
+        p99_index=0
+    fi
     p99_latency=${sorted_latencies[$p99_index]}
+    
+    end_time=$(date +%s%N)
+    total_time_ms=$(( (end_time - start_time) / 1000000 ))
 
     echo "SLA Load Test Complete!"
-    echo "  Total Requests: 200"
+    echo "  Total Requests: $total_reqs"
     echo "  Success:        $success_count"
     echo "  Failures:       $fail_count"
     echo "  p99 Latency:    ${p99_latency}ms"

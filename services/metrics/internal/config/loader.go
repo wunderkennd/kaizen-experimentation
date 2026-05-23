@@ -117,6 +117,7 @@ type ConfigStore struct {
 	metrics         map[string]*MetricConfig
 	expMetrics      map[string][]string
 	surrogateModels map[string]*SurrogateModelConfig
+	metricIDs       map[string]bool
 }
 
 func LoadFromFile(path string) (*ConfigStore, error) {
@@ -133,10 +134,12 @@ func LoadFromFile(path string) (*ConfigStore, error) {
 		metrics:         make(map[string]*MetricConfig, len(sf.Metrics)),
 		expMetrics:      make(map[string][]string, len(sf.Experiments)),
 		surrogateModels: make(map[string]*SurrogateModelConfig, len(sf.SurrogateModels)),
+		metricIDs:       make(map[string]bool, len(sf.Metrics)),
 	}
 	for i := range sf.Metrics {
 		m := sf.Metrics[i]
 		cs.metrics[m.MetricID] = &m
+		cs.metricIDs[m.MetricID] = true
 	}
 	for i := range sf.SurrogateModels {
 		sm := sf.SurrogateModels[i]
@@ -176,11 +179,7 @@ func (c *ConfigStore) GetMetric(id string) (*MetricConfig, error) {
 func (c *ConfigStore) MetricIDs() map[string]bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	ids := make(map[string]bool, len(c.metrics))
-	for id := range c.metrics {
-		ids[id] = true
-	}
-	return ids
+	return c.metricIDs
 }
 
 

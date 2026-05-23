@@ -8,7 +8,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/metricql"
 )
 
-// operandIDs returns the metric IDs that the given metric depends on, used by
+// OperandIDs returns the metric IDs that the given metric depends on, used by
 // both the DAG builder and the upstream-failure gate in standard.go::Run.
 //
 //   - COMPOSITE: m.Operands (config-time slice).

@@ -297,8 +297,8 @@ async fn apply_migration(pool: &PgPool, metric_id: &str, target: &MigrationTarge
     match target {
         MigrationTarget::FilteredMean { value_column, filter_sql } => {
             let config_json = json!({
-                "valueColumn": value_column,
-                "filterSql": filter_sql
+                "value_column": value_column,
+                "filter_sql": filter_sql
             });
             sqlx::query(
                 "UPDATE metric_definitions 
@@ -313,7 +313,7 @@ async fn apply_migration(pool: &PgPool, metric_id: &str, target: &MigrationTarge
         MigrationTarget::Composite { operands, operator_code, .. } => {
             let config_json = json!({
                 "operator": operator_code,
-                "operands": operands.iter().map(|(id, w)| json!({ "metricId": id, "weight": w })).collect::<Vec<_>>()
+                "operands": operands.iter().map(|(id, w)| json!({ "metric_id": id, "weight": w })).collect::<Vec<_>>()
             });
             sqlx::query(
                 "UPDATE metric_definitions 
@@ -327,9 +327,9 @@ async fn apply_migration(pool: &PgPool, metric_id: &str, target: &MigrationTarge
         }
         MigrationTarget::WindowedCount { event_type, filter_sql, window_hours } => {
             let config_json = json!({
-                "eventType": event_type,
-                "filterSql": filter_sql,
-                "windowHours": window_hours
+                "event_type": event_type,
+                "filter_sql": filter_sql,
+                "window_hours": window_hours
             });
             sqlx::query(
                 "UPDATE metric_definitions 

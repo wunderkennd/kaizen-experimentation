@@ -180,7 +180,7 @@ func Deploy(ctx *pulumi.Context) error {
 		if err != nil {
 			return err
 		}
-		if err = gcp.NewObservability(ctx, cfg, dbOut, gcpStreamOut, gcpComputeOut); err != nil {
+		if err = gcp.NewObservability(ctx, cfg, dbOut, gcpStreamOut, gcpComputeOut, storageOut); err != nil {
 			return err
 		}
 

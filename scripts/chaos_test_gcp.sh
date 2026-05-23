@@ -36,16 +36,15 @@ if ! command -v gcloud &> /dev/null; then
     echo "   [REMOUNT] Persistent disk remounted."
     sleep 1
     echo "   [ROCKSDB] RocksDB state loaded (Thompson/LinUCB state synchronized)."
-    
     end_time=$(date +%s%N)
     recovery_time_ms=$(( (end_time - start_time) / 1000000 ))
-    recovery_time_s=$(echo "$recovery_time_ms / 1000" | bc -l)
+    recovery_time_s=$(awk "BEGIN {print $recovery_time_ms / 1000.0}")
 
     echo "SLA Chaos Test Complete!"
     printf "  MIG Recovery Time: %.3fs\n" "$recovery_time_s"
     
     # Asserting SLA under 10 seconds
-    if (( $(echo "$recovery_time_s <= 10.0" | bc -l) )); then
+    if awk "BEGIN {exit ($recovery_time_s <= 10.0) ? 0 : 1}"; then
         printf "✅ CHAOS PASS: M4b stateful recovery took %.3fs (well under 10.0s SLA).\n" "$recovery_time_s"
         exit 0
     else

@@ -20,10 +20,6 @@ func NewEdge(
 ) (types.EdgeOutputs, error) {
 	env := cfg.Environment
 	project := cfg.GCPProjectID
-	region := cfg.GCPRegion
-	if region == "" {
-		region = "us-central1"
-	}
 
 	// 1. Global Public IP Address for Load Balancer
 	ipAddress, err := compute.NewGlobalAddress(ctx, fmt.Sprintf("kaizen-%s-gclb-ip", env), &compute.GlobalAddressArgs{

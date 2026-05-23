@@ -22,6 +22,7 @@ export function MetricqlEditor({ value, onChange, disabled, metricId }: Metricql
   
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<any>(null);
+  const requestCounterRef = useRef<number>(0);
 
   // 1. Fetch existing metrics for autocompletion of @metric_id
   useEffect(() => {
@@ -162,9 +163,13 @@ export function MetricqlEditor({ value, onChange, disabled, metricId }: Metricql
       return;
     }
 
+    const currentRequestId = ++requestCounterRef.current;
     setIsValidating(true);
     try {
       const res = await validateMetricql(expr, metricId);
+      if (currentRequestId !== requestCounterRef.current) {
+        return;
+      }
       setValidationResult(res);
 
       if (editorRef.current && monaco) {

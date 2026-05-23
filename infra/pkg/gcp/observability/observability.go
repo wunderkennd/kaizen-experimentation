@@ -5,6 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/logging"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/monitoring"
+	gcpstorage "github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/storage"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
@@ -18,6 +19,7 @@ func NewObservability(
 	dbOut types.DatabaseOutputs,
 	streamOut types.StreamingOutputs,
 	computeOut types.ComputeOutputs,
+	storageOut types.StorageOutputs,
 ) error {
 	env := cfg.Environment
 	project := cfg.GCPProjectID
@@ -25,8 +27,20 @@ func NewObservability(
 	// 1. Centralized Log Sink
 	logSink, err := logging.NewProjectSink(ctx, fmt.Sprintf("kaizen-%s-log-sink", env), &logging.ProjectSinkArgs{
 		Project:     pulumi.String(project),
-		Destination: pulumi.String(fmt.Sprintf("storage.googleapis.com/kaizen-%s-logs-bucket", env)),
+		Destination: pulumi.Sprintf("storage.googleapis.com/%s", storageOut.LogsBucketName),
 		Filter:      pulumi.String("resource.type=\"cloud_run_revision\" OR resource.type=\"gce_instance\""),
+	})
+	if err != nil {
+		return err
+	}
+
+	// 1b. Grant Storage Object Creator permissions to the Log Sink's Writer Identity
+	_, err = gcpstorage.NewBucketIAMBinding(ctx, fmt.Sprintf("kaizen-%s-log-sink-iam", env), &gcpstorage.BucketIAMBindingArgs{
+		Bucket: storageOut.LogsBucketName,
+		Role:   pulumi.String("roles/storage.objectCreator"),
+		Members: pulumi.StringArray{
+			logSink.WriterIdentity,
+		},
 	})
 	if err != nil {
 		return err

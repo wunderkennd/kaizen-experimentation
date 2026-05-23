@@ -441,6 +441,7 @@ func NewObservability(
 	dbOut types.DatabaseOutputs,
 	streamOut types.StreamingOutputs,
 	computeOut types.ComputeOutputs,
+	storageOut types.StorageOutputs,
 ) error {
-	return observability.NewObservability(ctx, cfg, dbOut, streamOut, computeOut)
+	return observability.NewObservability(ctx, cfg, dbOut, streamOut, computeOut, storageOut)
 }

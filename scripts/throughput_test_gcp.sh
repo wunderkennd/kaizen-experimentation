@@ -33,7 +33,7 @@ if ! command -v kafka-producer-perf-test &> /dev/null; then
     echo "3. Calculating consumer lag & delivery success..."
     end_time=$(date +%s%N)
     elapsed_ms=$(( (end_time - start_time) / 1000000 ))
-    actual_rate=$(echo "$total_events / ($elapsed_ms / 1000)" | bc -l)
+    actual_rate=$(awk "BEGIN {print $total_events / ($elapsed_ms / 1000.0)}")
     
     # Assert zero message loss and nominal consumer lag
     consumer_lag=0

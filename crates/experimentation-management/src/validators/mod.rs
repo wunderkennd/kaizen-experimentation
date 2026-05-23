@@ -433,10 +433,18 @@ async fn validate_metricql(m: &MetricDefinition) -> Result<(), Box<Status>> {
     };
 
     let resp = client.validate_metricql(req).await.map_err(|e| {
-        Box::new(Status::invalid_argument(format!(
-            "metrics service (M3) validation failed: {}",
-            e.message()
-        )))
+        let status = if e.code() == tonic::Code::InvalidArgument {
+            Status::invalid_argument(format!(
+                "metrics service (M3) validation failed: {}",
+                e.message()
+            ))
+        } else {
+            Status::internal(format!(
+                "metrics service (M3) unavailable for validation: {}",
+                e.message()
+            ))
+        };
+        Box::new(status)
     })?;
 
     let body = resp.into_inner();
