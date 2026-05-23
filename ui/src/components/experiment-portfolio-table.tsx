@@ -45,11 +45,22 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
   const sorted = sortExperiments(experiments, sortKey, sortDir);
 
   function SortIndicator({ col }: { col: SortKey }) {
-    if (col !== sortKey) return <span className="ml-1 text-gray-300 transition-colors group-hover:text-gray-400" aria-hidden="true">↕</span>;
-    return (
-      <span className="ml-1 text-indigo-600 font-bold" aria-hidden="true">
-        {sortDir === 'asc' ? '↑' : '↓'}
-      </span>
+    const isActive = col === sortKey;
+    if (!isActive) {
+      return (
+        <svg className="ml-1 h-3 w-3 text-gray-300 transition-colors group-hover:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return sortDir === 'asc' ? (
+      <svg className="ml-1 h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="ml-1 h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
     );
   }
 
@@ -63,6 +74,14 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
         : 'none') as React.AriaAttributes['aria-sort'],
     };
   }
+
+  const LABEL_MAP: Record<SortKey, string> = {
+    name: 'Experiment',
+    effectSize: 'Effect Size',
+    variance: 'Variance',
+    allocatedTrafficPct: 'Traffic %',
+    priorityScore: 'Priority Score',
+  };
 
   if (experiments.length === 0) {
     return (
@@ -81,45 +100,50 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <button
                 type="button"
                 onClick={() => handleSort('name')}
-                className="group inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+                className="group inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                title={`Sort by ${LABEL_MAP.name}`}
               >
-                Experiment <SortIndicator col="name" />
+                {LABEL_MAP.name} <SortIndicator col="name" />
               </button>
             </th>
             <th {...thProps('effectSize', 'right')}>
               <button
                 type="button"
                 onClick={() => handleSort('effectSize')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                title={`Sort by ${LABEL_MAP.effectSize}`}
               >
-                Effect Size <SortIndicator col="effectSize" />
+                {LABEL_MAP.effectSize} <SortIndicator col="effectSize" />
               </button>
             </th>
             <th {...thProps('variance', 'right')}>
               <button
                 type="button"
                 onClick={() => handleSort('variance')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                title={`Sort by ${LABEL_MAP.variance}`}
               >
-                Variance <SortIndicator col="variance" />
+                {LABEL_MAP.variance} <SortIndicator col="variance" />
               </button>
             </th>
             <th {...thProps('allocatedTrafficPct', 'right')}>
               <button
                 type="button"
                 onClick={() => handleSort('allocatedTrafficPct')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                title={`Sort by ${LABEL_MAP.allocatedTrafficPct}`}
               >
-                Traffic % <SortIndicator col="allocatedTrafficPct" />
+                {LABEL_MAP.allocatedTrafficPct} <SortIndicator col="allocatedTrafficPct" />
               </button>
             </th>
             <th {...thProps('priorityScore', 'right')}>
               <button
                 type="button"
                 onClick={() => handleSort('priorityScore')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                title={`Sort by ${LABEL_MAP.priorityScore}`}
               >
-                Priority Score <SortIndicator col="priorityScore" />
+                {LABEL_MAP.priorityScore} <SortIndicator col="priorityScore" />
               </button>
             </th>
             <th scope="col" className="py-3 pr-4 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
