@@ -823,6 +823,61 @@ agent-work agent_label:
     gh issue list --label "{{agent_label}}" --state open --json number,title,milestone \
       --jq '.[] | "#\(.number)\t\(.milestone.title // "no milestone")\t\(.title)"'
 
+# Idempotent: re-running rewrites the <!-- EXEC-BANNER:START/END --> block
+# in place without appending. Looks for a plan file under
+# docs/superpowers/plans/ that references this issue ("Refs #N", "Closes #N",
+# or "Issue: #N"); fails with a clear error if none found.
+#
+# Run this AFTER the plan PR merges to main; the dispatch recipe `work-on`
+# reads only title+body (not comments), so the banner is how locked-plan
+# context reaches the Multiclaude worker.
+#
+# Upsert the locked-plan execution banner on a GitHub Issue.
+prime-issue issue:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ISSUE={{issue}}
+
+    PLAN=$(grep -rlE "(Refs|Closes|Issue:?)[[:space:]]*#${ISSUE}\b" docs/superpowers/plans/*.md 2>/dev/null | head -1)
+    if [ -z "$PLAN" ]; then
+        echo "✗ No plan in docs/superpowers/plans/ references #${ISSUE}" >&2
+        echo "  Plan must contain 'Refs #${ISSUE}', 'Closes #${ISSUE}', or 'Issue: #${ISSUE}'" >&2
+        exit 1
+    fi
+
+    PLAN_SHA=$(git log -1 --format=%h main -- "$PLAN" 2>/dev/null || echo "(unmerged)")
+    PLAN_DATE=$(git log -1 --format=%cs main -- "$PLAN" 2>/dev/null || date +%Y-%m-%d)
+
+    BANNER=$(sed -e "s|\${ISSUE_NUM}|${ISSUE}|g" \
+                 -e "s|\${PLAN_PATH}|${PLAN}|g" \
+                 -e "s|\${PLAN_SHA}|${PLAN_SHA}|g" \
+                 -e "s|\${PLAN_DATE}|${PLAN_DATE}|g" \
+                 .github/issue-banner-template.md)
+
+    TMPDIR=$(mktemp -d)
+    trap 'rm -rf "$TMPDIR"' EXIT
+
+    gh issue view ${ISSUE} --json body --jq '.body' > "${TMPDIR}/current.md"
+
+    # Strip any prior <!-- EXEC-BANNER --> block plus an optional trailing
+    # "---" separator. Python one-liner because just's recipe-body parser
+    # requires consistent indentation on every line (multi-line embedded
+    # scripts that start at column 0 trip it up).
+    python3 -c 'import re,sys; t=open(sys.argv[1]).read(); t=re.sub(r"<!-- EXEC-BANNER:START -->[\s\S]*?<!-- EXEC-BANNER:END -->\n*(---\n*)?", "", t); sys.stdout.write(t.lstrip())' "${TMPDIR}/current.md" > "${TMPDIR}/stripped.md"
+
+    {
+      echo "<!-- EXEC-BANNER:START -->"
+      echo "$BANNER"
+      echo "<!-- EXEC-BANNER:END -->"
+      echo ""
+      echo "---"
+      echo ""
+      cat "${TMPDIR}/stripped.md"
+    } > "${TMPDIR}/new-body.md"
+
+    gh issue edit ${ISSUE} --body-file "${TMPDIR}/new-body.md"
+    echo "✓ Issue #${ISSUE} primed with ${PLAN} (${PLAN_SHA}, ${PLAN_DATE})"
+
 # Launch a Multiclaude worker from a GitHub Issue number
 work-on issue:
     #!/usr/bin/env bash
