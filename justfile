@@ -845,8 +845,11 @@ prime-issue issue:
         exit 1
     fi
 
-    PLAN_SHA=$(git log -1 --format=%h main -- "$PLAN" 2>/dev/null || echo "(unmerged)")
-    PLAN_DATE=$(git log -1 --format=%cs main -- "$PLAN" 2>/dev/null || date +%Y-%m-%d)
+    PLAN_SHA=$(git log -1 --format=%h main -- "$PLAN" 2>/dev/null || true)
+    PLAN_SHA=${PLAN_SHA:-(unmerged)}
+    PLAN_DATE=$(git log -1 --format=%cs main -- "$PLAN" 2>/dev/null || true)
+    PLAN_DATE=${PLAN_DATE:-$(date +%Y-%m-%d)}
+
 
     BANNER=$(sed -e "s|\${ISSUE_NUM}|${ISSUE}|g" \
                  -e "s|\${PLAN_PATH}|${PLAN}|g" \
