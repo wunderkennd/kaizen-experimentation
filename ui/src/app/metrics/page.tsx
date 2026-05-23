@@ -34,6 +34,7 @@ const METRIC_TYPE_BADGE: Record<MetricType, string> = {
   FILTERED_MEAN: 'bg-teal-100 text-teal-800',
   COMPOSITE: 'bg-indigo-100 text-indigo-800',
   WINDOWED_COUNT: 'bg-rose-100 text-rose-800',
+  METRICQL: 'bg-violet-100 text-violet-800',
 };
 
 const COMPOSITE_OPERATOR_NAME: Record<CompositeOperator, string> = {
@@ -128,6 +129,7 @@ const ALL_METRIC_TYPES: MetricType[] = [
   'FILTERED_MEAN',
   'COMPOSITE',
   'WINDOWED_COUNT',
+  'METRICQL',
 ];
 
 function MetricRow({ metric }: { metric: MetricDefinition }) {
@@ -242,6 +244,16 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
                   <dt className="font-medium text-gray-500">Custom SQL</dt>
                   <dd className="mt-1">
                     <SqlHighlighter sql={metric.customSql} />
+                  </dd>
+                </div>
+              )}
+              {metric.metricqlExpression && (
+                <div className="col-span-2">
+                  <dt className="font-medium text-gray-500">MetricQL Expression</dt>
+                  <dd className="mt-1">
+                    <pre className="rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100 leading-relaxed overflow-x-auto shadow-inner border border-slate-800">
+                      <code>{metric.metricqlExpression}</code>
+                    </pre>
                   </dd>
                 </div>
               )}

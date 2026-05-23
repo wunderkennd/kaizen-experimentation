@@ -555,7 +555,8 @@ export type MetricType =
   | 'CUSTOM'
   | 'FILTERED_MEAN'
   | 'COMPOSITE'
-  | 'WINDOWED_COUNT';
+  | 'WINDOWED_COUNT'
+  | 'METRICQL';
 
 /**
  * Discriminated union for the `MetricDefinition.type_config` proto oneof
@@ -592,6 +593,8 @@ export interface MetricDefinition {
   aggregationLevel?: MetricAggregationLevel;
   /** ADR-026 Phase 1 per-type config (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT). */
   typeConfig?: MetricTypeConfig;
+  /** ADR-026 Phase 2: MetricQL expression source text. */
+  metricqlExpression?: string;
 }
 
 /** Proto: `MetricStakeholder` enum on `MetricDefinition` (ADR-014). */

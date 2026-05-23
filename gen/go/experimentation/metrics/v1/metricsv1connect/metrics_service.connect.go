@@ -45,6 +45,9 @@ const (
 	// MetricComputationServiceGetQueryLogProcedure is the fully-qualified name of the
 	// MetricComputationService's GetQueryLog RPC.
 	MetricComputationServiceGetQueryLogProcedure = "/experimentation.metrics.v1.MetricComputationService/GetQueryLog"
+	// MetricComputationServiceValidateMetricqlProcedure is the fully-qualified name of the
+	// MetricComputationService's ValidateMetricql RPC.
+	MetricComputationServiceValidateMetricqlProcedure = "/experimentation.metrics.v1.MetricComputationService/ValidateMetricql"
 )
 
 // MetricComputationServiceClient is a client for the
@@ -58,6 +61,8 @@ type MetricComputationServiceClient interface {
 	ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error)
 	// Get the SQL query used for a specific metric computation.
 	GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error)
+	// Validate a MetricQL expression.
+	ValidateMetricql(context.Context, *connect.Request[v1.ValidateMetricqlRequest]) (*connect.Response[v1.ValidateMetricqlResponse], error)
 }
 
 // NewMetricComputationServiceClient constructs a client for the
@@ -96,6 +101,12 @@ func NewMetricComputationServiceClient(httpClient connect.HTTPClient, baseURL st
 			connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
 			connect.WithClientOptions(opts...),
 		),
+		validateMetricql: connect.NewClient[v1.ValidateMetricqlRequest, v1.ValidateMetricqlResponse](
+			httpClient,
+			baseURL+MetricComputationServiceValidateMetricqlProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("ValidateMetricql")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -105,6 +116,7 @@ type metricComputationServiceClient struct {
 	computeGuardrailMetrics *connect.Client[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse]
 	exportNotebook          *connect.Client[v1.ExportNotebookRequest, v1.ExportNotebookResponse]
 	getQueryLog             *connect.Client[v1.GetQueryLogRequest, v1.GetQueryLogResponse]
+	validateMetricql        *connect.Client[v1.ValidateMetricqlRequest, v1.ValidateMetricqlResponse]
 }
 
 // ComputeMetrics calls experimentation.metrics.v1.MetricComputationService.ComputeMetrics.
@@ -128,6 +140,11 @@ func (c *metricComputationServiceClient) GetQueryLog(ctx context.Context, req *c
 	return c.getQueryLog.CallUnary(ctx, req)
 }
 
+// ValidateMetricql calls experimentation.metrics.v1.MetricComputationService.ValidateMetricql.
+func (c *metricComputationServiceClient) ValidateMetricql(ctx context.Context, req *connect.Request[v1.ValidateMetricqlRequest]) (*connect.Response[v1.ValidateMetricqlResponse], error) {
+	return c.validateMetricql.CallUnary(ctx, req)
+}
+
 // MetricComputationServiceHandler is an implementation of the
 // experimentation.metrics.v1.MetricComputationService service.
 type MetricComputationServiceHandler interface {
@@ -139,6 +156,8 @@ type MetricComputationServiceHandler interface {
 	ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error)
 	// Get the SQL query used for a specific metric computation.
 	GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error)
+	// Validate a MetricQL expression.
+	ValidateMetricql(context.Context, *connect.Request[v1.ValidateMetricqlRequest]) (*connect.Response[v1.ValidateMetricqlResponse], error)
 }
 
 // NewMetricComputationServiceHandler builds an HTTP handler from the service implementation. It
@@ -172,6 +191,12 @@ func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opt
 		connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
 		connect.WithHandlerOptions(opts...),
 	)
+	metricComputationServiceValidateMetricqlHandler := connect.NewUnaryHandler(
+		MetricComputationServiceValidateMetricqlProcedure,
+		svc.ValidateMetricql,
+		connect.WithSchema(metricComputationServiceMethods.ByName("ValidateMetricql")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/experimentation.metrics.v1.MetricComputationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MetricComputationServiceComputeMetricsProcedure:
@@ -182,6 +207,8 @@ func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opt
 			metricComputationServiceExportNotebookHandler.ServeHTTP(w, r)
 		case MetricComputationServiceGetQueryLogProcedure:
 			metricComputationServiceGetQueryLogHandler.ServeHTTP(w, r)
+		case MetricComputationServiceValidateMetricqlProcedure:
+			metricComputationServiceValidateMetricqlHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -205,4 +232,8 @@ func (UnimplementedMetricComputationServiceHandler) ExportNotebook(context.Conte
 
 func (UnimplementedMetricComputationServiceHandler) GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.GetQueryLog is not implemented"))
+}
+
+func (UnimplementedMetricComputationServiceHandler) ValidateMetricql(context.Context, *connect.Request[v1.ValidateMetricqlRequest]) (*connect.Response[v1.ValidateMetricqlResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.ValidateMetricql is not implemented"))
 }

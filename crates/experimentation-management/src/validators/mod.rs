@@ -374,17 +374,94 @@ pub async fn validate_metric_definition<L: MetricLookup + ?Sized>(
     lookup: &L,
 ) -> Result<(), Box<Status>> {
     validate_metric_common_fields(m)?;
+
+    if m.r#type() != MetricType::Metricql && !m.metricql_expression.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "metricql_expression can only be specified for METRICQL metrics",
+        )));
+    }
+
     match m.r#type() {
         MetricType::FilteredMean => validate_filtered_mean(filtered_mean_cfg(m)),
         MetricType::Composite => {
             validate_composite(composite_cfg(m), &m.metric_id, lookup).await
         }
         MetricType::WindowedCount => validate_windowed_count(windowed_count_cfg(m)),
+        MetricType::Metricql => {
+            validate_metricql(m).await
+        }
         // Legacy 6 types (MEAN, PROPORTION, RATIO, COUNT, PERCENTILE, CUSTOM)
         // and UNSPECIFIED fall through — existing flat-field validation, if
         // any, lives elsewhere or has historically been absent for Phase 1.
         _ => Ok(()),
     }
+}
+
+#[allow(clippy::result_large_err)]
+async fn validate_metricql(m: &MetricDefinition) -> Result<(), Box<Status>> {
+    if m.metricql_expression.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "METRICQL metric requires a non-empty metricql_expression",
+        )));
+    }
+    if !m.custom_sql.trim().is_empty() || m.type_config.is_some() {
+        return Err(Box::new(Status::invalid_argument(
+            "METRICQL metric must not specify custom_sql or type_config",
+        )));
+    }
+
+    let metrics_addr = std::env::var("METRICS_ADDR")
+        .unwrap_or_else(|_| "http://localhost:50056".into());
+
+    use experimentation_proto::experimentation::metrics::v1::{
+        metric_computation_service_client::MetricComputationServiceClient,
+        ValidateMetricqlRequest,
+    };
+
+    let mut client = MetricComputationServiceClient::connect(metrics_addr)
+        .await
+        .map_err(|e| {
+            Box::new(Status::internal(format!(
+                "failed to connect to metrics service (M3) for validation: {}",
+                e
+            )))
+        })?;
+
+    let req = ValidateMetricqlRequest {
+        expression: m.metricql_expression.clone(),
+        metric_id: m.metric_id.clone(),
+    };
+
+    let resp = client.validate_metricql(req).await.map_err(|e| {
+        Box::new(Status::invalid_argument(format!(
+            "metrics service (M3) validation failed: {}",
+            e.message()
+        )))
+    })?;
+
+    let body = resp.into_inner();
+    if !body.is_valid {
+        let errors: Vec<String> = body
+            .diagnostics
+            .iter()
+            .map(|d| {
+                format!(
+                    "[{}:{}] {}",
+                    d.line, d.column, d.message
+                )
+            })
+            .collect();
+
+        let detail_msg = if errors.is_empty() {
+            "invalid MetricQL expression".to_string()
+        } else {
+            errors.join("; ")
+        };
+
+        return Err(Box::new(Status::invalid_argument(detail_msg)));
+    }
+
+    Ok(())
 }
 
 #[allow(clippy::result_large_err)]
@@ -1359,5 +1436,23 @@ mod tests {
 
         exp.equivalence_test = Some(equiv(0.05, None, 0.05));
         assert!(validate_starting(&exp).is_ok());
+    }
+
+    #[tokio::test]
+    async fn metricql_empty_expression_rejected() {
+        let mut m = make_metric("mq", "mq", MetricType::Metricql);
+        m.metricql_expression = "".into();
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("METRICQL"));
+    }
+
+    #[tokio::test]
+    async fn metricql_non_metricql_with_expression_rejected() {
+        let mut m = make_metric("mq", "mq", MetricType::Mean);
+        m.metricql_expression = "mean(heartbeat)".into();
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("only be specified for METRICQL"));
     }
 }

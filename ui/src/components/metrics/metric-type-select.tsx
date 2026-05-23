@@ -16,10 +16,11 @@ const TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] 
   { value: 'RATIO',          label: 'Ratio',          description: 'Numerator sum / denominator sum, delta-method variance.' },
   { value: 'COUNT',          label: 'Count',          description: 'Event count per user.' },
   { value: 'PERCENTILE',     label: 'Percentile',     description: 'P-th percentile of a distribution.' },
-  { value: 'CUSTOM',         label: 'Custom SQL',     description: 'Arbitrary Spark SQL (advanced — prefer structured types).' },
+  { value: 'CUSTOM',         label: 'Custom SQL (Deprecated)', description: 'Arbitrary Spark SQL (DEPRECATED — prefer structured types or MetricQL).' },
   { value: 'FILTERED_MEAN',  label: 'Filtered Mean',  description: 'Mean over rows matching a filter (ADR-026 Phase 1).' },
   { value: 'COMPOSITE',      label: 'Composite',      description: 'Combine other metrics with an operator (ADR-026 Phase 1).' },
   { value: 'WINDOWED_COUNT', label: 'Windowed Count', description: 'Event count within N hours of exposure (ADR-026 Phase 1).' },
+  { value: 'METRICQL',       label: 'MetricQL Expression', description: 'Declarative metric expression language with autocomplete and cycle validation.' },
 ];
 
 export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelectProps) {

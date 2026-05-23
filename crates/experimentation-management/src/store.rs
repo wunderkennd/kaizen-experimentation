@@ -269,6 +269,7 @@ fn metric_type_to_sql(t: MetricType) -> &'static str {
         MetricType::FilteredMean => "FILTERED_MEAN",
         MetricType::Composite => "COMPOSITE",
         MetricType::WindowedCount => "WINDOWED_COUNT",
+        MetricType::Metricql => "METRICQL",
     }
 }
 
@@ -343,6 +344,7 @@ fn metric_type_from_sql(s: &str) -> MetricType {
         "FILTERED_MEAN" => MetricType::FilteredMean,
         "COMPOSITE" => MetricType::Composite,
         "WINDOWED_COUNT" => MetricType::WindowedCount,
+        "METRICQL" => MetricType::Metricql,
         _ => MetricType::Unspecified,
     }
 }

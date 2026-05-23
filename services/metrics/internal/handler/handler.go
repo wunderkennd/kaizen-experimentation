@@ -14,6 +14,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/export"
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
+	"github.com/org/experimentation-platform/services/metrics/internal/metricql"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 )
 
@@ -201,3 +202,149 @@ func (h *MetricsHandler) GetQueryLog(ctx context.Context, req *connect.Request[m
 	m3metrics.RPCDuration.WithLabelValues("GetQueryLog", "ok").Observe(time.Since(start).Seconds())
 	return connect.NewResponse(&metricsv1.GetQueryLogResponse{Entries: pe, NextPageToken: nextToken}), nil
 }
+
+func (h *MetricsHandler) ValidateMetricql(ctx context.Context, req *connect.Request[metricsv1.ValidateMetricqlRequest]) (*connect.Response[metricsv1.ValidateMetricqlResponse], error) {
+	start := time.Now()
+	expr := req.Msg.GetExpression()
+	metricID := req.Msg.GetMetricId()
+
+	if expr == "" {
+		m3metrics.RPCTotal.WithLabelValues("ValidateMetricql", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ValidateMetricql", "error").Observe(time.Since(start).Seconds())
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("expression is required"))
+	}
+
+	var diagnostics []*metricsv1.MetricqlDiagnostic
+
+	// 1. Lex and Parse
+	ast, err := metricql.Parse(expr)
+	if err != nil {
+		var line, col int32
+		var msg string
+		switch e := err.(type) {
+		case *metricql.LexError:
+			line, col = offsetToLineCol(expr, e.Span.Start)
+			msg = e.Message
+		case *metricql.ParseError:
+			line, col = offsetToLineCol(expr, e.Span.Start)
+			msg = e.Message
+		default:
+			line, col = 1, 1
+			msg = err.Error()
+		}
+		diagnostics = append(diagnostics, &metricsv1.MetricqlDiagnostic{
+			Message:  msg,
+			Line:     line,
+			Column:   col,
+			Severity: 1, // ERROR
+		})
+		m3metrics.RPCTotal.WithLabelValues("ValidateMetricql", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ValidateMetricql", "ok").Observe(time.Since(start).Seconds())
+		return connect.NewResponse(&metricsv1.ValidateMetricqlResponse{
+			IsValid:     false,
+			Diagnostics: diagnostics,
+		}), nil
+	}
+
+	// 2. Semantic Analysis
+	cfg := h.job.ConfigStore()
+	knownMetricIDs := cfg.MetricIDs()
+
+	analyzeCtx := metricql.AnalyzeContext{
+		KnownMetricIDs: knownMetricIDs,
+	}
+
+	if err := metricql.Analyze(ast, analyzeCtx); err != nil {
+		var line, col int32
+		var msg string
+		switch e := err.(type) {
+		case *metricql.AnalyzeError:
+			line, col = offsetToLineCol(expr, e.Span.Start)
+			msg = e.Message
+		default:
+			line, col = 1, 1
+			msg = err.Error()
+		}
+		diagnostics = append(diagnostics, &metricsv1.MetricqlDiagnostic{
+			Message:  msg,
+			Line:     line,
+			Column:   col,
+			Severity: 1, // ERROR
+		})
+		m3metrics.RPCTotal.WithLabelValues("ValidateMetricql", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ValidateMetricql", "ok").Observe(time.Since(start).Seconds())
+		return connect.NewResponse(&metricsv1.ValidateMetricqlResponse{
+			IsValid:     false,
+			Diagnostics: diagnostics,
+		}), nil
+	}
+
+	// 3. Cycle Detection
+	if metricID != "" {
+		directOperands := metricql.ExtractMetricRefs(ast)
+		lookup := func(mid string) ([]string, bool) {
+			if mid == metricID {
+				return directOperands, true
+			}
+			m, err := cfg.GetMetric(mid)
+			if err != nil {
+				return nil, false
+			}
+			ops, err := jobs.OperandIDs(m)
+			if err != nil {
+				return nil, false
+			}
+			return ops, true
+		}
+
+		if err := metricql.CheckNoCycles(metricID, directOperands, lookup); err != nil {
+			var msg string
+			switch e := err.(type) {
+			case *metricql.CycleError:
+				msg = e.Message
+			default:
+				msg = err.Error()
+			}
+			diagnostics = append(diagnostics, &metricsv1.MetricqlDiagnostic{
+				Message:  msg,
+				Line:     1,
+				Column:   1,
+				Severity: 1, // ERROR
+			})
+			m3metrics.RPCTotal.WithLabelValues("ValidateMetricql", "ok").Inc()
+			m3metrics.RPCDuration.WithLabelValues("ValidateMetricql", "ok").Observe(time.Since(start).Seconds())
+			return connect.NewResponse(&metricsv1.ValidateMetricqlResponse{
+				IsValid:     false,
+				Diagnostics: diagnostics,
+			}), nil
+		}
+	}
+
+	m3metrics.RPCTotal.WithLabelValues("ValidateMetricql", "ok").Inc()
+	m3metrics.RPCDuration.WithLabelValues("ValidateMetricql", "ok").Observe(time.Since(start).Seconds())
+	return connect.NewResponse(&metricsv1.ValidateMetricqlResponse{
+		IsValid:     true,
+		Diagnostics: nil,
+	}), nil
+}
+
+func offsetToLineCol(source string, offset int) (int32, int32) {
+	if offset < 0 {
+		return 1, 1
+	}
+	if offset > len(source) {
+		offset = len(source)
+	}
+	line := int32(1)
+	col := int32(1)
+	for i := 0; i < offset; i++ {
+		if source[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+	return line, col
+}
+

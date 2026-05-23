@@ -67,6 +67,11 @@ func NewStandardJob(
 	return j
 }
 
+func (j *StandardJob) ConfigStore() *config.ConfigStore {
+	return j.config
+}
+
+
 // Run computes all metrics for the given experiment.
 //
 // ADR-026 #475: metrics are executed in topological order so that COMPOSITE
@@ -181,7 +186,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		// blockerForRefs is shared with markUnvisitedDependentsAsSkipped
 		// so "blocked" means the same thing in both places.
 		if strings.ToUpper(mPtr.Type) == "METRICQL" {
-			refs, parseErr := operandIDs(mPtr)
+			refs, parseErr := OperandIDs(mPtr)
 			if parseErr != nil {
 				// Parse failure -- already recorded as Failed via the
 				// failedParse pre-mark; defensive re-mark in case the
@@ -671,7 +676,7 @@ func markUnvisitedDependentsAsSkipped(sortedMetrics []*config.MetricConfig, sm *
 			// Already Completed / Failed / SkippedUpstreamFailure / SkippedCycle.
 			continue
 		}
-		refs, err := operandIDs(mPtr)
+		refs, err := OperandIDs(mPtr)
 		if err != nil {
 			// METRICQL parse failure encountered here would normally already
 			// be recorded via the pre-loop pre-mark from failedParse; if not,

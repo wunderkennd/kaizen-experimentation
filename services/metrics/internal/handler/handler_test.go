@@ -196,3 +196,76 @@ func TestComputeMetrics_InterleavingExperiment(t *testing.T) {
 	}
 	assert.Equal(t, 1, interleavingCount, "Should have 1 interleaving_score query log entry")
 }
+
+func TestValidateMetricql_Success(t *testing.T) {
+	client, _ := setupTestServer(t)
+	resp, err := client.ValidateMetricql(context.Background(), connect.NewRequest(&metricsv1.ValidateMetricqlRequest{
+		Expression: "mean(heartbeat.value)",
+	}))
+	require.NoError(t, err)
+	assert.True(t, resp.Msg.GetIsValid())
+	assert.Empty(t, resp.Msg.GetDiagnostics())
+}
+
+func TestValidateMetricql_EmptyExpression(t *testing.T) {
+	client, _ := setupTestServer(t)
+	_, err := client.ValidateMetricql(context.Background(), connect.NewRequest(&metricsv1.ValidateMetricqlRequest{
+		Expression: "",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestValidateMetricql_LexError(t *testing.T) {
+	client, _ := setupTestServer(t)
+	resp, err := client.ValidateMetricql(context.Background(), connect.NewRequest(&metricsv1.ValidateMetricqlRequest{
+		Expression: "mean(heartbeat.value !)",
+	}))
+	require.NoError(t, err)
+	assert.False(t, resp.Msg.GetIsValid())
+	require.Len(t, resp.Msg.GetDiagnostics(), 1)
+	diag := resp.Msg.GetDiagnostics()[0]
+	assert.Contains(t, diag.Message, "unexpected '!'")
+	assert.Equal(t, int32(1), diag.Severity)
+}
+
+func TestValidateMetricql_ParseError(t *testing.T) {
+	client, _ := setupTestServer(t)
+	resp, err := client.ValidateMetricql(context.Background(), connect.NewRequest(&metricsv1.ValidateMetricqlRequest{
+		Expression: "mean(heartbeat.value",
+	}))
+	require.NoError(t, err)
+	assert.False(t, resp.Msg.GetIsValid())
+	require.Len(t, resp.Msg.GetDiagnostics(), 1)
+	diag := resp.Msg.GetDiagnostics()[0]
+	assert.Contains(t, diag.Message, "expected ')'")
+	assert.Equal(t, int32(1), diag.Severity)
+}
+
+func TestValidateMetricql_AnalyzeError(t *testing.T) {
+	client, _ := setupTestServer(t)
+	resp, err := client.ValidateMetricql(context.Background(), connect.NewRequest(&metricsv1.ValidateMetricqlRequest{
+		Expression: "mean(heartbeat)", // mean requires a value field, e.g. heartbeat.value
+	}))
+	require.NoError(t, err)
+	assert.False(t, resp.Msg.GetIsValid())
+	require.Len(t, resp.Msg.GetDiagnostics(), 1)
+	diag := resp.Msg.GetDiagnostics()[0]
+	assert.Contains(t, diag.Message, "requires a value field")
+	assert.Equal(t, int32(1), diag.Severity)
+}
+
+func TestValidateMetricql_CycleError(t *testing.T) {
+	client, _ := setupTestServer(t)
+	resp, err := client.ValidateMetricql(context.Background(), connect.NewRequest(&metricsv1.ValidateMetricqlRequest{
+		Expression: "ratio(@watch_time_minutes, @watch_time_minutes)",
+		MetricId:   "watch_time_minutes",
+	}))
+	require.NoError(t, err)
+	assert.False(t, resp.Msg.GetIsValid())
+	require.Len(t, resp.Msg.GetDiagnostics(), 1)
+	diag := resp.Msg.GetDiagnostics()[0]
+	assert.Contains(t, diag.Message, "composite cycle detected")
+	assert.Equal(t, int32(1), diag.Severity)
+}
+

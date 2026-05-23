@@ -173,6 +173,17 @@ func (c *ConfigStore) GetMetric(id string) (*MetricConfig, error) {
 	return m, nil
 }
 
+func (c *ConfigStore) MetricIDs() map[string]bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	ids := make(map[string]bool, len(c.metrics))
+	for id := range c.metrics {
+		ids[id] = true
+	}
+	return ids
+}
+
+
 func (c *ConfigStore) GetMetricsForExperiment(id string) ([]MetricConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

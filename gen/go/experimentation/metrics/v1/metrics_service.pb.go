@@ -520,6 +520,179 @@ func (x *QueryLogEntry) GetComputedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type ValidateMetricqlRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Expression string                 `protobuf:"bytes,1,opt,name=expression,proto3" json:"expression,omitempty"`
+	// Optional: metric_id if we want M3 to validate cycle detection specifically for an existing metric.
+	MetricId      string `protobuf:"bytes,2,opt,name=metric_id,json=metricId,proto3" json:"metric_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateMetricqlRequest) Reset() {
+	*x = ValidateMetricqlRequest{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateMetricqlRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateMetricqlRequest) ProtoMessage() {}
+
+func (x *ValidateMetricqlRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateMetricqlRequest.ProtoReflect.Descriptor instead.
+func (*ValidateMetricqlRequest) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ValidateMetricqlRequest) GetExpression() string {
+	if x != nil {
+		return x.Expression
+	}
+	return ""
+}
+
+func (x *ValidateMetricqlRequest) GetMetricId() string {
+	if x != nil {
+		return x.MetricId
+	}
+	return ""
+}
+
+type ValidateMetricqlResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IsValid       bool                   `protobuf:"varint,1,opt,name=is_valid,json=isValid,proto3" json:"is_valid,omitempty"`
+	Diagnostics   []*MetricqlDiagnostic  `protobuf:"bytes,2,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateMetricqlResponse) Reset() {
+	*x = ValidateMetricqlResponse{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateMetricqlResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateMetricqlResponse) ProtoMessage() {}
+
+func (x *ValidateMetricqlResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateMetricqlResponse.ProtoReflect.Descriptor instead.
+func (*ValidateMetricqlResponse) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ValidateMetricqlResponse) GetIsValid() bool {
+	if x != nil {
+		return x.IsValid
+	}
+	return false
+}
+
+func (x *ValidateMetricqlResponse) GetDiagnostics() []*MetricqlDiagnostic {
+	if x != nil {
+		return x.Diagnostics
+	}
+	return nil
+}
+
+type MetricqlDiagnostic struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Line          int32                  `protobuf:"varint,2,opt,name=line,proto3" json:"line,omitempty"`
+	Column        int32                  `protobuf:"varint,3,opt,name=column,proto3" json:"column,omitempty"`
+	Severity      int32                  `protobuf:"varint,4,opt,name=severity,proto3" json:"severity,omitempty"` // 1 = ERROR, 2 = WARNING
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricqlDiagnostic) Reset() {
+	*x = MetricqlDiagnostic{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricqlDiagnostic) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricqlDiagnostic) ProtoMessage() {}
+
+func (x *MetricqlDiagnostic) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricqlDiagnostic.ProtoReflect.Descriptor instead.
+func (*MetricqlDiagnostic) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MetricqlDiagnostic) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *MetricqlDiagnostic) GetLine() int32 {
+	if x != nil {
+		return x.Line
+	}
+	return 0
+}
+
+func (x *MetricqlDiagnostic) GetColumn() int32 {
+	if x != nil {
+		return x.Column
+	}
+	return 0
+}
+
+func (x *MetricqlDiagnostic) GetSeverity() int32 {
+	if x != nil {
+		return x.Severity
+	}
+	return 0
+}
+
 var File_experimentation_metrics_v1_metrics_service_proto protoreflect.FileDescriptor
 
 const file_experimentation_metrics_v1_metrics_service_proto_rawDesc = "" +
@@ -560,12 +733,26 @@ const file_experimentation_metrics_v1_metrics_service_proto_rawDesc = "" +
 	"\vduration_ms\x18\x05 \x01(\x03R\n" +
 	"durationMs\x12;\n" +
 	"\vcomputed_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAt2\x88\x04\n" +
+	"computedAt\"V\n" +
+	"\x17ValidateMetricqlRequest\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x01 \x01(\tR\n" +
+	"expression\x12\x1b\n" +
+	"\tmetric_id\x18\x02 \x01(\tR\bmetricId\"\x87\x01\n" +
+	"\x18ValidateMetricqlResponse\x12\x19\n" +
+	"\bis_valid\x18\x01 \x01(\bR\aisValid\x12P\n" +
+	"\vdiagnostics\x18\x02 \x03(\v2..experimentation.metrics.v1.MetricqlDiagnosticR\vdiagnostics\"v\n" +
+	"\x12MetricqlDiagnostic\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
+	"\x04line\x18\x02 \x01(\x05R\x04line\x12\x16\n" +
+	"\x06column\x18\x03 \x01(\x05R\x06column\x12\x1a\n" +
+	"\bseverity\x18\x04 \x01(\x05R\bseverity2\x87\x05\n" +
 	"\x18MetricComputationService\x12w\n" +
 	"\x0eComputeMetrics\x121.experimentation.metrics.v1.ComputeMetricsRequest\x1a2.experimentation.metrics.v1.ComputeMetricsResponse\x12\x89\x01\n" +
 	"\x17ComputeGuardrailMetrics\x12:.experimentation.metrics.v1.ComputeGuardrailMetricsRequest\x1a2.experimentation.metrics.v1.ComputeMetricsResponse\x12w\n" +
 	"\x0eExportNotebook\x121.experimentation.metrics.v1.ExportNotebookRequest\x1a2.experimentation.metrics.v1.ExportNotebookResponse\x12n\n" +
-	"\vGetQueryLog\x12..experimentation.metrics.v1.GetQueryLogRequest\x1a/.experimentation.metrics.v1.GetQueryLogResponseB\x8b\x02\n" +
+	"\vGetQueryLog\x12..experimentation.metrics.v1.GetQueryLogRequest\x1a/.experimentation.metrics.v1.GetQueryLogResponse\x12}\n" +
+	"\x10ValidateMetricql\x123.experimentation.metrics.v1.ValidateMetricqlRequest\x1a4.experimentation.metrics.v1.ValidateMetricqlResponseB\x8b\x02\n" +
 	"\x1ecom.experimentation.metrics.v1B\x13MetricsServiceProtoP\x01ZJgithub.com/org/experimentation/gen/go/experimentation/metrics/v1;metricsv1\xa2\x02\x03EMX\xaa\x02\x1aExperimentation.Metrics.V1\xca\x02\x1aExperimentation\\Metrics\\V1\xe2\x02&Experimentation\\Metrics\\V1\\GPBMetadata\xea\x02\x1cExperimentation::Metrics::V1b\x06proto3"
 
 var (
@@ -580,7 +767,7 @@ func file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP() []byte 
 	return file_experimentation_metrics_v1_metrics_service_proto_rawDescData
 }
 
-var file_experimentation_metrics_v1_metrics_service_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_experimentation_metrics_v1_metrics_service_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_experimentation_metrics_v1_metrics_service_proto_goTypes = []any{
 	(*ComputeMetricsRequest)(nil),          // 0: experimentation.metrics.v1.ComputeMetricsRequest
 	(*ComputeGuardrailMetricsRequest)(nil), // 1: experimentation.metrics.v1.ComputeGuardrailMetricsRequest
@@ -590,27 +777,33 @@ var file_experimentation_metrics_v1_metrics_service_proto_goTypes = []any{
 	(*GetQueryLogRequest)(nil),             // 5: experimentation.metrics.v1.GetQueryLogRequest
 	(*GetQueryLogResponse)(nil),            // 6: experimentation.metrics.v1.GetQueryLogResponse
 	(*QueryLogEntry)(nil),                  // 7: experimentation.metrics.v1.QueryLogEntry
-	(*timestamppb.Timestamp)(nil),          // 8: google.protobuf.Timestamp
+	(*ValidateMetricqlRequest)(nil),        // 8: experimentation.metrics.v1.ValidateMetricqlRequest
+	(*ValidateMetricqlResponse)(nil),       // 9: experimentation.metrics.v1.ValidateMetricqlResponse
+	(*MetricqlDiagnostic)(nil),             // 10: experimentation.metrics.v1.MetricqlDiagnostic
+	(*timestamppb.Timestamp)(nil),          // 11: google.protobuf.Timestamp
 }
 var file_experimentation_metrics_v1_metrics_service_proto_depIdxs = []int32{
-	8, // 0: experimentation.metrics.v1.ComputeMetricsResponse.completed_at:type_name -> google.protobuf.Timestamp
-	8, // 1: experimentation.metrics.v1.GetQueryLogRequest.after:type_name -> google.protobuf.Timestamp
-	8, // 2: experimentation.metrics.v1.GetQueryLogRequest.before:type_name -> google.protobuf.Timestamp
-	7, // 3: experimentation.metrics.v1.GetQueryLogResponse.entries:type_name -> experimentation.metrics.v1.QueryLogEntry
-	8, // 4: experimentation.metrics.v1.QueryLogEntry.computed_at:type_name -> google.protobuf.Timestamp
-	0, // 5: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:input_type -> experimentation.metrics.v1.ComputeMetricsRequest
-	1, // 6: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:input_type -> experimentation.metrics.v1.ComputeGuardrailMetricsRequest
-	3, // 7: experimentation.metrics.v1.MetricComputationService.ExportNotebook:input_type -> experimentation.metrics.v1.ExportNotebookRequest
-	5, // 8: experimentation.metrics.v1.MetricComputationService.GetQueryLog:input_type -> experimentation.metrics.v1.GetQueryLogRequest
-	2, // 9: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
-	2, // 10: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
-	4, // 11: experimentation.metrics.v1.MetricComputationService.ExportNotebook:output_type -> experimentation.metrics.v1.ExportNotebookResponse
-	6, // 12: experimentation.metrics.v1.MetricComputationService.GetQueryLog:output_type -> experimentation.metrics.v1.GetQueryLogResponse
-	9, // [9:13] is the sub-list for method output_type
-	5, // [5:9] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	11, // 0: experimentation.metrics.v1.ComputeMetricsResponse.completed_at:type_name -> google.protobuf.Timestamp
+	11, // 1: experimentation.metrics.v1.GetQueryLogRequest.after:type_name -> google.protobuf.Timestamp
+	11, // 2: experimentation.metrics.v1.GetQueryLogRequest.before:type_name -> google.protobuf.Timestamp
+	7,  // 3: experimentation.metrics.v1.GetQueryLogResponse.entries:type_name -> experimentation.metrics.v1.QueryLogEntry
+	11, // 4: experimentation.metrics.v1.QueryLogEntry.computed_at:type_name -> google.protobuf.Timestamp
+	10, // 5: experimentation.metrics.v1.ValidateMetricqlResponse.diagnostics:type_name -> experimentation.metrics.v1.MetricqlDiagnostic
+	0,  // 6: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:input_type -> experimentation.metrics.v1.ComputeMetricsRequest
+	1,  // 7: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:input_type -> experimentation.metrics.v1.ComputeGuardrailMetricsRequest
+	3,  // 8: experimentation.metrics.v1.MetricComputationService.ExportNotebook:input_type -> experimentation.metrics.v1.ExportNotebookRequest
+	5,  // 9: experimentation.metrics.v1.MetricComputationService.GetQueryLog:input_type -> experimentation.metrics.v1.GetQueryLogRequest
+	8,  // 10: experimentation.metrics.v1.MetricComputationService.ValidateMetricql:input_type -> experimentation.metrics.v1.ValidateMetricqlRequest
+	2,  // 11: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
+	2,  // 12: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
+	4,  // 13: experimentation.metrics.v1.MetricComputationService.ExportNotebook:output_type -> experimentation.metrics.v1.ExportNotebookResponse
+	6,  // 14: experimentation.metrics.v1.MetricComputationService.GetQueryLog:output_type -> experimentation.metrics.v1.GetQueryLogResponse
+	9,  // 15: experimentation.metrics.v1.MetricComputationService.ValidateMetricql:output_type -> experimentation.metrics.v1.ValidateMetricqlResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_experimentation_metrics_v1_metrics_service_proto_init() }
@@ -624,7 +817,7 @@ func file_experimentation_metrics_v1_metrics_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_experimentation_metrics_v1_metrics_service_proto_rawDesc), len(file_experimentation_metrics_v1_metrics_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

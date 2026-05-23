@@ -190,6 +190,7 @@ fn metric_type_to_pg_string(t: MetricType) -> &'static str {
         MetricType::FilteredMean => "FILTERED_MEAN",
         MetricType::Composite => "COMPOSITE",
         MetricType::WindowedCount => "WINDOWED_COUNT",
+        MetricType::Metricql => "METRICQL",
     }
 }
 
@@ -1030,6 +1031,8 @@ impl ExperimentManagementService for ManagementServiceHandler {
             .await
             .map_err(|boxed| *boxed)?;
 
+        let is_custom = metric.r#type == MetricType::Custom as i32;
+
         let row = self
             .state
             .store
@@ -1037,7 +1040,16 @@ impl ExperimentManagementService for ManagementServiceHandler {
             .await
             .map_err(store_err_to_status)?;
 
-        Ok(Response::new(row.into_proto()))
+        let mut response = Response::new(row.into_proto());
+        if is_custom {
+            response.metadata_mut().insert(
+                "x-kaizen-deprecation",
+                "METRIC_TYPE_CUSTOM is deprecated and will be removed in a future release. Use structured type or MetricQL instead."
+                    .parse()
+                    .unwrap(),
+            );
+        }
+        Ok(response)
     }
 
     async fn get_metric_definition(

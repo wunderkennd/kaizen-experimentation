@@ -175,6 +175,15 @@ func Deploy(ctx *pulumi.Context) error {
 		if err != nil {
 			return err
 		}
+		// ── Stage 6: Edge + Observability ────────────────────────────────
+		edgeOut, err := gcp.NewEdge(ctx, cfg, netOut, storageOut)
+		if err != nil {
+			return err
+		}
+		if err = gcp.NewObservability(ctx, cfg, dbOut, gcpStreamOut, gcpComputeOut); err != nil {
+			return err
+		}
+
 		ctx.Export("streamingBootstrapBrokers", gcpStreamOut.BootstrapBrokers)
 		ctx.Export("m4bAsgName", gcpComputeOut.M4bAsgName)
 		ctx.Export("m4bInstanceId", gcpComputeOut.M4bInstanceId)
@@ -185,6 +194,7 @@ func Deploy(ctx *pulumi.Context) error {
 		ctx.Export("dataBucket", storageOut.DataBucketName)
 		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
 		ctx.Export("databaseEndpoint", dbOut.Endpoint)
+		ctx.Export("loadBalancerDns", edgeOut.LoadBalancerDns)
 		return nil
 	}
 

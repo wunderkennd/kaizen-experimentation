@@ -14,6 +14,7 @@ import { MetricTypeSelect } from '@/components/metrics/metric-type-select';
 import { FilteredMeanSection } from '@/components/metrics/filtered-mean-section';
 import { CompositeSection } from '@/components/metrics/composite-section';
 import { WindowedCountSection } from '@/components/metrics/windowed-count-section';
+import { MetricqlEditor } from '@/components/editors/metricql-editor';
 import { MetricFormPreview } from '@/components/metrics/metric-form-preview';
 import { createMetricDefinition, marshalMetricDefinition } from '@/lib/api';
 import {
@@ -37,6 +38,7 @@ interface MetricFormState extends MetricFormShellState {
   filteredMean?: FilteredMeanConfig;
   composite?: CompositeConfig;
   windowedCount?: WindowedCountConfig;
+  metricqlExpression?: string;
   // UI-only
   submitting: boolean;
   serverError?: string;
@@ -48,6 +50,7 @@ type Action =
   | { type: 'SET_FILTERED_MEAN'; value: FilteredMeanConfig }
   | { type: 'SET_COMPOSITE'; value: CompositeConfig }
   | { type: 'SET_WINDOWED_COUNT'; value: WindowedCountConfig }
+  | { type: 'SET_METRICQL_EXPRESSION'; value: string }
   | { type: 'SET_SUBMITTING'; value: boolean }
   | { type: 'SET_SERVER_ERROR'; value: string | undefined };
 
@@ -75,6 +78,7 @@ function reducer(state: MetricFormState, action: Action): MetricFormState {
         filteredMean: undefined,
         composite: undefined,
         windowedCount: undefined,
+        metricqlExpression: undefined,
       };
     case 'SET_FILTERED_MEAN':
       return { ...state, filteredMean: action.value };
@@ -82,6 +86,8 @@ function reducer(state: MetricFormState, action: Action): MetricFormState {
       return { ...state, composite: action.value };
     case 'SET_WINDOWED_COUNT':
       return { ...state, windowedCount: action.value };
+    case 'SET_METRICQL_EXPRESSION':
+      return { ...state, metricqlExpression: action.value };
     case 'SET_SUBMITTING':
       return { ...state, submitting: action.value };
     case 'SET_SERVER_ERROR':
@@ -134,6 +140,11 @@ function buildMetricFromState(state: MetricFormState): MetricDefinition {
         return { ...base, typeConfig: { case: 'windowedCount', value: state.windowedCount } };
       }
       return base;
+    case 'METRICQL':
+      if (state.metricqlExpression !== undefined) {
+        return { ...base, metricqlExpression: state.metricqlExpression };
+      }
+      return base;
     default:
       return base;
   }
@@ -155,6 +166,8 @@ function isFormValid(state: MetricFormState): boolean {
       return !!state.composite && validateCompositeConfig(state.composite).valid;
     case 'WINDOWED_COUNT':
       return !!state.windowedCount && validateWindowedCountConfig(state.windowedCount).valid;
+    case 'METRICQL':
+      return !!state.metricqlExpression && state.metricqlExpression.trim().length > 0;
     default:
       return true;
   }
@@ -248,9 +261,35 @@ export default function NewMetricPage() {
                 disabled={state.submitting}
               />
             )}
+            {state.type === 'METRICQL' && (
+              <MetricqlEditor
+                value={state.metricqlExpression || ''}
+                onChange={(next) => dispatch({ type: 'SET_METRICQL_EXPRESSION', value: next })}
+                disabled={state.submitting}
+                metricId={state.metricId}
+              />
+            )}
+            {state.type === 'CUSTOM' && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                <div className="flex gap-2">
+                  <svg className="h-5 w-5 text-amber-600 shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <h4 className="font-semibold text-amber-900 mb-1">Custom SQL Metric Deprecation</h4>
+                    <p>
+                      CUSTOM raw SQL metrics are deprecated and will be completely removed in a future release.
+                      Please choose a Structured metric type (Filtered Mean, Composite, Windowed Count) or use <strong>MetricQL</strong> instead.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             {state.type !== 'FILTERED_MEAN'
               && state.type !== 'COMPOSITE'
-              && state.type !== 'WINDOWED_COUNT' && (
+              && state.type !== 'WINDOWED_COUNT'
+              && state.type !== 'METRICQL'
+              && state.type !== 'CUSTOM' && (
               <p>
                 Type-specific fields for legacy types are out of scope for ADR-026 Phase 1.
                 Continue authoring these metric types via the M5 API directly until a follow-up

@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "experimentation-management"
 path = "src/main.rs"
 
+[[bin]]
+name = "custom-metric-migrator"
+path = "src/bin/custom_metric_migrator.rs"
+
 [dependencies]
 experimentation-core = { path = "../experimentation-core" }
 experimentation-proto = { path = "../experimentation-proto" }

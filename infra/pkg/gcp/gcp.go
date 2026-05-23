@@ -17,7 +17,9 @@ import (
 	"github.com/kaizen-experimentation/infra/pkg/gcp/cicd"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/compute"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/database"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/edge"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/network"
+	"github.com/kaizen-experimentation/infra/pkg/gcp/observability"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/services"
 	"github.com/kaizen-experimentation/infra/pkg/gcp/storage"
@@ -420,4 +422,25 @@ func NewCompute(
 		ServiceEndpoints: endpoints,
 		ServiceArns:      arns,
 	}, nil
+}
+
+// NewEdge creates the DNS, GCLB, and Cloud Armor edge configuration for GCP.
+func NewEdge(
+	ctx *pulumi.Context,
+	cfg *kconfig.Config,
+	netOut types.NetworkOutputs,
+	storageOut types.StorageOutputs,
+) (types.EdgeOutputs, error) {
+	return edge.NewEdge(ctx, cfg, netOut, storageOut)
+}
+
+// NewObservability configures centralized logging sinks and Cloud Monitoring alert policies on GCP.
+func NewObservability(
+	ctx *pulumi.Context,
+	cfg *kconfig.Config,
+	dbOut types.DatabaseOutputs,
+	streamOut types.StreamingOutputs,
+	computeOut types.ComputeOutputs,
+) error {
+	return observability.NewObservability(ctx, cfg, dbOut, streamOut, computeOut)
 }

@@ -19,6 +19,8 @@ service MetricComputationService {
   rpc ExportNotebook(ExportNotebookRequest) returns (ExportNotebookResponse);
   // Get the SQL query used for a specific metric computation.
   rpc GetQueryLog(GetQueryLogRequest) returns (GetQueryLogResponse);
+  // Validate a MetricQL expression.
+  rpc ValidateMetricql(ValidateMetricqlRequest) returns (ValidateMetricqlResponse);
 }
 
 message ComputeMetricsRequest { string experiment_id = 1; }
@@ -69,3 +71,22 @@ message QueryLogEntry {
   int64 duration_ms = 5;
   google.protobuf.Timestamp computed_at = 6;
 }
+
+message ValidateMetricqlRequest {
+  string expression = 1;
+  // Optional: metric_id if we want M3 to validate cycle detection specifically for an existing metric.
+  string metric_id = 2;
+}
+
+message ValidateMetricqlResponse {
+  bool is_valid = 1;
+  repeated MetricqlDiagnostic diagnostics = 2;
+}
+
+message MetricqlDiagnostic {
+  string message = 1;
+  int32 line = 2;
+  int32 column = 3;
+  int32 severity = 4; // 1 = ERROR, 2 = WARNING
+}
+

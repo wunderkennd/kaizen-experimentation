@@ -50,6 +50,8 @@ enum MetricType {
   METRIC_TYPE_COMPOSITE = 8;
   // Count of an event type within a time window after first exposure (ADR-026 Phase 1).
   METRIC_TYPE_WINDOWED_COUNT = 9;
+  // MetricQL-defined metric. M3 parses and compiles the metricql_expression (ADR-026 Phase 2).
+  METRIC_TYPE_METRICQL = 10;
 }
 
 // MetricDefinition is the specification for a metric computed by M3.

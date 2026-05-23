@@ -664,6 +664,7 @@ function adaptMetricDefinition(proto: Record<string, unknown>): MetricDefinition
       ? (stripEnumPrefix(aggregationRaw, 'METRIC_AGGREGATION_LEVEL_') as MetricAggregationLevel)
       : undefined,
     typeConfig: adaptMetricTypeConfig(proto),
+    metricqlExpression: proto.metricqlExpression as string | undefined,
   };
 }
 
@@ -689,6 +690,7 @@ export function marshalMetricDefinition(metric: MetricDefinition): Record<string
   if (metric.denominatorEventType !== undefined) out.denominatorEventType = metric.denominatorEventType;
   if (metric.percentile !== undefined) out.percentile = metric.percentile;
   if (metric.customSql !== undefined) out.customSql = metric.customSql;
+  if (metric.metricqlExpression !== undefined) out.metricqlExpression = metric.metricqlExpression;
   if (metric.surrogateTargetMetricId !== undefined) out.surrogateTargetMetricId = metric.surrogateTargetMetricId;
   if (metric.cupedCovariateMetricId !== undefined) out.cupedCovariateMetricId = metric.cupedCovariateMetricId;
   if (metric.minimumDetectableEffect !== undefined) out.minimumDetectableEffect = metric.minimumDetectableEffect;
@@ -725,6 +727,25 @@ export function marshalMetricDefinition(metric: MetricDefinition): Record<string
     }
   }
   return out;
+}
+
+export interface MetricqlDiagnostic {
+  message: string;
+  line: number;
+  column: number;
+  severity: number;
+}
+
+export interface ValidateMetricqlResponse {
+  isValid: boolean;
+  diagnostics: MetricqlDiagnostic[];
+}
+
+export async function validateMetricql(expression: string, metricId?: string): Promise<ValidateMetricqlResponse> {
+  return callRpc<{ expression: string; metricId?: string }, ValidateMetricqlResponse>(
+    METRICS_URL, METRICS_SVC, 'ValidateMetricql', { expression, ...(metricId ? { metricId } : {}) },
+    { skipCache: true }
+  );
 }
 
 export interface ListMetricDefinitionsFilters {

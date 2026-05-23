@@ -23,7 +23,7 @@ import (
 // entry and downstream dependents get marked SkippedUpstreamFailure for a
 // reason that's actually a parse error. Propagating yields a single, clearer
 // Failed row with reason "metricql: parse: <msg>".
-func operandIDs(m *config.MetricConfig) ([]string, error) {
+func OperandIDs(m *config.MetricConfig) ([]string, error) {
 	switch strings.ToUpper(m.Type) {
 	case "COMPOSITE":
 		ids := make([]string, len(m.Operands))
@@ -88,7 +88,7 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 		if _, ok := inDeg[m.MetricID]; !ok {
 			inDeg[m.MetricID] = 0
 		}
-		ids, err := operandIDs(m)
+		ids, err := OperandIDs(m)
 		if err != nil {
 			// METRICQL parse failure -- record for the scheduler to mark Failed.
 			// The metric itself has no edges (we can't extract refs), so it
