@@ -164,7 +164,8 @@ impl From<VariantRowSql> for VariantRow {
 // ---------------------------------------------------------------------------
 
 /// Row materialised from `metric_definitions`. Mirrors the table columns after
-/// migration 007 (stakeholder/aggregation_level) and 011 (type_config JSONB).
+/// migration 007 (stakeholder/aggregation_level), 011 (type_config JSONB), and
+/// 013 (metricql_expression TEXT, ADR-026 Phase 2).
 #[derive(Debug, Clone)]
 pub struct MetricRow {
     pub metric_id: String,
@@ -184,6 +185,9 @@ pub struct MetricRow {
     pub aggregation_level: String,
     /// Per-type oneof payload persisted as JSONB. None for legacy 6 types.
     pub type_config: Option<sqlx::types::Json<serde_json::Value>>,
+    /// MetricQL source text (migration 013, ADR-026 Phase 2 / #435). None for
+    /// legacy 6 types and Phase 1 structured types; populated only for METRICQL.
+    pub metricql_expression: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -209,6 +213,8 @@ struct MetricRowSql {
     aggregation_level: String,
     #[sqlx(default)]
     type_config: Option<sqlx::types::Json<serde_json::Value>>,
+    #[sqlx(default)]
+    metricql_expression: Option<String>,
     created_at: DateTime<Utc>,
 }
 
@@ -231,6 +237,7 @@ impl From<MetricRowSql> for MetricRow {
             stakeholder: r.stakeholder,
             aggregation_level: r.aggregation_level,
             type_config: r.type_config,
+            metricql_expression: r.metricql_expression,
             created_at: r.created_at,
         }
     }
@@ -460,6 +467,10 @@ impl MetricRow {
             stakeholder: stakeholder as i32,
             aggregation_level: aggregation_level as i32,
             type_config,
+            // Lock 3 from #559 / migration 013: proto3 string default is "" so
+            // legacy rows (NULL column) round-trip as empty — `unwrap_or_default`
+            // matches the `custom_sql` pattern above.
+            metricql_expression: self.metricql_expression.unwrap_or_default(),
         }
     }
 }
@@ -900,14 +911,14 @@ impl ManagementStore {
                    percentile, custom_sql,
                    lower_is_better, is_qoe_metric,
                    cuped_covariate_metric_id, minimum_detectable_effect,
-                   stakeholder, aggregation_level, type_config
+                   stakeholder, aggregation_level, type_config, metricql_expression
                ) VALUES (
                    $1, $2, $3, $4,
                    $5, $6, $7,
                    $8, $9,
                    $10, $11,
                    $12, $13,
-                   $14, $15, $16
+                   $14, $15, $16, $17
                )
                RETURNING
                    metric_id, name, description, type,
@@ -915,7 +926,7 @@ impl ManagementStore {
                    percentile, custom_sql,
                    lower_is_better, is_qoe_metric,
                    cuped_covariate_metric_id, minimum_detectable_effect,
-                   stakeholder, aggregation_level, type_config, created_at"#,
+                   stakeholder, aggregation_level, type_config, metricql_expression, created_at"#,
         )
         .bind(&metric.metric_id)
         .bind(&metric.name)
@@ -933,6 +944,10 @@ impl ManagementStore {
         .bind(stakeholder_to_sql(metric.stakeholder()))
         .bind(aggregation_level_to_sql(metric.aggregation_level()))
         .bind(type_config_json.map(sqlx::types::Json))
+        // Migration 013: empty proto string → NULL in DB to satisfy the
+        // metric_definitions_single_definition_source CHECK (custom_sql,
+        // type_config, metricql_expression mutually exclusive).
+        .bind(opt_str(&metric.metricql_expression))
         .fetch_one(&self.pool)
         .await
         .map_err(|e| {
@@ -958,7 +973,7 @@ impl ManagementStore {
                    percentile, custom_sql,
                    lower_is_better, is_qoe_metric,
                    cuped_covariate_metric_id, minimum_detectable_effect,
-                   stakeholder, aggregation_level, type_config, created_at
+                   stakeholder, aggregation_level, type_config, metricql_expression, created_at
                FROM metric_definitions
                WHERE metric_id = $1"#,
         )
@@ -985,7 +1000,7 @@ impl ManagementStore {
                    percentile, custom_sql,
                    lower_is_better, is_qoe_metric,
                    cuped_covariate_metric_id, minimum_detectable_effect,
-                   stakeholder, aggregation_level, type_config, created_at
+                   stakeholder, aggregation_level, type_config, metricql_expression, created_at
                FROM metric_definitions WHERE 1 = 1"#,
         );
 
@@ -1174,6 +1189,7 @@ mod tests {
             stakeholder: String::new(),
             aggregation_level: String::new(),
             type_config: type_config.map(sqlx::types::Json),
+            metricql_expression: None,
             created_at: Utc.timestamp_opt(0, 0).unwrap(),
         }
     }

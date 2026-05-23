@@ -1,0 +1,44 @@
+WITH exposed_users AS (
+    SELECT user_id, variant_id,
+           MIN(event_timestamp) AS exposure_ts,
+           MIN(assignment_probability) AS assignment_probability
+    FROM delta.exposures
+    WHERE experiment_id = '{{.ExperimentID}}'
+    GROUP BY user_id, variant_id
+),
+event_rows AS (
+    SELECT eu.user_id, eu.variant_id{{if .ValueColumn}}, me.{{.ValueColumn}} AS value{{end}}
+    FROM delta.metric_events me
+    INNER JOIN exposed_users eu ON me.user_id = eu.user_id
+    WHERE me.event_type = '{{.SourceEventType}}'
+    {{- if .WindowHours }}
+      AND me.event_timestamp >= eu.exposure_ts
+      AND me.event_timestamp <  eu.exposure_ts + INTERVAL {{.WindowHours}} HOURS
+    {{- end }}
+    {{- if .FilterSQL }}
+      AND ({{.FilterSQL}})
+    {{- end }}
+)
+SELECT
+    '{{.ExperimentID}}' AS experiment_id,
+    eu.user_id,
+    eu.variant_id,
+    '{{.MetricID}}' AS metric_id,
+    {{- if eq .AggFunc "MEAN"}}
+    AVG(er.value) AS metric_value,
+    {{- else if eq .AggFunc "SUM"}}
+    COALESCE(SUM(er.value), 0.0) AS metric_value,
+    {{- else if eq .AggFunc "COUNT"}}
+    CAST(COUNT(er.user_id) AS DOUBLE) AS metric_value,
+    {{- else if eq .AggFunc "COUNT_DISTINCT"}}
+    CAST(COUNT(DISTINCT er.value) AS DOUBLE) AS metric_value,
+    {{- else if eq .AggFunc "PROPORTION"}}
+    CASE WHEN COUNT(er.user_id) > 0 THEN 1.0 ELSE 0.0 END AS metric_value,
+    {{- else if eq .AggFunc "PERCENTILE"}}
+    percentile_approx(er.value, {{.PercentileFraction}}) AS metric_value,
+    {{- end }}
+    CAST('{{.ComputationDate}}' AS DATE) AS computation_date,
+    eu.assignment_probability
+FROM exposed_users eu
+LEFT JOIN event_rows er ON eu.user_id = er.user_id AND eu.variant_id = er.variant_id
+GROUP BY eu.user_id, eu.variant_id, eu.assignment_probability;

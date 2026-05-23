@@ -6,22 +6,24 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+
+	"github.com/org/experimentation-platform/services/metrics/internal/metricql"
 )
 
 //go:embed templates/*.sql.tmpl
 var templateFS embed.FS
 
 type TemplateParams struct {
-	ExperimentID         string
-	MetricID             string
-	SourceEventType      string
-	ComputationDate      string
-	NumeratorEventType   string
-	DenominatorEventType string
-	CupedEnabled             bool
-	CupedCovariateEventType  string
-	ExperimentStartDate      string
-	CupedLookbackDays        int
+	ExperimentID            string
+	MetricID                string
+	SourceEventType         string
+	ComputationDate         string
+	NumeratorEventType      string
+	DenominatorEventType    string
+	CupedEnabled            bool
+	CupedCovariateEventType string
+	ExperimentStartDate     string
+	CupedLookbackDays       int
 	// SVOD-specific fields
 	QoEField         string // maps to PlaybackMetrics field (e.g. "time_to_first_frame_ms")
 	ControlVariantID string // variant_id of the control variant
@@ -65,6 +67,9 @@ type TemplateParams struct {
 	// ADR-026 Phase 1 — WINDOWED_COUNT
 	EventType   string // counted event type (named distinctly from SourceEventType)
 	WindowHours int32  // time window after first exposure
+
+	// ADR-026 Phase 2 — METRICQL
+	MetricqlExpression string // raw MetricQL source; compiled by RenderMetricql arm
 }
 
 // OperandParam represents one operand of a COMPOSITE metric.
@@ -101,41 +106,98 @@ func (r *SQLRenderer) Render(templateName string, p TemplateParams) (string, err
 	return strings.TrimSpace(buf.String()), nil
 }
 
-func (r *SQLRenderer) RenderMean(p TemplateParams) (string, error)            { return r.Render("mean.sql.tmpl", p) }
-func (r *SQLRenderer) RenderProportion(p TemplateParams) (string, error)      { return r.Render("proportion.sql.tmpl", p) }
-func (r *SQLRenderer) RenderCount(p TemplateParams) (string, error)           { return r.Render("count.sql.tmpl", p) }
-func (r *SQLRenderer) RenderRatio(p TemplateParams) (string, error)           { return r.Render("ratio.sql.tmpl", p) }
-func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) { return r.Render("ratio_delta_method.sql.tmpl", p) }
-func (r *SQLRenderer) RenderCupedCovariate(p TemplateParams) (string, error)  { return r.Render("cuped_covariate.sql.tmpl", p) }
-func (r *SQLRenderer) RenderGuardrailMetric(p TemplateParams) (string, error) { return r.Render("guardrail_metric.sql.tmpl", p) }
-func (r *SQLRenderer) RenderQoEMetric(p TemplateParams) (string, error)      { return r.Render("qoe_metric.sql.tmpl", p) }
+func (r *SQLRenderer) RenderMean(p TemplateParams) (string, error) {
+	return r.Render("mean.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderProportion(p TemplateParams) (string, error) {
+	return r.Render("proportion.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderCount(p TemplateParams) (string, error) {
+	return r.Render("count.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderRatio(p TemplateParams) (string, error) {
+	return r.Render("ratio.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderRatioDeltaMethod(p TemplateParams) (string, error) {
+	return r.Render("ratio_delta_method.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderCupedCovariate(p TemplateParams) (string, error) {
+	return r.Render("cuped_covariate.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderGuardrailMetric(p TemplateParams) (string, error) {
+	return r.Render("guardrail_metric.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderQoEMetric(p TemplateParams) (string, error) {
+	return r.Render("qoe_metric.sql.tmpl", p)
+}
+
 // RenderEBVSRate renders the EBVS (Exit Before Video Start) rate as a per-user
 // PROPORTION metric (Issue #425). Reads from delta.qoe_events.ebvs_detected.
-func (r *SQLRenderer) RenderEBVSRate(p TemplateParams) (string, error)       { return r.Render("ebvs_rate.sql.tmpl", p) }
-func (r *SQLRenderer) RenderContentConsumption(p TemplateParams) (string, error) { return r.Render("content_consumption.sql.tmpl", p) }
-func (r *SQLRenderer) RenderDailyTreatmentEffect(p TemplateParams) (string, error) { return r.Render("daily_treatment_effect.sql.tmpl", p) }
-func (r *SQLRenderer) RenderLifecycleMean(p TemplateParams) (string, error)  { return r.Render("lifecycle_mean.sql.tmpl", p) }
-func (r *SQLRenderer) RenderSurrogateInput(p TemplateParams) (string, error) { return r.Render("surrogate_input.sql.tmpl", p) }
-func (r *SQLRenderer) RenderInterleavingScore(p TemplateParams) (string, error) { return r.Render("interleaving_score.sql.tmpl", p) }
-func (r *SQLRenderer) RenderSessionLevelMean(p TemplateParams) (string, error) { return r.Render("session_level_mean.sql.tmpl", p) }
-func (r *SQLRenderer) RenderQoEEngagementCorrelation(p TemplateParams) (string, error) { return r.Render("qoe_engagement_correlation.sql.tmpl", p) }
-func (r *SQLRenderer) RenderCustom(p TemplateParams) (string, error)               { return r.Render("custom.sql.tmpl", p) }
-func (r *SQLRenderer) RenderPercentile(p TemplateParams) (string, error)           { return r.Render("percentile.sql.tmpl", p) }
+func (r *SQLRenderer) RenderEBVSRate(p TemplateParams) (string, error) {
+	return r.Render("ebvs_rate.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderContentConsumption(p TemplateParams) (string, error) {
+	return r.Render("content_consumption.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderDailyTreatmentEffect(p TemplateParams) (string, error) {
+	return r.Render("daily_treatment_effect.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderLifecycleMean(p TemplateParams) (string, error) {
+	return r.Render("lifecycle_mean.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderSurrogateInput(p TemplateParams) (string, error) {
+	return r.Render("surrogate_input.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderInterleavingScore(p TemplateParams) (string, error) {
+	return r.Render("interleaving_score.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderSessionLevelMean(p TemplateParams) (string, error) {
+	return r.Render("session_level_mean.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderQoEEngagementCorrelation(p TemplateParams) (string, error) {
+	return r.Render("qoe_engagement_correlation.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderCustom(p TemplateParams) (string, error) {
+	return r.Render("custom.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderPercentile(p TemplateParams) (string, error) {
+	return r.Render("percentile.sql.tmpl", p)
+}
 
 // Provider-side metric renderers (ADR-014).
 // Experiment-level metrics — results go to delta.experiment_level_metrics.
-func (r *SQLRenderer) RenderCatalogCoverageRate(p TemplateParams) (string, error)    { return r.Render("catalog_coverage_rate.sql.tmpl", p) }
-func (r *SQLRenderer) RenderCatalogGiniCoefficient(p TemplateParams) (string, error) { return r.Render("catalog_gini_coefficient.sql.tmpl", p) }
-func (r *SQLRenderer) RenderCatalogEntropy(p TemplateParams) (string, error)         { return r.Render("catalog_entropy.sql.tmpl", p) }
-func (r *SQLRenderer) RenderLongtailImpressionShare(p TemplateParams) (string, error) { return r.Render("longtail_impression_share.sql.tmpl", p) }
-func (r *SQLRenderer) RenderProviderExposureGini(p TemplateParams) (string, error)   { return r.Render("provider_exposure_gini.sql.tmpl", p) }
-func (r *SQLRenderer) RenderProviderExposureParity(p TemplateParams) (string, error) { return r.Render("provider_exposure_parity.sql.tmpl", p) }
+func (r *SQLRenderer) RenderCatalogCoverageRate(p TemplateParams) (string, error) {
+	return r.Render("catalog_coverage_rate.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderCatalogGiniCoefficient(p TemplateParams) (string, error) {
+	return r.Render("catalog_gini_coefficient.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderCatalogEntropy(p TemplateParams) (string, error) {
+	return r.Render("catalog_entropy.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderLongtailImpressionShare(p TemplateParams) (string, error) {
+	return r.Render("longtail_impression_share.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderProviderExposureGini(p TemplateParams) (string, error) {
+	return r.Render("provider_exposure_gini.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderProviderExposureParity(p TemplateParams) (string, error) {
+	return r.Render("provider_exposure_parity.sql.tmpl", p)
+}
 
 // User-level provider metrics — results go to delta.metric_summaries.
-func (r *SQLRenderer) RenderUserGenreEntropy(p TemplateParams) (string, error)      { return r.Render("user_genre_entropy.sql.tmpl", p) }
-func (r *SQLRenderer) RenderUserDiscoveryRate(p TemplateParams) (string, error)     { return r.Render("user_discovery_rate.sql.tmpl", p) }
-func (r *SQLRenderer) RenderUserProviderDiversity(p TemplateParams) (string, error) { return r.Render("user_provider_diversity.sql.tmpl", p) }
-func (r *SQLRenderer) RenderIntraListDistance(p TemplateParams) (string, error)     { return r.Render("intra_list_distance.sql.tmpl", p) }
+func (r *SQLRenderer) RenderUserGenreEntropy(p TemplateParams) (string, error) {
+	return r.Render("user_genre_entropy.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderUserDiscoveryRate(p TemplateParams) (string, error) {
+	return r.Render("user_discovery_rate.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderUserProviderDiversity(p TemplateParams) (string, error) {
+	return r.Render("user_provider_diversity.sql.tmpl", p)
+}
+func (r *SQLRenderer) RenderIntraListDistance(p TemplateParams) (string, error) {
+	return r.Render("intra_list_distance.sql.tmpl", p)
+}
 
 // MLRATE cross-fitting (ADR-015 Phase 2).
 // Step 1: Feature preparation with fold assignment — results go to delta.mlrate_features.
@@ -168,6 +230,29 @@ func (r *SQLRenderer) RenderComposite(p TemplateParams) (string, error) {
 
 func (r *SQLRenderer) RenderWindowedCount(p TemplateParams) (string, error) {
 	return r.Render("windowed_count.sql.tmpl", p)
+}
+
+// RenderMetricql compiles a MetricQL expression to Spark SQL via the
+// metricql package. The CompileContext is built from the renderer's params;
+// KnownMetricIDs is left nil because M5 already validated @metric_ref
+// existence at metric-definition create/update time, and M3 does not maintain
+// a full metric-ID catalog at render time. (Per the ADR-026 Phase 2 plan
+// design: parse-on-render is cheap; M5 is the source of truth for refs.)
+func (r *SQLRenderer) RenderMetricql(expression string, p TemplateParams) (string, error) {
+	if expression == "" {
+		return "", fmt.Errorf("spark: METRICQL metric %q requires non-empty metricql_expression", p.MetricID)
+	}
+	ctx := metricql.CompileContext{
+		ExperimentID:    p.ExperimentID,
+		ComputationDate: p.ComputationDate,
+		MetricID:        p.MetricID,
+		// KnownMetricIDs nil: M5 already validated existence; M3 trusts that.
+	}
+	sql, _, err := metricql.Compile(expression, ctx)
+	if err != nil {
+		return "", fmt.Errorf("spark: METRICQL metric %q compile: %w", p.MetricID, err)
+	}
+	return sql, nil
 }
 
 func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string, error) {
@@ -238,7 +323,12 @@ func (r *SQLRenderer) RenderForType(metricType string, p TemplateParams) (string
 		}
 		return r.RenderWindowedCount(p)
 
+	case "METRICQL":
+		// ADR-026 Phase 2 (#435). Compile the expression to Spark SQL.
+		// Mirrors the COMPOSITE arm shape: validation + delegate to a typed renderer.
+		return r.RenderMetricql(p.MetricqlExpression, p)
+
 	default:
-		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM, FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT)", metricType)
+		return "", fmt.Errorf("spark: unsupported metric type %q (supported: MEAN, PROPORTION, COUNT, RATIO, PERCENTILE, CUSTOM, FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT, METRICQL)", metricType)
 	}
 }

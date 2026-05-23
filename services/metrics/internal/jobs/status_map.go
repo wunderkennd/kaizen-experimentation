@@ -63,6 +63,25 @@ func (s *statusMap) blockerFor(operands []config.OperandConfig) (string, bool) {
 	return "", false
 }
 
+// blockerForRefs is the sibling of blockerFor for METRICQL metrics, whose
+// dependencies live in the parsed @metric_refs rather than the config
+// Operands slice (ADR-026 Phase 2 #435, round-4 BUG-0001).
+//
+// Returns the first ref ID whose status is not Completed, or "" if every
+// ref completed. Used by:
+//   - the upstream-failure gate in standard.go::Run (T8 Step 1a)
+//   - markUnvisitedDependentsAsSkipped (T7 Step 2a) -- so the COMPOSITE and
+//     METRICQL skip-propagation paths share one blocker-detection routine.
+func (s *statusMap) blockerForRefs(refIDs []string) string {
+	for _, id := range refIDs {
+		st, ok := s.entries[id]
+		if !ok || st != status.Completed {
+			return id
+		}
+	}
+	return ""
+}
+
 // reasonOf returns the recorded reason (or empty string if unrecorded).
 func (s *statusMap) reasonOf(id string) string {
 	return s.reasons[id]

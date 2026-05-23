@@ -28,27 +28,27 @@ import (
 // m5WireExperiment mirrors the protojson wire format of common.v1.Experiment
 // as returned by M5's GetExperiment/ListExperiments RPCs.
 type m5WireExperiment struct {
-	ExperimentID        string             `json:"experimentId"`
-	Name                string             `json:"name"`
-	Description         string             `json:"description,omitempty"`
-	OwnerEmail          string             `json:"ownerEmail,omitempty"`
-	Type                string             `json:"type"`                          // "EXPERIMENT_TYPE_AB"
-	State               string             `json:"state"`                         // "EXPERIMENT_STATE_RUNNING"
-	Variants            []m5WireVariant    `json:"variants"`
-	LayerID             string             `json:"layerId,omitempty"`
-	PrimaryMetricID     string             `json:"primaryMetricId"`
-	SecondaryMetricIDs  []string           `json:"secondaryMetricIds,omitempty"`
-	GuardrailConfigs    []m5WireGuardrail  `json:"guardrailConfigs,omitempty"`
-	GuardrailAction     string             `json:"guardrailAction,omitempty"`     // "GUARDRAIL_ACTION_AUTO_PAUSE"
-	HashSalt            string             `json:"hashSalt,omitempty"`
-	StartedAt           string             `json:"startedAt,omitempty"`           // RFC3339Nano
-	CreatedAt           string             `json:"createdAt,omitempty"`
-	ConcludedAt         string             `json:"concludedAt,omitempty"`
-	SurrogateModelID    string             `json:"surrogateModelId,omitempty"`
-	IsCumulativeHoldout bool               `json:"isCumulativeHoldout,omitempty"` // proto3 zero omit
-	InterleavingConfig  *m5WireInterleave  `json:"interleavingConfig,omitempty"`
-	SessionConfig       *m5WireSession     `json:"sessionConfig,omitempty"`
-	LifecycleConfig     *m5WireLifecycle   `json:"lifecycleConfig,omitempty"`
+	ExperimentID        string            `json:"experimentId"`
+	Name                string            `json:"name"`
+	Description         string            `json:"description,omitempty"`
+	OwnerEmail          string            `json:"ownerEmail,omitempty"`
+	Type                string            `json:"type"`  // "EXPERIMENT_TYPE_AB"
+	State               string            `json:"state"` // "EXPERIMENT_STATE_RUNNING"
+	Variants            []m5WireVariant   `json:"variants"`
+	LayerID             string            `json:"layerId,omitempty"`
+	PrimaryMetricID     string            `json:"primaryMetricId"`
+	SecondaryMetricIDs  []string          `json:"secondaryMetricIds,omitempty"`
+	GuardrailConfigs    []m5WireGuardrail `json:"guardrailConfigs,omitempty"`
+	GuardrailAction     string            `json:"guardrailAction,omitempty"` // "GUARDRAIL_ACTION_AUTO_PAUSE"
+	HashSalt            string            `json:"hashSalt,omitempty"`
+	StartedAt           string            `json:"startedAt,omitempty"` // RFC3339Nano
+	CreatedAt           string            `json:"createdAt,omitempty"`
+	ConcludedAt         string            `json:"concludedAt,omitempty"`
+	SurrogateModelID    string            `json:"surrogateModelId,omitempty"`
+	IsCumulativeHoldout bool              `json:"isCumulativeHoldout,omitempty"` // proto3 zero omit
+	InterleavingConfig  *m5WireInterleave `json:"interleavingConfig,omitempty"`
+	SessionConfig       *m5WireSession    `json:"sessionConfig,omitempty"`
+	LifecycleConfig     *m5WireLifecycle  `json:"lifecycleConfig,omitempty"`
 }
 
 type m5WireVariant struct {
@@ -60,9 +60,9 @@ type m5WireVariant struct {
 }
 
 type m5WireGuardrail struct {
-	MetricID                   string  `json:"metricId"`
-	Threshold                  float64 `json:"threshold"`
-	ConsecutiveBreachesRequired int32  `json:"consecutiveBreachesRequired"`
+	MetricID                    string  `json:"metricId"`
+	Threshold                   float64 `json:"threshold"`
+	ConsecutiveBreachesRequired int32   `json:"consecutiveBreachesRequired"`
 }
 
 type m5WireInterleave struct {
@@ -85,19 +85,19 @@ type m5WireLifecycle struct {
 // Composite, WindowedCount — which protojson emits at the top level (rather
 // than nested under `typeConfig`) because the oneof itself isn't named.
 type m5WireMetricDefinition struct {
-	MetricID               string  `json:"metricId"`
-	Name                   string  `json:"name"`
-	Description            string  `json:"description,omitempty"`
-	Type                   string  `json:"type"`                           // "METRIC_TYPE_MEAN"
-	SourceEventType        string  `json:"sourceEventType,omitempty"`
-	NumeratorEventType     string  `json:"numeratorEventType,omitempty"`
-	DenominatorEventType   string  `json:"denominatorEventType,omitempty"`
-	Percentile             float64 `json:"percentile,omitempty"`
-	CustomSQL              string  `json:"customSql,omitempty"`
-	LowerIsBetter          bool    `json:"lowerIsBetter,omitempty"`
-	SurrogateTargetMetricID string `json:"surrogateTargetMetricId,omitempty"`
-	IsQoEMetric            bool    `json:"isQoeMetric,omitempty"`
-	CupedCovariateMetricID string  `json:"cupedCovariateMetricId,omitempty"`
+	MetricID                string  `json:"metricId"`
+	Name                    string  `json:"name"`
+	Description             string  `json:"description,omitempty"`
+	Type                    string  `json:"type"` // "METRIC_TYPE_MEAN"
+	SourceEventType         string  `json:"sourceEventType,omitempty"`
+	NumeratorEventType      string  `json:"numeratorEventType,omitempty"`
+	DenominatorEventType    string  `json:"denominatorEventType,omitempty"`
+	Percentile              float64 `json:"percentile,omitempty"`
+	CustomSQL               string  `json:"customSql,omitempty"`
+	LowerIsBetter           bool    `json:"lowerIsBetter,omitempty"`
+	SurrogateTargetMetricID string  `json:"surrogateTargetMetricId,omitempty"`
+	IsQoEMetric             bool    `json:"isQoeMetric,omitempty"`
+	CupedCovariateMetricID  string  `json:"cupedCovariateMetricId,omitempty"`
 	MinimumDetectableEffect float64 `json:"minimumDetectableEffect,omitempty"`
 
 	// ADR-026 Phase 1 — oneof type_config arms. Exactly one of these is
@@ -141,16 +141,16 @@ const m5CompositeOperatorPrefix = "COMPOSITE_OPERATOR_"
 
 // m5WireSurrogateModel mirrors protojson of common.v1.SurrogateModelConfig.
 type m5WireSurrogateModel struct {
-	ModelID               string  `json:"modelId"`
-	TargetMetricID        string  `json:"targetMetricId"`
+	ModelID               string   `json:"modelId"`
+	TargetMetricID        string   `json:"targetMetricId"`
 	InputMetricIDs        []string `json:"inputMetricIds,omitempty"`
-	ObservationWindowDays int32   `json:"observationWindowDays,omitempty"`
-	PredictionHorizonDays int32   `json:"predictionHorizonDays,omitempty"`
-	ModelType             string  `json:"modelType"` // "SURROGATE_MODEL_TYPE_LINEAR"
-	CalibrationRSquared   float64 `json:"calibrationRSquared,omitempty"`
-	MlflowModelURI        string  `json:"mlflowModelUri,omitempty"`
-	LastCalibratedAt      string  `json:"lastCalibratedAt,omitempty"`
-	CreatedAt             string  `json:"createdAt,omitempty"`
+	ObservationWindowDays int32    `json:"observationWindowDays,omitempty"`
+	PredictionHorizonDays int32    `json:"predictionHorizonDays,omitempty"`
+	ModelType             string   `json:"modelType"` // "SURROGATE_MODEL_TYPE_LINEAR"
+	CalibrationRSquared   float64  `json:"calibrationRSquared,omitempty"`
+	MlflowModelURI        string   `json:"mlflowModelUri,omitempty"`
+	LastCalibratedAt      string   `json:"lastCalibratedAt,omitempty"`
+	CreatedAt             string   `json:"createdAt,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -188,23 +188,23 @@ func TestM3M5_ExperimentConfig_FieldCompleteness(t *testing.T) {
 	// M3 config JSON tags → M5 protojson equivalents.
 	m3ToM5 := map[string]string{
 		"experiment_id":                    "experimentId",
-		"name":                            "name",
-		"type":                            "type",
-		"state":                           "state",
-		"started_at":                      "startedAt",
-		"primary_metric_id":               "primaryMetricId",
-		"secondary_metric_ids":            "secondaryMetricIds",
-		"variants":                        "variants",
-		"guardrail_configs":               "guardrailConfigs",
-		"guardrail_action":                "guardrailAction",
+		"name":                             "name",
+		"type":                             "type",
+		"state":                            "state",
+		"started_at":                       "startedAt",
+		"primary_metric_id":                "primaryMetricId",
+		"secondary_metric_ids":             "secondaryMetricIds",
+		"variants":                         "variants",
+		"guardrail_configs":                "guardrailConfigs",
+		"guardrail_action":                 "guardrailAction",
 		"lifecycle_stratification_enabled": "lifecycleConfig.enabled",
 		"lifecycle_segments":               "lifecycleConfig.segments",
-		"surrogate_model_id":              "surrogateModelId",
-		"credit_assignment":               "interleavingConfig.creditAssignment",
-		"engagement_event_type":           "interleavingConfig.engagementEventType",
-		"session_level":                   "sessionConfig.sessionLevel",
-		"mlrate_enabled":                  "mlrateConfig.enabled",
-		"mlrate_folds":                    "mlrateConfig.folds",
+		"surrogate_model_id":               "surrogateModelId",
+		"credit_assignment":                "interleavingConfig.creditAssignment",
+		"engagement_event_type":            "interleavingConfig.engagementEventType",
+		"session_level":                    "sessionConfig.sessionLevel",
+		"mlrate_enabled":                   "mlrateConfig.enabled",
+		"mlrate_folds":                     "mlrateConfig.folds",
 	}
 
 	// Extract JSON tags from M3's ExperimentConfig struct.
@@ -227,28 +227,30 @@ func TestM3M5_ExperimentConfig_FieldCompleteness(t *testing.T) {
 // MetricConfig uses has a corresponding field in M5's MetricDefinition wire format.
 func TestM3M5_MetricConfig_FieldCompleteness(t *testing.T) {
 	m3ToM5 := map[string]string{
-		"metric_id":               "metricId",
-		"name":                    "name",
-		"type":                    "type",
-		"source_event_type":       "sourceEventType",
-		"numerator_event_type":    "numeratorEventType",
-		"denominator_event_type":  "denominatorEventType",
-		"cuped_covariate_metric_id": "cupedCovariateMetricId",
-		"percentile":              "percentile",
-		"lower_is_better":         "lowerIsBetter",
-		"is_qoe_metric":           "isQoeMetric",
+		"metric_id":                  "metricId",
+		"name":                       "name",
+		"type":                       "type",
+		"source_event_type":          "sourceEventType",
+		"numerator_event_type":       "numeratorEventType",
+		"denominator_event_type":     "denominatorEventType",
+		"cuped_covariate_metric_id":  "cupedCovariateMetricId",
+		"percentile":                 "percentile",
+		"lower_is_better":            "lowerIsBetter",
+		"is_qoe_metric":              "isQoeMetric",
 		"qoe_field":                  "", // M3-only; not in M5 proto (derived from source_event_type)
 		"custom_sql":                 "customSql",
 		"mlrate_feature_event_types": "mlrateConfig.featureEventTypes",
 		"mlrate_model_uri":           "mlrateConfig.modelUri",
 		"mlrate_lookback_days":       "mlrateConfig.lookbackDays",
 		// ADR-026 Phase 1 — new-type fields map to protojson oneof type_config branches.
-		"filter_sql":   "filteredMean.filterSql",   // FilteredMeanConfig.filter_sql
-		"value_column": "filteredMean.valueColumn", // FilteredMeanConfig.value_column
+		"filter_sql":   "filteredMean.filterSql",    // FilteredMeanConfig.filter_sql
+		"value_column": "filteredMean.valueColumn",  // FilteredMeanConfig.value_column
 		"operands":     "composite.operands",        // CompositeConfig.operands
 		"operator":     "composite.operator",        // CompositeConfig.operator
-		"event_type":   "windowedCount.eventType",  // WindowedCountConfig.event_type
+		"event_type":   "windowedCount.eventType",   // WindowedCountConfig.event_type
 		"window_hours": "windowedCount.windowHours", // WindowedCountConfig.window_hours
+		// ADR-026 Phase 2 (#435) — METRICQL expression source text.
+		"metricql_expression": "metricqlExpression", // MetricDefinition.metricql_expression (field 20)
 	}
 
 	m3Tags := extractJSONTags(reflect.TypeOf(config.MetricConfig{}))
@@ -293,7 +295,7 @@ func TestM3M5_SurrogateModelConfig_FieldCompleteness(t *testing.T) {
 // enum strings and M3's short enum strings for all experiment types.
 func TestM3M5_EnumFormat_ExperimentType(t *testing.T) {
 	cases := []struct {
-		m5Wire string
+		m5Wire   string
 		m3Config string
 	}{
 		{"EXPERIMENT_TYPE_AB", "AB"},
@@ -319,7 +321,7 @@ func TestM3M5_EnumFormat_ExperimentType(t *testing.T) {
 // TestM3M5_EnumFormat_ExperimentState validates all experiment state enum conversions.
 func TestM3M5_EnumFormat_ExperimentState(t *testing.T) {
 	cases := []struct {
-		m5Wire string
+		m5Wire   string
 		m3Config string
 	}{
 		{"EXPERIMENT_STATE_DRAFT", "DRAFT"},
@@ -341,7 +343,7 @@ func TestM3M5_EnumFormat_ExperimentState(t *testing.T) {
 // TestM3M5_EnumFormat_MetricType validates all metric type enum conversions.
 func TestM3M5_EnumFormat_MetricType(t *testing.T) {
 	cases := []struct {
-		m5Wire string
+		m5Wire   string
 		m3Config string
 	}{
 		{"METRIC_TYPE_MEAN", "MEAN"},
@@ -363,7 +365,7 @@ func TestM3M5_EnumFormat_MetricType(t *testing.T) {
 // TestM3M5_EnumFormat_SurrogateModelType validates surrogate model type enums.
 func TestM3M5_EnumFormat_SurrogateModelType(t *testing.T) {
 	cases := []struct {
-		m5Wire string
+		m5Wire   string
 		m3Config string
 	}{
 		{"SURROGATE_MODEL_TYPE_LINEAR", "LINEAR"},
@@ -382,7 +384,7 @@ func TestM3M5_EnumFormat_SurrogateModelType(t *testing.T) {
 // TestM3M5_EnumFormat_GuardrailAction validates guardrail action enums.
 func TestM3M5_EnumFormat_GuardrailAction(t *testing.T) {
 	cases := []struct {
-		m5Wire string
+		m5Wire   string
 		m3Config string
 	}{
 		{"GUARDRAIL_ACTION_AUTO_PAUSE", "AUTO_PAUSE"},
@@ -473,15 +475,15 @@ func TestM3M5_Proto3ZeroValueOmission(t *testing.T) {
 // and field renaming). This documents the exact transformation M3 must apply.
 func TestM3M5_ExperimentWireToConfig_Roundtrip(t *testing.T) {
 	m5 := m5WireExperiment{
-		ExperimentID:    "e0000001",
-		Name:            "homepage_recs_v2",
-		Type:            "EXPERIMENT_TYPE_AB",
-		State:           "EXPERIMENT_STATE_RUNNING",
-		PrimaryMetricID: "ctr_recommendation",
+		ExperimentID:       "e0000001",
+		Name:               "homepage_recs_v2",
+		Type:               "EXPERIMENT_TYPE_AB",
+		State:              "EXPERIMENT_STATE_RUNNING",
+		PrimaryMetricID:    "ctr_recommendation",
 		SecondaryMetricIDs: []string{"watch_time_minutes"},
-		StartedAt:       "2026-03-01T08:00:00Z",
-		SurrogateModelID: "sm-001",
-		GuardrailAction: "GUARDRAIL_ACTION_AUTO_PAUSE",
+		StartedAt:          "2026-03-01T08:00:00Z",
+		SurrogateModelID:   "sm-001",
+		GuardrailAction:    "GUARDRAIL_ACTION_AUTO_PAUSE",
 		Variants: []m5WireVariant{
 			{VariantID: "v1", Name: "control", TrafficFraction: 0.5, IsControl: true},
 			{VariantID: "v2", Name: "treatment", TrafficFraction: 0.5},
@@ -1073,15 +1075,15 @@ func TestM3M5_MetricWireJSON_DeserializesToM5Type(t *testing.T) {
 
 func m5ExperimentToConfig(m5 m5WireExperiment) config.ExperimentConfig {
 	cfg := config.ExperimentConfig{
-		ExperimentID:    m5.ExperimentID,
-		Name:            m5.Name,
-		Type:            stripEnumPrefix(m5.Type, m5ExperimentTypePrefix),
-		State:           stripEnumPrefix(m5.State, m5ExperimentStatePrefix),
-		StartedAt:       m5.StartedAt,
-		PrimaryMetricID: m5.PrimaryMetricID,
+		ExperimentID:       m5.ExperimentID,
+		Name:               m5.Name,
+		Type:               stripEnumPrefix(m5.Type, m5ExperimentTypePrefix),
+		State:              stripEnumPrefix(m5.State, m5ExperimentStatePrefix),
+		StartedAt:          m5.StartedAt,
+		PrimaryMetricID:    m5.PrimaryMetricID,
 		SecondaryMetricIDs: m5.SecondaryMetricIDs,
-		GuardrailAction: stripEnumPrefix(m5.GuardrailAction, m5GuardrailActionPrefix),
-		SurrogateModelID: m5.SurrogateModelID,
+		GuardrailAction:    stripEnumPrefix(m5.GuardrailAction, m5GuardrailActionPrefix),
+		SurrogateModelID:   m5.SurrogateModelID,
 	}
 
 	for _, v := range m5.Variants {
@@ -1095,8 +1097,8 @@ func m5ExperimentToConfig(m5 m5WireExperiment) config.ExperimentConfig {
 
 	for _, g := range m5.GuardrailConfigs {
 		cfg.GuardrailConfigs = append(cfg.GuardrailConfigs, config.GuardrailConfig{
-			MetricID:                   g.MetricID,
-			Threshold:                  g.Threshold,
+			MetricID:                    g.MetricID,
+			Threshold:                   g.Threshold,
 			ConsecutiveBreachesRequired: int(g.ConsecutiveBreachesRequired),
 		})
 	}
