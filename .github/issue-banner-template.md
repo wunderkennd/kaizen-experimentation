@@ -1,6 +1,7 @@
 > ## 📌 Execution status (${PLAN_DATE})
 >
-> **Locked plan:** [`${PLAN_PATH}`](../tree/main/${PLAN_PATH}) — last touched on main at `${PLAN_SHA}`.
+> **Locked plan:** [`${PLAN_PATH}`](../../tree/main/${PLAN_PATH}) — last touched on main at `${PLAN_SHA}`.
+
 >
 > **Branch convention:** `agent-N/feat/adr-XXX-<slug>` per CLAUDE.md. PR body must include `Closes #${ISSUE_NUM}`. Never use auto-generated worker names as branches.
 >
