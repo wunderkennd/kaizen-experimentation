@@ -762,6 +762,10 @@ export function marshalMetricDefinition(metric: MetricDefinition): Record<string
       }
     }
   }
+  // ADR-026 Phase 2: METRICQL expression field (proto: metricql_expression).
+  if (metric.metricqlExpression !== undefined && metric.metricqlExpression !== '') {
+    out.metricqlExpression = metric.metricqlExpression;
+  }
   return out;
 }
 

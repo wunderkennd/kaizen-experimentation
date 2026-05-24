@@ -20,6 +20,7 @@ const TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] 
   { value: 'FILTERED_MEAN',  label: 'Filtered Mean',  description: 'Mean over rows matching a filter (ADR-026 Phase 1).' },
   { value: 'COMPOSITE',      label: 'Composite',      description: 'Combine other metrics with an operator (ADR-026 Phase 1).' },
   { value: 'WINDOWED_COUNT', label: 'Windowed Count', description: 'Event count within N hours of exposure (ADR-026 Phase 1).' },
+  { value: 'METRICQL',      label: 'MetricQL expression', description: 'Custom expression with arithmetic, filters, and @metric_ref references (ADR-026 Phase 2).' },
 ];
 
 export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelectProps) {

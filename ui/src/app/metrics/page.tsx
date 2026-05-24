@@ -34,6 +34,8 @@ const METRIC_TYPE_BADGE: Record<MetricType, string> = {
   FILTERED_MEAN: 'bg-teal-100 text-teal-800',
   COMPOSITE: 'bg-indigo-100 text-indigo-800',
   WINDOWED_COUNT: 'bg-rose-100 text-rose-800',
+  // ADR-026 Phase 2 — violet matches the MetricqlSection fieldset border color.
+  METRICQL: 'bg-violet-100 text-violet-800',
 };
 
 const COMPOSITE_OPERATOR_NAME: Record<CompositeOperator, string> = {
@@ -128,6 +130,8 @@ const ALL_METRIC_TYPES: MetricType[] = [
   'FILTERED_MEAN',
   'COMPOSITE',
   'WINDOWED_COUNT',
+  // ADR-026 Phase 2
+  'METRICQL',
 ];
 
 function MetricRow({ metric }: { metric: MetricDefinition }) {
