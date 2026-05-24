@@ -410,34 +410,42 @@ async fn validate_metricql(m: &MetricDefinition) -> Result<(), Box<Status>> {
         )));
     }
 
-    let metrics_addr = std::env::var("METRICS_ADDR")
-        .unwrap_or_else(|_| "http://localhost:50056".into());
-
     use experimentation_proto::experimentation::metrics::v1::{
         metric_computation_service_client::MetricComputationServiceClient,
         ValidateMetricqlRequest,
     };
-    use tonic::transport::Endpoint;
+    use tonic::transport::{Channel, Endpoint};
     use std::time::Duration;
+    use std::sync::OnceLock;
 
-    let endpoint = Endpoint::from_shared(metrics_addr)
-        .map_err(|e| {
-            Box::new(Status::invalid_argument(format!(
-                "invalid metrics service address: {}",
-                e
-            )))
-        })?
-        .timeout(Duration::from_secs(5))
-        .connect_timeout(Duration::from_secs(5));
+    static CHANNEL: OnceLock<Channel> = OnceLock::new();
 
-    let mut client = MetricComputationServiceClient::connect(endpoint)
-        .await
-        .map_err(|e| {
+    let channel = if let Some(chan) = CHANNEL.get() {
+        chan.clone()
+    } else {
+        let metrics_addr = std::env::var("METRICS_ADDR")
+            .unwrap_or_else(|_| "http://localhost:50056".into());
+        let endpoint = Endpoint::from_shared(metrics_addr)
+            .map_err(|e| {
+                Box::new(Status::invalid_argument(format!(
+                    "invalid metrics service address: {}",
+                    e
+                )))
+            })?
+            .timeout(Duration::from_secs(5))
+            .connect_timeout(Duration::from_secs(5));
+
+        let chan = endpoint.connect().await.map_err(|e| {
             Box::new(Status::internal(format!(
                 "failed to connect to metrics service (M3) for validation: {}",
                 e
             )))
         })?;
+        let _ = CHANNEL.set(chan.clone());
+        chan
+    };
+
+    let mut client = MetricComputationServiceClient::new(channel);
 
     let req = ValidateMetricqlRequest {
         expression: m.metricql_expression.clone(),
