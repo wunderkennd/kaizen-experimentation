@@ -2,14 +2,15 @@ syntax = "proto3";
 
 package experimentation.metrics.v1;
 
+import "experimentation/common/v1/metricql_diagnostic.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/org/experimentation/gen/go/metrics/v1;metricsv1";
+option go_package = "github.com/org/experimentation/gen/go/experimentation/metrics/v1;metricsv1";
 
 // MetricComputationService is implemented in Go (M3).
 // Orchestrates Spark SQL jobs. All SQL logged to query_log table.
-// No statistical analysis — that is M4a's responsibility.
+// No statistical analysis -- that is M4a's responsibility.
 service MetricComputationService {
   // Trigger metric computation for an experiment.
   rpc ComputeMetrics(ComputeMetricsRequest) returns (ComputeMetricsResponse);
@@ -19,6 +20,14 @@ service MetricComputationService {
   rpc ExportNotebook(ExportNotebookRequest) returns (ExportNotebookResponse);
   // Get the SQL query used for a specific metric computation.
   rpc GetQueryLog(GetQueryLogRequest) returns (GetQueryLogResponse);
+  // CompileMetricqlPreview -- dry-run compile a MetricQL expression to its
+  // Spark SQL equivalent without persisting or executing. Used by the M6
+  // editor's preview pane (ADR-026 Phase 2 / #436).
+  //
+  // KnownMetricIDs is derived server-side from the experiment's current
+  // metric set -- clients do NOT pass it, to prevent autocomplete-time
+  // info leakage about other experiments' metrics.
+  rpc CompileMetricqlPreview(CompileMetricqlPreviewRequest) returns (CompileMetricqlPreviewResponse);
 }
 
 message ComputeMetricsRequest { string experiment_id = 1; }
@@ -68,4 +77,18 @@ message QueryLogEntry {
   int64 row_count = 4;
   int64 duration_ms = 5;
   google.protobuf.Timestamp computed_at = 6;
+}
+
+message CompileMetricqlPreviewRequest {
+  // Scopes the KnownMetricIDs lookup. Required.
+  string experiment_id = 1;
+  // The MetricQL source text to compile.
+  string metricql_expression = 2;
+}
+
+message CompileMetricqlPreviewResponse {
+  // The compiled Spark SQL. Empty when diagnostics is non-empty.
+  string compiled_sql = 1;
+  // Parse + semantic diagnostics. Empty when compiled_sql is populated.
+  repeated experimentation.common.v1.MetricqlDiagnostic diagnostics = 2;
 }
