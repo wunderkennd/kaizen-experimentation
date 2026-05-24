@@ -3,3 +3,4 @@
 //! enforced via `test-vectors/metricql_corpus.json`.
 
 pub mod ast;
+pub mod lexer;
