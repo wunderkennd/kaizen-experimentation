@@ -20,7 +20,6 @@
  */
 
 import { parser } from './metricql';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — JSON import; resolveJsonModule is enabled in tsconfig.json
 import corpusJson from '../../../../../test-vectors/metricql_corpus.json';
 
