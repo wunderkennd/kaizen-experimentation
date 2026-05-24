@@ -24,6 +24,7 @@ use experimentation_proto::experimentation::common::v1::{
 
 pub mod composite_cycle;
 pub mod filter_sql;
+pub mod metricql;
 
 // ---------------------------------------------------------------------------
 // Shared identifier regex (used by B2 WINDOWED_COUNT.event_type and, when B3
