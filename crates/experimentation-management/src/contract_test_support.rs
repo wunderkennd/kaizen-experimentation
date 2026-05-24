@@ -170,7 +170,7 @@ impl MetricStore {
     }
 }
 
-// `MetricLookup` bridges the in-memory store to the COMPOSITE validator.
+// `MetricLookup` bridges the in-memory store to the cycle-detection validator.
 // Method names + semantics mirror the PG-backed `ManagementStore` so the
 // validator implementation stays storage-agnostic.
 #[tonic::async_trait]
@@ -196,6 +196,41 @@ impl crate::validators::MetricLookup for MetricStore {
             }
             _ => Ok(Vec::new()),
         }
+    }
+
+    async fn get_metricql_refs(
+        &self,
+        metric_id: &str,
+    ) -> Result<Vec<String>, crate::store::StoreError> {
+        let map = self.metrics.read().unwrap();
+        let Some(m) = map.get(metric_id) else {
+            return Err(crate::store::StoreError::NotFound(metric_id.to_string()));
+        };
+        if m.r#type != MetricType::Metricql as i32 {
+            return Ok(Vec::new());
+        }
+        let expr = m.metricql_expression.trim();
+        if expr.is_empty() {
+            return Ok(Vec::new());
+        }
+        use crate::validators::metricql;
+        use crate::validators::metricql::analyze;
+        let ast = match metricql::parse_only(expr) {
+            Ok(node) => node,
+            Err(_) => return Ok(Vec::new()),
+        };
+        Ok(analyze::extract_metric_refs(&ast))
+    }
+
+    async fn get_metric_type(
+        &self,
+        metric_id: &str,
+    ) -> Result<MetricType, crate::store::StoreError> {
+        let map = self.metrics.read().unwrap();
+        let Some(m) = map.get(metric_id) else {
+            return Err(crate::store::StoreError::NotFound(metric_id.to_string()));
+        };
+        Ok(MetricType::try_from(m.r#type).unwrap_or(MetricType::Unspecified))
     }
 }
 

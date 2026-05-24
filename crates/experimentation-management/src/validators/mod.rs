@@ -22,7 +22,7 @@ use experimentation_proto::experimentation::common::v1::{
     MetricDefinition, MetricType, QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
 };
 
-pub mod composite_cycle;
+pub mod cycle;
 pub mod filter_sql;
 pub mod metricql;
 
@@ -40,7 +40,7 @@ fn identifier_re() -> &'static Regex {
 use crate::store::{ManagementStore, StoreError};
 
 // ---------------------------------------------------------------------------
-// MetricLookup — the minimal surface the COMPOSITE validator needs.
+// MetricLookup — the minimal surface the cycle-detection validator needs.
 //
 // Both the PG-backed `ManagementStore` and the in-memory `MetricStore`
 // (`contract_test_support`) implement this so `validate_metric_definition`
@@ -56,9 +56,19 @@ pub trait MetricLookup: Send + Sync {
 
     /// Walk a COMPOSITE row and return its direct operand `metric_id`s in
     /// declaration order. Implementations should return `StoreError::NotFound`
-    /// when the metric does not exist (the cycle detector treats that as the
-    /// "not-yet-inserted root" case and skips the lookup).
+    /// when the metric does not exist. For non-COMPOSITE types, returns
+    /// `Ok(vec![])`.
     async fn get_composite_operands(&self, metric_id: &str) -> Result<Vec<String>, StoreError>;
+
+    /// Return the parsed `@metric_ref` ids from a stored METRICQL metric's
+    /// expression. Returns `StoreError::NotFound` if the metric does not exist.
+    /// Returns `Ok(vec![])` for non-METRICQL types.
+    async fn get_metricql_refs(&self, metric_id: &str) -> Result<Vec<String>, StoreError>;
+
+    /// Cheap metric-type lookup so the cycle dispatcher can pick the right
+    /// neighbor source without speculatively calling both getters.
+    /// Returns `StoreError::NotFound` if the metric does not exist.
+    async fn get_metric_type(&self, metric_id: &str) -> Result<MetricType, StoreError>;
 }
 
 #[tonic::async_trait]
@@ -69,6 +79,14 @@ impl MetricLookup for ManagementStore {
 
     async fn get_composite_operands(&self, metric_id: &str) -> Result<Vec<String>, StoreError> {
         ManagementStore::get_composite_operands(self, metric_id).await
+    }
+
+    async fn get_metricql_refs(&self, metric_id: &str) -> Result<Vec<String>, StoreError> {
+        ManagementStore::get_metricql_refs(self, metric_id).await
+    }
+
+    async fn get_metric_type(&self, metric_id: &str) -> Result<MetricType, StoreError> {
+        ManagementStore::get_metric_type(self, metric_id).await
     }
 }
 
@@ -636,13 +654,13 @@ async fn validate_composite<L: MetricLookup + ?Sized>(
 
     // Cycle + depth cap.
     let owned_ids: Vec<String> = cfg.operands.iter().map(|o| o.metric_id.clone()).collect();
-    composite_cycle::check_no_cycles(this_metric_id, &owned_ids, lookup, DEFAULT_DEPTH_CAP).await?;
+    cycle::check_no_cycles(this_metric_id, &owned_ids, lookup, DEFAULT_DEPTH_CAP).await?;
 
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// METRICQL validator (ADR-026 Phase 2, A7)
+// METRICQL validator (ADR-026 Phase 2, A7 + A8)
 // ---------------------------------------------------------------------------
 //
 // Rules enforced here:
@@ -652,13 +670,10 @@ async fn validate_composite<L: MetricLookup + ?Sized>(
 //     `metricql::validate_metricql`.
 //   * Every `@metric_ref` in the expression must exist in the store (single
 //     round trip via `exists_all_metrics`).
-//   * No reference cycle — uses the existing `composite_cycle::check_no_cycles`
-//     with the parsed refs as direct_operands.
-//
-// NOTE: METRICQL → METRICQL cycles are partially detected: the DFS descends
-// into neighbors returned by `get_composite_operands`, which currently returns
-// COMPOSITE operands only. Pure METRICQL → METRICQL chains are not fully
-// detected until A8 generalizes neighbor expansion. Flagged as a follow-up.
+//   * No reference cycle — uses `cycle::check_no_cycles` with the parsed refs
+//     as direct_operands. A8 generalized neighbor expansion dispatches on
+//     metric type, so METRICQL → METRICQL, METRICQL → COMPOSITE, and
+//     COMPOSITE → METRICQL chains are all fully detected.
 
 #[allow(clippy::result_large_err)]
 async fn validate_metricql_arm<L: MetricLookup + ?Sized>(
@@ -697,13 +712,8 @@ async fn validate_metricql_arm<L: MetricLookup + ?Sized>(
             ))));
         }
 
-        // Cycle + depth cap — reuse composite_cycle::check_no_cycles.
-        // A8 will generalize neighbor expansion so that METRICQL → METRICQL
-        // chains are also detected; until then, only METRICQL → COMPOSITE
-        // cycles are caught.
-        // TODO(#436.follow-up): after A8, METRICQL → METRICQL cycle detection
-        // will be handled automatically by the generalized neighbor expansion.
-        composite_cycle::check_no_cycles(this_metric_id, &refs, lookup, DEFAULT_DEPTH_CAP).await?;
+        // Cycle + depth cap — generalized DFS dispatches on metric type (A8).
+        cycle::check_no_cycles(this_metric_id, &refs, lookup, DEFAULT_DEPTH_CAP).await?;
     }
 
     Ok(())
@@ -927,6 +937,27 @@ mod tests {
                 .get(metric_id)
                 .cloned()
                 .ok_or_else(|| StoreError::NotFound(metric_id.to_string()))
+        }
+
+        async fn get_metricql_refs(&self, _metric_id: &str) -> Result<Vec<String>, StoreError> {
+            // MockLookup has no type awareness — treat all nodes as COMPOSITE
+            // (operands via graph). METRICQL-typed neighbor expansion is tested
+            // via GraphLookup in cycle.rs.
+            Ok(vec![])
+        }
+
+        async fn get_metric_type(
+            &self,
+            metric_id: &str,
+        ) -> Result<MetricType, StoreError> {
+            if self.graph.contains_key(metric_id) {
+                // MockLookup is used for COMPOSITE-flavoured validator tests;
+                // advertise all present nodes as COMPOSITE so the DFS calls
+                // get_composite_operands when descending (matching A7 test expectations).
+                Ok(MetricType::Composite)
+            } else {
+                Err(StoreError::NotFound(metric_id.to_string()))
+            }
         }
     }
 
