@@ -190,6 +190,7 @@ fn metric_type_to_pg_string(t: MetricType) -> &'static str {
         MetricType::FilteredMean => "FILTERED_MEAN",
         MetricType::Composite => "COMPOSITE",
         MetricType::WindowedCount => "WINDOWED_COUNT",
+        MetricType::Metricql => "METRICQL",
     }
 }
 
