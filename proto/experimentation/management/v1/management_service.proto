@@ -69,6 +69,16 @@ service ExperimentManagementService {
   // Tighter latency budget than CreateMetricDefinition: clients should send
   // a request with a 2s deadline; the handler honors `tonic::Request::deadline()`.
   rpc ValidateMetricql(ValidateMetricqlRequest) returns (ValidateMetricqlResponse);
+
+  // PreviewMetricDefinition (ADR-026 Phase 2 / #436) — proxies M6 → M5 → M3.
+  // M5 forwards the request to M3's CompileMetricqlPreview, returning the
+  // compiled Spark SQL + diagnostics unchanged. Wrapped at M5 for SDK
+  // boundary consistency (all M6 RPCs hit M5; M5 owns experiment-scoped
+  // auth + the metric catalog).
+  //
+  // Honors the incoming deadline: M5 propagates remaining time budget to M3.
+  // Clients should send a request with a 5s deadline.
+  rpc PreviewMetricDefinition(PreviewMetricDefinitionRequest) returns (PreviewMetricDefinitionResponse);
 }
 
 // --- Config Streaming ---
@@ -125,6 +135,26 @@ message ListMetricDefinitionsRequest {
 message ListMetricDefinitionsResponse {
   repeated experimentation.common.v1.MetricDefinition metrics = 1;
   string next_page_token = 2;
+}
+
+// --- PreviewMetricDefinition (ADR-026 Phase 2 / #436) ---
+
+// PreviewMetricDefinition — compile a MetricQL expression to its Spark SQL
+// equivalent via M3's CompileMetricqlPreview. M5 proxies the request,
+// scoping the KnownMetricIDs lookup to the experiment on M3's side.
+// No side effects; safe to call at the editor's preview cadence.
+message PreviewMetricDefinitionRequest {
+  // Scopes the KnownMetricIDs lookup on M3. Required.
+  string experiment_id = 1;
+  // The MetricQL source text to compile. Required.
+  string metricql_expression = 2;
+}
+
+message PreviewMetricDefinitionResponse {
+  // The compiled Spark SQL. Empty when diagnostics is non-empty.
+  string compiled_sql = 1;
+  // Parse + semantic diagnostics. Empty when compiled_sql is populated.
+  repeated experimentation.common.v1.MetricqlDiagnostic diagnostics = 2;
 }
 
 // --- ValidateMetricql (ADR-026 Phase 2 / #436) ---

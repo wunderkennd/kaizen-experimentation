@@ -25,6 +25,7 @@ use experimentation_proto::experimentation::management::v1::{
     GetMetricDefinitionRequest, GetSurrogateCalibrationRequest, ListExperimentsRequest,
     ListExperimentsResponse, ListMetricDefinitionsRequest, ListMetricDefinitionsResponse,
     ListSurrogateModelsRequest, ListSurrogateModelsResponse, PauseExperimentRequest,
+    PreviewMetricDefinitionRequest, PreviewMetricDefinitionResponse,
     ResumeExperimentRequest, StartExperimentRequest, StreamConfigUpdatesRequest,
     GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
     TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
@@ -730,5 +731,32 @@ impl ExperimentManagementService for ManagementServiceHandler {
                 referenced_metric_ids: vec![],
             })),
         }
+    }
+
+    /// Contract test stub for PreviewMetricDefinition.
+    ///
+    /// The in-memory handler has no M3 client — this stub returns
+    /// UNIMPLEMENTED so that contract tests that exercise the *proxy path*
+    /// use the real production handler pointed at a mock M3 server
+    /// (see `tests/contract_preview_test.rs`). Tests that only need to
+    /// verify field validation pass through the production handler directly.
+    async fn preview_metric_definition(
+        &self,
+        request: Request<PreviewMetricDefinitionRequest>,
+    ) -> Result<Response<PreviewMetricDefinitionResponse>, Status> {
+        let req = request.into_inner();
+        // Mirror the production handler's input validation so wire-format
+        // contract tests can exercise the INVALID_ARGUMENT paths without M3.
+        if req.experiment_id.trim().is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+        if req.metricql_expression.trim().is_empty() {
+            return Err(Status::invalid_argument("metricql_expression is required"));
+        }
+        // Proxy path requires a real M3 client; not available in the in-memory impl.
+        Err(Status::unimplemented(
+            "PreviewMetricDefinition proxy not available in contract_test_support handler; \
+             use the production ManagementServiceHandler with a mock M3 server",
+        ))
     }
 }

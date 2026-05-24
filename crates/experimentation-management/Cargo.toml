@@ -38,5 +38,7 @@ regex = "1.12"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 proptest = { workspace = true }
 tokio-test = { workspace = true }
+tokio-stream = { workspace = true, features = ["net"] }
 prost = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }

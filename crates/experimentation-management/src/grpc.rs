@@ -40,9 +40,14 @@ use experimentation_proto::experimentation::management::v1::{
     GetSurrogateCalibrationRequest, ListExperimentsRequest, ListExperimentsResponse,
     ListMetricDefinitionsRequest, ListMetricDefinitionsResponse, ListSurrogateModelsRequest,
     ListSurrogateModelsResponse, PauseExperimentRequest,
-    PortfolioStats as ProtoPortfolioStats, ResumeExperimentRequest, StartExperimentRequest,
+    PortfolioStats as ProtoPortfolioStats, PreviewMetricDefinitionRequest,
+    PreviewMetricDefinitionResponse, ResumeExperimentRequest, StartExperimentRequest,
     StreamConfigUpdatesRequest, TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
     ValidateMetricqlRequest, ValidateMetricqlResponse,
+};
+use experimentation_proto::experimentation::metrics::v1::{
+    metric_computation_service_client::MetricComputationServiceClient,
+    CompileMetricqlPreviewRequest,
 };
 
 use crate::bucket_reuse;
@@ -61,15 +66,33 @@ pub struct SharedState {
     pub store: Arc<ManagementStore>,
     pub config_tx: broadcast::Sender<ConfigUpdateEvent>,
     pub version: Arc<AtomicI64>,
+    /// Cached gRPC client for M3 MetricComputationService.
+    /// Channel is lazily-connected (connect_lazy) — no TCP until first RPC.
+    /// Clone is cheap: Channel is Arc-counted internally.
+    pub metrics_client: MetricComputationServiceClient<tonic::transport::Channel>,
 }
 
 impl SharedState {
     pub fn new(store: ManagementStore) -> Self {
+        // Build a lazy channel to localhost:50056 as the default.
+        // The production path calls new_with_metrics_addr from serve().
+        let channel = tonic::transport::Endpoint::from_static("http://localhost:50056")
+            .connect_lazy();
+        Self::new_with_channel(store, MetricComputationServiceClient::new(channel))
+    }
+
+    /// Construct with a caller-supplied metrics client. Used by serve() (production)
+    /// and by tests (mock / lazily-connected channel to a test port).
+    pub fn new_with_channel(
+        store: ManagementStore,
+        metrics_client: MetricComputationServiceClient<tonic::transport::Channel>,
+    ) -> Self {
         let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
         Self {
             store: Arc::new(store),
             config_tx: tx,
             version: Arc::new(AtomicI64::new(1)),
+            metrics_client,
         }
     }
 
@@ -1382,6 +1405,57 @@ impl ExperimentManagementService for ManagementServiceHandler {
 
         Ok(Response::new(response))
     }
+
+    // --- PreviewMetricDefinition (ADR-026 Phase 2 / #436) ---
+
+    async fn preview_metric_definition(
+        &self,
+        request: Request<PreviewMetricDefinitionRequest>,
+    ) -> Result<Response<PreviewMetricDefinitionResponse>, Status> {
+        // Extract the grpc-timeout header (if present) before consuming the
+        // request.  Tonic 0.12 does not expose a `deadline()` helper; the
+        // remaining budget is encoded in the `grpc-timeout` metadata key.
+        // We propagate it verbatim to M3 so M3 also gives up when M6 gives up.
+        let grpc_timeout = request
+            .metadata()
+            .get("grpc-timeout")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_owned());
+
+        let req = request.into_inner();
+
+        if req.experiment_id.trim().is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+        if req.metricql_expression.trim().is_empty() {
+            return Err(Status::invalid_argument("metricql_expression is required"));
+        }
+
+        let m3_req = CompileMetricqlPreviewRequest {
+            experiment_id: req.experiment_id.clone(),
+            metricql_expression: req.metricql_expression.clone(),
+        };
+
+        let mut outbound = Request::new(m3_req);
+
+        // Propagate the caller's deadline to M3 so M3 also respects the budget.
+        // If no grpc-timeout was provided by the caller, apply a 5s default so
+        // the preview call never hangs indefinitely.
+        let timeout = grpc_timeout
+            .and_then(|t| parse_grpc_timeout(&t))
+            .unwrap_or(std::time::Duration::from_secs(5));
+        outbound.set_timeout(timeout);
+
+        // Clone is cheap — Channel is Arc-counted internally.
+        let mut client = self.state.metrics_client.clone();
+        let m3_resp = client.compile_metricql_preview(outbound).await?;
+
+        let inner = m3_resp.into_inner();
+        Ok(Response::new(PreviewMetricDefinitionResponse {
+            compiled_sql: inner.compiled_sql,
+            diagnostics: inner.diagnostics,
+        }))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1439,7 +1513,16 @@ pub async fn serve(config: &crate::config::ManagementConfig, store: ManagementSt
         .parse()
         .map_err(|e| format!("invalid gRPC address '{}': {e}", config.grpc_addr))?;
 
-    let state = SharedState::new(store);
+    // Build a lazy channel to M3. connect_lazy() does NOT establish TCP until
+    // the first RPC — no startup latency or failure if M3 isn't up yet.
+    let metrics_endpoint = tonic::transport::Endpoint::from_shared(config.metrics_addr.clone())
+        .map_err(|e| format!("invalid METRICS_ADDR '{}': {e}", config.metrics_addr))?
+        .connect_timeout(std::time::Duration::from_secs(2))
+        .timeout(std::time::Duration::from_secs(5));
+    let metrics_channel = metrics_endpoint.connect_lazy();
+    let metrics_client = MetricComputationServiceClient::new(metrics_channel);
+
+    let state = SharedState::new_with_channel(store, metrics_client);
     let handler = ManagementServiceHandler::new(state);
     let svc = ExperimentManagementServiceServer::new(handler);
 
@@ -1529,6 +1612,28 @@ async fn get_layer_total_buckets(pool: &sqlx::postgres::PgPool, layer_id: Uuid) 
     .map_err(|_| ())?;
 
     row.map(|(total,)| total).ok_or(())
+}
+
+/// Parse a `grpc-timeout` header value (e.g. "5000m", "2S", "1H") into a `Duration`.
+///
+/// The gRPC wire format: an ASCII decimal integer followed by a unit suffix:
+///   H = hours, M = minutes, S = seconds, m = milliseconds,
+///   u = microseconds, n = nanoseconds.
+/// Ref: https://grpc.io/docs/what-is-grpc/core-concepts/ (grpc-timeout header).
+///
+/// Returns `None` if the value cannot be parsed (caller falls back to the default).
+fn parse_grpc_timeout(value: &str) -> Option<std::time::Duration> {
+    let (digits, unit) = value.split_at(value.len().saturating_sub(1));
+    let n: u64 = digits.parse().ok()?;
+    match unit {
+        "H" => Some(std::time::Duration::from_secs(n * 3600)),
+        "M" => Some(std::time::Duration::from_secs(n * 60)),
+        "S" => Some(std::time::Duration::from_secs(n)),
+        "m" => Some(std::time::Duration::from_millis(n)),
+        "u" => Some(std::time::Duration::from_micros(n)),
+        "n" => Some(std::time::Duration::from_nanos(n)),
+        _ => None,
+    }
 }
 
 /// Extract guardrail metric IDs from the type_config JSONB column.
