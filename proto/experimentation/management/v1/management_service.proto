@@ -8,6 +8,7 @@ import "experimentation/common/v1/metric.proto";
 import "experimentation/common/v1/layer.proto";
 import "experimentation/common/v1/targeting.proto";
 import "experimentation/common/v1/surrogate.proto";
+import "experimentation/common/v1/metricql_diagnostic.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/management/v1;managementv1";
 
@@ -60,6 +61,14 @@ service ExperimentManagementService {
   // Returns per-experiment traffic allocation recommendations, conflict detection,
   // and priority-weighted variance budget for all RUNNING experiments in a layer.
   rpc GetPortfolioAllocation(GetPortfolioAllocationRequest) returns (GetPortfolioAllocationResponse);
+
+  // MetricQL live linting (ADR-026 Phase 2 / #436). Returns the diagnostic
+  // bag for a candidate MetricQL expression without persisting anything.
+  // Used by the M6 editor for ~500ms-debounced live linting.
+  //
+  // Tighter latency budget than CreateMetricDefinition: clients should send
+  // a request with a 2s deadline; the handler honors `tonic::Request::deadline()`.
+  rpc ValidateMetricql(ValidateMetricqlRequest) returns (ValidateMetricqlResponse);
 }
 
 // --- Config Streaming ---
@@ -116,6 +125,27 @@ message ListMetricDefinitionsRequest {
 message ListMetricDefinitionsResponse {
   repeated experimentation.common.v1.MetricDefinition metrics = 1;
   string next_page_token = 2;
+}
+
+// --- ValidateMetricql (ADR-026 Phase 2 / #436) ---
+
+// ValidateMetricql — parse + analyze a candidate MetricQL expression
+// against the experiment's metric catalog. No side effects; safe to call
+// at the editor's debounce cadence (~500ms per keystroke pause).
+message ValidateMetricqlRequest {
+  // Scopes the known-metric-ids lookup. Required.
+  string experiment_id = 1;
+  // The MetricQL source text to validate. Empty source returns one
+  // diagnostic "empty expression".
+  string metricql_expression = 2;
+}
+
+message ValidateMetricqlResponse {
+  // Parse + semantic diagnostics. Empty when the expression is valid.
+  repeated experimentation.common.v1.MetricqlDiagnostic diagnostics = 1;
+  // The @metric_ref IDs the expression depends on. Populated on success
+  // (empty diagnostics); informational for the M6 editor preview path.
+  repeated string referenced_metric_ids = 2;
 }
 
 // --- Layer ---

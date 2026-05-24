@@ -28,6 +28,7 @@ use experimentation_proto::experimentation::management::v1::{
     ResumeExperimentRequest, StartExperimentRequest, StreamConfigUpdatesRequest,
     GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
     TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
+    ValidateMetricqlRequest, ValidateMetricqlResponse,
 };
 
 // ---------------------------------------------------------------------------
@@ -683,5 +684,51 @@ impl ExperimentManagementService for ManagementServiceHandler {
         _request: Request<GetPortfolioAllocationRequest>,
     ) -> Result<Response<GetPortfolioAllocationResponse>, Status> {
         Err(Status::unimplemented("GetPortfolioAllocation not yet implemented in Rust M5"))
+    }
+
+    async fn validate_metricql(
+        &self,
+        request: Request<ValidateMetricqlRequest>,
+    ) -> Result<Response<ValidateMetricqlResponse>, Status> {
+        let req = request.into_inner();
+        if req.experiment_id.trim().is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+        // Contract test stub: delegate to the validator directly (no DB needed).
+        use crate::validators::metricql::{validate_metricql as vm, ValidateContext};
+        if req.metricql_expression.trim().is_empty() {
+            return Ok(Response::new(ValidateMetricqlResponse {
+                diagnostics: vec![
+                    experimentation_proto::experimentation::common::v1::MetricqlDiagnostic {
+                        severity: experimentation_proto::experimentation::common::v1::metricql_diagnostic::Severity::Error as i32,
+                        message: "empty MetricQL expression".to_string(),
+                        span: Some(experimentation_proto::experimentation::common::v1::metricql_diagnostic::Span {
+                            start_offset: 0,
+                            end_offset: 0,
+                            line: 1,
+                            column: 1,
+                        }),
+                    },
+                ],
+                referenced_metric_ids: vec![],
+            }));
+        }
+        let ctx = ValidateContext { known_metric_ids: None };
+        match vm(&req.metricql_expression, &ctx) {
+            Ok(refs) => Ok(Response::new(ValidateMetricqlResponse {
+                diagnostics: vec![],
+                referenced_metric_ids: refs,
+            })),
+            Err(_diags) => Ok(Response::new(ValidateMetricqlResponse {
+                diagnostics: vec![
+                    experimentation_proto::experimentation::common::v1::MetricqlDiagnostic {
+                        severity: experimentation_proto::experimentation::common::v1::metricql_diagnostic::Severity::Error as i32,
+                        message: "validation failed".to_string(),
+                        span: None,
+                    },
+                ],
+                referenced_metric_ids: vec![],
+            })),
+        }
     }
 }
