@@ -1,0 +1,135 @@
+// MetricQL Lezer grammar for the M6 CodeMirror 6 editor.
+//
+// Mirrors the Go recursive-descent parser in
+//   services/metrics/internal/metricql/parser.go
+// and the EBNF locked in ADR-026 Phase 2 (#559 Lock 1).
+//
+// Keyword disambiguation: all identifiers lex as Identifier; @specialize then
+// reclassifies reserved words into their own node types.  The kw<word> helper
+// produces an inline specialization in each rule where keywords appear.
+//
+// Lock 1 invariant: Number does NOT include a leading sign.  The '-' in
+// "-@a" and "-1" is always a separate Minus token consumed by the Unary rule.
+
+@top Expression {
+  aggregation | composite
+}
+
+// ─── Keyword helper ───────────────────────────────────────────────────────────
+// Parameterized rule — kw<"mean"> expands to @specialize[@name=mean]<Identifier, "mean">.
+// This is the idiomatic Lezer pattern for keyword disambiguation.
+kw<word> { @specialize[@name={word}]<Identifier, word> }
+
+// ─── Aggregation ──────────────────────────────────────────────────────────────
+
+aggregation {
+  kw<"percentile"> "(" Number ")" "(" Source ")" filter? window?
+  | AggFunc "(" Source ")" filter? window?
+}
+
+// AggFunc matches any of the five non-percentile aggregate function names.
+// We use kw<> specializations grouped into an inline rule so the parse tree
+// shows AggFunc as the node name for all of them.
+AggFunc {
+  kw<"mean"> | kw<"sum"> | kw<"count"> | kw<"count_distinct"> | kw<"proportion">
+}
+
+// ─── Composite expression (with left-assoc precedence) ────────────────────────
+
+composite {
+  term (("+" | "-") term)*
+}
+
+term {
+  unary (("*" | "/") unary)*
+}
+
+unary {
+  "-" factor
+  | factor
+}
+
+factor {
+  MetricRef
+  | Number
+  | "(" composite ")"
+  | ratio
+}
+
+// ─── Terminals used in aggregation / composite ────────────────────────────────
+
+MetricRef { "@" Identifier }
+
+ratio {
+  kw<"ratio"> "(" MetricRef "," MetricRef ")"
+}
+
+// ─── Source (event-type reference inside an aggregation) ──────────────────────
+
+Source {
+  Identifier ("." Identifier)?
+}
+
+// ─── Filter clause ────────────────────────────────────────────────────────────
+
+filter {
+  kw<"where"> predicate (kw<"and"> predicate)*
+}
+
+predicate {
+  FieldRef operator value
+}
+
+// field_ref: identifier ( '.' identifier )?
+FieldRef {
+  Identifier ("." Identifier)?
+}
+
+operator {
+  "=" | "!=" | "<" | "<=" | ">" | ">=" | kw<"in">
+}
+
+// value: String | Number | '[' value (',' value)* ']'  — non-empty list
+// The grammar enforces at least one element (value before the "," repetition).
+value {
+  String
+  | Number
+  | "[" value ("," value)* "]"
+}
+
+// ─── Window clause ────────────────────────────────────────────────────────────
+
+window {
+  kw<"within"> Number timeUnit kw<"of"> kw<"exposure">
+}
+
+timeUnit {
+  kw<"hours"> | kw<"days">
+}
+
+// ─── Tokens ───────────────────────────────────────────────────────────────────
+
+@tokens {
+  // Identifier: [a-z_][a-z0-9_]*  (lowercase only, per Lock 1).
+  // All keyword forms lex as Identifier and are specialized by kw<> above.
+  // Uppercase is excluded so "count(Event)" produces a lex-level error node.
+  Identifier { $[a-z_] $[a-z0-9_]* }
+
+  // Number: unsigned [0-9]+ ('.' [0-9]+)?  (no leading sign, per Lock 1).
+  // A trailing '.' is NOT part of Number; it's a field-access dot.
+  Number { @digit+ ("." @digit+)? }
+
+  // String: single-quoted, no escape sequences (Lock 1 v1 constraint).
+  String { "'" ![']* "'" }
+
+  space { @whitespace+ }
+
+  // Punctuation
+  "(" ")" "[" "]" "," "." "@"
+  "+" "-" "*" "/"
+  "=" "!=" "<" "<=" ">" ">="
+}
+
+// ─── Skip whitespace everywhere ───────────────────────────────────────────────
+
+@skip { space }
