@@ -196,6 +196,44 @@ async function callRpc<Req, Res>(
   throw lastError;
 }
 
+/**
+ * Like callRpc but accepts an external AbortSignal (for cancel-in-flight).
+ *
+ * The caller (linter) manages both the debounce timer and the AbortController;
+ * we just honour the signal on the fetch call. Note: this bypasses the
+ * Promise.race timeout pattern used by callRpc because the linter already
+ * sets a manual timeout on the same controller.
+ */
+async function callRpcWithSignal<Req, Res>(
+  baseUrl: string,
+  service: string,
+  method: string,
+  request: Req,
+  options: Omit<CallRpcOptions, 'timeoutMs'>,
+  signal: AbortSignal,
+): Promise<Res> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (_authEmail) headers['X-User-Email'] = _authEmail;
+  if (_authRole) headers['X-User-Role'] = _authRole;
+
+  const res = await fetch(`${baseUrl}/${service}/${method}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+    signal,
+  });
+
+  if (!res.ok) {
+    throw new RpcError(await parseRpcError(res, method), res.status);
+  }
+
+  if (options.clearCacheOnSuccess) {
+    _cache.clear();
+  }
+
+  return res.json() as Promise<Res>;
+}
+
 /** Strip proto enum prefix if present. e.g. "EXPERIMENT_STATE_DRAFT" → "DRAFT" */
 function stripEnumPrefix(value: string, prefix: string): string {
   return value.startsWith(prefix) ? value.slice(prefix.length) : value;
@@ -1043,4 +1081,69 @@ export async function getSyntheticControlResult(experimentId: string): Promise<S
   return callRpc<{ experimentId: string }, SyntheticControlResult>(
     ANALYSIS_URL, ANALYSIS_SVC, 'GetSyntheticControlResult', { experimentId },
   );
+}
+
+// --- ADR-026 Phase 2: MetricQL live validation (A9 / B4) ---
+
+/**
+ * Wire-format span from ValidateMetricql RPC (A9).
+ * Offsets are byte offsets into the MetricQL expression string.
+ */
+export interface MetricqlDiagnosticSpan {
+  startOffset: number;
+  endOffset: number;
+  line: number;
+  column: number;
+}
+
+/**
+ * Wire-format diagnostic from ValidateMetricql RPC.
+ * severity: 0 = unspecified, 1 = error, 2 = warning.
+ */
+export interface MetricqlDiagnosticEntry {
+  severity: number;
+  message: string;
+  span: MetricqlDiagnosticSpan | null;
+}
+
+/** Wire-format response from ValidateMetricql RPC (A9, M5 ExperimentManagementService). */
+export interface ValidateMetricqlRpcResponse {
+  diagnostics: MetricqlDiagnosticEntry[];
+  referencedMetricIds: string[];
+}
+
+/**
+ * Call the A9 ValidateMetricql RPC (M5 ExperimentManagementService).
+ *
+ * - skipCache: true — every keystroke yields a unique expression, cache is useless.
+ * - retries: 0 — abort-on-retype makes retries counterproductive.
+ * - signal: passed through for AbortController cancel-in-flight from the linter.
+ *
+ * Returns null when the request was aborted (cancel-in-flight or timeout); the
+ * linter layer treats null as "no update to markers right now".
+ */
+export async function validateMetricql(
+  args: { experimentId: string; metricqlExpression: string },
+  options: { signal: AbortSignal },
+): Promise<ValidateMetricqlRpcResponse | null> {
+  try {
+    const result = await callRpcWithSignal<
+      { experimentId: string; metricqlExpression: string },
+      ValidateMetricqlRpcResponse
+    >(
+      MGMT_URL,
+      MGMT_SVC,
+      'ValidateMetricql',
+      { experimentId: args.experimentId, metricqlExpression: args.metricqlExpression },
+      { skipCache: true, retries: 0 },
+      options.signal,
+    );
+    return result;
+  } catch (err) {
+    // AbortError covers both cancel-in-flight (user typed) and timeout.
+    if ((err as DOMException).name === 'AbortError' || options.signal.aborted) {
+      return null;
+    }
+    throw err;
+  }
 }

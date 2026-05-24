@@ -34,6 +34,7 @@ import {
 } from '@codemirror/language';
 import { metricql } from './language';
 import { metricqlAutocomplete } from './autocomplete';
+import { metricqlLinter } from './diagnostics';
 
 export interface MetricqlEditorProps {
   value: string;
@@ -60,8 +61,7 @@ export function MetricqlEditor({
   ariaLabel,
   maxLength = 4096,
   disabled,
-  // experimentId is reserved for B4 (linter); not consumed in B3.
-  experimentId: _experimentId,
+  experimentId,
   knownMetricIds,
 }: MetricqlEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,6 +80,13 @@ export function MetricqlEditor({
   useEffect(() => {
     knownMetricIdsRef.current = knownMetricIds ?? [];
   }, [knownMetricIds]);
+  // experimentId is captured at mount for the linter. If B6 changes the
+  // experimentId, it will remount the editor (key prop change), so this ref
+  // is always fresh within a mount lifetime.
+  const experimentIdRef = useRef(experimentId);
+  useEffect(() => {
+    experimentIdRef.current = experimentId;
+  }, [experimentId]);
 
   // Mount once — create the EditorView and attach it to the container div.
   useEffect(() => {
@@ -98,6 +105,17 @@ export function MetricqlEditor({
         // B3: @metric_ref autocomplete. Always included; when knownMetricIds
         // is not provided the ref starts empty and the menu simply never opens.
         metricqlAutocomplete({ getKnownMetricIds: () => knownMetricIdsRef.current }),
+        // B4: inline MetricQL diagnostics. Only active when an experimentId is
+        // provided — the ValidateMetricql RPC requires one to resolve @metric_ref
+        // references in context. When absent, no linter is registered and the
+        // editor renders without error underlines (safe for standalone usage).
+        ...(experimentIdRef.current
+          ? [metricqlLinter({
+              experimentId: experimentIdRef.current,
+              debounceMs: 500,
+              timeoutMs: 2000,
+            })]
+          : []),
         EditorState.transactionFilter.of((tr) => {
           // Multi-line is ALLOWED (unlike sql-editor.tsx).
           // Reject only transactions that would exceed maxLength.
