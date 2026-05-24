@@ -13,6 +13,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/state": "^6.6.0",

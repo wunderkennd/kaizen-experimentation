@@ -33,6 +33,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { metricql } from './language';
+import { metricqlAutocomplete } from './autocomplete';
 
 export interface MetricqlEditorProps {
   value: string;
@@ -59,10 +60,9 @@ export function MetricqlEditor({
   ariaLabel,
   maxLength = 4096,
   disabled,
-  // experimentId and knownMetricIds are intentionally unused in B2.
-  // B3 (autocomplete) and B4 (linter) will consume them respectively.
+  // experimentId is reserved for B4 (linter); not consumed in B3.
   experimentId: _experimentId,
-  knownMetricIds: _knownMetricIds,
+  knownMetricIds,
 }: MetricqlEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -73,6 +73,13 @@ export function MetricqlEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+  // Stable ref for knownMetricIds — the autocomplete source reads this on every
+  // trigger, so optimistic cache updates (just-created metrics) are visible
+  // without restarting the editor.
+  const knownMetricIdsRef = useRef<string[]>(knownMetricIds ?? []);
+  useEffect(() => {
+    knownMetricIdsRef.current = knownMetricIds ?? [];
+  }, [knownMetricIds]);
 
   // Mount once — create the EditorView and attach it to the container div.
   useEffect(() => {
@@ -88,6 +95,9 @@ export function MetricqlEditor({
         syntaxHighlighting(defaultHighlightStyle),
         keymap.of([...defaultKeymap, indentWithTab]),
         EditorView.lineWrapping,
+        // B3: @metric_ref autocomplete. Always included; when knownMetricIds
+        // is not provided the ref starts empty and the menu simply never opens.
+        metricqlAutocomplete({ getKnownMetricIds: () => knownMetricIdsRef.current }),
         EditorState.transactionFilter.of((tr) => {
           // Multi-line is ALLOWED (unlike sql-editor.tsx).
           // Reject only transactions that would exceed maxLength.
@@ -110,8 +120,8 @@ export function MetricqlEditor({
       viewRef.current?.destroy();
       viewRef.current = null;
     };
-    // Mount-once: external value/disabled changes are handled in the sync
-    // effects below.  Re-creating the editor on every change would lose
+    // Mount-once: external value/disabled/knownMetricIds changes are handled in
+    // the sync effects below.  Re-creating the editor on every change would lose
     // selection state and is expensive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
