@@ -6,7 +6,7 @@ import "experimentation/common/v1/metricql_diagnostic.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/org/experimentation/gen/go/experimentation/metrics/v1;metricsv1";
+option go_package = "github.com/org/experimentation/gen/go/metrics/v1;metricsv1";
 
 // MetricComputationService is implemented in Go (M3).
 // Orchestrates Spark SQL jobs. All SQL logged to query_log table.
