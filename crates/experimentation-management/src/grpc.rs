@@ -1625,9 +1625,14 @@ async fn get_layer_total_buckets(pool: &sqlx::postgres::PgPool, layer_id: Uuid) 
 fn parse_grpc_timeout(value: &str) -> Option<std::time::Duration> {
     let (digits, unit) = value.split_at(value.len().saturating_sub(1));
     let n: u64 = digits.parse().ok()?;
+    // checked_mul on H/M because the value comes from request metadata
+    // (an untrusted client could send `99999999999999H`); unchecked u64
+    // multiplication panics in debug builds and wraps in release builds,
+    // either of which is worse than returning None (caller falls back
+    // to the 5s default). Devin PR #570 round-1 finding.
     match unit {
-        "H" => Some(std::time::Duration::from_secs(n * 3600)),
-        "M" => Some(std::time::Duration::from_secs(n * 60)),
+        "H" => n.checked_mul(3600).map(std::time::Duration::from_secs),
+        "M" => n.checked_mul(60).map(std::time::Duration::from_secs),
         "S" => Some(std::time::Duration::from_secs(n)),
         "m" => Some(std::time::Duration::from_millis(n)),
         "u" => Some(std::time::Duration::from_micros(n)),

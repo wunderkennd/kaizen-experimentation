@@ -149,6 +149,16 @@ export function MetricqlPreview({
           errorMessage: err instanceof Error ? err.message : 'Preview failed',
         });
       });
+
+    // Cleanup: when deps change or the component unmounts, abort the in-flight
+    // request and clear the timeout. Without this, closing the pane (isOpen→false)
+    // would leave the fetch + timer running; the .then handler would eventually
+    // call setState with stale results, flashing old SQL on the next pane open.
+    // Devin PR #570 round-1 finding.
+    return () => {
+      clearTimeout(timer);
+      ctl.abort();
+    };
   }, [isOpen, experimentId, metricqlExpression, hasErrors, previewFn]);
 
   // ── Cancel-on-unmount ────────────────────────────────────────────────────────
