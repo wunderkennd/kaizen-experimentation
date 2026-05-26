@@ -391,8 +391,8 @@ describe('Portfolio Dashboard — Sprint 5.4 charts', () => {
     render(<PortfolioDashboard />);
     // Should still render the page with the allocation data
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Portfolio Dashboard', level: 1 })).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-table')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('portfolio-table')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Portfolio Dashboard', level: 1 })).toBeInTheDocument();
   });
 });
