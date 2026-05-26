@@ -339,19 +339,6 @@ function MetricBrowserContent() {
     return result;
   }, [metrics, typeFilter, search]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
-        <span className="sr-only">Loading</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <RetryableError message={error} onRetry={fetchData} context="metric definitions" />;
-  }
-
   const isEmpty = metrics.length === 0;
 
   return (
@@ -364,32 +351,41 @@ function MetricBrowserContent() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Metric Definitions</h1>
-          {!isEmpty && (
+          {!loading && !error && !isEmpty && (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700" data-testid="metric-count">
               {filtered.length}
             </span>
           )}
         </div>
-        {canAtLeast('experimenter') ? (
-          <Link
-            href="/metrics/new"
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
-            data-testid="new-metric-button"
-          >
-            New Metric
-          </Link>
-        ) : (
-          <span
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
-            title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
-            data-testid="new-metric-disabled"
-          >
-            New Metric
-          </span>
+        {!loading && !error && (
+          canAtLeast('experimenter') ? (
+            <Link
+              href="/metrics/new"
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+              data-testid="new-metric-button"
+            >
+              New Metric
+            </Link>
+          ) : (
+            <span
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+              title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
+              data-testid="new-metric-disabled"
+            >
+              New Metric
+            </span>
+          )
         )}
       </div>
 
-      {isEmpty ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+          <span className="sr-only">Loading</span>
+        </div>
+      ) : error ? (
+        <RetryableError message={error} onRetry={fetchData} context="metric definitions" />
+      ) : isEmpty ? (
         <div className="py-12 text-center" data-testid="empty-state">
           <p className="text-sm text-gray-500">No metric definitions found.</p>
           {canAtLeast('experimenter') && (

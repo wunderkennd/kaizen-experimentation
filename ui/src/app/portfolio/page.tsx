@@ -104,19 +104,6 @@ export default function PortfolioDashboard() {
     fetchData();
   }, [fetchData]);
 
-  if (loading && !result) {
-    return (
-      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
-        <span className="sr-only">Loading</span>
-      </div>
-    );
-  }
-
-  if (error && !result) {
-    return <RetryableError message={error} onRetry={fetchData} context="portfolio allocation data" />;
-  }
-
   const experiments = result?.experiments ?? [];
 
   return (
@@ -142,20 +129,29 @@ export default function PortfolioDashboard() {
         </Link>
       </div>
 
-      {loading && result && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-gray-500" role="status">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
-          Refreshing…
+      {loading && !result ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+          <span className="sr-only">Loading</span>
         </div>
-      )}
+      ) : error && !result ? (
+        <RetryableError message={error} onRetry={fetchData} context="portfolio allocation data" />
+      ) : (
+        <>
+          {loading && result && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-gray-500" role="status">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
+              Refreshing…
+            </div>
+          )}
 
-      {error && result && (
-        <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-800" role="alert">
-          {error}
-        </div>
-      )}
+          {error && result && (
+            <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-800" role="alert">
+              {error}
+            </div>
+          )}
 
-      <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6">
         <section aria-labelledby="budget-chart-heading">
           <h2 id="budget-chart-heading" className="sr-only">Budget Allocation Chart</h2>
           <BudgetAllocationChart experiments={experiments} />
@@ -203,6 +199,8 @@ export default function PortfolioDashboard() {
         <p className="mt-4 text-xs text-gray-400" data-testid="computed-at">
           Data computed at: {new Date(result.computedAt).toLocaleString()}
         </p>
+      )}
+        </>
       )}
     </div>
   );

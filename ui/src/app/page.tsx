@@ -83,24 +83,43 @@ export default function ExperimentListPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
-        <span className="sr-only">Loading</span>
+  const filtered = filters.applyFilters(experiments);
+
+  return (
+    <div>
+      <Breadcrumb items={[{ label: 'Experiments' }]} />
+
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Experiments</h1>
+        {!loading && !error && experiments.length > 0 && (
+          canCreate ? (
+            <Link
+              href="/experiments/new"
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+              data-testid="new-experiment-link"
+            >
+              New Experiment
+            </Link>
+          ) : (
+            <span
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+              title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
+              data-testid="new-experiment-disabled"
+            >
+              New Experiment
+            </span>
+          )
+        )}
       </div>
-    );
-  }
 
-  if (error) {
-    return <RetryableError message={error} onRetry={fetchData} context="experiments" />;
-  }
-
-  if (experiments.length === 0) {
-    return (
-      <div>
-        <Breadcrumb items={[{ label: 'Experiments' }]} />
-        <h1 className="mb-6 text-2xl font-bold text-gray-900">Experiments</h1>
+      {loading ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
+          <span className="sr-only">Loading</span>
+        </div>
+      ) : error ? (
+        <RetryableError message={error} onRetry={fetchData} context="experiments" />
+      ) : experiments.length === 0 ? (
         <div className="py-12 text-center" data-testid="empty-state">
           <p className="text-sm text-gray-500">No experiments yet.</p>
           {canCreate && (
@@ -115,37 +134,8 @@ export default function ExperimentListPage() {
             </div>
           )}
         </div>
-      </div>
-    );
-  }
-
-  const filtered = filters.applyFilters(experiments);
-
-  return (
-    <div>
-      <Breadcrumb items={[{ label: 'Experiments' }]} />
-
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Experiments</h1>
-        {canCreate ? (
-          <Link
-            href="/experiments/new"
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
-            data-testid="new-experiment-link"
-          >
-            New Experiment
-          </Link>
-        ) : (
-          <span
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
-            title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
-            data-testid="new-experiment-disabled"
-          >
-            New Experiment
-          </span>
-        )}
-      </div>
-
+      ) : (
+        <>
       <ExperimentFiltersToolbar
         filters={filters}
         totalCount={experiments.length}
@@ -211,6 +201,8 @@ export default function ExperimentListPage() {
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
     </div>
   );
