@@ -42,8 +42,9 @@ vi.mock('next/dynamic', () => ({
 
 async function renderAndWait() {
   render(<PortfolioDashboard />);
+  // Wait for the table to appear, confirming data is loaded
   await waitFor(() => {
-    expect(screen.getByRole('heading', { name: 'Portfolio Dashboard', level: 1 })).toBeInTheDocument();
+    expect(screen.getByTestId('portfolio-table')).toBeInTheDocument();
   });
 }
 

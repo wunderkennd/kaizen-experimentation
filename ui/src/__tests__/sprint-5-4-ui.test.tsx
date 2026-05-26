@@ -330,11 +330,13 @@ vi.mock('next/dynamic', () => ({
 import PortfolioDashboard from '@/app/portfolio/page';
 
 describe('Portfolio Dashboard — Sprint 5.4 charts', () => {
-  it('renders page heading', async () => {
+  it('renders page heading and content', async () => {
     render(<PortfolioDashboard />);
+    // Header is immediate, but wait for content to ensure data loaded
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Portfolio Dashboard', level: 1 })).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-table')).toBeInTheDocument();
     });
+    expect(screen.getByRole('heading', { name: 'Portfolio Dashboard', level: 1 })).toBeInTheDocument();
   });
 
   it('renders the budget allocation chart', async () => {
