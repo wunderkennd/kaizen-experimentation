@@ -1927,6 +1927,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sqlparser 0.50.0",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -4814,6 +4815,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a404d0e14905361b918cb8afdb73605e25c1d5029312bd9785142dcb3aa49e"
 dependencies = [
  "log",
+]
+
+[[package]]
+name = "sqlparser"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2e5b515a2bd5168426033e9efbfd05500114833916f1d5c268f938b4ee130ac"
+dependencies = [
+ "log",
+ "serde",
 ]
 
 [[package]]

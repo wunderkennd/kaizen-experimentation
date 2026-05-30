@@ -33,6 +33,7 @@ prost = { workspace = true }
 base64 = { workspace = true }
 rdkafka = { workspace = true }
 regex = "1.12"
+sqlparser = { version = "0.50", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

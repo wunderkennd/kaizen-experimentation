@@ -23,6 +23,7 @@ pub mod config;
 pub mod contract_test_support;
 pub mod grpc;
 pub mod kafka;
+pub mod migration;
 pub mod portfolio;
 pub mod state_machine;
 pub mod store;
