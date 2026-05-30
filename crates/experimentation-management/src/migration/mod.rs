@@ -22,6 +22,10 @@ pub mod tier2;
 
 use experimentation_proto::experimentation::common::v1::MetricDefinition;
 
+use crate::validators::MetricLookup;
+use classifier::ShapeHint;
+use tier1::Tier;
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -49,15 +53,33 @@ pub enum ClassificationResult {
 
 /// Classify a CUSTOM metric and (if possible) produce a translation proposal.
 ///
+/// This function is `async` because Tier 1 translation requires an async
+/// `validate_metric_definition` round-trip (operand existence + cycle detection
+/// for COMPOSITE types).
+///
 /// Returns `Tier3Untranslatable` for anything that doesn't fit a known shape.
 /// The operator-visible report (Task A6) distinguishes:
 ///   - "did not parse" (`parse_error: Some(...)`)
 ///   - "parsed but no matching pattern" (`parse_error: None`, generic reason)
-///   - "matched but failed M5 `validate_metricql` round-trip" (A5 concern)
-pub fn classify_and_translate(
+///   - "matched but failed M5 `validate_metric_definition` round-trip" (Tier 3)
+///
+/// ## Parameters
+///
+/// * `custom_sql` — the raw CUSTOM SQL to classify.
+/// * `original` — the source `MetricDefinition` (CUSTOM type); metadata
+///   fields are copied into proposals.
+/// * `lookup` — a `MetricLookup` for the validation round-trip. For
+///   FILTERED_MEAN and WINDOWED_COUNT, an empty lookup is sufficient.
+///   For COMPOSITE, the lookup must contain the operand metric IDs so
+///   that `validate_composite` passes.
+pub async fn classify_and_translate<L>(
     custom_sql: &str,
-    _original: &MetricDefinition,
-) -> ClassificationResult {
+    original: &MetricDefinition,
+    lookup: &L,
+) -> ClassificationResult
+where
+    L: MetricLookup + ?Sized,
+{
     // Short-circuit: whitespace-only or empty SQL.
     if custom_sql.trim().is_empty() {
         return ClassificationResult::Tier3Untranslatable {
@@ -80,12 +102,42 @@ pub fn classify_and_translate(
     // Step 2: extract a structural shape hint from the AST.
     let shape = classifier::extract_shape(&stmt);
 
-    // Steps 3+: A4 (Tier 1) and A5 (Tier 2) will branch on `shape` here.
-    // Until those tasks land, all parsed SQL still returns Tier 3, but now
-    // with an informative reason instead of the scaffold stub message.
+    // Step 3: for Tier 1 shapes, attempt translation + validation round-trip.
+    if let Some(ref s) = shape {
+        if matches!(
+            s,
+            ShapeHint::FilteredAggregation
+                | ShapeHint::WindowedAggregation
+                | ShapeHint::CompositeArithmetic
+        ) {
+            if let Some(proposal) =
+                tier1::translate(&stmt, s.clone(), original, lookup).await
+            {
+                return match proposal.tier {
+                    Tier::Filtered => ClassificationResult::Tier1Filtered {
+                        proposal: proposal.metric,
+                        reason: proposal.reason,
+                    },
+                    Tier::Composite => ClassificationResult::Tier1Composite {
+                        proposal: proposal.metric,
+                        reason: proposal.reason,
+                    },
+                    Tier::WindowedCount => ClassificationResult::Tier1WindowedCount {
+                        proposal: proposal.metric,
+                        reason: proposal.reason,
+                    },
+                };
+            }
+        }
+    }
+
+    // Step 4 (A5): Tier 2 (METRICQL) translator — not yet implemented.
+    // Falls through to Tier3.
+
+    // Tier 3: classified shape but no translator matched, or shape is None.
     ClassificationResult::Tier3Untranslatable {
         reason: match shape {
-            Some(h) => format!("shape {h:?} recognized but no translator implemented yet"),
+            Some(h) => format!("shape {h:?} recognized but no translator matched"),
             None => "SQL did not match any known translator shape".into(),
         },
         parse_error: None,
@@ -99,6 +151,7 @@ pub fn classify_and_translate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::migration::tier1::tests::EmptyLookup;
 
     fn dummy_custom_metric() -> MetricDefinition {
         MetricDefinition {
@@ -108,9 +161,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn smoke_empty_sql_returns_tier3_with_empty_reason() {
-        let result = classify_and_translate("", &dummy_custom_metric());
+    #[tokio::test]
+    async fn smoke_empty_sql_returns_tier3_with_empty_reason() {
+        let lookup = EmptyLookup;
+        let result = classify_and_translate("", &dummy_custom_metric(), &lookup).await;
         match result {
             ClassificationResult::Tier3Untranslatable { reason, parse_error } => {
                 assert_eq!(reason, "empty SQL", "expected reason 'empty SQL', got: {reason:?}");
@@ -120,12 +174,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn non_empty_sql_returns_tier3_shape_recognized() {
+    #[tokio::test]
+    async fn non_empty_sql_returns_tier3_shape_recognized() {
         // After A3 lands, parsed SQL produces a shape hint but still falls
         // through to Tier3 (A4/A5 translators not yet implemented).
+        // NOTE: after A4 lands, "SELECT AVG(value) FROM events" now classifies
+        // as FilteredAggregation but translate returns None (no event_type in WHERE),
+        // so it still falls through to Tier3.
+        let lookup = EmptyLookup;
         let result =
-            classify_and_translate("SELECT AVG(value) FROM events", &dummy_custom_metric());
+            classify_and_translate("SELECT AVG(value) FROM events", &dummy_custom_metric(), &lookup).await;
         match result {
             ClassificationResult::Tier3Untranslatable { reason, parse_error } => {
                 // Must NOT be the old scaffold stub message.
@@ -138,15 +196,36 @@ mod tests {
                     parse_error.is_none(),
                     "valid SQL must have parse_error = None; got: {parse_error:?}"
                 );
-                // Reason must mention "shape" (recognized) or "no translator"
-                // (not recognized) — either is correct Tier3 post-A3.
-                let ok = reason.contains("shape") || reason.contains("SQL did not match");
+                // Reason must mention "shape" (recognized) or "no translator" or "no match"
+                let ok = reason.contains("shape") || reason.contains("SQL did not match")
+                    || reason.contains("no translator");
                 assert!(
                     ok,
                     "reason must mention shape hint or no-match; got: {reason:?}"
                 );
             }
-            _ => panic!("expected Tier3Untranslatable for unimplemented translators"),
+            _ => panic!("expected Tier3Untranslatable for this input"),
         }
+    }
+
+    #[tokio::test]
+    async fn valid_filtered_mean_sql_returns_tier1_filtered() {
+        let sql = "SELECT me.user_id, AVG(me.duration_ms) AS metric_value \
+                   FROM delta.metric_events me \
+                   INNER JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   WHERE me.event_type = 'video_play' AND me.platform = 'mobile' \
+                   GROUP BY me.user_id";
+        let original = MetricDefinition {
+            metric_id: "test-fm".to_string(),
+            name: "Test FM".to_string(),
+            r#type: experimentation_proto::experimentation::common::v1::MetricType::Custom as i32,
+            ..Default::default()
+        };
+        let lookup = EmptyLookup;
+        let result = classify_and_translate(sql, &original, &lookup).await;
+        assert!(
+            matches!(result, ClassificationResult::Tier1Filtered { .. }),
+            "expected Tier1Filtered"
+        );
     }
 }

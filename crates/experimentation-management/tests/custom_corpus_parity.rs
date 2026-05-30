@@ -17,11 +17,14 @@
 //! The `corpus_loads_and_counts_fixtures` smoke test is **not** ignored — it
 //! runs on every CI pass and guards against accidental corpus truncation.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
 use experimentation_management::migration::classify_and_translate;
-use experimentation_proto::experimentation::common::v1::MetricDefinition;
+use experimentation_management::store::StoreError;
+use experimentation_management::validators::MetricLookup;
+use experimentation_proto::experimentation::common::v1::{MetricDefinition, MetricType};
 
 // ---------------------------------------------------------------------------
 // Fixture schema
@@ -34,6 +37,54 @@ struct Fixture {
     expected_tier: String,
     expected_proposal: Option<serde_json::Value>,
     expected_reason: String,
+}
+
+// ---------------------------------------------------------------------------
+// Local MetricLookup implementations for testing
+// ---------------------------------------------------------------------------
+
+/// Seeded lookup — knows a fixed set of metric IDs as leaves (no operands).
+/// Used for COMPOSITE fixture tests where the validator checks operand existence.
+struct SeedLookup {
+    ids: HashMap<String, ()>,
+}
+
+impl SeedLookup {
+    fn with_ids(ids: &[&str]) -> Self {
+        Self {
+            ids: ids.iter().map(|s| ((*s).to_string(), ())).collect(),
+        }
+    }
+}
+
+#[tonic::async_trait]
+impl MetricLookup for SeedLookup {
+    async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError> {
+        Ok(metric_ids.iter().all(|id| self.ids.contains_key(*id)))
+    }
+
+    async fn get_composite_operands(
+        &self,
+        _metric_id: &str,
+    ) -> Result<Vec<String>, StoreError> {
+        // All seeded metrics are leaves (no sub-operands).
+        Ok(vec![])
+    }
+
+    async fn get_metricql_refs(&self, _metric_id: &str) -> Result<Vec<String>, StoreError> {
+        Ok(vec![])
+    }
+
+    async fn get_metric_type(
+        &self,
+        metric_id: &str,
+    ) -> Result<MetricType, StoreError> {
+        if self.ids.contains_key(metric_id) {
+            Ok(MetricType::FilteredMean) // leaf type; cycle detection won't follow
+        } else {
+            Err(StoreError::NotFound(metric_id.to_string()))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -84,16 +135,43 @@ fn load_corpus() -> Vec<Fixture> {
 /// Build a minimal `MetricDefinition` for driving `classify_and_translate`.
 ///
 /// The original metric is CUSTOM-typed (type = 6). The translator receives the
-/// original definition so it can copy over metadata (metric_id, name, etc.).
-/// For corpus fixtures the metadata fields are intentionally blank — the
-/// translator is responsible for populating them from the SQL parse result.
-fn custom_metric_shell(custom_sql: &str) -> MetricDefinition {
-    use experimentation_proto::experimentation::common::v1::MetricType;
+/// original definition so it can copy metadata (metric_id, name, etc.) into
+/// the proposal. We use `fixture_name` as both metric_id and name so that the
+/// round-trip `validate_metric_definition` call inside `translate` can pass the
+/// common-fields validator (which requires non-empty metric_id and name).
+///
+/// In production, CUSTOM metrics always have non-empty ids/names. Using the
+/// fixture name here mirrors real usage without distorting the translation test.
+fn custom_metric_shell(custom_sql: &str, fixture_name: &str) -> MetricDefinition {
     MetricDefinition {
+        metric_id: fixture_name.to_string(),
+        name: fixture_name.to_string(),
         r#type: MetricType::Custom as i32,
         custom_sql: custom_sql.to_string(),
         ..Default::default()
     }
+}
+
+/// Build a `SeedLookup` pre-seeded with operand metric IDs extracted from the
+/// corpus fixture's `expected_proposal.composite.operands[].metric_id`.
+///
+/// For FILTERED_MEAN and WINDOWED_COUNT fixtures, the lookup is empty (those
+/// validators don't call `exists_all_metrics` for non-empty slices).
+fn lookup_for_fixture(fixture: &Fixture) -> SeedLookup {
+    let mut ids: Vec<String> = Vec::new();
+    if let Some(ref proposal) = fixture.expected_proposal {
+        if let Some(operands) = proposal.get("composite").and_then(|c| c.get("operands")) {
+            if let Some(arr) = operands.as_array() {
+                for op in arr {
+                    if let Some(mid) = op.get("metric_id").and_then(|v| v.as_str()) {
+                        ids.push(mid.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+    SeedLookup::with_ids(&id_refs)
 }
 
 // ---------------------------------------------------------------------------
@@ -165,25 +243,25 @@ fn corpus_loads_and_counts_fixtures() {
 }
 
 // ---------------------------------------------------------------------------
-// Parity test — #[ignore] until A3/A4/A5 land
+// Parity test — #[ignore] until A5 lands (Tier 2 METRICQL translator)
 //
-// When A3 ships (empty-SQL + parse-error Tier 3 classification) the test can
-// be un-ignored. When A4/A5 also ship (Tier 1/2 translators), the ignore can
-// be removed entirely and the test becomes a green gate.
+// A4 is now landed. Once A5 ships, remove the #[ignore] and this test
+// becomes the full green gate.
 //
-// To run manually before that point:
+// To run manually:
 //   cargo test -p experimentation-management --test custom_corpus_parity -- --ignored
 // ---------------------------------------------------------------------------
 
-#[test]
-#[ignore = "awaiting A3 (classifier), A4 (Tier 1 translators), A5 (Tier 2 translator)"]
-fn corpus_parity() {
+#[tokio::test]
+#[ignore = "awaiting A5 (Tier 2 METRICQL translator)"]
+async fn corpus_parity() {
     let fixtures = load_corpus();
     let mut failures: Vec<String> = vec![];
 
     for f in &fixtures {
-        let original = custom_metric_shell(&f.custom_sql);
-        let result = classify_and_translate(&f.custom_sql, &original);
+        let original = custom_metric_shell(&f.custom_sql, &f.name);
+        let lookup = lookup_for_fixture(f);
+        let result = classify_and_translate(&f.custom_sql, &original, &lookup).await;
         let got_tag = tier_tag(&result);
 
         if got_tag != f.expected_tier.as_str() {
@@ -204,20 +282,12 @@ fn corpus_parity() {
 }
 
 // ---------------------------------------------------------------------------
-// Tier-3 early smoke — should pass even with the stub classifier
-//
-// The stub `classify_and_translate` always returns Tier3Untranslatable, so
-// Tier 3 fixtures already pass. This sub-test runs eagerly (no #[ignore]) to
-// give fast feedback that the stub + corpus are correctly wired up, without
-// requiring A3/A4/A5 to be implemented first.
-//
-// NOTE: This test will need updating when A3 lands and the stub is replaced
-// with real classification (at that point all fixtures should use
-// `corpus_parity` instead).
+// Tier-3 smoke — verifies all Tier 3 corpus fixtures still classify Tier 3
+// after A4.
 // ---------------------------------------------------------------------------
 
-#[test]
-fn tier3_fixtures_match_stub_classifier() {
+#[tokio::test]
+async fn tier3_fixtures_match_stub_classifier() {
     let fixtures = load_corpus();
     let tier3_fixtures: Vec<&Fixture> = fixtures
         .iter()
@@ -230,15 +300,63 @@ fn tier3_fixtures_match_stub_classifier() {
     );
 
     for f in tier3_fixtures {
-        let original = custom_metric_shell(&f.custom_sql);
-        let result = classify_and_translate(&f.custom_sql, &original);
+        let original = custom_metric_shell(&f.custom_sql, &f.name);
+        let lookup = SeedLookup::with_ids(&[]);
+        let result = classify_and_translate(&f.custom_sql, &original, &lookup).await;
         let got_tag = tier_tag(&result);
         assert_eq!(
             got_tag,
             "tier3_untranslatable",
-            "fixture '{}': stub classifier must return tier3_untranslatable for all inputs; got '{}'",
+            "fixture '{}': must return tier3_untranslatable; got '{}'",
             f.name,
             got_tag,
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Tier 1 fixtures — active (no ignore), must all translate successfully.
+//
+// This test verifies all 10 Tier 1 corpus fixtures (5 FILTERED_MEAN +
+// 3 COMPOSITE + 2 WINDOWED_COUNT) produce the correct tier tag.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn tier1_fixtures_translate_successfully() {
+    let fixtures = load_corpus();
+    let tier1_fixtures: Vec<&Fixture> = fixtures
+        .iter()
+        .filter(|f| f.expected_tier.starts_with("tier1_"))
+        .collect();
+
+    assert_eq!(
+        tier1_fixtures.len(),
+        10,
+        "expected 10 Tier 1 fixtures, found {}",
+        tier1_fixtures.len()
+    );
+
+    let mut failures: Vec<String> = vec![];
+
+    for f in &tier1_fixtures {
+        let original = custom_metric_shell(&f.custom_sql, &f.name);
+        let lookup = lookup_for_fixture(f);
+        let result = classify_and_translate(&f.custom_sql, &original, &lookup).await;
+        let got_tag = tier_tag(&result);
+
+        if got_tag != f.expected_tier.as_str() {
+            failures.push(format!(
+                "'{}': expected '{}', got '{}'",
+                f.name, f.expected_tier, got_tag,
+            ));
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "Tier 1 translation failures ({} of {} fixtures):\n  {}",
+        failures.len(),
+        tier1_fixtures.len(),
+        failures.join("\n  "),
+    );
 }
