@@ -493,7 +493,7 @@ fn extract_event_type_literal(expr: &Expr) -> Option<String> {
 /// Rejects any other shape (multiple joins, joined table is not `exposures`, etc.).
 /// This guards against the multi-table-join Tier 3 case where predicates on
 /// non-events tables (e.g. `user_profiles.country`) can't be captured in `filter_sql`.
-fn from_is_events_with_optional_exposures_join(
+pub(crate) fn from_is_events_with_optional_exposures_join(
     from: &[sqlparser::ast::TableWithJoins],
 ) -> bool {
     if from.len() != 1 {
@@ -524,7 +524,7 @@ fn from_is_events_with_optional_exposures_join(
 ///
 /// Any other table pair (e.g. `orders JOIN shipments`) violates L4 conservatism
 /// and must fall through to Tier 3.
-fn from_is_exposures_with_metric_events_join(
+pub(crate) fn from_is_exposures_with_metric_events_join(
     from: &[sqlparser::ast::TableWithJoins],
 ) -> bool {
     if from.len() != 1 {
@@ -554,7 +554,7 @@ fn table_name_from_factor_str(factor: &sqlparser::ast::TableFactor) -> Option<St
 }
 
 /// Find the single JOIN ON expression in the FROM clause.
-fn find_join_on_expr(from: &[sqlparser::ast::TableWithJoins]) -> Option<&Expr> {
+pub(crate) fn find_join_on_expr(from: &[sqlparser::ast::TableWithJoins]) -> Option<&Expr> {
     for twj in from {
         for join in &twj.joins {
             let constraint = match &join.join_operator {
@@ -994,7 +994,7 @@ fn binary_op_str(op: &BinaryOperator) -> Option<&'static str> {
 // ---------------------------------------------------------------------------
 
 /// Extract the `Select` body from a `Statement::Query`.
-fn extract_select(stmt: &Statement) -> Option<&sqlparser::ast::Select> {
+pub(crate) fn extract_select(stmt: &Statement) -> Option<&sqlparser::ast::Select> {
     if let Statement::Query(q) = stmt {
         if let SetExpr::Select(s) = q.body.as_ref() {
             return Some(s.as_ref());
@@ -1004,7 +1004,7 @@ fn extract_select(stmt: &Statement) -> Option<&sqlparser::ast::Select> {
 }
 
 /// Recursively collect all leaf predicates of an AND tree.
-fn collect_and_predicates(expr: &Expr) -> Vec<&Expr> {
+pub(crate) fn collect_and_predicates(expr: &Expr) -> Vec<&Expr> {
     match expr {
         Expr::BinaryOp { left, op: BinaryOperator::And, right } => {
             let mut v = collect_and_predicates(left);
@@ -1017,7 +1017,7 @@ fn collect_and_predicates(expr: &Expr) -> Vec<&Expr> {
 }
 
 /// Strip table alias from `alias.col` → `col`. Returns `None` for complex expressions.
-fn strip_table_alias(expr: &Expr) -> Option<String> {
+pub(crate) fn strip_table_alias(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Identifier(id) => Some(id.value.clone()),
         Expr::CompoundIdentifier(parts) => {
@@ -1029,7 +1029,7 @@ fn strip_table_alias(expr: &Expr) -> Option<String> {
 }
 
 /// Unwrap `Expr::Nested(...)` recursively.
-fn unwrap_nested(expr: &Expr) -> &Expr {
+pub(crate) fn unwrap_nested(expr: &Expr) -> &Expr {
     match expr {
         Expr::Nested(inner) => unwrap_nested(inner),
         other => other,

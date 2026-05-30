@@ -188,41 +188,61 @@
   {
     "name": "metricql_ratio_revenue_sessions",
     "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'revenue_metric' THEN ms.metric_value END) / NULLIF(MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END), 0)) AS metric_value FROM delta.metric_summaries ms WHERE ms.experiment_id = '{{ExperimentID}}' AND ms.computation_date = '{{ComputationDate}}' AND ms.metric_id IN ('revenue_metric', 'session_count_metric') GROUP BY ms.user_id, ms.variant_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_composite",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "ratio(@revenue_metric, @session_count_metric)"
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_DIVIDE",
+        "operands": [
+          {"metric_id": "revenue_metric", "weight": 0.0},
+          {"metric_id": "session_count_metric", "weight": 0.0}
+        ]
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches COMPOSITE shape"
   },
   {
     "name": "metricql_weighted_engagement_score",
     "custom_sql": "SELECT ms.user_id, ms.variant_id, (0.5 * MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) + 0.3 * MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END) + 0.2 * MAX(CASE WHEN ms.metric_id = 'completion_rate_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('watch_time_metric', 'ctr_metric', 'completion_rate_metric') GROUP BY ms.user_id, ms.variant_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_composite",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "0.5 * @watch_time_metric + 0.3 * @ctr_metric + 0.2 * @completion_rate_metric"
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+        "operands": [
+          {"metric_id": "watch_time_metric", "weight": 0.5},
+          {"metric_id": "ctr_metric", "weight": 0.3},
+          {"metric_id": "completion_rate_metric", "weight": 0.2}
+        ]
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches COMPOSITE shape"
   },
   {
     "name": "metricql_filtered_mean_with_percentile_filter",
     "custom_sql": "SELECT me.user_id, AVG(me.duration_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'video_play' AND me.duration_ms > 30000 AND me.duration_ms < 7200000 GROUP BY me.user_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_filtered_mean",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "mean(video_play.duration_ms) where duration_ms > 30000 and duration_ms < 7200000"
+      "type": "FILTERED_MEAN",
+      "source_event_type": "video_play",
+      "lower_is_better": false,
+      "filtered_mean": {
+        "filter_sql": "duration_ms > 30000 AND duration_ms < 7200000",
+        "value_column": "duration_ms"
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches FILTERED_MEAN shape"
   },
   {
     "name": "metricql_count_with_in_list_filter",
@@ -240,15 +260,22 @@
   {
     "name": "metricql_subtract_two_metrics",
     "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'revenue_metric' THEN ms.metric_value END) - MAX(CASE WHEN ms.metric_id = 'cost_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('revenue_metric', 'cost_metric') GROUP BY ms.user_id, ms.variant_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_composite",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "@revenue_metric - @cost_metric"
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_SUBTRACT",
+        "operands": [
+          {"metric_id": "revenue_metric", "weight": 0.0},
+          {"metric_id": "cost_metric", "weight": 0.0}
+        ]
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches COMPOSITE shape"
   },
   {
     "name": "metricql_proportion_with_filter",
@@ -266,54 +293,79 @@
   {
     "name": "metricql_windowed_count_filtered",
     "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'content_start' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL '72' HOUR AND me.content_type = 'movie' GROUP BY eu.user_id, eu.variant_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_windowed_count",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "count(content_start) where content_type = 'movie' within 72 hours of exposure"
+      "type": "WINDOWED_COUNT",
+      "lower_is_better": false,
+      "windowed_count": {
+        "event_type": "content_start",
+        "filter_sql": "content_type = 'movie'",
+        "window_hours": 72
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "COUNT within window"
   },
   {
     "name": "metricql_multiply_metric_refs",
     "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END) * MAX(CASE WHEN ms.metric_id = 'avg_order_value_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('ctr_metric', 'avg_order_value_metric') GROUP BY ms.user_id, ms.variant_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_composite",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "@ctr_metric * @avg_order_value_metric"
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_MULTIPLY",
+        "operands": [
+          {"metric_id": "ctr_metric", "weight": 0.0},
+          {"metric_id": "avg_order_value_metric", "weight": 0.0}
+        ]
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches COMPOSITE shape"
   },
   {
     "name": "metricql_three_ref_combination",
     "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) + MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END) + MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('watch_time_metric', 'session_count_metric', 'ctr_metric') GROUP BY ms.user_id, ms.variant_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_composite",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "@watch_time_metric + @session_count_metric + @ctr_metric"
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_ADD",
+        "operands": [
+          {"metric_id": "watch_time_metric", "weight": 0.0},
+          {"metric_id": "session_count_metric", "weight": 0.0},
+          {"metric_id": "ctr_metric", "weight": 0.0}
+        ]
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches COMPOSITE shape"
   },
   {
     "name": "metricql_percentile_filter_combined",
     "custom_sql": "SELECT me.user_id, AVG(me.ttff_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'play_start' AND me.ttff_ms < 5000 AND me.network_type = 'wifi' GROUP BY me.user_id",
-    "expected_tier": "tier2_metricql",
+    "expected_tier": "tier1_filtered_mean",
     "expected_proposal": {
       "metric_id": "",
       "name": "",
       "description": "",
-      "type": "METRICQL",
-      "metricql_expression": "mean(play_start.ttff_ms) where ttff_ms < 5000 and network_type = 'wifi'"
+      "type": "FILTERED_MEAN",
+      "source_event_type": "play_start",
+      "lower_is_better": true,
+      "filtered_mean": {
+        "filter_sql": "ttff_ms < 5000 AND network_type = 'wifi'",
+        "value_column": "ttff_ms"
+      }
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "matches FILTERED_MEAN shape"
   },
   {
     "name": "tier3_window_function",

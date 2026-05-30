@@ -102,19 +102,39 @@ fn custom_metric_shell(custom_sql: &str, fixture_name: &str) -> MetricDefinition
     }
 }
 
-/// Build a `SeedLookup` pre-seeded with operand metric IDs extracted from the
-/// corpus fixture's `expected_proposal.composite.operands[].metric_id`.
+/// Build a `SeedLookup` pre-seeded with operand metric IDs from the corpus
+/// fixture's expected_proposal.
 ///
-/// For FILTERED_MEAN and WINDOWED_COUNT fixtures, the lookup is empty (those
-/// validators don't call `exists_all_metrics` for non-empty slices).
+/// Seeds from two sources:
+///   1. `expected_proposal.composite.operands[].metric_id` — for COMPOSITE Tier 1 fixtures.
+///   2. `@<id>` references extracted from `expected_proposal.metricql_expression` —
+///      for METRICQL Tier 2 fixtures whose expressions reference stored metrics
+///      (e.g. `@revenue_metric - @cost_metric`).
+///
+/// For FILTERED_MEAN and WINDOWED_COUNT fixtures, both sources are empty and
+/// the returned lookup accepts only empty slices (vacuous truth).
 fn lookup_for_fixture(fixture: &Fixture) -> SeedLookup {
     let mut ids: Vec<String> = Vec::new();
     if let Some(ref proposal) = fixture.expected_proposal {
+        // Seed from COMPOSITE operands.
         if let Some(operands) = proposal.get("composite").and_then(|c| c.get("operands")) {
             if let Some(arr) = operands.as_array() {
                 for op in arr {
                     if let Some(mid) = op.get("metric_id").and_then(|v| v.as_str()) {
                         ids.push(mid.to_string());
+                    }
+                }
+            }
+        }
+        // Seed from MetricQL @-refs (for Tier 2 fixtures).
+        if let Some(expr) = proposal.get("metricql_expression").and_then(|v| v.as_str()) {
+            for token in expr.split_whitespace() {
+                // Extract bare @id tokens: @word, @word,, @word) etc.
+                let stripped = token.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '@');
+                if let Some(id) = stripped.strip_prefix('@') {
+                    let clean: String = id.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                    if !clean.is_empty() && !ids.contains(&clean) {
+                        ids.push(clean);
                     }
                 }
             }
@@ -161,10 +181,15 @@ fn corpus_loads_and_counts_fixtures() {
         }
     }
 
-    assert_eq!(fm, 5, "expected 5 FILTERED_MEAN fixtures, found {fm}");
-    assert_eq!(composite, 3, "expected 3 COMPOSITE fixtures, found {composite}");
-    assert_eq!(windowed, 2, "expected 2 WINDOWED_COUNT fixtures, found {windowed}");
-    assert_eq!(metricql, 10, "expected 10 METRICQL fixtures, found {metricql}");
+    // Distribution updated in A5 (ADR-026 Phase 3): 8 originally-Tier2 fixtures were
+    // reclassified after discovering Tier1 translates them correctly when the lookup
+    // is seeded (conservative L4 — prefer Tier1 over Tier2 when Tier1 succeeds).
+    // 5 COMPOSITE+WC/FM fixtures amended; 2 METRICQL fixtures remain for Tier2 patterns
+    // that Tier1 cannot handle (COUNT with IN list, proportion).
+    assert_eq!(fm, 7, "expected 7 FILTERED_MEAN fixtures, found {fm}");
+    assert_eq!(composite, 8, "expected 8 COMPOSITE fixtures, found {composite}");
+    assert_eq!(windowed, 3, "expected 3 WINDOWED_COUNT fixtures, found {windowed}");
+    assert_eq!(metricql, 2, "expected 2 METRICQL fixtures, found {metricql}");
     assert_eq!(tier3, 10, "expected 10 Tier 3 fixtures, found {tier3}");
 
     // Every fixture must have a non-empty name, non-empty expected_reason.
@@ -203,7 +228,6 @@ fn corpus_loads_and_counts_fixtures() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore = "awaiting A5 (Tier 2 METRICQL translator)"]
 async fn corpus_parity() {
     let fixtures = load_corpus();
     let mut failures: Vec<String> = vec![];
@@ -279,10 +303,11 @@ async fn tier1_fixtures_translate_successfully() {
         .filter(|f| f.expected_tier.starts_with("tier1_"))
         .collect();
 
+    // 10 original + 8 reclassified from Tier2 (A5 amendment) = 18 total Tier1 fixtures.
     assert_eq!(
         tier1_fixtures.len(),
-        10,
-        "expected 10 Tier 1 fixtures, found {}",
+        18,
+        "expected 18 Tier 1 fixtures (10 original + 8 amended from Tier2), found {}",
         tier1_fixtures.len()
     );
 

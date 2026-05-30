@@ -134,8 +134,26 @@ where
         }
     }
 
-    // Step 4 (A5): Tier 2 (METRICQL) translator — not yet implemented.
-    // Falls through to Tier3.
+    // Step 4 (A5): Tier 2 (METRICQL) translator — attempt on any recognized shape
+    // that Tier 1 rejected, or on RatioOfSums which Tier 1 explicitly skips.
+    if let Some(ref s) = shape {
+        if matches!(
+            s,
+            ShapeHint::FilteredAggregation
+                | ShapeHint::WindowedAggregation
+                | ShapeHint::CompositeArithmetic
+                | ShapeHint::RatioOfSums
+        ) {
+            if let Some(proposal) =
+                tier2::translate(&stmt, s.clone(), original, lookup).await
+            {
+                return ClassificationResult::Tier2Metricql {
+                    proposal: proposal.metric,
+                    reason: proposal.reason,
+                };
+            }
+        }
+    }
 
     // Tier 3: classified shape but no translator matched, or shape is None.
     ClassificationResult::Tier3Untranslatable {
