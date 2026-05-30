@@ -255,7 +255,7 @@
       "type": "METRICQL",
       "metricql_expression": "count(search_query) where country in ['us', 'gb', 'ca', 'au']"
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "FilteredAggregation → MetricQL aggregation"
   },
   {
     "name": "metricql_subtract_two_metrics",
@@ -288,7 +288,7 @@
       "type": "METRICQL",
       "metricql_expression": "proportion(purchase_completed) where platform = 'mobile'"
     },
-    "expected_reason": "arithmetic over metric refs"
+    "expected_reason": "FilteredAggregation → MetricQL aggregation"
   },
   {
     "name": "metricql_windowed_count_filtered",

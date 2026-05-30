@@ -75,11 +75,23 @@ pub async fn translate<L>(
 where
     L: MetricLookup + ?Sized,
 {
-    let metricql_expr = match shape {
-        ShapeHint::CompositeArithmetic => translate_composite_arithmetic(stmt)?,
-        ShapeHint::RatioOfSums => translate_ratio_of_sums(stmt)?,
-        ShapeHint::FilteredAggregation => translate_filtered_aggregation(stmt)?,
-        ShapeHint::WindowedAggregation => translate_windowed_aggregation(stmt)?,
+    let (metricql_expr, reason) = match shape {
+        ShapeHint::CompositeArithmetic => {
+            let expr = translate_composite_arithmetic(stmt)?;
+            (expr, "CompositeArithmetic → @-ref arithmetic".to_string())
+        }
+        ShapeHint::RatioOfSums => {
+            let expr = translate_ratio_of_sums(stmt)?;
+            (expr, "RatioOfSums → ratio(@n, @d)".to_string())
+        }
+        ShapeHint::FilteredAggregation => {
+            let expr = translate_filtered_aggregation(stmt)?;
+            (expr, "FilteredAggregation → MetricQL aggregation".to_string())
+        }
+        ShapeHint::WindowedAggregation => {
+            let expr = translate_windowed_aggregation(stmt)?;
+            (expr, "WindowedAggregation → MetricQL windowed count".to_string())
+        }
     };
 
     // Round-trip 1: MetricQL parse + semantic analysis (existence check skipped
@@ -100,7 +112,7 @@ where
 
     Some(Tier2Proposal {
         metric: candidate,
-        reason: "arithmetic over metric refs".to_string(),
+        reason,
     })
 }
 
@@ -693,11 +705,12 @@ fn serialize_metricql_predicate(expr: &Expr) -> Option<String> {
                     let r = serialize_metricql_predicate(right)?;
                     return Some(format!("{l} and {r}"));
                 }
-                BinaryOperator::Or => {
-                    let l = serialize_metricql_predicate(left)?;
-                    let r = serialize_metricql_predicate(right)?;
-                    return Some(format!("{l} or {r}"));
-                }
+                // MetricQL filter grammar is strictly `predicate ('and' predicate)*` —
+                // OR is not in the grammar. Return None to bail to Tier 3
+                // conservatively (L4/L8). The round-trip guard (validate_metricql)
+                // would catch any emitted `or` anyway, but being explicit here
+                // makes the intent clear and avoids misleading callers.
+                BinaryOperator::Or => return None,
                 _ => return None,
             };
             let l = serialize_metricql_simple(left)?;
@@ -1160,5 +1173,108 @@ mod tests {
             // Should be None (no event_type → split_where_for_metricql returns None).
             assert!(result.is_none(), "no event_type must return None from tier2");
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // FIX 3: RatioOfSums → ratio(@n, @d)
+    //
+    // Classifier yields RatioOfSums when the projection is `SUM(x) / SUM(y)`.
+    // When those SUM arguments are pivot expressions (MAX(CASE WHEN metric_id =
+    // '...' THEN metric_value END)), Tier 2 can extract the @-ref IDs and emit
+    // `ratio(@n, @d)`.
+    //
+    // Tier 1 never handles RatioOfSums (mod.rs only routes FilteredAggregation,
+    // WindowedAggregation, and CompositeArithmetic to Tier 1). The classifier
+    // does NOT fire CompositeArithmetic for this SQL because:
+    //   - CompositeArithmetic requires `is_metric_summary_table &&
+    //     projection_is_composite_arithmetic`.
+    //   - `projection_is_composite_arithmetic` recurses via
+    //     `expr_contains_metric_pivot`, which returns true only for MAX/MIN
+    //     directly wrapping CASE — not for SUM wrapping MAX wrapping CASE.
+    //   - So the outer SUM is opaque to the composite-arithmetic detector, and
+    //     RatioOfSums fires instead (it only checks the divide pattern).
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn ratio_of_sums_translates_to_metricql_ratio() {
+        // SUM(MAX(CASE WHEN metric_id = 'n' THEN metric_value END)) /
+        // SUM(MAX(CASE WHEN metric_id = 'd' THEN metric_value END))
+        // → ratio(@numerator_metric, @denominator_metric)
+        let sql = "SELECT ms.user_id, ms.variant_id, \
+                   SUM(MAX(CASE WHEN ms.metric_id = 'numerator_metric' THEN ms.metric_value END)) \
+                   / SUM(MAX(CASE WHEN ms.metric_id = 'denominator_metric' THEN ms.metric_value END)) \
+                   AS metric_value \
+                   FROM delta.metric_summaries ms \
+                   WHERE ms.metric_id IN ('numerator_metric', 'denominator_metric') \
+                   GROUP BY ms.user_id, ms.variant_id";
+        let original = custom_original("ratio_of_sums_test");
+        let stmt = parse_or_tier3(sql).expect("must parse");
+        let shape = extract_shape(&stmt);
+
+        // Confirm classifier yields RatioOfSums (not CompositeArithmetic).
+        assert_eq!(
+            shape,
+            Some(ShapeHint::RatioOfSums),
+            "expected RatioOfSums shape for SUM(pivot)/SUM(pivot)"
+        );
+
+        let lookup = SeedLookup::with_ids(&["numerator_metric", "denominator_metric"]);
+        let proposal = translate(&stmt, ShapeHint::RatioOfSums, &original, &lookup)
+            .await
+            .expect("RatioOfSums with pivot SUM args must produce a proposal");
+
+        assert_eq!(proposal.metric.r#type, MetricType::Metricql as i32);
+        assert_eq!(
+            proposal.metric.metricql_expression,
+            "ratio(@numerator_metric, @denominator_metric)"
+        );
+        assert_eq!(proposal.reason, "RatioOfSums → ratio(@n, @d)");
+    }
+
+    // -----------------------------------------------------------------------
+    // FIX 4: FilteredAggregation with LIKE predicate → None (negative test)
+    //
+    // LIKE is not in the MetricQL filter grammar. serialize_metricql_predicate
+    // returns None for any unrecognised predicate type (the catch-all `_ => None`
+    // arm), which propagates as None from translate_filtered_aggregation, which
+    // propagates as None from translate. No bad MetricDefinition is produced.
+    //
+    // A4 added the equivalent test for Tier 1 (tier1.rs). This mirrors it for
+    // Tier 2 to ensure the same LIKE → None behaviour holds after the Tier 1
+    // fall-through route reaches Tier 2.
+    //
+    // Why Tier 2 sees this SQL:
+    //   Tier 1 also rejects it — LIKE is not in Tier 1's predicate allowlist
+    //   either (predicates_to_filter_sql calls serialize_filter_predicate which
+    //   returns None for LIKE). So the SQL reaches Tier 2 as FilteredAggregation.
+    //   Tier 2's serialize_metricql_predicate must also return None for LIKE.
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn filtered_aggregation_with_like_predicate_returns_none() {
+        let sql = "SELECT AVG(me.duration_ms) AS metric_value \
+                   FROM delta.metric_events me \
+                   INNER JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   WHERE me.event_type = 'play' AND me.title LIKE '%action%' \
+                   GROUP BY me.user_id";
+        let original = custom_original("like_predicate_test");
+        let stmt = parse_or_tier3(sql).expect("must parse");
+        let shape = extract_shape(&stmt);
+
+        // Classifier must yield FilteredAggregation.
+        assert_eq!(
+            shape,
+            Some(ShapeHint::FilteredAggregation),
+            "expected FilteredAggregation for AVG with LIKE; got {shape:?}"
+        );
+
+        let result =
+            translate(&stmt, ShapeHint::FilteredAggregation, &original, &EmptyLookup).await;
+
+        // LIKE is unserializable in MetricQL — must fall through to Tier 3.
+        assert!(
+            result.is_none(),
+            "FilteredAggregation with LIKE predicate must return None from tier2"
+        );
     }
 }
