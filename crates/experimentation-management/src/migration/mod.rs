@@ -66,7 +66,7 @@ pub fn classify_and_translate(
         };
     }
 
-    // Step 1: parse with sqlparser (GenericDialect ≈ Spark SQL subset).
+    // Step 1: parse with sqlparser (DatabricksDialect for Databricks/Spark SQL).
     let stmt = match classifier::parse_or_tier3(custom_sql) {
         Ok(s) => s,
         Err(e) => {

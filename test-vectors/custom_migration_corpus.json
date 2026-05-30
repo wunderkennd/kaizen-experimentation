@@ -151,7 +151,7 @@
   },
   {
     "name": "wc_purchase_48h",
-    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'purchase_completed' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL 48 HOURS GROUP BY eu.user_id, eu.variant_id",
+    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'purchase_completed' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL '48' HOUR GROUP BY eu.user_id, eu.variant_id",
     "expected_tier": "tier1_windowed_count",
     "expected_proposal": {
       "metric_id": "",
@@ -169,7 +169,7 @@
   },
   {
     "name": "wc_add_to_list_24h_mobile",
-    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'add_to_list' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL 24 HOURS AND me.platform = 'mobile' GROUP BY eu.user_id, eu.variant_id",
+    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'add_to_list' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL '24' HOUR AND me.platform = 'mobile' GROUP BY eu.user_id, eu.variant_id",
     "expected_tier": "tier1_windowed_count",
     "expected_proposal": {
       "metric_id": "",
@@ -265,7 +265,7 @@
   },
   {
     "name": "metricql_windowed_count_filtered",
-    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'content_start' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL 72 HOURS AND me.content_type = 'movie' GROUP BY eu.user_id, eu.variant_id",
+    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'content_start' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL '72' HOUR AND me.content_type = 'movie' GROUP BY eu.user_id, eu.variant_id",
     "expected_tier": "tier2_metricql",
     "expected_proposal": {
       "metric_id": "",

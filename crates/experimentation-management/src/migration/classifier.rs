@@ -1,16 +1,16 @@
 //! AST-based Tier classifier for ADR-026 Phase 3 — Task A3.
 //!
 //! This module parses CUSTOM metric SQL with `sqlparser-rs` (using
-//! `GenericDialect`, which covers the Spark SQL subset used by the platform)
+//! `DatabricksDialect`, which covers the Spark SQL subset used by the platform)
 //! and extracts a **shape hint** that downstream translators (A4 Tier 1, A5
 //! Tier 2) use to decide which translation path to attempt.
 //!
 //! ## Design decisions
 //!
-//! * **`GenericDialect`** is used instead of a Spark-specific dialect because
-//!   sqlparser 0.50 does not ship a `SparkDialect`.  `GenericDialect` parses
-//!   all constructs present in the corpus (`INTERVAL N HOURS`, `NULLIF`, CTEs,
-//!   window functions) correctly.
+//! * **`DatabricksDialect`** is used because sqlparser 0.50 ships it as the
+//!   best available dialect for Databricks/Spark SQL.  It parses all constructs
+//!   present in the corpus (`INTERVAL '48' HOUR`, `NULLIF`, CTEs, window
+//!   functions) correctly.
 //!
 //! * **`parse_or_tier3`** returns `Result<Statement, String>` rather than
 //!   `ClassificationResult` because this module owns parsing only.  Tier
