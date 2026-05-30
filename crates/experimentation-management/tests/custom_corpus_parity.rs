@@ -17,13 +17,11 @@
 //! The `corpus_loads_and_counts_fixtures` smoke test is **not** ignored — it
 //! runs on every CI pass and guards against accidental corpus truncation.
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
 use experimentation_management::migration::classify_and_translate;
-use experimentation_management::store::StoreError;
-use experimentation_management::validators::MetricLookup;
+use experimentation_management::migration::test_support::SeedLookup;
 use experimentation_proto::experimentation::common::v1::{MetricDefinition, MetricType};
 
 // ---------------------------------------------------------------------------
@@ -37,54 +35,6 @@ struct Fixture {
     expected_tier: String,
     expected_proposal: Option<serde_json::Value>,
     expected_reason: String,
-}
-
-// ---------------------------------------------------------------------------
-// Local MetricLookup implementations for testing
-// ---------------------------------------------------------------------------
-
-/// Seeded lookup — knows a fixed set of metric IDs as leaves (no operands).
-/// Used for COMPOSITE fixture tests where the validator checks operand existence.
-struct SeedLookup {
-    ids: HashMap<String, ()>,
-}
-
-impl SeedLookup {
-    fn with_ids(ids: &[&str]) -> Self {
-        Self {
-            ids: ids.iter().map(|s| ((*s).to_string(), ())).collect(),
-        }
-    }
-}
-
-#[tonic::async_trait]
-impl MetricLookup for SeedLookup {
-    async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError> {
-        Ok(metric_ids.iter().all(|id| self.ids.contains_key(*id)))
-    }
-
-    async fn get_composite_operands(
-        &self,
-        _metric_id: &str,
-    ) -> Result<Vec<String>, StoreError> {
-        // All seeded metrics are leaves (no sub-operands).
-        Ok(vec![])
-    }
-
-    async fn get_metricql_refs(&self, _metric_id: &str) -> Result<Vec<String>, StoreError> {
-        Ok(vec![])
-    }
-
-    async fn get_metric_type(
-        &self,
-        metric_id: &str,
-    ) -> Result<MetricType, StoreError> {
-        if self.ids.contains_key(metric_id) {
-            Ok(MetricType::FilteredMean) // leaf type; cycle detection won't follow
-        } else {
-            Err(StoreError::NotFound(metric_id.to_string()))
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

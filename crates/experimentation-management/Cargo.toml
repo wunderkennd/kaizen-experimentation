@@ -35,7 +35,11 @@ rdkafka = { workspace = true }
 regex = "1.12"
 sqlparser = { version = "0.50", features = ["serde"] }
 
+[features]
+test-support = []
+
 [dev-dependencies]
+experimentation-management = { path = ".", features = ["test-support"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 proptest = { workspace = true }
 tokio-test = { workspace = true }

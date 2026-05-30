@@ -20,6 +20,9 @@ pub mod report;
 pub mod tier1;
 pub mod tier2;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+
 use experimentation_proto::experimentation::common::v1::MetricDefinition;
 
 use crate::validators::MetricLookup;
@@ -151,7 +154,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::migration::tier1::tests::EmptyLookup;
+    use crate::migration::test_support::EmptyLookup;
 
     fn dummy_custom_metric() -> MetricDefinition {
         MetricDefinition {

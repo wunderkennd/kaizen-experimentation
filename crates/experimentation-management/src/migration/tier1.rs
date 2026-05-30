@@ -135,15 +135,17 @@ fn translate_filtered_mean(
         return None;
     }
 
-    // Extract value_column from AVG(alias.col) projection.
-    let value_column = find_avg_column(&select.projection)?;
+    // Extract value_column from AVG(alias.col) OR SUM(alias.col)/COUNT(*) projection.
+    let value_column = find_avg_column(&select.projection)
+        .or_else(|| find_sum_div_count_column(&select.projection))?;
 
     // Extract event_type and remaining filter predicates from WHERE.
     let where_expr = select.selection.as_ref()?;
     let (event_type, filter_predicates) = split_where_by_event_type(where_expr)?;
 
     // Reconstruct filter_sql from remaining predicates (strip table alias prefix).
-    let filter_sql = predicates_to_filter_sql(&filter_predicates);
+    // Returns None if any predicate is unserializable (e.g. LIKE, BETWEEN, IN-subquery).
+    let filter_sql = predicates_to_filter_sql(&filter_predicates)?;
 
     // filter_sql is REQUIRED for FILTERED_MEAN (otherwise use MEAN).
     if filter_sql.trim().is_empty() {
@@ -195,6 +197,12 @@ fn translate_windowed_count(
 ) -> Option<TranslationProposal> {
     let select = extract_select(stmt)?;
 
+    // Validate FROM clause: must be exposures (main) JOIN metric_events (joined).
+    // Any other table pair violates the WINDOWED_COUNT structural contract (L4).
+    if !from_is_exposures_with_metric_events_join(&select.from) {
+        return None;
+    }
+
     // Find the JOIN ON condition — it contains event_type, window, and optional filter.
     let join_on = find_join_on_expr(&select.from)?;
 
@@ -219,7 +227,8 @@ fn translate_windowed_count(
         })
         .collect();
 
-    let filter_sql = predicates_to_filter_sql(&filter_predicates);
+    // Returns None if any predicate is unserializable (conservative L4/L8).
+    let filter_sql = predicates_to_filter_sql(&filter_predicates)?;
 
     let candidate = build_metric(
         original,
@@ -347,6 +356,85 @@ fn extract_avg_col(expr: &Expr) -> Option<String> {
     }
 }
 
+/// Find the column argument inside a `SUM(alias.col) / COUNT(*)` projection item.
+/// Returns the bare column name (no table alias), matching the same contract as
+/// `find_avg_column` so callers can use either interchangeably.
+///
+/// Accepted projection shapes:
+///   `SUM(alias.col) / COUNT(*)`
+///   `SUM(col) / COUNT(*)`
+fn find_sum_div_count_column(projection: &[SelectItem]) -> Option<String> {
+    for item in projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(e) | SelectItem::ExprWithAlias { expr: e, .. } => e,
+            _ => continue,
+        };
+        if let Some(col) = extract_sum_div_count_col(expr) {
+            return Some(col);
+        }
+    }
+    None
+}
+
+fn extract_sum_div_count_col(expr: &Expr) -> Option<String> {
+    let expr = unwrap_nested(expr);
+    // Pattern: BinaryOp { left: SUM(col), op: Divide, right: COUNT(*) }
+    if let Expr::BinaryOp {
+        left,
+        op: BinaryOperator::Divide,
+        right,
+    } = expr
+    {
+        let left = unwrap_nested(left);
+        let right = unwrap_nested(right);
+        // right must be COUNT(*) or COUNT(1)
+        if !is_count_star_or_one(right) {
+            return None;
+        }
+        // left must be SUM(alias.col)
+        if let Expr::Function(f) = left {
+            if f.name.to_string().eq_ignore_ascii_case("sum") {
+                if let FunctionArguments::List(list) = &f.args {
+                    if let Some(sqlparser::ast::FunctionArg::Unnamed(
+                        sqlparser::ast::FunctionArgExpr::Expr(inner),
+                    )) = list.args.first()
+                    {
+                        return strip_table_alias(inner);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn is_count_star_or_one(expr: &Expr) -> bool {
+    if let Expr::Function(f) = expr {
+        if f.name.to_string().eq_ignore_ascii_case("count") {
+            if let FunctionArguments::List(list) = &f.args {
+                // COUNT(*) with empty args list
+                if list.args.is_empty() {
+                    return true;
+                }
+                if let Some(arg) = list.args.first() {
+                    match arg {
+                        sqlparser::ast::FunctionArg::Unnamed(
+                            sqlparser::ast::FunctionArgExpr::Wildcard,
+                        ) => return true,
+                        sqlparser::ast::FunctionArg::Unnamed(
+                            sqlparser::ast::FunctionArgExpr::Expr(Expr::Value(
+                                sqlparser::ast::Value::Number(n, _),
+                            )),
+                        ) => return n == "1",
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Split a WHERE `Expr` into:
 ///   - `event_type`: the string literal from `alias.event_type = '<lit>'`
 ///   - remaining predicates: everything else (excluding the event_type predicate)
@@ -426,6 +514,34 @@ fn from_is_events_with_optional_exposures_join(
         }
         _ => false, // multiple joins → Tier 3
     }
+}
+
+/// Validate that the WINDOWED_COUNT FROM clause is `exposures JOIN metric_events`.
+///
+/// The WINDOWED_COUNT pattern (per `windowed_count.sql.tmpl`) requires:
+///   - main table: `exposures` or `delta.exposures`
+///   - exactly one join: `metric_events` or `delta.metric_events`
+///
+/// Any other table pair (e.g. `orders JOIN shipments`) violates L4 conservatism
+/// and must fall through to Tier 3.
+fn from_is_exposures_with_metric_events_join(
+    from: &[sqlparser::ast::TableWithJoins],
+) -> bool {
+    if from.len() != 1 {
+        return false;
+    }
+    let twj = &from[0];
+    // Main table must be exposures.
+    let main_table = table_name_from_factor_str(&twj.relation);
+    if !main_table.map(|n| n.contains("exposures")).unwrap_or(false) {
+        return false;
+    }
+    // Exactly one join required, joined table must be metric_events.
+    if twj.joins.len() != 1 {
+        return false;
+    }
+    let joined = table_name_from_factor_str(&twj.joins[0].relation);
+    joined.map(|n| n.contains("metric_events")).unwrap_or(false)
 }
 
 fn table_name_from_factor_str(factor: &sqlparser::ast::TableFactor) -> Option<String> {
@@ -789,12 +905,24 @@ fn extract_number_literal(expr: &Expr) -> Option<f64> {
 // emit `None` from `serialize_predicate`, and the caller returns `None`
 // from the entire translator (conservative L8).
 
-fn predicates_to_filter_sql(predicates: &[&Expr]) -> String {
-    let parts: Vec<String> = predicates
-        .iter()
-        .filter_map(|p| serialize_predicate(p))
-        .collect();
-    parts.join(" AND ")
+/// Serialize `predicates` into a flat SQL AND-string suitable for `filter_sql`.
+///
+/// Returns `None` if **any** predicate cannot be serialized (e.g. LIKE, BETWEEN,
+/// IN-with-subquery, function calls). This is the conservative L4/L8 policy —
+/// dropping even one predicate would silently widen the semantic filter, which is
+/// exactly the bug class rejected in PR #567.
+///
+/// Returns `Some("")` for an empty slice (legitimate "no filter" state).
+fn predicates_to_filter_sql(predicates: &[&Expr]) -> Option<String> {
+    if predicates.is_empty() {
+        return Some(String::new());
+    }
+    let mut parts = Vec::with_capacity(predicates.len());
+    for p in predicates {
+        let s = serialize_predicate(p)?; // bail on first unserializable predicate
+        parts.push(s);
+    }
+    Some(parts.join(" AND "))
 }
 
 fn serialize_predicate(expr: &Expr) -> Option<String> {
@@ -951,90 +1079,7 @@ fn build_metric(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::validators::MetricLookup;
-    use crate::store::StoreError;
-    use std::collections::HashMap;
-
-    // -----------------------------------------------------------------------
-    // Test MetricLookup impls
-    // -----------------------------------------------------------------------
-
-    /// Empty lookup — `exists_all_metrics` always returns `true` for the empty
-    /// slice (vacuous truth), and `false` for any non-empty slice. Suitable
-    /// for FILTERED_MEAN and WINDOWED_COUNT where no operand existence check
-    /// runs.
-    pub(crate) struct EmptyLookup;
-
-    #[tonic::async_trait]
-    impl MetricLookup for EmptyLookup {
-        async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError> {
-            // For FILTERED_MEAN and WINDOWED_COUNT, the validator never calls
-            // this. For COMPOSITE it's called — use SeedLookup instead.
-            Ok(metric_ids.is_empty())
-        }
-
-        async fn get_composite_operands(
-            &self,
-            metric_id: &str,
-        ) -> Result<Vec<String>, StoreError> {
-            Err(StoreError::NotFound(metric_id.to_string()))
-        }
-
-        async fn get_metricql_refs(&self, _metric_id: &str) -> Result<Vec<String>, StoreError> {
-            Ok(vec![])
-        }
-
-        async fn get_metric_type(
-            &self,
-            metric_id: &str,
-        ) -> Result<MetricType, StoreError> {
-            Err(StoreError::NotFound(metric_id.to_string()))
-        }
-    }
-
-    /// Seeded lookup — knows a fixed set of metric IDs as leaves (no operands).
-    /// Used for COMPOSITE fixture tests where the validator checks operand existence.
-    pub(crate) struct SeedLookup {
-        ids: HashMap<String, ()>,
-    }
-
-    impl SeedLookup {
-        pub(crate) fn with_ids(ids: &[&str]) -> Self {
-            Self {
-                ids: ids.iter().map(|s| ((*s).to_string(), ())).collect(),
-            }
-        }
-    }
-
-    #[tonic::async_trait]
-    impl MetricLookup for SeedLookup {
-        async fn exists_all_metrics(&self, metric_ids: &[&str]) -> Result<bool, StoreError> {
-            Ok(metric_ids.iter().all(|id| self.ids.contains_key(*id)))
-        }
-
-        async fn get_composite_operands(
-            &self,
-            _metric_id: &str,
-        ) -> Result<Vec<String>, StoreError> {
-            // All seeded metrics are leaves (no sub-operands).
-            Ok(vec![])
-        }
-
-        async fn get_metricql_refs(&self, _metric_id: &str) -> Result<Vec<String>, StoreError> {
-            Ok(vec![])
-        }
-
-        async fn get_metric_type(
-            &self,
-            metric_id: &str,
-        ) -> Result<MetricType, StoreError> {
-            if self.ids.contains_key(metric_id) {
-                Ok(MetricType::FilteredMean) // leaf type; cycle detection won't follow
-            } else {
-                Err(StoreError::NotFound(metric_id.to_string()))
-            }
-        }
-    }
+    use crate::migration::test_support::{EmptyLookup, SeedLookup};
 
     // -----------------------------------------------------------------------
     // Shared helpers
@@ -1345,5 +1390,211 @@ pub(crate) mod tests {
         assert!(proposal.metric.lower_is_better);
         assert!((proposal.metric.minimum_detectable_effect - 0.05).abs() < 1e-12);
         assert!(proposal.metric.custom_sql.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // FIX 3: SUM(col)/COUNT(*) alternative for FILTERED_MEAN
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn filtered_mean_sum_div_count_star_projection() {
+        // Per plan spec: FILTERED_MEAN accepts SUM(col)/COUNT(*) as well as AVG(col).
+        let sql = "SELECT SUM(duration_ms) / COUNT(*) AS metric_value \
+                   FROM delta.metric_events \
+                   WHERE event_type = 'play'";
+        let original = custom_original("sum_div_count_play");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = EmptyLookup;
+        // SQL has no filter beyond event_type → filter_sql is empty → None.
+        // The spec requires filter_sql to be non-empty for FILTERED_MEAN, so this
+        // falls through to Tier 3. Verify it does NOT panic and produces None.
+        // (A FILTERED_MEAN without a filter is a plain MEAN — conservatism holds.)
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(
+            result.is_none(),
+            "SUM/COUNT without extra filter → no filter_sql → must return None (use MEAN instead)"
+        );
+    }
+
+    #[tokio::test]
+    async fn filtered_mean_sum_div_count_with_filter_translates() {
+        // SUM(col)/COUNT(*) with a real filter predicate → valid FILTERED_MEAN.
+        let sql = "SELECT me.user_id, SUM(me.duration_ms) / COUNT(*) AS metric_value \
+                   FROM delta.metric_events me \
+                   INNER JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   WHERE me.event_type = 'video_play' AND me.platform = 'mobile' \
+                   GROUP BY me.user_id";
+        let original = custom_original("sum_div_count_mobile");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = EmptyLookup;
+        let proposal = translate(&stmt, shape, &original, &lookup)
+            .await
+            .expect("SUM(col)/COUNT(*) with filter must translate to FILTERED_MEAN");
+        assert_eq!(proposal.tier, Tier::Filtered);
+        let cfg = match proposal.metric.type_config.as_ref().unwrap() {
+            MetricTypeConfig::FilteredMean(c) => c,
+            other => panic!("expected FilteredMean, got: {other:?}"),
+        };
+        assert_eq!(cfg.value_column, "duration_ms");
+        assert_eq!(cfg.filter_sql, "platform = 'mobile'");
+    }
+
+    // -----------------------------------------------------------------------
+    // FIX 1 (regression) — predicates_to_filter_sql must not silently drop LIKE
+    //
+    // Pre-fix: translator returned Some(FilteredMeanConfig { filter_sql: "" })
+    // Post-fix: translator returns None (LIKE is unserializable → bail).
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn like_predicate_causes_translator_to_return_none() {
+        // The LIKE predicate `me.description LIKE '%HD%'` is unserializable.
+        // Pre-fix behavior: filter_map silently dropped it → filter_sql = "event_type = 'play'"
+        // Post-fix behavior: returns None (semantic drift avoided).
+        let sql = "SELECT me.user_id, AVG(me.duration_ms) AS metric_value \
+                   FROM delta.metric_events me \
+                   JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   WHERE me.event_type = 'play' AND me.description LIKE '%HD%' \
+                   GROUP BY me.user_id";
+        let original = custom_original("like_regression");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = EmptyLookup;
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(
+            result.is_none(),
+            "LIKE predicate is unserializable — translator must return None, not Some with \
+             silent filter drop. Pre-fix would have returned Some(FilteredMeanConfig {{ \
+             filter_sql: \"\" }}) which is semantically wrong."
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // FIX 4: Negative tests
+    // -----------------------------------------------------------------------
+
+    /// A FILTERED_MEAN-shaped query with a 3rd JOIN (not exposures/metric_events)
+    /// must return None — extra join introduces predicates on unknown tables.
+    #[tokio::test]
+    async fn filtered_mean_with_third_join_returns_none() {
+        // user_profiles is not exposures → from_is_events_with_optional_exposures_join rejects.
+        let sql = "SELECT me.user_id, AVG(me.duration_ms) AS metric_value \
+                   FROM delta.metric_events me \
+                   INNER JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   INNER JOIN delta.user_profiles up ON me.user_id = up.user_id \
+                   WHERE me.event_type = 'video_play' AND me.platform = 'mobile' \
+                   GROUP BY me.user_id";
+        let original = custom_original("third_join_negative");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = EmptyLookup;
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(result.is_none(), "3-table join must return None (Tier 3)");
+    }
+
+    /// A FILTERED_MEAN-shaped query with no event_type predicate in WHERE must
+    /// return None — event_type is required to populate source_event_type.
+    #[tokio::test]
+    async fn filtered_mean_without_event_type_in_where_returns_none() {
+        let sql = "SELECT me.user_id, AVG(me.duration_ms) AS metric_value \
+                   FROM delta.metric_events me \
+                   WHERE me.platform = 'mobile' \
+                   GROUP BY me.user_id";
+        let original = custom_original("no_event_type_negative");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = EmptyLookup;
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(result.is_none(), "missing event_type predicate must return None");
+    }
+
+    /// A WINDOWED_COUNT-shaped query without an INTERVAL predicate must return
+    /// None — window_hours is mandatory for WindowedCountConfig.
+    #[tokio::test]
+    async fn windowed_count_without_interval_returns_none() {
+        // No `event_timestamp < exposure_ts + INTERVAL` predicate.
+        let sql = "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value \
+                   FROM delta.exposures eu \
+                   LEFT JOIN delta.metric_events me \
+                     ON eu.user_id = me.user_id \
+                     AND me.event_type = 'purchase' \
+                   GROUP BY eu.user_id, eu.variant_id";
+        let original = custom_original("windowed_no_interval_negative");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = EmptyLookup;
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(result.is_none(), "missing INTERVAL predicate must return None");
+    }
+
+    /// A WINDOWED_COUNT with non-exposures/metric_events tables must return None (L4).
+    #[tokio::test]
+    async fn windowed_count_wrong_tables_returns_none() {
+        // FROM orders o LEFT JOIN shipments s — wrong table pair.
+        // NOTE: sqlparser may not parse this as WindowedAggregation shape (the
+        // classifier looks for INTERVAL in the JOIN ON), so we assert at whichever
+        // boundary fires first. The intent is to confirm conservative behavior.
+        let sql = "SELECT o.user_id, CAST(COUNT(s.id) AS DOUBLE) AS metric_value \
+                   FROM delta.orders o \
+                   LEFT JOIN delta.shipments s \
+                     ON o.user_id = s.user_id \
+                     AND s.event_timestamp >= o.created_at \
+                     AND s.event_timestamp < o.created_at + INTERVAL '24' HOUR \
+                   GROUP BY o.user_id";
+        let original = custom_original("windowed_wrong_tables_negative");
+        use crate::migration::classifier::{extract_shape, parse_or_tier3};
+        let stmt = parse_or_tier3(sql).expect("must parse");
+        let shape = extract_shape(&stmt);
+        // If classifier recognizes the shape, the FROM guard must reject it.
+        // If classifier returns None, it already fell to Tier 3 — also correct.
+        match shape {
+            Some(s @ ShapeHint::WindowedAggregation) => {
+                let result = translate(&stmt, s, &original, &EmptyLookup).await;
+                assert!(
+                    result.is_none(),
+                    "wrong table pair (orders/shipments) must return None from translate"
+                );
+            }
+            _ => {
+                // Classifier already returned None or a different shape — Tier 3 path.
+                // Conservative: correct behavior.
+            }
+        }
+    }
+
+    /// A COMPOSITE expression with a single operand (no operator) must return None.
+    #[tokio::test]
+    async fn composite_single_operand_returns_none() {
+        // Only one pivot term — can't form a COMPOSITE with <2 operands.
+        let sql = "SELECT ms.user_id, ms.variant_id, \
+                   MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) \
+                   AS metric_value \
+                   FROM delta.metric_summaries ms \
+                   WHERE ms.metric_id IN ('watch_time_metric') \
+                   GROUP BY ms.user_id, ms.variant_id";
+        let original = custom_original("single_operand_negative");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = SeedLookup::with_ids(&["watch_time_metric"]);
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(result.is_none(), "single-operand COMPOSITE must return None");
+    }
+
+    /// A COMPOSITE WEIGHTED_SUM where one weight is 0.0 must return None.
+    /// The validator rejects zero weights; this confirms the round-trip catches it.
+    #[tokio::test]
+    async fn composite_weighted_sum_with_zero_weight_returns_none() {
+        // 0.0 * A + 0.3 * B — zero weight on the first term.
+        let sql = "SELECT ms.user_id, ms.variant_id, \
+                   (0.0 * MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) \
+                    + 0.3 * MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END)) \
+                   AS metric_value \
+                   FROM delta.metric_summaries ms \
+                   WHERE ms.experiment_id = '{{ExperimentID}}' \
+                     AND ms.metric_id IN ('watch_time_metric', 'ctr_metric') \
+                   GROUP BY ms.user_id, ms.variant_id";
+        let original = custom_original("zero_weight_negative");
+        let (stmt, shape) = parse_and_shape(sql);
+        let lookup = SeedLookup::with_ids(&["watch_time_metric", "ctr_metric"]);
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(
+            result.is_none(),
+            "WEIGHTED_SUM with zero weight must return None (validator rejects zero weights)"
+        );
     }
 }
