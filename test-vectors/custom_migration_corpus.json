@@ -1,0 +1,388 @@
+[
+  {
+    "name": "fm_mobile_watch_time",
+    "custom_sql": "SELECT me.user_id, AVG(me.duration_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'video_play' AND me.platform = 'mobile' GROUP BY me.user_id",
+    "expected_tier": "tier1_filtered_mean",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "FILTERED_MEAN",
+      "source_event_type": "video_play",
+      "lower_is_better": false,
+      "filtered_mean": {
+        "filter_sql": "platform = 'mobile'",
+        "value_column": "duration_ms"
+      }
+    },
+    "expected_reason": "matches FILTERED_MEAN shape"
+  },
+  {
+    "name": "fm_high_quality_stream",
+    "custom_sql": "SELECT me.user_id, AVG(me.bitrate_kbps) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'heartbeat' AND me.bitrate_kbps > 2000 GROUP BY me.user_id",
+    "expected_tier": "tier1_filtered_mean",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "FILTERED_MEAN",
+      "source_event_type": "heartbeat",
+      "lower_is_better": false,
+      "filtered_mean": {
+        "filter_sql": "bitrate_kbps > 2000",
+        "value_column": "bitrate_kbps"
+      }
+    },
+    "expected_reason": "matches FILTERED_MEAN shape"
+  },
+  {
+    "name": "fm_ttff_desktop_non_premium",
+    "custom_sql": "SELECT me.user_id, AVG(me.ttff_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'play_start' AND me.platform = 'desktop' AND me.subscription_tier != 'premium' GROUP BY me.user_id",
+    "expected_tier": "tier1_filtered_mean",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "FILTERED_MEAN",
+      "source_event_type": "play_start",
+      "lower_is_better": true,
+      "filtered_mean": {
+        "filter_sql": "platform = 'desktop' AND subscription_tier != 'premium'",
+        "value_column": "ttff_ms"
+      }
+    },
+    "expected_reason": "matches FILTERED_MEAN shape"
+  },
+  {
+    "name": "fm_rebuffer_ratio_mobile",
+    "custom_sql": "SELECT me.user_id, AVG(me.rebuffer_ratio) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'heartbeat' AND me.platform = 'mobile' AND me.rebuffer_ratio >= 0 GROUP BY me.user_id",
+    "expected_tier": "tier1_filtered_mean",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "FILTERED_MEAN",
+      "source_event_type": "heartbeat",
+      "lower_is_better": true,
+      "filtered_mean": {
+        "filter_sql": "platform = 'mobile' AND rebuffer_ratio >= 0",
+        "value_column": "rebuffer_ratio"
+      }
+    },
+    "expected_reason": "matches FILTERED_MEAN shape"
+  },
+  {
+    "name": "fm_content_completion_long_form",
+    "custom_sql": "SELECT me.user_id, AVG(me.completion_ratio) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'video_play' AND me.content_type = 'series' AND me.duration_ms > 1200000 GROUP BY me.user_id",
+    "expected_tier": "tier1_filtered_mean",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "FILTERED_MEAN",
+      "source_event_type": "video_play",
+      "lower_is_better": false,
+      "filtered_mean": {
+        "filter_sql": "content_type = 'series' AND duration_ms > 1200000",
+        "value_column": "completion_ratio"
+      }
+    },
+    "expected_reason": "matches FILTERED_MEAN shape"
+  },
+  {
+    "name": "composite_add_two_metrics",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) + MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.experiment_id = '{{ExperimentID}}' AND ms.metric_id IN ('watch_time_metric', 'session_count_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier1_composite",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_ADD",
+        "operands": [
+          {"metric_id": "watch_time_metric", "weight": 0.0},
+          {"metric_id": "session_count_metric", "weight": 0.0}
+        ]
+      }
+    },
+    "expected_reason": "matches COMPOSITE shape"
+  },
+  {
+    "name": "composite_divide_two_metrics",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'revenue_metric' THEN ms.metric_value END) / NULLIF(MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END), 0)) AS metric_value FROM delta.metric_summaries ms WHERE ms.experiment_id = '{{ExperimentID}}' AND ms.metric_id IN ('revenue_metric', 'session_count_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier1_composite",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_DIVIDE",
+        "operands": [
+          {"metric_id": "revenue_metric", "weight": 0.0},
+          {"metric_id": "session_count_metric", "weight": 0.0}
+        ]
+      }
+    },
+    "expected_reason": "matches COMPOSITE shape"
+  },
+  {
+    "name": "composite_weighted_sum_engagement",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (0.7 * MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) + 0.3 * MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.experiment_id = '{{ExperimentID}}' AND ms.metric_id IN ('watch_time_metric', 'ctr_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier1_composite",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "COMPOSITE",
+      "lower_is_better": false,
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+        "operands": [
+          {"metric_id": "watch_time_metric", "weight": 0.7},
+          {"metric_id": "ctr_metric", "weight": 0.3}
+        ]
+      }
+    },
+    "expected_reason": "matches COMPOSITE shape"
+  },
+  {
+    "name": "wc_purchase_48h",
+    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'purchase_completed' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL 48 HOURS GROUP BY eu.user_id, eu.variant_id",
+    "expected_tier": "tier1_windowed_count",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "WINDOWED_COUNT",
+      "lower_is_better": false,
+      "windowed_count": {
+        "event_type": "purchase_completed",
+        "filter_sql": "",
+        "window_hours": 48
+      }
+    },
+    "expected_reason": "COUNT within window"
+  },
+  {
+    "name": "wc_add_to_list_24h_mobile",
+    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'add_to_list' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL 24 HOURS AND me.platform = 'mobile' GROUP BY eu.user_id, eu.variant_id",
+    "expected_tier": "tier1_windowed_count",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "WINDOWED_COUNT",
+      "lower_is_better": false,
+      "windowed_count": {
+        "event_type": "add_to_list",
+        "filter_sql": "platform = 'mobile'",
+        "window_hours": 24
+      }
+    },
+    "expected_reason": "COUNT within window"
+  },
+  {
+    "name": "metricql_ratio_revenue_sessions",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'revenue_metric' THEN ms.metric_value END) / NULLIF(MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END), 0)) AS metric_value FROM delta.metric_summaries ms WHERE ms.experiment_id = '{{ExperimentID}}' AND ms.computation_date = '{{ComputationDate}}' AND ms.metric_id IN ('revenue_metric', 'session_count_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "ratio(@revenue_metric, @session_count_metric)"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_weighted_engagement_score",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (0.5 * MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) + 0.3 * MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END) + 0.2 * MAX(CASE WHEN ms.metric_id = 'completion_rate_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('watch_time_metric', 'ctr_metric', 'completion_rate_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "0.5 * @watch_time_metric + 0.3 * @ctr_metric + 0.2 * @completion_rate_metric"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_filtered_mean_with_percentile_filter",
+    "custom_sql": "SELECT me.user_id, AVG(me.duration_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'video_play' AND me.duration_ms > 30000 AND me.duration_ms < 7200000 GROUP BY me.user_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "mean(video_play.duration_ms) where duration_ms > 30000 and duration_ms < 7200000"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_count_with_in_list_filter",
+    "custom_sql": "SELECT me.user_id, COUNT(*) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'search_query' AND me.country IN ('us', 'gb', 'ca', 'au') GROUP BY me.user_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "count(search_query) where country in ['us', 'gb', 'ca', 'au']"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_subtract_two_metrics",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'revenue_metric' THEN ms.metric_value END) - MAX(CASE WHEN ms.metric_id = 'cost_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('revenue_metric', 'cost_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "@revenue_metric - @cost_metric"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_proportion_with_filter",
+    "custom_sql": "SELECT me.user_id, CAST(MAX(CASE WHEN me.event_type = 'purchase_completed' THEN 1 ELSE 0 END) AS DOUBLE) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.platform = 'mobile' GROUP BY me.user_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "proportion(purchase_completed) where platform = 'mobile'"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_windowed_count_filtered",
+    "custom_sql": "SELECT eu.user_id, eu.variant_id, CAST(COUNT(me.user_id) AS DOUBLE) AS metric_value FROM delta.exposures eu LEFT JOIN delta.metric_events me ON eu.user_id = me.user_id AND me.event_type = 'content_start' AND me.event_timestamp >= eu.exposure_ts AND me.event_timestamp < eu.exposure_ts + INTERVAL 72 HOURS AND me.content_type = 'movie' GROUP BY eu.user_id, eu.variant_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "count(content_start) where content_type = 'movie' within 72 hours of exposure"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_multiply_metric_refs",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END) * MAX(CASE WHEN ms.metric_id = 'avg_order_value_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('ctr_metric', 'avg_order_value_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "@ctr_metric * @avg_order_value_metric"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_three_ref_combination",
+    "custom_sql": "SELECT ms.user_id, ms.variant_id, (MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) + MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END) + MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END)) AS metric_value FROM delta.metric_summaries ms WHERE ms.metric_id IN ('watch_time_metric', 'session_count_metric', 'ctr_metric') GROUP BY ms.user_id, ms.variant_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "@watch_time_metric + @session_count_metric + @ctr_metric"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "metricql_percentile_filter_combined",
+    "custom_sql": "SELECT me.user_id, AVG(me.ttff_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.exposures eu ON me.user_id = eu.user_id WHERE me.event_type = 'play_start' AND me.ttff_ms < 5000 AND me.network_type = 'wifi' GROUP BY me.user_id",
+    "expected_tier": "tier2_metricql",
+    "expected_proposal": {
+      "metric_id": "",
+      "name": "",
+      "description": "",
+      "type": "METRICQL",
+      "metricql_expression": "mean(play_start.ttff_ms) where ttff_ms < 5000 and network_type = 'wifi'"
+    },
+    "expected_reason": "arithmetic over metric refs"
+  },
+  {
+    "name": "tier3_window_function",
+    "custom_sql": "SELECT user_id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY event_timestamp DESC) AS rn, duration_ms FROM delta.metric_events WHERE event_type = 'video_play'",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "unsupported window function"
+  },
+  {
+    "name": "tier3_multi_table_join_non_metric",
+    "custom_sql": "SELECT me.user_id, AVG(me.duration_ms) AS metric_value FROM delta.metric_events me INNER JOIN delta.user_profiles up ON me.user_id = up.user_id INNER JOIN delta.content_catalog cc ON me.content_id = cc.content_id WHERE me.event_type = 'video_play' AND up.country = 'us' GROUP BY me.user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "multi-table join"
+  },
+  {
+    "name": "tier3_recursive_cte",
+    "custom_sql": "WITH RECURSIVE user_chain AS (SELECT user_id, 0 AS depth FROM delta.metric_events WHERE event_type = 'referral' UNION ALL SELECT me.user_id, uc.depth + 1 FROM delta.metric_events me INNER JOIN user_chain uc ON me.referrer_user_id = uc.user_id) SELECT user_id, MAX(depth) AS max_depth FROM user_chain GROUP BY user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "recursive CTE"
+  },
+  {
+    "name": "tier3_malformed_sql_typo",
+    "custom_sql": "SELEC user_id, AVG(duration_ms) FORM delta.metric_events WHER event_type = 'video_play' GRUP BY user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "parse error"
+  },
+  {
+    "name": "tier3_empty_sql",
+    "custom_sql": "",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "empty SQL"
+  },
+  {
+    "name": "tier3_comments_only",
+    "custom_sql": "-- This metric was computed manually by the data team\n-- See ticket ENG-4821\n-- TODO: replace with proper metric definition",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "empty SQL"
+  },
+  {
+    "name": "tier3_subquery_in_where",
+    "custom_sql": "SELECT me.user_id, AVG(me.duration_ms) AS metric_value FROM delta.metric_events me WHERE me.event_type = 'video_play' AND me.user_id IN (SELECT user_id FROM delta.user_segments WHERE segment = 'high_value') GROUP BY me.user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "unsupported subquery"
+  },
+  {
+    "name": "tier3_lateral_join",
+    "custom_sql": "SELECT eu.user_id, AVG(t.score) AS metric_value FROM delta.exposures eu LATERAL VIEW explode(me.event_tags) t AS score JOIN delta.metric_events me ON eu.user_id = me.user_id WHERE me.event_type = 'impression' GROUP BY eu.user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "unsupported lateral view"
+  },
+  {
+    "name": "tier3_non_deterministic_function",
+    "custom_sql": "SELECT user_id, AVG(duration_ms) * RAND() AS metric_value FROM delta.metric_events WHERE event_type = 'video_play' GROUP BY user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "non-deterministic function"
+  },
+  {
+    "name": "tier3_union_all",
+    "custom_sql": "SELECT user_id, COUNT(*) AS metric_value FROM delta.metric_events WHERE event_type = 'play_start' GROUP BY user_id UNION ALL SELECT user_id, COUNT(*) AS metric_value FROM delta.metric_events WHERE event_type = 'purchase_completed' GROUP BY user_id",
+    "expected_tier": "tier3_untranslatable",
+    "expected_proposal": null,
+    "expected_reason": "UNION not supported"
+  }
+]
