@@ -58,16 +58,36 @@ pub fn classify_and_translate(
     custom_sql: &str,
     _original: &MetricDefinition,
 ) -> ClassificationResult {
-    if custom_sql.is_empty() {
+    // Short-circuit: whitespace-only or empty SQL.
+    if custom_sql.trim().is_empty() {
         return ClassificationResult::Tier3Untranslatable {
             reason: "empty SQL".to_string(),
             parse_error: None,
         };
     }
 
-    // Task A3 (classifier) + A4/A5 (tier translators) will replace this stub.
+    // Step 1: parse with sqlparser (GenericDialect ≈ Spark SQL subset).
+    let stmt = match classifier::parse_or_tier3(custom_sql) {
+        Ok(s) => s,
+        Err(e) => {
+            return ClassificationResult::Tier3Untranslatable {
+                reason: format!("SQL parse failed: {e}"),
+                parse_error: Some(e),
+            };
+        }
+    };
+
+    // Step 2: extract a structural shape hint from the AST.
+    let shape = classifier::extract_shape(&stmt);
+
+    // Steps 3+: A4 (Tier 1) and A5 (Tier 2) will branch on `shape` here.
+    // Until those tasks land, all parsed SQL still returns Tier 3, but now
+    // with an informative reason instead of the scaffold stub message.
     ClassificationResult::Tier3Untranslatable {
-        reason: "no patterns implemented yet".to_string(),
+        reason: match shape {
+            Some(h) => format!("shape {h:?} recognized but no translator implemented yet"),
+            None => "SQL did not match any known translator shape".into(),
+        },
         parse_error: None,
     }
 }
@@ -101,17 +121,32 @@ mod tests {
     }
 
     #[test]
-    fn non_empty_sql_returns_tier3_no_patterns_yet() {
+    fn non_empty_sql_returns_tier3_shape_recognized() {
+        // After A3 lands, parsed SQL produces a shape hint but still falls
+        // through to Tier3 (A4/A5 translators not yet implemented).
         let result =
             classify_and_translate("SELECT AVG(value) FROM events", &dummy_custom_metric());
         match result {
-            ClassificationResult::Tier3Untranslatable { reason, .. } => {
-                assert_eq!(
+            ClassificationResult::Tier3Untranslatable { reason, parse_error } => {
+                // Must NOT be the old scaffold stub message.
+                assert_ne!(
                     reason, "no patterns implemented yet",
-                    "scaffold stub must return 'no patterns implemented yet'; got: {reason:?}"
+                    "A3 must replace the scaffold stub; got: {reason:?}"
+                );
+                // Must be Tier3 with no parse error (it parsed successfully).
+                assert!(
+                    parse_error.is_none(),
+                    "valid SQL must have parse_error = None; got: {parse_error:?}"
+                );
+                // Reason must mention "shape" (recognized) or "no translator"
+                // (not recognized) — either is correct Tier3 post-A3.
+                let ok = reason.contains("shape") || reason.contains("SQL did not match");
+                assert!(
+                    ok,
+                    "reason must mention shape hint or no-match; got: {reason:?}"
                 );
             }
-            _ => panic!("expected Tier3Untranslatable for unimplemented patterns"),
+            _ => panic!("expected Tier3Untranslatable for unimplemented translators"),
         }
     }
 }
