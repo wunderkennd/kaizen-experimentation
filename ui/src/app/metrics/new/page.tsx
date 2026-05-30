@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer } from 'react';
+import { useReducer, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Breadcrumb } from '@/components/breadcrumb';
@@ -14,8 +14,9 @@ import { MetricTypeSelect } from '@/components/metrics/metric-type-select';
 import { FilteredMeanSection } from '@/components/metrics/filtered-mean-section';
 import { CompositeSection } from '@/components/metrics/composite-section';
 import { WindowedCountSection } from '@/components/metrics/windowed-count-section';
+import { MetricqlSection } from '@/components/metrics/metricql-section';
 import { MetricFormPreview } from '@/components/metrics/metric-form-preview';
-import { createMetricDefinition, marshalMetricDefinition } from '@/lib/api';
+import { createMetricDefinition, marshalMetricDefinition, listMetricDefinitions } from '@/lib/api';
 import {
   validateFilteredMeanConfig,
   validateCompositeConfig,
@@ -37,6 +38,8 @@ interface MetricFormState extends MetricFormShellState {
   filteredMean?: FilteredMeanConfig;
   composite?: CompositeConfig;
   windowedCount?: WindowedCountConfig;
+  // ADR-026 Phase 2: MetricQL expression string for the METRICQL type.
+  metricqlExpression: string;
   // UI-only
   submitting: boolean;
   serverError?: string;
@@ -48,6 +51,7 @@ type Action =
   | { type: 'SET_FILTERED_MEAN'; value: FilteredMeanConfig }
   | { type: 'SET_COMPOSITE'; value: CompositeConfig }
   | { type: 'SET_WINDOWED_COUNT'; value: WindowedCountConfig }
+  | { type: 'SET_METRICQL_EXPRESSION'; value: string }
   | { type: 'SET_SUBMITTING'; value: boolean }
   | { type: 'SET_SERVER_ERROR'; value: string | undefined };
 
@@ -59,6 +63,7 @@ const initialState: MetricFormState = {
   stakeholder: 'USER' as MetricStakeholder,
   aggregationLevel: 'USER' as MetricAggregationLevel,
   lowerIsBetter: false,
+  metricqlExpression: '',
   submitting: false,
 };
 
@@ -75,6 +80,7 @@ function reducer(state: MetricFormState, action: Action): MetricFormState {
         filteredMean: undefined,
         composite: undefined,
         windowedCount: undefined,
+        metricqlExpression: '',
       };
     case 'SET_FILTERED_MEAN':
       return { ...state, filteredMean: action.value };
@@ -82,6 +88,8 @@ function reducer(state: MetricFormState, action: Action): MetricFormState {
       return { ...state, composite: action.value };
     case 'SET_WINDOWED_COUNT':
       return { ...state, windowedCount: action.value };
+    case 'SET_METRICQL_EXPRESSION':
+      return { ...state, metricqlExpression: action.value };
     case 'SET_SUBMITTING':
       return { ...state, submitting: action.value };
     case 'SET_SERVER_ERROR':
@@ -134,6 +142,8 @@ function buildMetricFromState(state: MetricFormState): MetricDefinition {
         return { ...base, typeConfig: { case: 'windowedCount', value: state.windowedCount } };
       }
       return base;
+    case 'METRICQL':
+      return { ...base, metricqlExpression: state.metricqlExpression };
     default:
       return base;
   }
@@ -155,14 +165,40 @@ function isFormValid(state: MetricFormState): boolean {
       return !!state.composite && validateCompositeConfig(state.composite).valid;
     case 'WINDOWED_COUNT':
       return !!state.windowedCount && validateWindowedCountConfig(state.windowedCount).valid;
+    case 'METRICQL':
+      return state.metricqlExpression.trim().length > 0;
     default:
       return true;
   }
 }
 
+/**
+ * Experiment ID is not available on the metric creation form (a metric is not
+ * yet bound to an experiment at creation time). The MetricQL validator (B4)
+ * and preview RPC (B5/C2) accept an empty string — the server resolves
+ * @metric_ref existence from the global metric catalog, not per-experiment.
+ * A follow-up spec can thread a real experimentId here once the form-shell
+ * supports experiment context.
+ */
+const METRICQL_FORM_EXPERIMENT_ID = '';
+
 export default function NewMetricPage() {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  // Fetch the metric catalog so MetricqlSection can power @metric_ref autocomplete.
+  // We need only the IDs — metric names and configs are not required here.
+  // This matches the pattern used by OperandPicker (composite-section.tsx) which
+  // also calls listMetricDefinitions and maps to IDs.
+  const [knownMetricIds, setKnownMetricIds] = useState<string[]>([]);
+  useEffect(() => {
+    listMetricDefinitions()
+      .then((resp) => setKnownMetricIds(resp.metrics.map((m) => m.metricId)))
+      .catch(() => {
+        // Non-fatal: autocomplete degrades gracefully to empty when the catalog
+        // cannot be fetched. The user can still type expressions manually.
+      });
+  }, []);
 
   const handleCancel = () => {
     router.push('/metrics');
@@ -248,9 +284,19 @@ export default function NewMetricPage() {
                 disabled={state.submitting}
               />
             )}
+            {state.type === 'METRICQL' && (
+              <MetricqlSection
+                value={state.metricqlExpression}
+                onChange={(next) => dispatch({ type: 'SET_METRICQL_EXPRESSION', value: next })}
+                experimentId={METRICQL_FORM_EXPERIMENT_ID}
+                knownMetricIds={knownMetricIds}
+                disabled={state.submitting}
+              />
+            )}
             {state.type !== 'FILTERED_MEAN'
               && state.type !== 'COMPOSITE'
-              && state.type !== 'WINDOWED_COUNT' && (
+              && state.type !== 'WINDOWED_COUNT'
+              && state.type !== 'METRICQL' && (
               <p>
                 Type-specific fields for legacy types are out of scope for ADR-026 Phase 1.
                 Continue authoring these metric types via the M5 API directly until a follow-up

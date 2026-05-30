@@ -22,8 +22,9 @@ use experimentation_proto::experimentation::common::v1::{
     MetricDefinition, MetricType, QuasiExperimentConfig, SwitchbackConfig, WindowedCountConfig,
 };
 
-pub mod composite_cycle;
+pub mod cycle;
 pub mod filter_sql;
+pub mod metricql;
 
 // ---------------------------------------------------------------------------
 // Shared identifier regex (used by B2 WINDOWED_COUNT.event_type and, when B3
@@ -39,7 +40,7 @@ fn identifier_re() -> &'static Regex {
 use crate::store::{ManagementStore, StoreError};
 
 // ---------------------------------------------------------------------------
-// MetricLookup — the minimal surface the COMPOSITE validator needs.
+// MetricLookup — the minimal surface the cycle-detection validator needs.
 //
 // Both the PG-backed `ManagementStore` and the in-memory `MetricStore`
 // (`contract_test_support`) implement this so `validate_metric_definition`
@@ -55,9 +56,19 @@ pub trait MetricLookup: Send + Sync {
 
     /// Walk a COMPOSITE row and return its direct operand `metric_id`s in
     /// declaration order. Implementations should return `StoreError::NotFound`
-    /// when the metric does not exist (the cycle detector treats that as the
-    /// "not-yet-inserted root" case and skips the lookup).
+    /// when the metric does not exist. For non-COMPOSITE types, returns
+    /// `Ok(vec![])`.
     async fn get_composite_operands(&self, metric_id: &str) -> Result<Vec<String>, StoreError>;
+
+    /// Return the parsed `@metric_ref` ids from a stored METRICQL metric's
+    /// expression. Returns `StoreError::NotFound` if the metric does not exist.
+    /// Returns `Ok(vec![])` for non-METRICQL types.
+    async fn get_metricql_refs(&self, metric_id: &str) -> Result<Vec<String>, StoreError>;
+
+    /// Cheap metric-type lookup so the cycle dispatcher can pick the right
+    /// neighbor source without speculatively calling both getters.
+    /// Returns `StoreError::NotFound` if the metric does not exist.
+    async fn get_metric_type(&self, metric_id: &str) -> Result<MetricType, StoreError>;
 }
 
 #[tonic::async_trait]
@@ -68,6 +79,14 @@ impl MetricLookup for ManagementStore {
 
     async fn get_composite_operands(&self, metric_id: &str) -> Result<Vec<String>, StoreError> {
         ManagementStore::get_composite_operands(self, metric_id).await
+    }
+
+    async fn get_metricql_refs(&self, metric_id: &str) -> Result<Vec<String>, StoreError> {
+        ManagementStore::get_metricql_refs(self, metric_id).await
+    }
+
+    async fn get_metric_type(&self, metric_id: &str) -> Result<MetricType, StoreError> {
+        ManagementStore::get_metric_type(self, metric_id).await
     }
 }
 
@@ -380,6 +399,10 @@ pub async fn validate_metric_definition<L: MetricLookup + ?Sized>(
             validate_composite(composite_cfg(m), &m.metric_id, lookup).await
         }
         MetricType::WindowedCount => validate_windowed_count(windowed_count_cfg(m)),
+        // ADR-026 Phase 2: MetricQL expression-based metric.
+        MetricType::Metricql => {
+            validate_metricql_arm(&m.metricql_expression, &m.metric_id, lookup).await
+        }
         // Legacy 6 types (MEAN, PROPORTION, RATIO, COUNT, PERCENTILE, CUSTOM)
         // and UNSPECIFIED fall through — existing flat-field validation, if
         // any, lives elsewhere or has historically been absent for Phase 1.
@@ -631,9 +654,95 @@ async fn validate_composite<L: MetricLookup + ?Sized>(
 
     // Cycle + depth cap.
     let owned_ids: Vec<String> = cfg.operands.iter().map(|o| o.metric_id.clone()).collect();
-    composite_cycle::check_no_cycles(this_metric_id, &owned_ids, lookup, DEFAULT_DEPTH_CAP).await?;
+    cycle::check_no_cycles(this_metric_id, &owned_ids, lookup, DEFAULT_DEPTH_CAP).await?;
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// METRICQL validator (ADR-026 Phase 2, A7 + A8)
+// ---------------------------------------------------------------------------
+//
+// Rules enforced here:
+//   * `metricql_expression` must be non-empty (METRICQL with no expression is
+//     misuse — use a concrete type like MEAN or COMPOSITE instead).
+//   * The expression must lex, parse, and pass semantic analysis via
+//     `metricql::validate_metricql`.
+//   * Every `@metric_ref` in the expression must exist in the store (single
+//     round trip via `exists_all_metrics`).
+//   * No reference cycle — uses `cycle::check_no_cycles` with the parsed refs
+//     as direct_operands. A8 generalized neighbor expansion dispatches on
+//     metric type, so METRICQL → METRICQL, METRICQL → COMPOSITE, and
+//     COMPOSITE → METRICQL chains are all fully detected.
+
+#[allow(clippy::result_large_err)]
+async fn validate_metricql_arm<L: MetricLookup + ?Sized>(
+    expression: &str,
+    this_metric_id: &str,
+    lookup: &L,
+) -> Result<(), Box<Status>> {
+    // Empty expression for METRICQL type is misuse — reject early.
+    if expression.trim().is_empty() {
+        return Err(Box::new(Status::invalid_argument(
+            "METRICQL metric requires non-empty metricql_expression",
+        )));
+    }
+
+    // Parse with None so we get the refs first without requiring the known-set
+    // (option B from plan: parse → check refs exist → cycle-detect).
+    let ctx = metricql::ValidateContext { known_metric_ids: None };
+    let refs = match metricql::validate_metricql(expression, &ctx) {
+        Ok(refs) => refs,
+        Err(diags) => {
+            return Err(diagnostics_to_status(diags));
+        }
+    };
+
+    // Existence check — single round trip.
+    if !refs.is_empty() {
+        let ref_strs: Vec<&str> = refs.iter().map(|s| s.as_str()).collect();
+        let all_present = lookup
+            .exists_all_metrics(&ref_strs)
+            .await
+            .map_err(store_err_to_status)?;
+        if !all_present {
+            return Err(Box::new(Status::invalid_argument(format!(
+                "METRICQL metric '{}' references metrics that do not exist",
+                this_metric_id
+            ))));
+        }
+
+        // Cycle + depth cap — generalized DFS dispatches on metric type (A8).
+        cycle::check_no_cycles(this_metric_id, &refs, lookup, DEFAULT_DEPTH_CAP).await?;
+    }
+
+    Ok(())
+}
+
+/// Convert a list of internal `Diagnostic`s into a `Box<Status>`.
+///
+/// Uses summary-only encoding (first / all errors concatenated in the message).
+/// The full structured `MetricqlDiagnosticBag` is surfaced via the dedicated
+/// `ValidateMetricql` RPC (A9), which returns the bag in the response body.
+/// That is the path the M6 editor uses; this path is for CLI tooling and
+/// defense-in-depth at write time.
+///
+/// TODO(#436.x): serialize the full MetricqlDiagnosticBag into Status details
+/// for tooling that parses tonic Any payloads (CLI, language servers).
+#[allow(clippy::result_large_err)]
+fn diagnostics_to_status(diags: Vec<metricql::Diagnostic>) -> Box<Status> {
+    let summary = if diags.is_empty() {
+        "MetricQL validation failed".to_string()
+    } else if diags.len() == 1 {
+        diags[0].message.clone()
+    } else {
+        format!(
+            "MetricQL validation failed with {} errors: {}",
+            diags.len(),
+            diags.iter().map(|d| d.message.as_str()).collect::<Vec<_>>().join("; ")
+        )
+    };
+    Box::new(Status::invalid_argument(summary))
 }
 
 #[allow(clippy::result_large_err)]
@@ -828,6 +937,27 @@ mod tests {
                 .get(metric_id)
                 .cloned()
                 .ok_or_else(|| StoreError::NotFound(metric_id.to_string()))
+        }
+
+        async fn get_metricql_refs(&self, _metric_id: &str) -> Result<Vec<String>, StoreError> {
+            // MockLookup has no type awareness — treat all nodes as COMPOSITE
+            // (operands via graph). METRICQL-typed neighbor expansion is tested
+            // via GraphLookup in cycle.rs.
+            Ok(vec![])
+        }
+
+        async fn get_metric_type(
+            &self,
+            metric_id: &str,
+        ) -> Result<MetricType, StoreError> {
+            if self.graph.contains_key(metric_id) {
+                // MockLookup is used for COMPOSITE-flavoured validator tests;
+                // advertise all present nodes as COMPOSITE so the DFS calls
+                // get_composite_operands when descending (matching A7 test expectations).
+                Ok(MetricType::Composite)
+            } else {
+                Err(StoreError::NotFound(metric_id.to_string()))
+            }
         }
     }
 
@@ -1359,5 +1489,90 @@ mod tests {
 
         exp.equivalence_test = Some(equiv(0.05, None, 0.05));
         assert!(validate_starting(&exp).is_ok());
+    }
+
+    // --- METRICQL validator (A7 / ADR-026 Phase 2) ----------------------------
+
+    fn metricql_metric(metric_id: &str, expression: &str) -> MetricDefinition {
+        let mut m = make_metric(metric_id, metric_id, MetricType::Metricql);
+        m.metricql_expression = expression.to_string();
+        m
+    }
+
+    #[tokio::test]
+    async fn metricql_rejects_empty_expression() {
+        let m = metricql_metric("engagement", "");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("non-empty"));
+    }
+
+    #[tokio::test]
+    async fn metricql_rejects_whitespace_only_expression() {
+        let m = metricql_metric("engagement", "   ");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("non-empty"));
+    }
+
+    #[tokio::test]
+    async fn metricql_accepts_valid_no_refs() {
+        // mean(playtime.seconds) — no @metric_refs, no store round trip needed.
+        let m = metricql_metric("first_view", "mean(playtime.seconds)");
+        assert!(validate_metric_definition(&m, &empty_lookup()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn metricql_accepts_valid_with_existing_refs() {
+        // 0.7 * @watch_time + 0.3 * @ctr — both refs exist in the store.
+        let m = metricql_metric("engagement", "0.7 * @watch_time + 0.3 * @ctr");
+        let lookup = MockLookup::with_leaves(&["watch_time", "ctr"]);
+        assert!(validate_metric_definition(&m, &lookup).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn metricql_rejects_parse_error() {
+        // mean(heartbeat.value — unclosed paren. Parser will reject this.
+        let m = metricql_metric("broken", "mean(heartbeat.value");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        // Don't assert on exact wording — parser owns it. Just confirm it's not a panic.
+    }
+
+    #[tokio::test]
+    async fn metricql_rejects_missing_refs() {
+        // With empty_lookup all refs are missing → existence check fails.
+        let m = metricql_metric("engagement", "0.7 * @watch_time + 0.3 * @ctr");
+        let err = validate_metric_definition(&m, &empty_lookup()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("do not exist"));
+    }
+
+    #[tokio::test]
+    async fn metricql_rejects_missing_ref_with_lookup() {
+        // More specific: watch_time exists, ctr does not.
+        let m = metricql_metric("engagement", "0.7 * @watch_time + 0.3 * @ctr");
+        let lookup = MockLookup::with_leaves(&["watch_time"]);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("do not exist"));
+    }
+
+    #[tokio::test]
+    async fn metricql_rejects_simple_cycle() {
+        // METRICQL 'me' references @other, where MockLookup treats 'other'
+        // as a COMPOSITE-flavoured node with operand 'me' (simulating a cycle).
+        // composite_cycle::check_no_cycles catches this via the DFS.
+        let m = metricql_metric("me", "1.0 * @other");
+        let mut graph = HashMap::new();
+        graph.insert("me".to_string(), Vec::new());
+        graph.insert("other".to_string(), vec!["me".to_string()]);
+        let lookup = MockLookup::new(graph);
+        let err = validate_metric_definition(&m, &lookup).await.unwrap_err();
+        assert!(
+            err.message().to_lowercase().contains("cycle"),
+            "expected cycle error, got: {}",
+            err.message()
+        );
     }
 }

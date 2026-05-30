@@ -15,6 +15,9 @@ pub struct ManagementConfig {
     pub kafka_lifecycle_topic: String,
     /// Whether the guardrail Kafka consumer is enabled.
     pub kafka_enabled: bool,
+    /// gRPC address of the M3 MetricComputationService (ADR-026 Phase 2 / #436).
+    /// Used by the PreviewMetricDefinition proxy RPC.
+    pub metrics_addr: String,
 }
 
 impl ManagementConfig {
@@ -35,6 +38,8 @@ impl ManagementConfig {
             kafka_enabled: std::env::var("KAFKA_ENABLED")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false),
+            metrics_addr: std::env::var("METRICS_ADDR")
+                .unwrap_or_else(|_| "http://localhost:50056".into()),
         }
     }
 }

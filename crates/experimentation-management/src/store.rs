@@ -269,6 +269,7 @@ fn metric_type_to_sql(t: MetricType) -> &'static str {
         MetricType::FilteredMean => "FILTERED_MEAN",
         MetricType::Composite => "COMPOSITE",
         MetricType::WindowedCount => "WINDOWED_COUNT",
+        MetricType::Metricql => "METRICQL",
     }
 }
 
@@ -343,6 +344,7 @@ fn metric_type_from_sql(s: &str) -> MetricType {
         "FILTERED_MEAN" => MetricType::FilteredMean,
         "COMPOSITE" => MetricType::Composite,
         "WINDOWED_COUNT" => MetricType::WindowedCount,
+        "METRICQL" => MetricType::Metricql,
         _ => MetricType::Unspecified,
     }
 }
@@ -1104,6 +1106,73 @@ impl ManagementStore {
     }
 
     // ---------------------------------------------------------------------------
+    // ADR-026 Phase 2: MetricQL cycle-detection helpers
+    // ---------------------------------------------------------------------------
+
+    /// Return the parsed `@metric_ref` ids from a stored METRICQL metric.
+    ///
+    /// - Returns `StoreError::NotFound` if `metric_id` does not exist.
+    /// - Returns `Ok(vec![])` for non-METRICQL types (no refs to walk).
+    pub async fn get_metricql_refs(
+        &self,
+        metric_id: &str,
+    ) -> Result<Vec<String>, StoreError> {
+        let row: Option<(String, Option<String>)> = sqlx::query_as(
+            r#"SELECT type, metricql_expression
+               FROM metric_definitions
+               WHERE metric_id = $1"#,
+        )
+        .bind(metric_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+
+        let (ty, expr) = row.ok_or_else(|| StoreError::NotFound(metric_id.to_string()))?;
+
+        if ty != "METRICQL" {
+            return Ok(Vec::new());
+        }
+
+        let expression = match expr {
+            Some(e) if !e.trim().is_empty() => e,
+            _ => return Ok(Vec::new()),
+        };
+
+        // Re-parse the stored expression to extract @metric_refs. Using
+        // parse_only (no semantic rules) so we get refs even if the stored
+        // expression has a semantic issue (shouldn't happen after validation
+        // but defensive).
+        use crate::validators::metricql;
+        use crate::validators::metricql::analyze;
+
+        let ast = match metricql::parse_only(&expression) {
+            Ok(node) => node,
+            Err(_) => return Ok(Vec::new()),
+        };
+
+        Ok(analyze::extract_metric_refs(&ast))
+    }
+
+    /// Cheap metric-type lookup for the cycle-detection dispatcher.
+    ///
+    /// Returns `StoreError::NotFound` if `metric_id` does not exist.
+    pub async fn get_metric_type(
+        &self,
+        metric_id: &str,
+    ) -> Result<MetricType, StoreError> {
+        let row: Option<(String,)> = sqlx::query_as(
+            r#"SELECT type FROM metric_definitions WHERE metric_id = $1"#,
+        )
+        .bind(metric_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+
+        let (ty,) = row.ok_or_else(|| StoreError::NotFound(metric_id.to_string()))?;
+        Ok(metric_type_from_sql(&ty))
+    }
+
+    // ---------------------------------------------------------------------------
     // Audit trail
     // ---------------------------------------------------------------------------
 
@@ -1206,6 +1275,7 @@ mod tests {
             MetricType::FilteredMean,
             MetricType::Composite,
             MetricType::WindowedCount,
+            MetricType::Metricql,
         ] {
             let s = metric_type_to_sql(t);
             assert_eq!(metric_type_from_sql(s), t, "{:?} did not round-trip via {}", t, s);

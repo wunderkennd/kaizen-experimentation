@@ -1,0 +1,236 @@
+[
+  {
+    "name": "simple_mean",
+    "source": "mean(heartbeat.value)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "simple_sum",
+    "source": "sum(payment.value)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "simple_count",
+    "source": "count(login_event)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "simple_count_distinct",
+    "source": "count_distinct(purchase.product_id)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "simple_proportion",
+    "source": "proportion(signup_event)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "percentile_50",
+    "source": "percentile(50)(latency.value)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "percentile_95",
+    "source": "percentile(95)(latency.value)",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "aggregation_with_filter",
+    "source": "count(login_event) where success = 'true'",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "window_hours",
+    "source": "count(login_event) within 24 hours of exposure",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "window_days",
+    "source": "count(login_event) within 7 days of exposure",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "filter_and_window",
+    "source": "mean(playtime.seconds) where platform = 'mobile' within 7 days of exposure",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "ratio_two_refs",
+    "source": "ratio(@logins, @signups)",
+    "valid": true,
+    "expected_refs": ["logins", "signups"]
+  },
+  {
+    "name": "composite_two_refs",
+    "source": "0.7 * @watch_time + 0.3 * @ctr",
+    "valid": true,
+    "expected_refs": ["ctr", "watch_time"]
+  },
+  {
+    "name": "composite_three_refs",
+    "source": "@a + @b + @c",
+    "valid": true,
+    "expected_refs": ["a", "b", "c"]
+  },
+  {
+    "name": "composite_with_parens",
+    "source": "(0.5 + 0.5) * @x",
+    "valid": true,
+    "expected_refs": ["x"]
+  },
+  {
+    "name": "nested_composite",
+    "source": "@a * (@b + @c) - @d",
+    "valid": true,
+    "expected_refs": ["a", "b", "c", "d"]
+  },
+  {
+    "name": "unary_negation_ref",
+    "source": "-@a + @b",
+    "valid": true,
+    "expected_refs": ["a", "b"]
+  },
+  {
+    "name": "unary_negation_in_factor",
+    "source": "-1 * @a",
+    "valid": true,
+    "expected_refs": ["a"]
+  },
+  {
+    "name": "filter_eq_number",
+    "source": "count(e) where v = 42",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "filter_neq",
+    "source": "count(e) where v != 0",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "filter_lt_lte",
+    "source": "count(e) where v < 100 and w <= 50",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "filter_gt_gte",
+    "source": "count(e) where v > 0 and w >= 1",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "filter_in_list",
+    "source": "count(e) where country in ['us', 'gb', 'ca']",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "filter_nested_field",
+    "source": "count(e) where properties.tier = 'gold'",
+    "valid": true,
+    "expected_refs": []
+  },
+  {
+    "name": "lex_unterminated_string",
+    "source": "count(e) where p = 'mobile",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "lex_uppercase_ident",
+    "source": "count(Event)",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "lex_bang_alone",
+    "source": "count(e) where v ! 1",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_unclosed_paren",
+    "source": "mean(x.y",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_trailing_junk",
+    "source": "@a junk",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_unknown_agg",
+    "source": "median(x.y)",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_percentile_out_of_range",
+    "source": "percentile(150)(x.y)",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_window_zero",
+    "source": "count(e) within 0 hours of exposure",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_window_non_integer",
+    "source": "count(e) within 1.5 hours of exposure",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_empty_in_list",
+    "source": "count(e) where x in []",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "parse_bare_ident_in_factor",
+    "source": "0.7 * watch_time",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "semantic_bare_ref",
+    "source": "@watch_time",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "semantic_bare_literal",
+    "source": "0.95",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "semantic_count_with_field",
+    "source": "count(login.foo)",
+    "valid": false,
+    "expected_error_count": 1
+  },
+  {
+    "name": "semantic_mean_no_field",
+    "source": "mean(heartbeat)",
+    "valid": false,
+    "expected_error_count": 1
+  }
+]

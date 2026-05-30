@@ -45,6 +45,9 @@ const (
 	// MetricComputationServiceGetQueryLogProcedure is the fully-qualified name of the
 	// MetricComputationService's GetQueryLog RPC.
 	MetricComputationServiceGetQueryLogProcedure = "/experimentation.metrics.v1.MetricComputationService/GetQueryLog"
+	// MetricComputationServiceCompileMetricqlPreviewProcedure is the fully-qualified name of the
+	// MetricComputationService's CompileMetricqlPreview RPC.
+	MetricComputationServiceCompileMetricqlPreviewProcedure = "/experimentation.metrics.v1.MetricComputationService/CompileMetricqlPreview"
 )
 
 // MetricComputationServiceClient is a client for the
@@ -58,6 +61,14 @@ type MetricComputationServiceClient interface {
 	ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error)
 	// Get the SQL query used for a specific metric computation.
 	GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error)
+	// CompileMetricqlPreview -- dry-run compile a MetricQL expression to its
+	// Spark SQL equivalent without persisting or executing. Used by the M6
+	// editor's preview pane (ADR-026 Phase 2 / #436).
+	//
+	// KnownMetricIDs is derived server-side from the experiment's current
+	// metric set -- clients do NOT pass it, to prevent autocomplete-time
+	// info leakage about other experiments' metrics.
+	CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error)
 }
 
 // NewMetricComputationServiceClient constructs a client for the
@@ -96,6 +107,12 @@ func NewMetricComputationServiceClient(httpClient connect.HTTPClient, baseURL st
 			connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
 			connect.WithClientOptions(opts...),
 		),
+		compileMetricqlPreview: connect.NewClient[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse](
+			httpClient,
+			baseURL+MetricComputationServiceCompileMetricqlPreviewProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -105,6 +122,7 @@ type metricComputationServiceClient struct {
 	computeGuardrailMetrics *connect.Client[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse]
 	exportNotebook          *connect.Client[v1.ExportNotebookRequest, v1.ExportNotebookResponse]
 	getQueryLog             *connect.Client[v1.GetQueryLogRequest, v1.GetQueryLogResponse]
+	compileMetricqlPreview  *connect.Client[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse]
 }
 
 // ComputeMetrics calls experimentation.metrics.v1.MetricComputationService.ComputeMetrics.
@@ -128,6 +146,12 @@ func (c *metricComputationServiceClient) GetQueryLog(ctx context.Context, req *c
 	return c.getQueryLog.CallUnary(ctx, req)
 }
 
+// CompileMetricqlPreview calls
+// experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview.
+func (c *metricComputationServiceClient) CompileMetricqlPreview(ctx context.Context, req *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error) {
+	return c.compileMetricqlPreview.CallUnary(ctx, req)
+}
+
 // MetricComputationServiceHandler is an implementation of the
 // experimentation.metrics.v1.MetricComputationService service.
 type MetricComputationServiceHandler interface {
@@ -139,6 +163,14 @@ type MetricComputationServiceHandler interface {
 	ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error)
 	// Get the SQL query used for a specific metric computation.
 	GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error)
+	// CompileMetricqlPreview -- dry-run compile a MetricQL expression to its
+	// Spark SQL equivalent without persisting or executing. Used by the M6
+	// editor's preview pane (ADR-026 Phase 2 / #436).
+	//
+	// KnownMetricIDs is derived server-side from the experiment's current
+	// metric set -- clients do NOT pass it, to prevent autocomplete-time
+	// info leakage about other experiments' metrics.
+	CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error)
 }
 
 // NewMetricComputationServiceHandler builds an HTTP handler from the service implementation. It
@@ -172,6 +204,12 @@ func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opt
 		connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
 		connect.WithHandlerOptions(opts...),
 	)
+	metricComputationServiceCompileMetricqlPreviewHandler := connect.NewUnaryHandler(
+		MetricComputationServiceCompileMetricqlPreviewProcedure,
+		svc.CompileMetricqlPreview,
+		connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/experimentation.metrics.v1.MetricComputationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MetricComputationServiceComputeMetricsProcedure:
@@ -182,6 +220,8 @@ func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opt
 			metricComputationServiceExportNotebookHandler.ServeHTTP(w, r)
 		case MetricComputationServiceGetQueryLogProcedure:
 			metricComputationServiceGetQueryLogHandler.ServeHTTP(w, r)
+		case MetricComputationServiceCompileMetricqlPreviewProcedure:
+			metricComputationServiceCompileMetricqlPreviewHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -205,4 +245,8 @@ func (UnimplementedMetricComputationServiceHandler) ExportNotebook(context.Conte
 
 func (UnimplementedMetricComputationServiceHandler) GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.GetQueryLog is not implemented"))
+}
+
+func (UnimplementedMetricComputationServiceHandler) CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview is not implemented"))
 }

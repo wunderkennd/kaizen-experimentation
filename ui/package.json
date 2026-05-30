@@ -4,6 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "build:grammar": "lezer-generator src/components/metrics/metricql/metricql.grammar -o src/components/metrics/metricql/metricql.js",
+    "prebuild": "npm run build:grammar",
+    "pretype-check": "npm run build:grammar",
+    "pretest": "npm run build:grammar",
+    "prelint": "npm run build:grammar",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -11,8 +16,10 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/lint": "^6.9.6",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.43.0",
     "@connectrpc/connect": "^1.5.0",
@@ -24,6 +31,9 @@
     "recharts": "^2.12.0"
   },
   "devDependencies": {
+    "@lezer/generator": "^1.8.0",
+    "@lezer/highlight": "^1.2.3",
+    "@lezer/lr": "^1.4.10",
     "@tailwindcss/postcss": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.0.0",

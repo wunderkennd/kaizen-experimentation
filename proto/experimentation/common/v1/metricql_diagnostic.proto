@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package experimentation.common.v1;
+
+option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
+
+// MetricqlDiagnostic carries a single parse-or-semantic error from the
+// MetricQL validator (ADR-026 Phase 2 / #436). Multiple diagnostics may
+// be returned per validation pass; the analyzer collects all semantic
+// errors in one walk so operators don't play whack-a-mole.
+//
+// Wire format reused across:
+//   - ManagementService.ValidateMetricql response (live linting, M5)
+//   - ManagementService.CreateMetricDefinition Status.details (write-time)
+//   - MetricsService.CompileMetricqlPreview response (dry-run, M3)
+message MetricqlDiagnostic {
+  enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    SEVERITY_ERROR = 1;
+    SEVERITY_WARNING = 2;  // reserved; v1 emits only Error
+  }
+  Severity severity = 1;
+  string message = 2;
+  Span span = 3;
+
+  // Span is a byte-offset range into the MetricQL source string, plus
+  // a 1-based (line, column) for human-readable diagnostics.
+  message Span {
+    int32 start_offset = 1;   // byte offset, half-open [start, end)
+    int32 end_offset = 2;
+    int32 line = 3;           // 1-based
+    int32 column = 4;         // 1-based byte column (ASCII-naive; Phase 2 punt)
+  }
+}
+
+// MetricqlDiagnosticBag wraps a list of diagnostics for serialization
+// into tonic Status::with_details(). One bag per Status, never multiple.
+message MetricqlDiagnosticBag {
+  repeated MetricqlDiagnostic diagnostics = 1;
+}

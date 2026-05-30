@@ -50,6 +50,10 @@ enum MetricType {
   METRIC_TYPE_COMPOSITE = 8;
   // Count of an event type within a time window after first exposure (ADR-026 Phase 1).
   METRIC_TYPE_WINDOWED_COUNT = 9;
+  // MetricQL expression-based metric (ADR-026 Phase 2). The expression in
+  // MetricDefinition.metricql_expression is parsed + validated at M5 create
+  // time and compiled to Spark SQL by M3 at scheduling time.
+  METRIC_TYPE_METRICQL = 10;
 }
 
 // MetricDefinition is the specification for a metric computed by M3.

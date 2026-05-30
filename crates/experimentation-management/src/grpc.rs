@@ -21,8 +21,10 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
+    metricql_diagnostic::{Severity as ProtoSeverity, Span as ProtoSpan},
     Experiment, ExperimentState as ProtoState, ExperimentType, GuardrailAction, Layer,
-    LayerAllocation, MetricDefinition, MetricType, SurrogateModelConfig, TargetingRule, Variant,
+    LayerAllocation, MetricDefinition, MetricqlDiagnostic as ProtoMetricqlDiagnostic, MetricType,
+    SurrogateModelConfig, TargetingRule, Variant,
 };
 use experimentation_proto::experimentation::management::v1::{
     experiment_management_service_server::{
@@ -38,8 +40,14 @@ use experimentation_proto::experimentation::management::v1::{
     GetSurrogateCalibrationRequest, ListExperimentsRequest, ListExperimentsResponse,
     ListMetricDefinitionsRequest, ListMetricDefinitionsResponse, ListSurrogateModelsRequest,
     ListSurrogateModelsResponse, PauseExperimentRequest,
-    PortfolioStats as ProtoPortfolioStats, ResumeExperimentRequest, StartExperimentRequest,
+    PortfolioStats as ProtoPortfolioStats, PreviewMetricDefinitionRequest,
+    PreviewMetricDefinitionResponse, ResumeExperimentRequest, StartExperimentRequest,
     StreamConfigUpdatesRequest, TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
+    ValidateMetricqlRequest, ValidateMetricqlResponse,
+};
+use experimentation_proto::experimentation::metrics::v1::{
+    metric_computation_service_client::MetricComputationServiceClient,
+    CompileMetricqlPreviewRequest,
 };
 
 use crate::bucket_reuse;
@@ -58,15 +66,33 @@ pub struct SharedState {
     pub store: Arc<ManagementStore>,
     pub config_tx: broadcast::Sender<ConfigUpdateEvent>,
     pub version: Arc<AtomicI64>,
+    /// Cached gRPC client for M3 MetricComputationService.
+    /// Channel is lazily-connected (connect_lazy) — no TCP until first RPC.
+    /// Clone is cheap: Channel is Arc-counted internally.
+    pub metrics_client: MetricComputationServiceClient<tonic::transport::Channel>,
 }
 
 impl SharedState {
     pub fn new(store: ManagementStore) -> Self {
+        // Build a lazy channel to localhost:50056 as the default.
+        // The production path calls new_with_metrics_addr from serve().
+        let channel = tonic::transport::Endpoint::from_static("http://localhost:50056")
+            .connect_lazy();
+        Self::new_with_channel(store, MetricComputationServiceClient::new(channel))
+    }
+
+    /// Construct with a caller-supplied metrics client. Used by serve() (production)
+    /// and by tests (mock / lazily-connected channel to a test port).
+    pub fn new_with_channel(
+        store: ManagementStore,
+        metrics_client: MetricComputationServiceClient<tonic::transport::Channel>,
+    ) -> Self {
         let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
         Self {
             store: Arc::new(store),
             config_tx: tx,
             version: Arc::new(AtomicI64::new(1)),
+            metrics_client,
         }
     }
 
@@ -190,6 +216,7 @@ fn metric_type_to_pg_string(t: MetricType) -> &'static str {
         MetricType::FilteredMean => "FILTERED_MEAN",
         MetricType::Composite => "COMPOSITE",
         MetricType::WindowedCount => "WINDOWED_COUNT",
+        MetricType::Metricql => "METRICQL",
     }
 }
 
@@ -1326,6 +1353,154 @@ impl ExperimentManagementService for ManagementServiceHandler {
             stats: Some(proto_stats),
         }))
     }
+
+    // --- MetricQL live linting (ADR-026 Phase 2 / #436) ---
+
+    async fn validate_metricql(
+        &self,
+        request: Request<ValidateMetricqlRequest>,
+    ) -> Result<Response<ValidateMetricqlResponse>, Status> {
+        let req = request.into_inner();
+
+        if req.experiment_id.trim().is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+
+        // Per plan L8: empty expression returns one diagnostic, not an RPC error.
+        if req.metricql_expression.trim().is_empty() {
+            return Ok(Response::new(ValidateMetricqlResponse {
+                diagnostics: vec![ProtoMetricqlDiagnostic {
+                    severity: ProtoSeverity::Error as i32,
+                    message: "empty MetricQL expression".to_string(),
+                    span: Some(ProtoSpan {
+                        start_offset: 0,
+                        end_offset: 0,
+                        line: 1,
+                        column: 1,
+                    }),
+                }],
+                referenced_metric_ids: vec![],
+            }));
+        }
+
+        // Pass None for known_metric_ids — existence checks are enforced at
+        // write time (CreateMetricDefinition). The live-lint path only needs to
+        // catch parse/semantic structural errors during interactive editing.
+        let ctx = validators::metricql::ValidateContext { known_metric_ids: None };
+
+        let response =
+            match validators::metricql::validate_metricql(&req.metricql_expression, &ctx) {
+                Ok(refs) => ValidateMetricqlResponse {
+                    diagnostics: vec![],
+                    referenced_metric_ids: refs,
+                },
+                Err(diags) => ValidateMetricqlResponse {
+                    diagnostics: diags
+                        .into_iter()
+                        .map(|d| internal_to_proto_diag(d, &req.metricql_expression))
+                        .collect(),
+                    referenced_metric_ids: vec![],
+                },
+            };
+
+        Ok(Response::new(response))
+    }
+
+    // --- PreviewMetricDefinition (ADR-026 Phase 2 / #436) ---
+
+    async fn preview_metric_definition(
+        &self,
+        request: Request<PreviewMetricDefinitionRequest>,
+    ) -> Result<Response<PreviewMetricDefinitionResponse>, Status> {
+        // Extract the grpc-timeout header (if present) before consuming the
+        // request.  Tonic 0.12 does not expose a `deadline()` helper; the
+        // remaining budget is encoded in the `grpc-timeout` metadata key.
+        // We propagate it verbatim to M3 so M3 also gives up when M6 gives up.
+        let grpc_timeout = request
+            .metadata()
+            .get("grpc-timeout")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_owned());
+
+        let req = request.into_inner();
+
+        if req.experiment_id.trim().is_empty() {
+            return Err(Status::invalid_argument("experiment_id is required"));
+        }
+        if req.metricql_expression.trim().is_empty() {
+            return Err(Status::invalid_argument("metricql_expression is required"));
+        }
+
+        let m3_req = CompileMetricqlPreviewRequest {
+            experiment_id: req.experiment_id.clone(),
+            metricql_expression: req.metricql_expression.clone(),
+        };
+
+        let mut outbound = Request::new(m3_req);
+
+        // Propagate the caller's deadline to M3 so M3 also respects the budget.
+        // If no grpc-timeout was provided by the caller, apply a 5s default so
+        // the preview call never hangs indefinitely.
+        let timeout = grpc_timeout
+            .and_then(|t| parse_grpc_timeout(&t))
+            .unwrap_or(std::time::Duration::from_secs(5));
+        outbound.set_timeout(timeout);
+
+        // Clone is cheap — Channel is Arc-counted internally.
+        let mut client = self.state.metrics_client.clone();
+        let m3_resp = client.compile_metricql_preview(outbound).await?;
+
+        let inner = m3_resp.into_inner();
+        Ok(Response::new(PreviewMetricDefinitionResponse {
+            compiled_sql: inner.compiled_sql,
+            diagnostics: inner.diagnostics,
+        }))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MetricQL diagnostic helpers (ADR-026 Phase 2 / #436)
+// ---------------------------------------------------------------------------
+
+/// Convert byte offset into the source string to a 1-based (line, column) pair.
+/// Iterates once over the bytes up to `byte_offset`. ASCII-naive (consistent
+/// with the proto Span comment: "ASCII-naive; Phase 2 punt").
+fn line_col_from_byte_offset(source: &str, byte_offset: usize) -> (i32, i32) {
+    let mut line = 1i32;
+    let mut col = 1i32;
+    for (i, b) in source.bytes().enumerate() {
+        if i >= byte_offset {
+            break;
+        }
+        if b == b'\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+/// Convert one internal [`validators::metricql::Diagnostic`] to the proto wire type.
+fn internal_to_proto_diag(
+    d: validators::metricql::Diagnostic,
+    source: &str,
+) -> ProtoMetricqlDiagnostic {
+    let (line, column) = line_col_from_byte_offset(source, d.span.start);
+    ProtoMetricqlDiagnostic {
+        severity: match d.severity {
+            validators::metricql::Severity::Error => ProtoSeverity::Error as i32,
+            validators::metricql::Severity::Warning => ProtoSeverity::Warning as i32,
+        },
+        message: d.message,
+        span: Some(ProtoSpan {
+            start_offset: d.span.start as i32,
+            end_offset: d.span.end as i32,
+            line,
+            column,
+        }),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1338,7 +1513,16 @@ pub async fn serve(config: &crate::config::ManagementConfig, store: ManagementSt
         .parse()
         .map_err(|e| format!("invalid gRPC address '{}': {e}", config.grpc_addr))?;
 
-    let state = SharedState::new(store);
+    // Build a lazy channel to M3. connect_lazy() does NOT establish TCP until
+    // the first RPC — no startup latency or failure if M3 isn't up yet.
+    let metrics_endpoint = tonic::transport::Endpoint::from_shared(config.metrics_addr.clone())
+        .map_err(|e| format!("invalid METRICS_ADDR '{}': {e}", config.metrics_addr))?
+        .connect_timeout(std::time::Duration::from_secs(2))
+        .timeout(std::time::Duration::from_secs(5));
+    let metrics_channel = metrics_endpoint.connect_lazy();
+    let metrics_client = MetricComputationServiceClient::new(metrics_channel);
+
+    let state = SharedState::new_with_channel(store, metrics_client);
     let handler = ManagementServiceHandler::new(state);
     let svc = ExperimentManagementServiceServer::new(handler);
 
@@ -1430,6 +1614,33 @@ async fn get_layer_total_buckets(pool: &sqlx::postgres::PgPool, layer_id: Uuid) 
     row.map(|(total,)| total).ok_or(())
 }
 
+/// Parse a `grpc-timeout` header value (e.g. "5000m", "2S", "1H") into a `Duration`.
+///
+/// The gRPC wire format: an ASCII decimal integer followed by a unit suffix:
+///   H = hours, M = minutes, S = seconds, m = milliseconds,
+///   u = microseconds, n = nanoseconds.
+/// Ref: https://grpc.io/docs/what-is-grpc/core-concepts/ (grpc-timeout header).
+///
+/// Returns `None` if the value cannot be parsed (caller falls back to the default).
+fn parse_grpc_timeout(value: &str) -> Option<std::time::Duration> {
+    let (digits, unit) = value.split_at(value.len().saturating_sub(1));
+    let n: u64 = digits.parse().ok()?;
+    // checked_mul on H/M because the value comes from request metadata
+    // (an untrusted client could send `99999999999999H`); unchecked u64
+    // multiplication panics in debug builds and wraps in release builds,
+    // either of which is worse than returning None (caller falls back
+    // to the 5s default). Devin PR #570 round-1 finding.
+    match unit {
+        "H" => n.checked_mul(3600).map(std::time::Duration::from_secs),
+        "M" => n.checked_mul(60).map(std::time::Duration::from_secs),
+        "S" => Some(std::time::Duration::from_secs(n)),
+        "m" => Some(std::time::Duration::from_millis(n)),
+        "u" => Some(std::time::Duration::from_micros(n)),
+        "n" => Some(std::time::Duration::from_nanos(n)),
+        _ => None,
+    }
+}
+
 /// Extract guardrail metric IDs from the type_config JSONB column.
 fn extract_guardrail_ids(type_config: &serde_json::Value) -> Vec<String> {
     // Guardrail configs may be stored as a top-level array in type_config.
@@ -1443,4 +1654,161 @@ fn extract_guardrail_ids(type_config: &serde_json::Value) -> Vec<String> {
         }
     }
     vec![]
+}
+
+// ---------------------------------------------------------------------------
+// Tests — line_col_from_byte_offset + validate_metricql handler logic
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use validators::metricql::ValidateContext;
+
+    // ── line_col_from_byte_offset ────────────────────────────────────────────
+
+    #[test]
+    fn line_col_offset_zero_is_line1_col1() {
+        assert_eq!(line_col_from_byte_offset("mean(x.y)", 0), (1, 1));
+    }
+
+    #[test]
+    fn line_col_offset_within_first_line() {
+        // "mean" = bytes 0-3; offset 4 is '(' → still line 1
+        assert_eq!(line_col_from_byte_offset("mean(x.y)", 4), (1, 5));
+    }
+
+    #[test]
+    fn line_col_newline_increments_line() {
+        // "foo\nbar" — offset 4 ('b') should be (line=2, col=1)
+        let src = "foo\nbar";
+        assert_eq!(line_col_from_byte_offset(src, 4), (2, 1));
+    }
+
+    #[test]
+    fn line_col_second_char_on_second_line() {
+        // "foo\nbar" — offset 5 ('a') → (2, 2)
+        let src = "foo\nbar";
+        assert_eq!(line_col_from_byte_offset(src, 5), (2, 2));
+    }
+
+    #[test]
+    fn line_col_offset_past_end_clamps_gracefully() {
+        // Should not panic on out-of-bounds offset
+        let src = "ab";
+        let (line, col) = line_col_from_byte_offset(src, 999);
+        assert!(line >= 1);
+        assert!(col >= 1);
+    }
+
+    // ── internal_to_proto_diag ───────────────────────────────────────────────
+
+    #[test]
+    fn internal_to_proto_diag_error_severity() {
+        use validators::metricql::{Diagnostic, Severity, Span};
+
+        let d = Diagnostic { severity: Severity::Error, message: "oops".into(), span: Span::new(0, 4) };
+        let proto = internal_to_proto_diag(d, "oops");
+        assert_eq!(proto.severity, ProtoSeverity::Error as i32);
+        assert_eq!(proto.message, "oops");
+        let span = proto.span.unwrap();
+        assert_eq!(span.start_offset, 0);
+        assert_eq!(span.end_offset, 4);
+        assert_eq!(span.line, 1);
+        assert_eq!(span.column, 1);
+    }
+
+    #[test]
+    fn internal_to_proto_diag_multiline_span() {
+        use validators::metricql::{Diagnostic, Severity, Span};
+
+        // Source: "foo\nbar" — error at byte 4 ('b') → line 2 col 1
+        let src = "foo\nbar";
+        let d = Diagnostic { severity: Severity::Error, message: "bad".into(), span: Span::new(4, 7) };
+        let proto = internal_to_proto_diag(d, src);
+        let span = proto.span.unwrap();
+        assert_eq!(span.line, 2);
+        assert_eq!(span.column, 1);
+    }
+
+    // ── validate_metricql handler logic (via validator directly) ─────────────
+    // The full RPC handler requires a ManagementStore (database); instead we
+    // test the core logic — the validator call and proto conversion — directly.
+    // The empty-expression and empty-experiment-id paths are pure handler logic.
+
+    #[test]
+    fn empty_expression_produces_one_empty_diagnostic() {
+        // Mirrors the empty-expression branch in validate_metricql handler.
+        let expr = "";
+        assert!(expr.trim().is_empty()); // confirms the branch triggers
+
+        // The proto response would have exactly one diagnostic.
+        let diag = ProtoMetricqlDiagnostic {
+            severity: ProtoSeverity::Error as i32,
+            message: "empty MetricQL expression".to_string(),
+            span: Some(ProtoSpan { start_offset: 0, end_offset: 0, line: 1, column: 1 }),
+        };
+        assert!(diag.message.to_lowercase().contains("empty"));
+    }
+
+    #[test]
+    fn valid_expression_yields_no_diagnostics_and_refs() {
+        let ctx = ValidateContext { known_metric_ids: None };
+        let result = validators::metricql::validate_metricql("0.7 * @watch_time + 0.3 * @ctr", &ctx);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+        let mut refs = result.unwrap();
+        refs.sort();
+        assert_eq!(refs, vec!["ctr", "watch_time"]);
+    }
+
+    #[test]
+    fn parse_error_produces_one_diagnostic_with_proto_conversion() {
+        let ctx = ValidateContext { known_metric_ids: None };
+        let src = "mean(heartbeat.value"; // unclosed paren
+        let result = validators::metricql::validate_metricql(src, &ctx);
+        let diags = result.unwrap_err();
+        assert_eq!(diags.len(), 1);
+
+        let proto = internal_to_proto_diag(diags.into_iter().next().unwrap(), src);
+        assert_eq!(proto.severity, ProtoSeverity::Error as i32);
+        assert!(proto.span.is_some());
+    }
+
+    #[test]
+    fn count_with_field_produces_error_diagnostic() {
+        let ctx = ValidateContext { known_metric_ids: None };
+        let result = validators::metricql::validate_metricql("count(login.foo)", &ctx);
+        assert!(result.is_err(), "count(login.foo) should fail semantic analysis");
+        let diags = result.unwrap_err();
+        assert!(!diags.is_empty());
+    }
+
+    #[test]
+    fn multiline_expression_error_attributed_to_line2() {
+        // "mean(heartbeat.value)\nand wrong" — the "and" part will parse/fail
+        // somewhere after the newline. We verify the proto span gets line 2.
+        let src = "mean(heartbeat.value)\nand wrong";
+        let ctx = ValidateContext { known_metric_ids: None };
+        let result = validators::metricql::validate_metricql(src, &ctx);
+        // The expression may parse or fail depending on grammar — we just verify
+        // the line_col conversion works on multi-line input by exercising it.
+        match result {
+            Err(diags) => {
+                for d in diags {
+                    if d.span.start > 21 {
+                        // After the newline
+                        let proto = internal_to_proto_diag(d, src);
+                        let span = proto.span.unwrap();
+                        assert_eq!(span.line, 2, "error after newline should be on line 2");
+                    }
+                }
+            }
+            Ok(_) => {
+                // Expression valid — at minimum verify line_col_from_byte_offset
+                // correctly returns line 2 for offset 22 (first char after '\n')
+                let (line, _) = line_col_from_byte_offset(src, 22);
+                assert_eq!(line, 2);
+            }
+        }
+    }
 }

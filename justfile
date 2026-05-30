@@ -187,6 +187,17 @@ test-hash:
     @echo "  Validating hash parity..."
     python3 scripts/verify_hash_parity.py
 
+# MetricQL cross-implementation parity test (ADR-026 Phase 2 / #436).
+# Runs both the Rust and Go parsers against the shared golden corpus at
+# test-vectors/metricql_corpus.json and asserts both implementations
+# accept/reject the same fixtures with the same extracted refs.
+test-metricql-parity:
+    @echo "  Rust parser parity..."
+    {{ cargo }} test -p experimentation-management --test metricql_corpus_parity -- --nocapture
+    @echo "  Go parser parity..."
+    cd {{ services_dir }} && {{ go }} test ./metrics/internal/metricql/ -run TestCorpusParity -v
+    @echo "  ✓ both parsers accept/reject the same corpus"
+
 # Run Rust flags service tests (ADR-024: Go M7 deleted, Rust crate is the implementation)
 test-flags:
     @echo "  Running Rust flags service tests..."

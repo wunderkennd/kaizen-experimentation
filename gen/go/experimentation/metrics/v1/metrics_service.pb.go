@@ -7,6 +7,7 @@
 package metricsv1
 
 import (
+	v1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/known/emptypb"
@@ -520,11 +521,119 @@ func (x *QueryLogEntry) GetComputedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type CompileMetricqlPreviewRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Scopes the KnownMetricIDs lookup. Required.
+	ExperimentId string `protobuf:"bytes,1,opt,name=experiment_id,json=experimentId,proto3" json:"experiment_id,omitempty"`
+	// The MetricQL source text to compile.
+	MetricqlExpression string `protobuf:"bytes,2,opt,name=metricql_expression,json=metricqlExpression,proto3" json:"metricql_expression,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *CompileMetricqlPreviewRequest) Reset() {
+	*x = CompileMetricqlPreviewRequest{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompileMetricqlPreviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompileMetricqlPreviewRequest) ProtoMessage() {}
+
+func (x *CompileMetricqlPreviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompileMetricqlPreviewRequest.ProtoReflect.Descriptor instead.
+func (*CompileMetricqlPreviewRequest) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CompileMetricqlPreviewRequest) GetExperimentId() string {
+	if x != nil {
+		return x.ExperimentId
+	}
+	return ""
+}
+
+func (x *CompileMetricqlPreviewRequest) GetMetricqlExpression() string {
+	if x != nil {
+		return x.MetricqlExpression
+	}
+	return ""
+}
+
+type CompileMetricqlPreviewResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The compiled Spark SQL. Empty when diagnostics is non-empty.
+	CompiledSql string `protobuf:"bytes,1,opt,name=compiled_sql,json=compiledSql,proto3" json:"compiled_sql,omitempty"`
+	// Parse + semantic diagnostics. Empty when compiled_sql is populated.
+	Diagnostics   []*v1.MetricqlDiagnostic `protobuf:"bytes,2,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompileMetricqlPreviewResponse) Reset() {
+	*x = CompileMetricqlPreviewResponse{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompileMetricqlPreviewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompileMetricqlPreviewResponse) ProtoMessage() {}
+
+func (x *CompileMetricqlPreviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompileMetricqlPreviewResponse.ProtoReflect.Descriptor instead.
+func (*CompileMetricqlPreviewResponse) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CompileMetricqlPreviewResponse) GetCompiledSql() string {
+	if x != nil {
+		return x.CompiledSql
+	}
+	return ""
+}
+
+func (x *CompileMetricqlPreviewResponse) GetDiagnostics() []*v1.MetricqlDiagnostic {
+	if x != nil {
+		return x.Diagnostics
+	}
+	return nil
+}
+
 var File_experimentation_metrics_v1_metrics_service_proto protoreflect.FileDescriptor
 
 const file_experimentation_metrics_v1_metrics_service_proto_rawDesc = "" +
 	"\n" +
-	"0experimentation/metrics/v1/metrics_service.proto\x12\x1aexperimentation.metrics.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"<\n" +
+	"0experimentation/metrics/v1/metrics_service.proto\x12\x1aexperimentation.metrics.v1\x1a3experimentation/common/v1/metricql_diagnostic.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"<\n" +
 	"\x15ComputeMetricsRequest\x12#\n" +
 	"\rexperiment_id\x18\x01 \x01(\tR\fexperimentId\"E\n" +
 	"\x1eComputeGuardrailMetricsRequest\x12#\n" +
@@ -560,12 +669,19 @@ const file_experimentation_metrics_v1_metrics_service_proto_rawDesc = "" +
 	"\vduration_ms\x18\x05 \x01(\x03R\n" +
 	"durationMs\x12;\n" +
 	"\vcomputed_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAt2\x88\x04\n" +
+	"computedAt\"u\n" +
+	"\x1dCompileMetricqlPreviewRequest\x12#\n" +
+	"\rexperiment_id\x18\x01 \x01(\tR\fexperimentId\x12/\n" +
+	"\x13metricql_expression\x18\x02 \x01(\tR\x12metricqlExpression\"\x94\x01\n" +
+	"\x1eCompileMetricqlPreviewResponse\x12!\n" +
+	"\fcompiled_sql\x18\x01 \x01(\tR\vcompiledSql\x12O\n" +
+	"\vdiagnostics\x18\x02 \x03(\v2-.experimentation.common.v1.MetricqlDiagnosticR\vdiagnostics2\x9a\x05\n" +
 	"\x18MetricComputationService\x12w\n" +
 	"\x0eComputeMetrics\x121.experimentation.metrics.v1.ComputeMetricsRequest\x1a2.experimentation.metrics.v1.ComputeMetricsResponse\x12\x89\x01\n" +
 	"\x17ComputeGuardrailMetrics\x12:.experimentation.metrics.v1.ComputeGuardrailMetricsRequest\x1a2.experimentation.metrics.v1.ComputeMetricsResponse\x12w\n" +
 	"\x0eExportNotebook\x121.experimentation.metrics.v1.ExportNotebookRequest\x1a2.experimentation.metrics.v1.ExportNotebookResponse\x12n\n" +
-	"\vGetQueryLog\x12..experimentation.metrics.v1.GetQueryLogRequest\x1a/.experimentation.metrics.v1.GetQueryLogResponseB\x8b\x02\n" +
+	"\vGetQueryLog\x12..experimentation.metrics.v1.GetQueryLogRequest\x1a/.experimentation.metrics.v1.GetQueryLogResponse\x12\x8f\x01\n" +
+	"\x16CompileMetricqlPreview\x129.experimentation.metrics.v1.CompileMetricqlPreviewRequest\x1a:.experimentation.metrics.v1.CompileMetricqlPreviewResponseB\x8b\x02\n" +
 	"\x1ecom.experimentation.metrics.v1B\x13MetricsServiceProtoP\x01ZJgithub.com/org/experimentation/gen/go/experimentation/metrics/v1;metricsv1\xa2\x02\x03EMX\xaa\x02\x1aExperimentation.Metrics.V1\xca\x02\x1aExperimentation\\Metrics\\V1\xe2\x02&Experimentation\\Metrics\\V1\\GPBMetadata\xea\x02\x1cExperimentation::Metrics::V1b\x06proto3"
 
 var (
@@ -580,7 +696,7 @@ func file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP() []byte 
 	return file_experimentation_metrics_v1_metrics_service_proto_rawDescData
 }
 
-var file_experimentation_metrics_v1_metrics_service_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_experimentation_metrics_v1_metrics_service_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_experimentation_metrics_v1_metrics_service_proto_goTypes = []any{
 	(*ComputeMetricsRequest)(nil),          // 0: experimentation.metrics.v1.ComputeMetricsRequest
 	(*ComputeGuardrailMetricsRequest)(nil), // 1: experimentation.metrics.v1.ComputeGuardrailMetricsRequest
@@ -590,27 +706,33 @@ var file_experimentation_metrics_v1_metrics_service_proto_goTypes = []any{
 	(*GetQueryLogRequest)(nil),             // 5: experimentation.metrics.v1.GetQueryLogRequest
 	(*GetQueryLogResponse)(nil),            // 6: experimentation.metrics.v1.GetQueryLogResponse
 	(*QueryLogEntry)(nil),                  // 7: experimentation.metrics.v1.QueryLogEntry
-	(*timestamppb.Timestamp)(nil),          // 8: google.protobuf.Timestamp
+	(*CompileMetricqlPreviewRequest)(nil),  // 8: experimentation.metrics.v1.CompileMetricqlPreviewRequest
+	(*CompileMetricqlPreviewResponse)(nil), // 9: experimentation.metrics.v1.CompileMetricqlPreviewResponse
+	(*timestamppb.Timestamp)(nil),          // 10: google.protobuf.Timestamp
+	(*v1.MetricqlDiagnostic)(nil),          // 11: experimentation.common.v1.MetricqlDiagnostic
 }
 var file_experimentation_metrics_v1_metrics_service_proto_depIdxs = []int32{
-	8, // 0: experimentation.metrics.v1.ComputeMetricsResponse.completed_at:type_name -> google.protobuf.Timestamp
-	8, // 1: experimentation.metrics.v1.GetQueryLogRequest.after:type_name -> google.protobuf.Timestamp
-	8, // 2: experimentation.metrics.v1.GetQueryLogRequest.before:type_name -> google.protobuf.Timestamp
-	7, // 3: experimentation.metrics.v1.GetQueryLogResponse.entries:type_name -> experimentation.metrics.v1.QueryLogEntry
-	8, // 4: experimentation.metrics.v1.QueryLogEntry.computed_at:type_name -> google.protobuf.Timestamp
-	0, // 5: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:input_type -> experimentation.metrics.v1.ComputeMetricsRequest
-	1, // 6: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:input_type -> experimentation.metrics.v1.ComputeGuardrailMetricsRequest
-	3, // 7: experimentation.metrics.v1.MetricComputationService.ExportNotebook:input_type -> experimentation.metrics.v1.ExportNotebookRequest
-	5, // 8: experimentation.metrics.v1.MetricComputationService.GetQueryLog:input_type -> experimentation.metrics.v1.GetQueryLogRequest
-	2, // 9: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
-	2, // 10: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
-	4, // 11: experimentation.metrics.v1.MetricComputationService.ExportNotebook:output_type -> experimentation.metrics.v1.ExportNotebookResponse
-	6, // 12: experimentation.metrics.v1.MetricComputationService.GetQueryLog:output_type -> experimentation.metrics.v1.GetQueryLogResponse
-	9, // [9:13] is the sub-list for method output_type
-	5, // [5:9] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	10, // 0: experimentation.metrics.v1.ComputeMetricsResponse.completed_at:type_name -> google.protobuf.Timestamp
+	10, // 1: experimentation.metrics.v1.GetQueryLogRequest.after:type_name -> google.protobuf.Timestamp
+	10, // 2: experimentation.metrics.v1.GetQueryLogRequest.before:type_name -> google.protobuf.Timestamp
+	7,  // 3: experimentation.metrics.v1.GetQueryLogResponse.entries:type_name -> experimentation.metrics.v1.QueryLogEntry
+	10, // 4: experimentation.metrics.v1.QueryLogEntry.computed_at:type_name -> google.protobuf.Timestamp
+	11, // 5: experimentation.metrics.v1.CompileMetricqlPreviewResponse.diagnostics:type_name -> experimentation.common.v1.MetricqlDiagnostic
+	0,  // 6: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:input_type -> experimentation.metrics.v1.ComputeMetricsRequest
+	1,  // 7: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:input_type -> experimentation.metrics.v1.ComputeGuardrailMetricsRequest
+	3,  // 8: experimentation.metrics.v1.MetricComputationService.ExportNotebook:input_type -> experimentation.metrics.v1.ExportNotebookRequest
+	5,  // 9: experimentation.metrics.v1.MetricComputationService.GetQueryLog:input_type -> experimentation.metrics.v1.GetQueryLogRequest
+	8,  // 10: experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview:input_type -> experimentation.metrics.v1.CompileMetricqlPreviewRequest
+	2,  // 11: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
+	2,  // 12: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
+	4,  // 13: experimentation.metrics.v1.MetricComputationService.ExportNotebook:output_type -> experimentation.metrics.v1.ExportNotebookResponse
+	6,  // 14: experimentation.metrics.v1.MetricComputationService.GetQueryLog:output_type -> experimentation.metrics.v1.GetQueryLogResponse
+	9,  // 15: experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview:output_type -> experimentation.metrics.v1.CompileMetricqlPreviewResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_experimentation_metrics_v1_metrics_service_proto_init() }
@@ -624,7 +746,7 @@ func file_experimentation_metrics_v1_metrics_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_experimentation_metrics_v1_metrics_service_proto_rawDesc), len(file_experimentation_metrics_v1_metrics_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
