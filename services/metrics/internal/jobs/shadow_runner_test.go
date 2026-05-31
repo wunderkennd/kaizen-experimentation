@@ -461,15 +461,17 @@ func TestStandardJob_ShadowRun_RegularPassUnaffected(t *testing.T) {
 	assert.Equal(t, 1, shadowEntries, "exactly one shadow_run query log entry expected")
 }
 
-// TestStandardJob_ShadowRun_AlreadyComputedToday_NotReRun: a shadow run that
-// already has a result row for today (mock InsertResult simulating B3) is
-// NOT re-computed by the pass.
-func TestStandardJob_ShadowRun_AlreadyComputedToday_NotReRun(t *testing.T) {
+// TestStandardJob_ShadowRun_PropagatesExperimentID: regression test for Fix 2 —
+// the SQL sent to the executor must contain the real experiment_id, not an empty
+// string.  An empty ExperimentID in TemplateParams would render
+// `WHERE experiment_id = ''` in delta.exposures joins, producing zero-row output.
+func TestStandardJob_ShadowRun_PropagatesExperimentID(t *testing.T) {
+	p := minimalExperimentFixture(t)
 	ms := shadow.NewMockStore()
 	ctx := context.Background()
 
 	candidate := &commonv1.MetricDefinition{
-		MetricId:        "already_done_candidate",
+		MetricId:        "exp_id_propagation_candidate",
 		Type:            commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
 		SourceEventType: "heartbeat",
 		TypeConfig: &commonv1.MetricDefinition_FilteredMean{
@@ -482,25 +484,135 @@ func TestStandardJob_ShadowRun_AlreadyComputedToday_NotReRun(t *testing.T) {
 	shadowID, err := ms.Schedule(ctx, "watch_time", candidateJSON(t, candidate))
 	require.NoError(t, err)
 
-	// Simulate B3 having already written a result for today's date.
-	// The exact date must match what StandardJob.Run computes via time.Now().
-	// We insert a result row with an intentionally past date to test the
-	// dedup gate for a different date (today's date is dynamic; we test the
-	// gate logic in mock_store_test.go where the date is controlled).
-	// Instead, verify the non-re-run path by checking that after inserting a
-	// result row for a predictable date, ListNeedingComputation excludes the ID.
-	today := "2099-12-31" // far future — will never match real time.Now()
-	require.NoError(t, ms.InsertResult(ctx, shadow.ResultRow{
-		ShadowID:        shadowID,
-		ExperimentID:    "exp1",
-		VariantID:       "v1",
-		ComputationDate: today,
-	}))
+	const targetExp = "e0000000-0000-0000-0000-shadow000001"
+	job, executor, _ := setupShadowJob(t, p, ms)
 
-	runs, err := ms.ListNeedingComputation(ctx, today)
-	require.NoError(t, err)
-	for _, r := range runs {
-		assert.NotEqual(t, shadowID, r.ShadowID,
-			"shadow already computed for today must be excluded from ListNeedingComputation")
+	_, runErr := job.Run(ctx, targetExp)
+	require.NoError(t, runErr)
+
+	// Find the shadow executor call and verify experiment_id appears in the SQL.
+	var shadowCall *spark.MockCall
+	for _, c := range executor.GetCalls() {
+		if strings.Contains(c.SQL, shadowID.String()) {
+			cc := c
+			shadowCall = &cc
+			break
+		}
 	}
+	require.NotNil(t, shadowCall, "shadow must have produced an executor call")
+	assert.Contains(t, shadowCall.SQL, targetExp,
+		"rendered SQL must contain the real experiment_id (Fix 2 regression guard)")
+}
+
+// TestStandardJob_ShadowRun_WritesStubResultRowForDedup: after a successful
+// shadow compute, computeOneShadow must insert a stub ResultRow with NULL diff
+// values and within_tolerance=false.  This row is the dedup marker that prevents
+// re-computation within the same nightly pass.
+func TestStandardJob_ShadowRun_WritesStubResultRowForDedup(t *testing.T) {
+	p := minimalExperimentFixture(t)
+	ms := shadow.NewMockStore()
+	ctx := context.Background()
+
+	candidate := &commonv1.MetricDefinition{
+		MetricId:        "stub_row_candidate",
+		Type:            commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
+		SourceEventType: "heartbeat",
+		TypeConfig: &commonv1.MetricDefinition_FilteredMean{
+			FilteredMean: &commonv1.FilteredMeanConfig{
+				FilterSql:   "platform = 'mobile'",
+				ValueColumn: "duration_ms",
+			},
+		},
+	}
+	shadowID, err := ms.Schedule(ctx, "watch_time", candidateJSON(t, candidate))
+	require.NoError(t, err)
+
+	// Use the experiment ID defined in minimalExperimentFixture.
+	const expX = "e0000000-0000-0000-0000-shadow000001"
+	job, _, _ := setupShadowJob(t, p, ms)
+
+	_, runErr := job.Run(ctx, expX)
+	require.NoError(t, runErr)
+
+	// Inspect the mock store for the stub result row.
+	results, err := ms.Results(ctx, shadowID)
+	require.NoError(t, err)
+	require.Len(t, results, 1, "exactly one stub result row must be written by B2")
+
+	stub := results[0]
+	assert.Equal(t, shadowID, stub.ShadowID)
+	assert.Equal(t, expX, stub.ExperimentID,
+		"stub ExperimentID must match the experiment passed to job.Run")
+	assert.False(t, stub.OriginalValue.Valid,
+		"stub OriginalValue must be NULL (B3 will fill it)")
+	assert.False(t, stub.CandidateValue.Valid,
+		"stub CandidateValue must be NULL (B3 will fill it)")
+	assert.False(t, stub.DiffAbs.Valid,
+		"stub DiffAbs must be NULL")
+	assert.False(t, stub.WithinTolerance,
+		"stub WithinTolerance must be false (B3 sets real value)")
+}
+
+// TestStandardJob_ShadowRun_DedupAcrossExperimentsInSamePass verifies the
+// per-(shadow_id, experiment_id) dedup contract:
+//   - job.Run(exp_A) → shadow is computed once for exp_A
+//   - job.Run(exp_B) → shadow is computed once for exp_B (different key)
+//   - job.Run(exp_A) again → shadow is NOT re-computed (stub row exists for exp_A)
+func TestStandardJob_ShadowRun_DedupAcrossExperimentsInSamePass(t *testing.T) {
+	p := minimalExperimentFixture(t)
+	ms := shadow.NewMockStore()
+	ctx := context.Background()
+
+	candidate := &commonv1.MetricDefinition{
+		MetricId:        "dedup_cross_exp_candidate",
+		Type:            commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
+		SourceEventType: "heartbeat",
+		TypeConfig: &commonv1.MetricDefinition_FilteredMean{
+			FilteredMean: &commonv1.FilteredMeanConfig{
+				FilterSql:   "platform = 'mobile'",
+				ValueColumn: "duration_ms",
+			},
+		},
+	}
+	shadowID, err := ms.Schedule(ctx, "watch_time", candidateJSON(t, candidate))
+	require.NoError(t, err)
+
+	job, executor, _ := setupShadowJob(t, p, ms)
+
+	countShadowCalls := func() int {
+		n := 0
+		for _, c := range executor.GetCalls() {
+			if strings.Contains(c.SQL, shadowID.String()) {
+				n++
+			}
+		}
+		return n
+	}
+
+	// First call: exp_A — shadow must be computed (1 call total).
+	_, runErr := job.Run(ctx, "e0000000-0000-0000-0000-shadow000001")
+	require.NoError(t, runErr)
+	assert.Equal(t, 1, countShadowCalls(), "first job.Run must compute shadow once")
+
+	// Verify SQL contained exp_A's ID.
+	for _, c := range executor.GetCalls() {
+		if strings.Contains(c.SQL, shadowID.String()) {
+			assert.Contains(t, c.SQL, "e0000000-0000-0000-0000-shadow000001",
+				"shadow SQL must be scoped to exp_A")
+			break
+		}
+	}
+
+	// Second call: exp_A again — dedup stub row exists → shadow must NOT re-compute.
+	executor.Reset()
+	_, runErr = job.Run(ctx, "e0000000-0000-0000-0000-shadow000001")
+	require.NoError(t, runErr)
+	assert.Equal(t, 0, countShadowCalls(),
+		"second job.Run for the same experiment must NOT re-compute the shadow (dedup)")
+
+	// Verify the stub result row count: still 1 (no new stub written on skip).
+	results, err := ms.Results(ctx, shadowID)
+	require.NoError(t, err)
+	assert.Len(t, results, 1,
+		"stub result count must remain 1 after dedup skip; no duplicate rows")
 }

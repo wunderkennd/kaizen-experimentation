@@ -123,28 +123,30 @@ func TestPgStore_TransitionPersistsRejectionReason(t *testing.T) {
 }
 
 // TestPgStore_ListNeedingComputation_Basic: a PENDING run with no result row is
-// returned; a PENDING run with an existing result row for the date is excluded.
+// returned; a PENDING run with an existing stub result row for the
+// (experimentID, date) pair is excluded; a FAILED run is always excluded.
 func TestPgStore_ListNeedingComputation_Basic(t *testing.T) {
 	pool := newTestPool(t)
 	store := NewPgStore(pool)
 	ctx := context.Background()
 	const computationDate = "2026-06-15"
+	const experimentID = "exp_lnc"
 
 	// Run A: PENDING, no result yet — must be returned.
 	idA, err := store.Schedule(ctx, "orig_lnc_a", json.RawMessage(`{}`))
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanup(t, pool, idA) })
 
-	// Run B: PENDING, but already has a result for computationDate — must be excluded.
+	// Run B: PENDING, but already has a stub result for (exp_lnc, computationDate) — must be excluded.
 	idB, err := store.Schedule(ctx, "orig_lnc_b", json.RawMessage(`{}`))
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanup(t, pool, idB) })
 	require.NoError(t, store.InsertResult(ctx, ResultRow{
 		ShadowID:        idB,
-		ExperimentID:    "exp_lnc",
-		VariantID:       "v1",
+		ExperimentID:    experimentID,
+		VariantID:       "",
 		ComputationDate: computationDate,
-		WithinTolerance: true,
+		WithinTolerance: false, // stub marker
 	}))
 
 	// Run C: FAILED — must be excluded regardless.
@@ -153,7 +155,7 @@ func TestPgStore_ListNeedingComputation_Basic(t *testing.T) {
 	t.Cleanup(func() { cleanup(t, pool, idC) })
 	require.NoError(t, store.Transition(ctx, idC, StatusPending, StatusFailed, "test failure"))
 
-	runs, err := store.ListNeedingComputation(ctx, computationDate)
+	runs, err := store.ListNeedingComputation(ctx, experimentID, computationDate)
 	require.NoError(t, err)
 
 	// Collect returned IDs.
@@ -163,32 +165,41 @@ func TestPgStore_ListNeedingComputation_Basic(t *testing.T) {
 	}
 
 	assert.True(t, gotIDs[idA], "run A (PENDING, no result) must be returned")
-	assert.False(t, gotIDs[idB], "run B (already computed for date) must be excluded")
+	assert.False(t, gotIDs[idB], "run B (already computed for this exp+date) must be excluded")
 	assert.False(t, gotIDs[idC], "run C (FAILED) must be excluded")
+
+	// Run B must still appear for a DIFFERENT experimentID on the same date.
+	runs2, err := store.ListNeedingComputation(ctx, "exp_other", computationDate)
+	require.NoError(t, err)
+	gotIDs2 := make(map[uuid.UUID]bool, len(runs2))
+	for _, r := range runs2 {
+		gotIDs2[r.ShadowID] = true
+	}
+	assert.True(t, gotIDs2[idB], "run B must be returned for a different experimentID")
 }
 
-// TestPgStore_ListNeedingComputation_DifferentDateNotExcluded: a result for a
+// TestPgStore_ListNeedingComputation_DifferentDateNotExcluded: a stub result for a
 // DIFFERENT date doesn't count as "already computed" for this date.
 func TestPgStore_ListNeedingComputation_DifferentDateNotExcluded(t *testing.T) {
 	pool := newTestPool(t)
 	store := NewPgStore(pool)
 	ctx := context.Background()
+	const experimentID = "exp_lnc"
 
 	id, err := store.Schedule(ctx, "orig_lnc_diff_date", json.RawMessage(`{}`))
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanup(t, pool, id) })
 
-	// Insert result for 2026-06-14 (yesterday).
+	// Insert stub result for 2026-06-14 (yesterday).
 	require.NoError(t, store.InsertResult(ctx, ResultRow{
 		ShadowID:        id,
-		ExperimentID:    "exp_lnc",
-		VariantID:       "v1",
+		ExperimentID:    experimentID,
 		ComputationDate: "2026-06-14",
-		WithinTolerance: true,
+		WithinTolerance: false, // stub marker
 	}))
 
 	// Query for 2026-06-15 (today) — run must still be returned.
-	runs, err := store.ListNeedingComputation(ctx, "2026-06-15")
+	runs, err := store.ListNeedingComputation(ctx, experimentID, "2026-06-15")
 	require.NoError(t, err)
 
 	found := false
@@ -198,7 +209,7 @@ func TestPgStore_ListNeedingComputation_DifferentDateNotExcluded(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, found, "run with result on different date must be returned for today's pass")
+	assert.True(t, found, "run with stub on different date must be returned for today's pass")
 }
 
 // TestPgStore_InsertResultAndResults: round-trip InsertResult → Results.

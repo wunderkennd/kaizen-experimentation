@@ -13,19 +13,19 @@ import (
 // TestMockStore_ListNeedingComputation_Empty: no runs → empty slice.
 func TestMockStore_ListNeedingComputation_Empty(t *testing.T) {
 	m := NewMockStore()
-	runs, err := m.ListNeedingComputation(context.Background(), "2026-06-01")
+	runs, err := m.ListNeedingComputation(context.Background(), "exp_a", "2026-06-01")
 	require.NoError(t, err)
 	assert.Empty(t, runs)
 }
 
 // TestMockStore_ListNeedingComputation_PendingNoResults: one PENDING run with no
-// result rows for the date → returned.
+// result rows for the (experimentID, date) pair → returned.
 func TestMockStore_ListNeedingComputation_PendingNoResults(t *testing.T) {
 	m := NewMockStore()
 	id, err := m.Schedule(context.Background(), "orig_metric_1", json.RawMessage(`{}`))
 	require.NoError(t, err)
 
-	runs, err := m.ListNeedingComputation(context.Background(), "2026-06-01")
+	runs, err := m.ListNeedingComputation(context.Background(), "exp_a", "2026-06-01")
 	require.NoError(t, err)
 	require.Len(t, runs, 1)
 	assert.Equal(t, id, runs[0].ShadowID)
@@ -33,25 +33,33 @@ func TestMockStore_ListNeedingComputation_PendingNoResults(t *testing.T) {
 }
 
 // TestMockStore_ListNeedingComputation_ExcludesAlreadyDone: a PENDING run that
-// already has a result row for the computation date is NOT returned.
+// already has a result row for the (experimentID, computationDate) pair is NOT
+// returned — this is the dedup gate for the B2 stub row.
 func TestMockStore_ListNeedingComputation_ExcludesAlreadyDone(t *testing.T) {
 	m := NewMockStore()
 	id, err := m.Schedule(context.Background(), "orig_metric_1", json.RawMessage(`{}`))
 	require.NoError(t, err)
 
-	// Insert a result row for this shadow on the target date.
+	// Insert a stub result row for this shadow on the target (exp, date) pair.
 	err = m.InsertResult(context.Background(), ResultRow{
 		ShadowID:        id,
 		ExperimentID:    "exp1",
-		VariantID:       "v1",
+		VariantID:       "",
 		ComputationDate: "2026-06-01",
-		WithinTolerance: true,
+		WithinTolerance: false, // stub marker
 	})
 	require.NoError(t, err)
 
-	runs, err := m.ListNeedingComputation(context.Background(), "2026-06-01")
+	// Same exp+date → excluded.
+	runs, err := m.ListNeedingComputation(context.Background(), "exp1", "2026-06-01")
 	require.NoError(t, err)
-	assert.Empty(t, runs, "run with existing result for date must be excluded")
+	assert.Empty(t, runs, "run with existing stub result for (exp, date) must be excluded")
+
+	// Different experiment on same date → NOT excluded.
+	runs, err = m.ListNeedingComputation(context.Background(), "exp2", "2026-06-01")
+	require.NoError(t, err)
+	require.Len(t, runs, 1, "run without stub for exp2 must still be returned")
+	assert.Equal(t, id, runs[0].ShadowID)
 }
 
 // TestMockStore_ListNeedingComputation_DifferentDateNotExcluded: a result row
@@ -61,16 +69,15 @@ func TestMockStore_ListNeedingComputation_DifferentDateNotExcluded(t *testing.T)
 	id, err := m.Schedule(context.Background(), "orig_metric_1", json.RawMessage(`{}`))
 	require.NoError(t, err)
 
-	// Result exists for 2026-06-01, but we're querying for 2026-06-02.
+	// Stub result exists for 2026-06-01, but we're querying for 2026-06-02.
 	err = m.InsertResult(context.Background(), ResultRow{
 		ShadowID:        id,
 		ExperimentID:    "exp1",
-		VariantID:       "v1",
 		ComputationDate: "2026-06-01",
 	})
 	require.NoError(t, err)
 
-	runs, err := m.ListNeedingComputation(context.Background(), "2026-06-02")
+	runs, err := m.ListNeedingComputation(context.Background(), "exp1", "2026-06-02")
 	require.NoError(t, err)
 	require.Len(t, runs, 1, "run with result on different date must still be returned")
 	assert.Equal(t, id, runs[0].ShadowID)
@@ -98,7 +105,7 @@ func TestMockStore_ListNeedingComputation_ExcludesNonPending(t *testing.T) {
 	require.NoError(t, err)
 	m.SetStatus(idRejected, StatusRejected)
 
-	runs, err := m.ListNeedingComputation(ctx, "2026-06-01")
+	runs, err := m.ListNeedingComputation(ctx, "exp_a", "2026-06-01")
 	require.NoError(t, err)
 	assert.Empty(t, runs, "only PENDING runs should be returned")
 }
@@ -122,7 +129,7 @@ func TestMockStore_ListNeedingComputation_MultiplePendingPartiallyExcluded(t *te
 		ComputationDate: "2026-06-01",
 	}))
 
-	runs, err := m.ListNeedingComputation(ctx, "2026-06-01")
+	runs, err := m.ListNeedingComputation(ctx, "exp1", "2026-06-01")
 	require.NoError(t, err)
 	require.Len(t, runs, 1)
 	assert.Equal(t, id2, runs[0].ShadowID, "only id2 must be returned; id1 is already done")

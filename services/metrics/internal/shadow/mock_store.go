@@ -72,22 +72,31 @@ func (m *MockStore) ListPending(_ context.Context) ([]Run, error) {
 }
 
 // ListNeedingComputation returns copies of all PENDING runs for which no result
-// row exists for computationDate (in-memory equivalent of the PgStore query).
-func (m *MockStore) ListNeedingComputation(_ context.Context, computationDate string) ([]Run, error) {
+// row exists for (experimentID, computationDate) — in-memory equivalent of
+// the PgStore NOT EXISTS query.  A stub ResultRow written after a successful
+// computeOneShadow call for a given (shadow_id, experimentID, computationDate)
+// triple is sufficient to gate re-computation within the same nightly pass.
+func (m *MockStore) ListNeedingComputation(_ context.Context, experimentID, computationDate string) ([]Run, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Build a set of shadow IDs that already have a result row for computationDate.
-	alreadyDone := make(map[uuid.UUID]bool)
+	// Build a set of shadow IDs that already have a result row for the
+	// (experimentID, computationDate) pair.  A stub row is written by
+	// computeOneShadow after success; B3 later UPDATEs the stub with real diffs.
+	type dedupKey struct {
+		shadowID     uuid.UUID
+		experimentID string
+		date         string
+	}
+	alreadyDone := make(map[dedupKey]bool)
 	for _, r := range m.results {
-		if r.ComputationDate == computationDate {
-			alreadyDone[r.ShadowID] = true
-		}
+		alreadyDone[dedupKey{r.ShadowID, r.ExperimentID, r.ComputationDate}] = true
 	}
 
 	var out []Run
 	for _, r := range m.runs {
-		if r.Status == StatusPending && !alreadyDone[r.ShadowID] {
+		k := dedupKey{r.ShadowID, experimentID, computationDate}
+		if r.Status == StatusPending && !alreadyDone[k] {
 			cp := *r
 			out = append(out, cp)
 		}

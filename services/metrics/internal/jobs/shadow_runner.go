@@ -40,7 +40,7 @@ func (j *StandardJob) runShadows(ctx context.Context, experimentID, computationD
 		return
 	}
 
-	runs, err := j.shadowStore.ListNeedingComputation(ctx, computationDate)
+	runs, err := j.shadowStore.ListNeedingComputation(ctx, experimentID, computationDate)
 	if err != nil {
 		// Transient store error — log and skip; the regular pass already completed.
 		slog.Error("shadow: ListNeedingComputation failed (non-fatal)",
@@ -95,8 +95,10 @@ func (j *StandardJob) computeOneShadow(
 		return
 	}
 
-	// Step 3: Render the candidate to Spark SQL.
-	sql, err := j.renderShadowCandidate(computationDate, shadowIDStr, &candidate)
+	// Step 3: Render the candidate to Spark SQL.  experimentID is propagated
+	// so that delta.exposures JOIN filters use the real experiment scope — the
+	// original B2 code left ExperimentID empty which caused zero-row output.
+	sql, err := j.renderShadowCandidate(experimentID, computationDate, shadowIDStr, &candidate)
 	if err != nil {
 		j.failShadow(ctx, run, computationDate, err.Error())
 		return
@@ -110,7 +112,28 @@ func (j *StandardJob) computeOneShadow(
 		return
 	}
 
-	// Step 5: Log the query.
+	// Step 5: Write a stub ResultRow to metric_shadow_run_results so that the
+	// dedup gate in ListNeedingComputation prevents re-computation for this
+	// (shadow_id, experimentID, computationDate) triple within the same nightly
+	// pass or on accidental re-runs.  The stub has NULL diff values; B3 will
+	// UPDATE them with real computed diffs.  A failure here is treated as fatal
+	// for this shadow (the compute already happened, so NOT writing the stub
+	// means the dedup is broken and we risk duplicate delta.metric_summaries rows).
+	stubRow := shadow.ResultRow{
+		ShadowID:        run.ShadowID,
+		ExperimentID:    experimentID,
+		ComputationDate: computationDate,
+		// VariantID left empty for the stub — B3 writes per-variant rows.
+		// WithinTolerance defaults to false; B3 sets the real value.
+		WithinTolerance: false,
+	}
+	if err := j.shadowStore.InsertResult(ctx, stubRow); err != nil {
+		reason := fmt.Sprintf("insert stub result: %v", err)
+		j.failShadow(ctx, run, computationDate, reason)
+		return
+	}
+
+	// Step 6: Log the query.
 	if err := j.queryLog.Log(ctx, querylog.Entry{
 		ExperimentID: experimentID,
 		MetricID:     shadowIDStr,
@@ -128,7 +151,7 @@ func (j *StandardJob) computeOneShadow(
 		)
 	}
 
-	// Step 6: Success — RUNNING → PENDING so tomorrow's pass picks it up again.
+	// Step 7: Success — RUNNING → PENDING so tomorrow's pass picks it up again.
 	if err := j.shadowStore.Transition(ctx, run.ShadowID, shadow.StatusRunning, shadow.StatusPending, ""); err != nil {
 		// Log but do not treat as fatal; worst case the row stays RUNNING
 		// (the next pass will see it as non-PENDING and skip it).
@@ -162,23 +185,19 @@ func (j *StandardJob) computeOneShadow(
 //   - CUSTOM           → rejected (migrator never proposes CUSTOM→CUSTOM)
 //   - all others       → rejected (legacy types should never appear as candidates)
 func (j *StandardJob) renderShadowCandidate(
-	computationDate, shadowID string,
+	experimentID, computationDate, shadowID string,
 	candidate *commonv1.MetricDefinition,
 ) (string, error) {
 	// Build a TemplateParams that substitutes the shadow_id for metric_id so
 	// delta.metric_summaries rows are namespaced under the shadow UUID rather
-	// than the original metric's ID.  The ExperimentID is left empty here
-	// because shadow runs are global (not per-experiment), and the MetricQL /
-	// structured templates use ExperimentID only for filtering delta.exposures —
-	// shadow output rows will be compared by the differ (B3) across all
-	// experiments, so leaving it empty here is intentional.
-	//
-	// NOTE: shadow_runner deliberately does not filter by experimentID when
-	// calling ListNeedingComputation or computing SQL.  Shadow runs are defined
-	// at the metric level (not the experiment level), so a single shadow run
-	// accumulates output across all experiments that use the original metric.
-	// The experimentID param passed to runShadows is used only for slog context.
+	// than the original metric's ID.  ExperimentID is propagated so that the
+	// delta.exposures JOIN in each SQL template is correctly scoped — without it
+	// the WHERE clause would filter on experiment_id = '' and produce zero rows.
+	// Each StandardJob.Run call is scoped to one experiment, so the shadow is
+	// computed once per (shadow_id, experiment_id) per nightly pass; the stub
+	// ResultRow written after success prevents re-computation on the same pair.
 	params := spark.TemplateParams{
+		ExperimentID:    experimentID,
 		MetricID:        shadowID,
 		ComputationDate: computationDate,
 		// Propagate all candidate fields into TemplateParams.

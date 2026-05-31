@@ -135,11 +135,30 @@ func TestStandardJob_ShadowRun_Integration_HappyPath(t *testing.T) {
 	}
 	require.NotNil(t, shadowEntry, "querylog must have a shadow_run entry")
 	assert.Equal(t, shadowIDStr, shadowEntry.MetricID)
+
+	// Assert a stub result row was written by B2 for dedup.
+	// The stub has NULL diff values and within_tolerance=false.
+	experimentID := "e0000000-0000-0000-0000-000000000001"
+	results, err := store.Results(ctx, shadowID)
+	require.NoError(t, err)
+	var stubRow *shadow.ResultRow
+	for _, r := range results {
+		if r.ExperimentID == experimentID {
+			rr := r
+			stubRow = &rr
+			break
+		}
+	}
+	require.NotNil(t, stubRow, "B2 must write a stub result row for dedup (B3 will UPDATE it)")
+	assert.Equal(t, experimentID, stubRow.ExperimentID)
+	assert.False(t, stubRow.OriginalValue.Valid, "stub row OriginalValue must be NULL")
+	assert.False(t, stubRow.CandidateValue.Valid, "stub row CandidateValue must be NULL")
+	assert.False(t, stubRow.WithinTolerance, "stub row within_tolerance must be false")
 }
 
-// TestStandardJob_ShadowRun_Integration_AlreadyComputedExcluded: after a result
-// row is inserted for today's date (simulating B3), ListNeedingComputation must
-// exclude the shadow and the pass must not re-compute it.
+// TestStandardJob_ShadowRun_Integration_AlreadyComputedExcluded: after a stub
+// result row is inserted for (experimentID, date), ListNeedingComputation must
+// exclude the shadow for that experiment; a different experimentID is unaffected.
 func TestStandardJob_ShadowRun_Integration_AlreadyComputedExcluded(t *testing.T) {
 	pool := newIntegTestPool(t)
 	store := shadow.NewPgStore(pool)
@@ -163,22 +182,34 @@ func TestStandardJob_ShadowRun_Integration_AlreadyComputedExcluded(t *testing.T)
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanupShadow(t, pool, shadowID) })
 
-	// Pre-insert a result for today — simulates B3 having already run.
-	// We use a far-future date to avoid accidentally matching real time.Now().
+	// Pre-insert a stub result for (integ_exp, alreadyDoneDate) — simulates B2
+	// having already computed for this experiment.  Use a far-future date.
 	const alreadyDoneDate = "2099-01-01"
+	const experimentID = "integ_exp"
 	require.NoError(t, store.InsertResult(ctx, shadow.ResultRow{
 		ShadowID:        shadowID,
-		ExperimentID:    "integ_exp",
-		VariantID:       "v1",
+		ExperimentID:    experimentID,
 		ComputationDate: alreadyDoneDate,
-		WithinTolerance: true,
+		WithinTolerance: false, // stub marker; B3 will update
 	}))
 
-	// Confirm ListNeedingComputation excludes the shadow for alreadyDoneDate.
-	runs, err := store.ListNeedingComputation(ctx, alreadyDoneDate)
+	// Confirm ListNeedingComputation excludes the shadow for the same (exp, date).
+	runs, err := store.ListNeedingComputation(ctx, experimentID, alreadyDoneDate)
 	require.NoError(t, err)
 	for _, r := range runs {
 		assert.NotEqual(t, shadowID, r.ShadowID,
-			"shadow with existing result for date must be excluded from ListNeedingComputation")
+			"shadow with stub result for (exp, date) must be excluded from ListNeedingComputation")
 	}
+
+	// A different experiment on the same date must NOT be excluded.
+	runs2, err := store.ListNeedingComputation(ctx, "integ_exp_other", alreadyDoneDate)
+	require.NoError(t, err)
+	found := false
+	for _, r := range runs2 {
+		if r.ShadowID == shadowID {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "shadow must still appear for a different experimentID on the same date")
 }

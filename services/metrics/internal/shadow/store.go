@@ -35,10 +35,12 @@ type Store interface {
 	// work in the nightly pass.
 	ListPending(ctx context.Context) ([]Run, error)
 	// ListNeedingComputation returns PENDING runs for which no result row exists
-	// for computationDate yet.  This is the dedup gate: once B3 writes a result
-	// row for (shadow_id, computationDate), the shadow is excluded from this day's
-	// pass.  computationDate must be a "YYYY-MM-DD" string.
-	ListNeedingComputation(ctx context.Context, computationDate string) ([]Run, error)
+	// for (experimentID, computationDate) yet.  This is the dedup gate: once
+	// computeOneShadow writes a stub ResultRow for (shadow_id, experimentID,
+	// computationDate), the shadow is excluded from subsequent calls within the
+	// same nightly pass for that experiment.  computationDate must be "YYYY-MM-DD".
+	// B3 will UPDATE the stub row with real diff values later.
+	ListNeedingComputation(ctx context.Context, experimentID, computationDate string) ([]Run, error)
 	// Transition atomically updates the status of a shadow run using a
 	// compare-and-swap: the row is updated only when its current status equals
 	// `from`.  Returns an error when zero rows are affected (CAS failure).
@@ -138,21 +140,28 @@ func (s *PgStore) ListPending(ctx context.Context) ([]Run, error) {
 }
 
 // ListNeedingComputation returns PENDING runs for which no result row yet exists
-// for computationDate, making it safe to re-query every nightly pass without
-// double-computing days that B3 has already diffed.
-func (s *PgStore) ListNeedingComputation(ctx context.Context, computationDate string) ([]Run, error) {
+// for (experimentID, computationDate), making it safe to call multiple times
+// within a nightly pass (once per experiment) without re-computing a shadow
+// for an experiment that already received a stub result row in this pass.
+// After a successful compute, computeOneShadow writes a stub ResultRow; this
+// NOT EXISTS gate then skips the shadow on subsequent calls for the same
+// (experimentID, computationDate) pair — which is the correct B2→B3 contract:
+// B3 will UPDATE the stub to add real diff values.
+func (s *PgStore) ListNeedingComputation(ctx context.Context, experimentID, computationDate string) ([]Run, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT shadow_id, original_metric_id, candidate_metric,
 		       scheduled_at, status, COALESCE(rejection_reason, '')
 		FROM metric_shadow_runs
 		WHERE status = 'PENDING'
-		  AND shadow_id NOT IN (
-		        SELECT shadow_id
+		  AND NOT EXISTS (
+		        SELECT 1
 		        FROM metric_shadow_run_results
-		        WHERE computation_date = $1::DATE
+		        WHERE shadow_id   = metric_shadow_runs.shadow_id
+		          AND experiment_id    = $1
+		          AND computation_date = $2::DATE
 		      )
 		ORDER BY scheduled_at
-	`, computationDate)
+	`, experimentID, computationDate)
 	if err != nil {
 		return nil, fmt.Errorf("shadow: list needing computation: %w", err)
 	}
