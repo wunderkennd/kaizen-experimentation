@@ -17,8 +17,11 @@
 allowed_patterns:
   # ── Canonical: agent-owned feature work tied to an ADR ────────────────────
   # Per CLAUDE.md: `agent-N/<verb>/adr-XXX-<slug>` for agent-N implementation
-  # branches. The verb set matches conventional-commit verbs the repo uses.
-  - "^agent-[0-9]+/(feat|fix|port|design|chore|refactor|docs|test)/[a-z0-9-]+$"
+  # branches. The verb set matches conventional-commit verbs the repo uses
+  # (see CONTRIBUTING.md: feat, fix, refactor, test, docs, chore, perf, port).
+  # `design` is repo-specific (RFC / ADR design-lock branches) and documented
+  # in CLAUDE.md + CONTRIBUTING.md alongside the conventional set.
+  - "^agent-[0-9]+/(feat|fix|port|design|chore|refactor|docs|test|perf)/[a-z0-9-]+$"
 
   # ── Infrastructure (Pulumi / GCP / AWS stacks) ────────────────────────────
   # The infra-N agents own the Pulumi modules under infra/pkg/.

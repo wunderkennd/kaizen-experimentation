@@ -72,7 +72,14 @@ agent-1/feat/adr-016-get-slate-assignment
 agent-5/fix/adr-020-adaptive-n-zone-boundary
 ```
 
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `port`
+Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `port`, `design`
+
+(`design` is a repo-specific verb for RFC / ADR design-lock branches; the
+others mirror standard conventional-commit verbs. The full allowlist —
+including `infra-N/<verb>/<slug>`, `palette/<slug>`, and `chore/<slug>`
+families — lives in [`.github/branch-naming.yml`](./.github/branch-naming.yml)
+and is enforced by `just check-branch-name` plus the advisory CI check at
+[`.github/workflows/branch-naming.yml`](./.github/workflows/branch-naming.yml).)
 
 **Never use auto-generated worker names** (e.g., `worker-swift-eagle`) as branch
 names. Always name branches by the feature or ADR being implemented.
