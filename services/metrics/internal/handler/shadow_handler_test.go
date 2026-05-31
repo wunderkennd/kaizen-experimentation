@@ -241,6 +241,8 @@ func TestPromoteShadow_ApprovesWhen7DaysClean(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "APPROVED", resp.Msg.GetStatus())
 	assert.Empty(t, resp.Msg.GetReason())
+	// result_id is the approval token consumed by Phase C MigrateMetricDefinition.
+	assert.Equal(t, shadowID.String(), resp.Msg.GetResultId())
 
 	// Verify store recorded the transition.
 	runs := mockStore.AllRuns()
@@ -331,6 +333,7 @@ func TestPromoteShadow_AlreadyPromotedReturnsFailedPrecondition(t *testing.T) {
 	client, mockStore := setupShadowTestServer(t)
 	ctx := context.Background()
 
+	// Schedule a run and pre-seed it as APPROVED so the Get succeeds but the CAS fails.
 	schedResp, err := client.ScheduleShadowComputation(ctx, connect.NewRequest(
 		&metricsv1.ScheduleShadowComputationRequest{
 			OriginalMetricId: "watch_time_minutes",
@@ -363,4 +366,17 @@ func TestPromoteShadow_AlreadyPromotedReturnsFailedPrecondition(t *testing.T) {
 	))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+func TestPromoteShadow_NotFound(t *testing.T) {
+	client, _ := setupShadowTestServer(t)
+	// A syntactically valid UUID that was never scheduled must return CodeNotFound,
+	// not a spurious PENDING (which the old code returned by calling Results on a
+	// non-existent shadow_id and getting an empty slice).
+	unknownID := uuid.New().String()
+	_, err := client.PromoteShadowResult(context.Background(), connect.NewRequest(
+		&metricsv1.PromoteShadowResultRequest{ShadowId: unknownID},
+	))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }

@@ -163,7 +163,9 @@ message PromoteShadowResultRequest {
 }
 
 message PromoteShadowResultResponse {
-  // The result_id of the winning result row (populated only on APPROVED).
+  // Approval token, populated only on APPROVED status. Equals the shadow_id of
+  // the promoted run. Used by M5's MigrateMetricDefinition RPC as
+  // shadow_run_result_id.
   string result_id = 1;
   // Terminal status after this call: APPROVED, REJECTED, or PENDING
   // (if not yet enough data to decide).

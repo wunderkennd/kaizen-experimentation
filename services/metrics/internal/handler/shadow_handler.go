@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -24,19 +25,23 @@ func (h *MetricsHandler) ScheduleShadowComputation(
 	ctx context.Context,
 	req *connect.Request[metricsv1.ScheduleShadowComputationRequest],
 ) (*connect.Response[metricsv1.ScheduleShadowComputationResponse], error) {
+	start := time.Now()
 	if h.shadowStore == nil {
 		m3metrics.RPCTotal.WithLabelValues("ScheduleShadowComputation", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ScheduleShadowComputation", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeUnavailable,
 			fmt.Errorf("shadow store not configured; shadow-run RPCs are not enabled in this deployment"))
 	}
 
 	if req.Msg.GetOriginalMetricId() == "" {
 		m3metrics.RPCTotal.WithLabelValues("ScheduleShadowComputation", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ScheduleShadowComputation", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("original_metric_id is required"))
 	}
 	if req.Msg.GetCandidateMetric() == nil {
 		m3metrics.RPCTotal.WithLabelValues("ScheduleShadowComputation", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ScheduleShadowComputation", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("candidate_metric is required"))
 	}
@@ -45,6 +50,7 @@ func (h *MetricsHandler) ScheduleShadowComputation(
 	candidateJSON, err := protojson.Marshal(req.Msg.GetCandidateMetric())
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("ScheduleShadowComputation", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ScheduleShadowComputation", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("candidate_metric: marshal failed: %w", err))
 	}
@@ -52,10 +58,12 @@ func (h *MetricsHandler) ScheduleShadowComputation(
 	shadowID, err := h.shadowStore.Schedule(ctx, req.Msg.GetOriginalMetricId(), candidateJSON)
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("ScheduleShadowComputation", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("ScheduleShadowComputation", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	m3metrics.RPCTotal.WithLabelValues("ScheduleShadowComputation", "ok").Inc()
+	m3metrics.RPCDuration.WithLabelValues("ScheduleShadowComputation", "ok").Observe(time.Since(start).Seconds())
 	return connect.NewResponse(&metricsv1.ScheduleShadowComputationResponse{
 		ShadowId: shadowID.String(),
 	}), nil
@@ -70,8 +78,10 @@ func (h *MetricsHandler) GetShadowResults(
 	ctx context.Context,
 	req *connect.Request[metricsv1.GetShadowResultsRequest],
 ) (*connect.Response[metricsv1.GetShadowResultsResponse], error) {
+	start := time.Now()
 	if h.shadowStore == nil {
 		m3metrics.RPCTotal.WithLabelValues("GetShadowResults", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("GetShadowResults", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeUnavailable,
 			fmt.Errorf("shadow store not configured; shadow-run RPCs are not enabled in this deployment"))
 	}
@@ -79,6 +89,7 @@ func (h *MetricsHandler) GetShadowResults(
 	shadowID, err := uuid.Parse(req.Msg.GetShadowId())
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("GetShadowResults", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("GetShadowResults", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("shadow_id: invalid UUID %q: %w", req.Msg.GetShadowId(), err))
 	}
@@ -86,10 +97,12 @@ func (h *MetricsHandler) GetShadowResults(
 	run, err := h.shadowStore.Get(ctx, shadowID)
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("GetShadowResults", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("GetShadowResults", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if run == nil {
 		m3metrics.RPCTotal.WithLabelValues("GetShadowResults", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("GetShadowResults", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeNotFound,
 			fmt.Errorf("shadow run %s not found", shadowID))
 	}
@@ -97,6 +110,7 @@ func (h *MetricsHandler) GetShadowResults(
 	rows, err := h.shadowStore.Results(ctx, shadowID)
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("GetShadowResults", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("GetShadowResults", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -117,12 +131,13 @@ func (h *MetricsHandler) GetShadowResults(
 	}
 
 	m3metrics.RPCTotal.WithLabelValues("GetShadowResults", "ok").Inc()
+	m3metrics.RPCDuration.WithLabelValues("GetShadowResults", "ok").Observe(time.Since(start).Seconds())
 	return connect.NewResponse(&metricsv1.GetShadowResultsResponse{
-		ShadowId:           shadowID.String(),
-		Status:             string(run.Status),
-		Rows:               protoRows,
+		ShadowId:            shadowID.String(),
+		Status:              string(run.Status),
+		Rows:                protoRows,
 		DaysWithinTolerance: int32(dwt),
-		TotalDays:          int32(totalDays),
+		TotalDays:           int32(totalDays),
 	}), nil
 }
 
@@ -138,8 +153,10 @@ func (h *MetricsHandler) PromoteShadowResult(
 	ctx context.Context,
 	req *connect.Request[metricsv1.PromoteShadowResultRequest],
 ) (*connect.Response[metricsv1.PromoteShadowResultResponse], error) {
+	start := time.Now()
 	if h.shadowStore == nil {
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeUnavailable,
 			fmt.Errorf("shadow store not configured; shadow-run RPCs are not enabled in this deployment"))
 	}
@@ -147,13 +164,30 @@ func (h *MetricsHandler) PromoteShadowResult(
 	shadowID, err := uuid.Parse(req.Msg.GetShadowId())
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("shadow_id: invalid UUID %q: %w", req.Msg.GetShadowId(), err))
+	}
+
+	// Verify the shadow run exists before evaluating results.  A valid UUID for
+	// a non-existent row must return CodeNotFound, not a spurious PENDING status.
+	run, err := h.shadowStore.Get(ctx, shadowID)
+	if err != nil {
+		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if run == nil {
+		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
+		return nil, connect.NewError(connect.CodeNotFound,
+			fmt.Errorf("shadow run %s not found", shadowID))
 	}
 
 	rows, err := h.shadowStore.Results(ctx, shadowID)
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -163,6 +197,7 @@ func (h *MetricsHandler) PromoteShadowResult(
 	case shadow.StatusPending:
 		// Not enough data yet — return current status without transitioning.
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
 		return connect.NewResponse(&metricsv1.PromoteShadowResultResponse{
 			Status: string(shadow.StatusPending),
 			Reason: reason,
@@ -177,12 +212,17 @@ func (h *MetricsHandler) PromoteShadowResult(
 		}
 		if casErr != nil {
 			m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+			m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
 				fmt.Errorf("shadow run is not in a promotable state"))
 		}
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
+		// ResultId is the approval token for Phase C's MigrateMetricDefinition.
+		// Populated only on APPROVED; equals the shadow_id of the promoted run.
 		return connect.NewResponse(&metricsv1.PromoteShadowResultResponse{
-			Status: string(shadow.StatusApproved),
+			Status:   string(shadow.StatusApproved),
+			ResultId: shadowID.String(),
 		}), nil
 
 	case shadow.StatusRejected:
@@ -193,10 +233,12 @@ func (h *MetricsHandler) PromoteShadowResult(
 		}
 		if casErr != nil {
 			m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+			m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
 				fmt.Errorf("shadow run is not in a promotable state"))
 		}
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
 		return connect.NewResponse(&metricsv1.PromoteShadowResultResponse{
 			Status: string(shadow.StatusRejected),
 			Reason: reason,
@@ -204,6 +246,7 @@ func (h *MetricsHandler) PromoteShadowResult(
 
 	default:
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
 		return nil, connect.NewError(connect.CodeInternal,
 			fmt.Errorf("unexpected evaluation status %s", evalStatus))
 	}
