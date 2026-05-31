@@ -57,6 +57,13 @@ use crate::validators;
 // Broadcast channel capacity. Slow subscribers will see RecvError::Lagged.
 const BROADCAST_CAPACITY: usize = 512;
 
+/// L5-locked deprecation trailer value for CUSTOM metric creates.
+/// See ADR-026 Phase 3 plan, Lock L5
+/// (`docs/superpowers/plans/2026-05-30-adr-026-phase-3-custom-migration.md`).
+/// The runbook anchor referenced below MUST exist — kept in sync with
+/// `docs/runbooks/m5-metric-definitions.md#custom-deprecation`.
+const DEPRECATION_HEADER_CUSTOM: &str = "kind=metric_type; type=CUSTOM; message=CUSTOM metrics are deprecated in favor of MetricQL or structured types. See docs/runbooks/m5-metric-definitions.md#custom-deprecation for the migration guide.";
+
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------
@@ -1064,7 +1071,26 @@ impl ExperimentManagementService for ManagementServiceHandler {
             .await
             .map_err(store_err_to_status)?;
 
-        Ok(Response::new(row.into_proto()))
+        let mut response = Response::new(row.into_proto());
+
+        // ADR-026 Phase 3 (L5): emit deprecation trailer on CUSTOM creates.
+        // UpdateMetricDefinition RPC does not exist; per L7 metric type is
+        // immutable post-create — Create is the only entry point.
+        if metric.r#type() == MetricType::Custom {
+            response.metadata_mut().insert(
+                "x-kaizen-deprecation",
+                tonic::metadata::MetadataValue::from_static(DEPRECATION_HEADER_CUSTOM),
+            );
+            tracing::info!(
+                target: "m5.deprecation",
+                metric_type = "CUSTOM",
+                metric_id = %metric.metric_id,
+                event = "metric_definition_created",
+                "custom metric created — emitting deprecation trailer"
+            );
+        }
+
+        Ok(response)
     }
 
     async fn get_metric_definition(
