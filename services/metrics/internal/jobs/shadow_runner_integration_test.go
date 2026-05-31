@@ -244,9 +244,14 @@ func TestStandardJob_ShadowRun_Integration_DifferWritesPerVariantRows(t *testing
 	candidateBytes, err := protojson.Marshal(candidate)
 	require.NoError(t, err)
 
-	// Original metric in seed_config.json is "ctr_recommendation" (type RATIO or MEAN).
-	// We use "watch_time" to match the minimalExperimentFixture convention.
-	shadowID, err := store.Schedule(ctx, "watch_time", json.RawMessage(candidateBytes))
+	// `watch_time_minutes` is one of the metrics declared in seed_config.json
+	// (and it's in homepage_recs_v2's secondary_metric_ids). Using a metric
+	// that exists in the config is required: the shadow runner calls
+	// `config.GetMetric(OriginalMetricID)` to resolve the original metric
+	// type for the differ's tolerance rule — when the lookup fails, the
+	// differ is silently skipped (see `services/metrics/internal/jobs/
+	// shadow_runner.go` step 8) and no per-variant rows are written.
+	shadowID, err := store.Schedule(ctx, "watch_time_minutes", json.RawMessage(candidateBytes))
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanupShadow(t, pool, shadowID) })
 
@@ -260,7 +265,10 @@ func TestStandardJob_ShadowRun_Integration_DifferWritesPerVariantRows(t *testing
 	ql := querylog.NewMemWriter()
 	sw := status.NewMockWriter()
 
-	// Pre-seed the MockValueReader with known per-variant values.
+	// Pre-seed the MockValueReader with known per-variant values. The original
+	// metric is keyed by metric_id ("watch_time_minutes"); the candidate is
+	// keyed by shadow UUID (B2 writes the candidate's delta.metric_summaries
+	// rows under the shadow UUID for namespace isolation).
 	// The experiment ID comes from seed_config.json.
 	const experimentID = "e0000000-0000-0000-0000-000000000001"
 	computationDate := time.Now().Format("2006-01-02")
@@ -271,7 +279,7 @@ func TestStandardJob_ShadowRun_Integration_DifferWritesPerVariantRows(t *testing
 				"control":   10.0,
 				"treatment": 10.0, // identical → within_tolerance = true for any type
 			},
-			{"watch_time", experimentID, computationDate}: {
+			{"watch_time_minutes", experimentID, computationDate}: {
 				"control":   10.0,
 				"treatment": 10.0,
 			},
