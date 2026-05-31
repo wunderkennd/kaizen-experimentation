@@ -11,6 +11,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
+	"github.com/org/experimentation-platform/services/metrics/internal/shadow"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 	"github.com/org/experimentation-platform/services/metrics/internal/status"
 )
@@ -29,7 +30,8 @@ type StandardJob struct {
 	renderer     *spark.SQLRenderer
 	executor     spark.SQLExecutor
 	queryLog     querylog.Writer
-	statusWriter status.Writer // ADR-026 #475: per-metric outcome flushed to PG; nil → flush is a no-op.
+	statusWriter status.Writer  // ADR-026 #475: per-metric outcome flushed to PG; nil → flush is a no-op.
+	shadowStore  shadow.Store   // ADR-026 Phase 3 (#437): shadow-run computation; nil → shadow pass is a no-op.
 }
 
 // StandardJobOption configures optional StandardJob behavior (ADR-026 #475).
@@ -43,6 +45,14 @@ type StandardJobOption func(*StandardJob)
 // still apply, but nothing is persisted.
 func WithStatusWriter(w status.Writer) StandardJobOption {
 	return func(j *StandardJob) { j.statusWriter = w }
+}
+
+// WithShadowStore wires a shadow.Store so the nightly pass also computes
+// PENDING shadow runs (ADR-026 Phase 3 #437).  When unset (nil), the shadow
+// iteration is a no-op — all existing behaviour is preserved for sites that
+// use the legacy 4-arg constructor.
+func WithShadowStore(s shadow.Store) StandardJobOption {
+	return func(j *StandardJob) { j.shadowStore = s }
 }
 
 // NewStandardJob creates a new standard metric computation job. Options are
@@ -593,6 +603,12 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 			}
 		}
 	}
+
+	// ADR-026 Phase 3 (#437): shadow-run computation.
+	// Runs AFTER the regular per-metric loop so a shadow failure can never
+	// interrupt the experiment's primary metrics.  runShadows absorbs all
+	// per-shadow errors internally; it is always safe to call here.
+	j.runShadows(ctx, experimentID, computationDate)
 
 	return &JobResult{
 		ExperimentID:    experimentID,
