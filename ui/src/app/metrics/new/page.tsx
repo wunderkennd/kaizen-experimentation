@@ -23,6 +23,15 @@ import {
   validateCompositeConfig,
   validateWindowedCountConfig,
 } from '@/lib/validation';
+// ADR-026 Phase 3 / Task D2 (Lock L5): the L5-locked toast message and the
+// per-type gate live in `@/lib/metric-deprecation` so the helper can be
+// imported from unit tests without colliding with Next.js App Router's
+// strict page-export allowlist (only `default`, `metadata`, `viewport`,
+// `dynamic`, ... may be exported from a page module).
+import {
+  DEPRECATION_TOAST_MESSAGE,
+  shouldShowCustomDeprecationToast,
+} from '@/lib/metric-deprecation';
 import type {
   MetricType,
   MetricDefinition,
@@ -30,30 +39,6 @@ import type {
   CompositeConfig,
   WindowedCountConfig,
 } from '@/lib/types';
-
-// ADR-026 Phase 3 / Task D2 (Lock L5). The M5 server emits the
-// x-kaizen-deprecation trailer on CUSTOM creates; the UI surfaces it as
-// a toast. Detail-page banner deferred (no metric detail page exists yet).
-//
-// The user-visible string is locked by L5 so operator-facing messaging stays
-// consistent across M5 (trailer), the UI toast, and the migration runbook
-// referenced at the end. If you change this, also update the runbook anchor
-// `docs/runbooks/m5-metric-definitions.md#custom-deprecation`.
-export const DEPRECATION_TOAST_MESSAGE =
-  'Custom SQL metrics are deprecated. Use MetricQL or structured types instead. See docs/runbooks/m5-metric-definitions.md#custom-deprecation.';
-
-/**
- * ADR-026 Phase 3 / Task D2. Returns true when the just-created metric is
- * a CUSTOM metric and the UI should surface the deprecation toast.
- *
- * Extracted so the type-gate is unit-testable in isolation — the integration
- * test exercises the full Create → router push → toast emission path via the
- * page, and this helper covers the per-type decision matrix (CUSTOM yes;
- * MEAN, FILTERED_MEAN, METRICQL, etc. no).
- */
-export function shouldShowCustomDeprecationToast(metric: { type: MetricType }): boolean {
-  return metric.type === 'CUSTOM';
-}
 
 interface MetricFormState extends MetricFormShellState {
   type: MetricType;

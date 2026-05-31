@@ -21,10 +21,15 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { server } from '@/__mocks__/server';
-import NewMetricPage, {
+import NewMetricPage from '@/app/metrics/new/page';
+// ADR-026 Phase 3 / Task D2: the L5-locked message and the per-type gate
+// live in `@/lib/metric-deprecation` (extracted out of `page.tsx` so they
+// can be imported without colliding with Next.js App Router's strict
+// page-export allowlist).
+import {
   DEPRECATION_TOAST_MESSAGE,
   shouldShowCustomDeprecationToast,
-} from '@/app/metrics/new/page';
+} from '@/lib/metric-deprecation';
 import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
 import type { MetricType } from '@/lib/types';
