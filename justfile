@@ -892,6 +892,14 @@ prime-issue issue:
     gh issue edit ${ISSUE} --body-file "${TMPDIR}/new-body.md"
     echo "✓ Issue #${ISSUE} primed with ${PLAN} (${PLAN_SHA}, ${PLAN_DATE})"
 
+# Same logic as the advisory CI check at .github/workflows/branch-naming.yml;
+# exits 1 with suggested renames on no match. Run before `git push -u` to
+# catch violations early.
+#
+# Validate the current branch name against .github/branch-naming.yml.
+check-branch-name:
+    python3 scripts/check_branch_name.py
+
 # Launch a Multiclaude worker from a GitHub Issue number
 work-on issue:
     #!/usr/bin/env bash

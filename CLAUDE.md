@@ -69,7 +69,7 @@ Hash parity across SDKs is enforced by `test-vectors/hash_vectors.json` and veri
 - **Proptest invariants**: Every public function in experimentation-stats gets proptest invariants. Nightly CI runs 10K cases.
 - **Contract tests**: Cross-module interfaces require wire-format contract tests. The consumer agent writes the test.
 - **Conventional commits**: `feat(crate):`, `fix(crate):`, `test(crate):`, `docs:`, `chore:`.
-- **Branch naming**: `agent-N/feat/adr-XXX-description`, `agent-N/fix/...`, `agent-N/port/...`. Never use auto-generated worker names as branch names.
+- **Branch naming**: see [Branch-naming convention](#branch-naming) below — canonical pattern is `agent-N/feat/adr-XXX-description`, with documented alternates for infra, palette, and chore work. Validate before pushing with `just check-branch-name`; a CI advisory check (`.github/workflows/branch-naming.yml`) also flags violations on PR open.
 - **Work tracking**: All work tracked via GitHub Issues. PRs reference issues with `Closes #N`. Check your assigned issues with `gh issue list --assignee @me`.
 
 ## Phase 5 Status — COMPLETE
@@ -144,6 +144,33 @@ gh issue view <number>
 - `cluster-a` through `cluster-f` — capability cluster
 - `blocked` — waiting on another issue/agent
 - `contract-test` — cross-module contract test
+
+## Branch-naming
+
+Branch names are validated against the allowlist in [`.github/branch-naming.yml`](.github/branch-naming.yml). Four pattern families are recognized; everything else is flagged by the CI advisory check.
+
+| Pattern | When to use | Examples |
+| --- | --- | --- |
+| `agent-N/<verb>/adr-XXX-<slug>` | **Canonical** — agent-owned implementation work tied to an ADR | `agent-3/feat/adr-026-phase-2-metricql`, `agent-5/design/adr-026-phase-2-m5-m6`, `agent-3/fix/composite-cycle-depth` |
+| `infra-N/<verb>/<slug>` | Pulumi / GCP / AWS infra work owned by `infra-N` agents | `infra-2/feat/gcp-sql-private-access`, `infra-5/fix/cloud-armor-policy` |
+| `palette[/-]<slug>[-<digits>]` | Design-system / M6 polish dispatched by the palette tooling | `palette/refine-breadcrumb-18322858338088205282`, `palette-standardize-sort-headers-16091075850831504436` |
+| `chore/<slug>` | Repo-wide hygiene without a single agent owner (justfile, docs, CI, tooling) | `chore/prime-issue-recipe`, `chore/branch-name-enforcement` |
+
+**Allowed verbs** (for `agent-N/<verb>/...`): `feat`, `fix`, `port`, `design`, `chore`, `refactor`, `docs`, `test`. Verb choice mirrors the conventional-commit prefix used in the eventual PR title.
+
+**Never use auto-generated worker names as branch names** (e.g., `claude/kaizen-streaming-video-diagram-3VZzS`, `plan-development-strategy`). These bypass the agent-N ownership model and confuse the dispatch / merge-queue tooling.
+
+### How to validate
+
+```
+just check-branch-name          # exits 0 on match, 1 with suggestions on no match
+```
+
+The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. Flip `continue-on-error: false` in the workflow to upgrade to a required check once the violation rate hits ~zero.
+
+### Adding a new pattern family
+
+If a legitimate new branch-name convention emerges (e.g., a future `bench-N/...` for benchmarking work), add the regex to `.github/branch-naming.yml::allowed_patterns` in the same PR that creates the first branch using it. Both `just check-branch-name` and the CI check read from the same file.
 
 ## Orchestration Model
 
