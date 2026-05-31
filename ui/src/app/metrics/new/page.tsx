@@ -17,6 +17,7 @@ import { WindowedCountSection } from '@/components/metrics/windowed-count-sectio
 import { MetricqlSection } from '@/components/metrics/metricql-section';
 import { MetricFormPreview } from '@/components/metrics/metric-form-preview';
 import { createMetricDefinition, marshalMetricDefinition, listMetricDefinitions } from '@/lib/api';
+import { useToast } from '@/lib/toast-context';
 import {
   validateFilteredMeanConfig,
   validateCompositeConfig,
@@ -29,6 +30,30 @@ import type {
   CompositeConfig,
   WindowedCountConfig,
 } from '@/lib/types';
+
+// ADR-026 Phase 3 / Task D2 (Lock L5). The M5 server emits the
+// x-kaizen-deprecation trailer on CUSTOM creates; the UI surfaces it as
+// a toast. Detail-page banner deferred (no metric detail page exists yet).
+//
+// The user-visible string is locked by L5 so operator-facing messaging stays
+// consistent across M5 (trailer), the UI toast, and the migration runbook
+// referenced at the end. If you change this, also update the runbook anchor
+// `docs/runbooks/m5-metric-definitions.md#custom-deprecation`.
+export const DEPRECATION_TOAST_MESSAGE =
+  'Custom SQL metrics are deprecated. Use MetricQL or structured types instead. See docs/runbooks/m5-metric-definitions.md#custom-deprecation.';
+
+/**
+ * ADR-026 Phase 3 / Task D2. Returns true when the just-created metric is
+ * a CUSTOM metric and the UI should surface the deprecation toast.
+ *
+ * Extracted so the type-gate is unit-testable in isolation — the integration
+ * test exercises the full Create → router push → toast emission path via the
+ * page, and this helper covers the per-type decision matrix (CUSTOM yes;
+ * MEAN, FILTERED_MEAN, METRICQL, etc. no).
+ */
+export function shouldShowCustomDeprecationToast(metric: { type: MetricType }): boolean {
+  return metric.type === 'CUSTOM';
+}
 
 interface MetricFormState extends MetricFormShellState {
   type: MetricType;
@@ -184,6 +209,7 @@ const METRICQL_FORM_EXPERIMENT_ID = '';
 
 export default function NewMetricPage() {
   const router = useRouter();
+  const { addToast } = useToast();
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Fetch the metric catalog so MetricqlSection can power @metric_ref autocomplete.
@@ -213,6 +239,14 @@ export default function NewMetricPage() {
 
     try {
       const created = await createMetricDefinition(metric);
+      // ADR-026 Phase 3 / Task D2 (L5). Decide off the server-echoed `type`
+      // rather than the form state — the server is the source of truth and
+      // also avoids surfacing a toast if M5 coerced the type for any reason.
+      // Toast is queued BEFORE router.push so the persistent ToastProvider
+      // (app/layout.tsx) holds it across the navigation.
+      if (shouldShowCustomDeprecationToast(created)) {
+        addToast(DEPRECATION_TOAST_MESSAGE, 'warning');
+      }
       router.push(`/metrics?created=${encodeURIComponent(created.metricId)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Submission failed';
