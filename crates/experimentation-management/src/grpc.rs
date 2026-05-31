@@ -57,7 +57,18 @@ use crate::validators;
 // Broadcast channel capacity. Slow subscribers will see RecvError::Lagged.
 const BROADCAST_CAPACITY: usize = 512;
 
-/// L5-locked deprecation trailer value for CUSTOM metric creates.
+/// L5-locked deprecation **header** value for CUSTOM metric creates.
+///
+/// Tonic unary RPCs surface `Response::metadata_mut()` as HTTP/2 initial
+/// metadata (response headers), not trailing metadata (trailers). Application
+/// trailers aren't part of the tonic unary response API — only the framework
+/// `grpc-status` / `grpc-message` trailers exist for unary calls. The L5
+/// contract is therefore implemented and consumed as a **header**; the runbook
+/// at `docs/runbooks/m5-metric-definitions.md#custom-deprecation` has always
+/// documented it as such. (Devin PR #578 round-1 🚩 terminology fix — prior
+/// docstrings in this file + the e2e test used "trailer" inconsistently with
+/// what tonic actually emits.)
+///
 /// See ADR-026 Phase 3 plan, Lock L5
 /// (`docs/superpowers/plans/2026-05-30-adr-026-phase-3-custom-migration.md`).
 /// The runbook anchor referenced below MUST exist — kept in sync with
@@ -1071,12 +1082,20 @@ impl ExperimentManagementService for ManagementServiceHandler {
             .await
             .map_err(store_err_to_status)?;
 
-        let mut response = Response::new(row.into_proto());
+        // ADR-026 Phase 3 (L5): emit the deprecation **header** on CUSTOM
+        // creates. The check uses the server-echoed row type (not the request
+        // payload's type) so that any future store-side type coercion stays
+        // symmetric with the response body the UI reads. The UI at
+        // ui/src/app/metrics/new/page.tsx already treats the server-echoed
+        // type as the source of truth — see Devin PR #578 round-1 📝 symmetry
+        // note. UpdateMetricDefinition RPC does not exist; per L7 metric type
+        // is immutable post-create — Create is the only entry point.
+        let response_metric = row.into_proto();
+        let stored_type = response_metric.r#type();
+        let metric_id_for_log = response_metric.metric_id.clone();
+        let mut response = Response::new(response_metric);
 
-        // ADR-026 Phase 3 (L5): emit deprecation trailer on CUSTOM creates.
-        // UpdateMetricDefinition RPC does not exist; per L7 metric type is
-        // immutable post-create — Create is the only entry point.
-        if metric.r#type() == MetricType::Custom {
+        if stored_type == MetricType::Custom {
             response.metadata_mut().insert(
                 "x-kaizen-deprecation",
                 tonic::metadata::MetadataValue::from_static(DEPRECATION_HEADER_CUSTOM),
@@ -1084,9 +1103,9 @@ impl ExperimentManagementService for ManagementServiceHandler {
             tracing::info!(
                 target: "m5.deprecation",
                 metric_type = "CUSTOM",
-                metric_id = %metric.metric_id,
+                metric_id = %metric_id_for_log,
                 event = "metric_definition_created",
-                "custom metric created — emitting deprecation trailer"
+                "custom metric created — emitting x-kaizen-deprecation header"
             );
         }
 
