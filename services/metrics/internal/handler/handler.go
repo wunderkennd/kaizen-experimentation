@@ -15,22 +15,42 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
+	"github.com/org/experimentation-platform/services/metrics/internal/shadow"
 )
 
 var _ metricsv1connect.MetricComputationServiceHandler = (*MetricsHandler)(nil)
 
 type MetricsHandler struct {
-	job                 *jobs.StandardJob
-	guardrailJob        *jobs.GuardrailJob
-	contentConsumption  *jobs.ContentConsumptionJob
-	surrogateJob        *jobs.SurrogateJob
-	interleavingJob     *jobs.InterleavingJob
-	recalibrationJob    *jobs.RecalibrationJob
-	queryLog            querylog.Writer
+	job                *jobs.StandardJob
+	guardrailJob       *jobs.GuardrailJob
+	contentConsumption *jobs.ContentConsumptionJob
+	surrogateJob       *jobs.SurrogateJob
+	interleavingJob    *jobs.InterleavingJob
+	recalibrationJob   *jobs.RecalibrationJob
+	queryLog           querylog.Writer
+	// shadowStore is optional (ADR-026 Phase 3 #437). When nil the three
+	// shadow-run RPCs return CodeUnavailable so existing callers are unaffected.
+	shadowStore shadow.Store
 }
 
-func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ilj *jobs.InterleavingJob, rj *jobs.RecalibrationJob, ql querylog.Writer) *MetricsHandler {
-	return &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, interleavingJob: ilj, recalibrationJob: rj, queryLog: ql}
+// MetricsHandlerOption configures optional MetricsHandler behavior.
+// Functional options keep the existing constructor wire-compatible while
+// allowing cmd/main.go and new tests to inject production/mock stores.
+type MetricsHandlerOption func(*MetricsHandler)
+
+// WithShadowStore wires a shadow.Store for the three shadow-run RPCs.
+// When unset (the default for all existing tests), shadow RPCs return
+// CodeUnavailable — no production behavior changes.
+func WithShadowStore(s shadow.Store) MetricsHandlerOption {
+	return func(h *MetricsHandler) { h.shadowStore = s }
+}
+
+func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ilj *jobs.InterleavingJob, rj *jobs.RecalibrationJob, ql querylog.Writer, opts ...MetricsHandlerOption) *MetricsHandler {
+	h := &MetricsHandler{job: job, guardrailJob: gj, contentConsumption: ccj, surrogateJob: sj, interleavingJob: ilj, recalibrationJob: rj, queryLog: ql}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 func (h *MetricsHandler) ComputeMetrics(ctx context.Context, req *connect.Request[metricsv1.ComputeMetricsRequest]) (*connect.Response[metricsv1.ComputeMetricsResponse], error) {
