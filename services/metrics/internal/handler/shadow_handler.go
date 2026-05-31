@@ -76,6 +76,10 @@ func (h *MetricsHandler) ScheduleShadowComputation(
 // Returns the current status and all accumulated per-tuple result rows for the
 // given shadow run, together with the EvaluatePromotion aggregate counters so
 // the caller can decide whether to call PromoteShadowResult.
+//
+// Stub rows (VariantID == "") are dedup-only markers written by B2's shadow
+// compute step to prevent double-computation within a nightly pass; they carry
+// no diff data and are excluded from the operator-facing response.
 func (h *MetricsHandler) GetShadowResults(
 	ctx context.Context,
 	req *connect.Request[metricsv1.GetShadowResultsRequest],
@@ -116,10 +120,21 @@ func (h *MetricsHandler) GetShadowResults(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	_, dwt, totalDays, _ := shadow.EvaluatePromotion(rows)
+	// Filter out stub rows (VariantID == "") before building the response.
+	// Stubs are dedup markers written by B2; they carry no diff data and must
+	// not appear in the operator-facing row list.  EvaluatePromotion performs
+	// the same filter internally, so passing realRows is idempotent but explicit.
+	var realRows []shadow.ResultRow
+	for _, r := range rows {
+		if r.VariantID != "" {
+			realRows = append(realRows, r)
+		}
+	}
 
-	protoRows := make([]*metricsv1.ShadowResultRow, len(rows))
-	for i, r := range rows {
+	_, dwt, totalDays, _ := shadow.EvaluatePromotion(realRows)
+
+	protoRows := make([]*metricsv1.ShadowResultRow, len(realRows))
+	for i, r := range realRows {
 		protoRows[i] = &metricsv1.ShadowResultRow{
 			ExperimentId:    r.ExperimentID,
 			VariantId:       r.VariantID,

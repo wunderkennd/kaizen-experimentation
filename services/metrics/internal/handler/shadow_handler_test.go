@@ -208,6 +208,73 @@ func TestGetShadowResults_PopulatesAggregates(t *testing.T) {
 	assert.Len(t, resp.Msg.GetRows(), 14)            // 7 days × 2 variants
 }
 
+// TestGetShadowResults_ExcludesStubRowsFromResponse — the store holds 1 stub row
+// (VariantID=="") written by B2 as a dedup marker, plus 2 real result rows
+// (VariantID=="treatment" and "control").  GetShadowResults must return only the
+// 2 real rows; the stub must be invisible in both Rows and the aggregate counters.
+func TestGetShadowResults_ExcludesStubRowsFromResponse(t *testing.T) {
+	client, mockStore := setupShadowTestServer(t)
+	ctx := context.Background()
+
+	schedResp, err := client.ScheduleShadowComputation(ctx, connect.NewRequest(
+		&metricsv1.ScheduleShadowComputationRequest{
+			OriginalMetricId: "watch_time_minutes",
+			CandidateMetric:  candidateMetric(),
+		},
+	))
+	require.NoError(t, err)
+	shadowID := uuid.MustParse(schedResp.Msg.GetShadowId())
+
+	date := "2026-05-01"
+
+	// Stub row: B2 dedup marker.
+	require.NoError(t, mockStore.InsertResult(ctx, shadow.ResultRow{
+		ShadowID:        shadowID,
+		ExperimentID:    "exp1",
+		VariantID:       "",   // stub marker
+		ComputationDate: date,
+		OriginalValue:   sql.NullFloat64{Valid: false},
+		CandidateValue:  sql.NullFloat64{Valid: false},
+		WithinTolerance: false,
+	}))
+
+	// Real result rows: B3 differ output.
+	for _, variant := range []string{"treatment", "control"} {
+		require.NoError(t, mockStore.InsertResult(ctx, shadow.ResultRow{
+			ShadowID:        shadowID,
+			ExperimentID:    "exp1",
+			VariantID:       variant,
+			ComputationDate: date,
+			OriginalValue:   sql.NullFloat64{Float64: 1.0, Valid: true},
+			CandidateValue:  sql.NullFloat64{Float64: 1.01, Valid: true},
+			WithinTolerance: true,
+		}))
+	}
+
+	resp, err := client.GetShadowResults(ctx, connect.NewRequest(
+		&metricsv1.GetShadowResultsRequest{ShadowId: shadowID.String()},
+	))
+	require.NoError(t, err)
+
+	// Only the 2 real rows must appear — the stub must be stripped.
+	assert.Len(t, resp.Msg.GetRows(), 2,
+		"stub row (VariantID=='') must not appear in the operator-facing response")
+
+	// Both real rows belong to "2026-05-01" and pass tolerance.  With only 1 day
+	// of real data, EvaluatePromotion returns PENDING (< 7 days).  The aggregate
+	// counters must reflect the real rows only: 1 day within tolerance, 1 total.
+	assert.Equal(t, int32(1), resp.Msg.GetDaysWithinTolerance(),
+		"days_within_tolerance must count only real rows")
+	assert.Equal(t, int32(1), resp.Msg.GetTotalDays(),
+		"total_days must count only real rows")
+
+	// Verify no stub variant IDs leaked into the response rows.
+	for _, row := range resp.Msg.GetRows() {
+		assert.NotEmpty(t, row.GetVariantId(),
+			"no stub row (empty variant_id) should appear in the response")
+	}
+}
+
 // C1: TestGetShadowResults_PreservesNullDoubles — a NULL sql.NullFloat64 must
 // appear as nil in the proto response, while a valid 0.0 must appear as 0.0.
 // Operators need to distinguish "computation failed" (NULL) from "metric is zero".

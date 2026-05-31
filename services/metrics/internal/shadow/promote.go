@@ -11,6 +11,10 @@ import (
 // applies the 7-consecutive-calendar-days-within-tolerance gate from ADR-026
 // Phase 3.
 //
+// Stub rows (VariantID == "") are dedup markers written by B2's shadow compute
+// step; they are ignored by promotion evaluation.  Only real per-variant result
+// rows (written by B3's differ) contribute to the 7-day gate.
+//
 // Grouping rules
 // --------------
 //   - Rows are grouped by ComputationDate.
@@ -45,6 +49,18 @@ import (
 //   totalDays           — count of distinct dates in the result set
 //   reason              — human-readable explanation (empty on APPROVED)
 func EvaluatePromotion(rows []ResultRow) (status Status, daysWithinTolerance, totalDays int, reason string) {
+	// Filter out stub rows (VariantID == "").  Stubs are written by B2's
+	// computeOneShadow as dedup markers so ListNeedingComputation excludes
+	// already-started (experiment, date) pairs within a nightly pass.  They
+	// carry no diff data and must not influence the 7-day gate.
+	var realRows []ResultRow
+	for _, r := range rows {
+		if r.VariantID != "" {
+			realRows = append(realRows, r)
+		}
+	}
+	rows = realRows
+
 	// Group tuples by date.
 	type dateTuples struct {
 		passed []bool // one entry per (experiment, variant) tuple

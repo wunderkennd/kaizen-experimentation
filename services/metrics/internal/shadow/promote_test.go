@@ -194,3 +194,57 @@ func TestEvaluatePromotion_DaysWithinToleranceLessThanTotalIsRejected(t *testing
 	assert.Equal(t, 7, total)
 	assert.Contains(t, reason, "2026-05-04")
 }
+
+// helper: build a stub row (VariantID == "") as written by B2's computeOneShadow.
+// A stub has all numeric fields NULL and WithinTolerance == false; it is a dedup
+// marker only and must not contribute to the 7-day promotion gate.
+func rowStub(date string) ResultRow {
+	return ResultRow{
+		ResultID:        uuid.New(),
+		ShadowID:        uuid.New(),
+		ExperimentID:    "exp1",
+		VariantID:       "", // empty string is the stub marker
+		ComputationDate: date,
+		OriginalValue:   sql.NullFloat64{Valid: false},
+		CandidateValue:  sql.NullFloat64{Valid: false},
+		WithinTolerance: false,
+	}
+}
+
+// TestEvaluatePromotion_IgnoresStubRowsForDedupOnly — 7 contiguous days where
+// each day has one stub row (VariantID=="") AND one real passing tuple.
+// The stubs must be invisible: EvaluatePromotion must return StatusApproved
+// because the 7 real rows all pass.
+func TestEvaluatePromotion_IgnoresStubRowsForDedupOnly(t *testing.T) {
+	var rows []ResultRow
+	for i := 1; i <= 7; i++ {
+		date := fmt.Sprintf("2026-05-%02d", i)
+		rows = append(rows, rowStub(date))  // B2 dedup marker — must be ignored
+		rows = append(rows, rowPass(date))  // B3 real result — must count
+	}
+	status, dwt, total, reason := EvaluatePromotion(rows)
+	assert.Equal(t, StatusApproved, status,
+		"stub rows must not prevent approval; only real per-variant rows matter")
+	assert.Equal(t, 7, dwt)
+	assert.Equal(t, 7, total)
+	assert.Empty(t, reason)
+}
+
+// TestEvaluatePromotion_StubRowsDoNotCountTowardTotalDays — 5 days of stub-only
+// rows (no real per-variant rows at all).  All 5 stubs must be discarded,
+// leaving 0 totalDays → StatusPending with "7 more days needed".
+func TestEvaluatePromotion_StubRowsDoNotCountTowardTotalDays(t *testing.T) {
+	var rows []ResultRow
+	for i := 1; i <= 5; i++ {
+		rows = append(rows, rowStub(fmt.Sprintf("2026-05-%02d", i)))
+	}
+	status, dwt, total, reason := EvaluatePromotion(rows)
+	assert.Equal(t, StatusPending, status,
+		"stub-only rows must not count toward totalDays; result must be PENDING")
+	assert.Equal(t, 0, dwt,
+		"daysWithinTolerance must be 0 when all rows are stubs")
+	assert.Equal(t, 0, total,
+		"totalDays must be 0 when all rows are stubs")
+	assert.Contains(t, reason, "7 more days",
+		"reason must indicate the full 7 days are still needed")
+}
