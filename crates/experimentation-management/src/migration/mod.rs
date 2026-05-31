@@ -16,6 +16,7 @@
 //! When in doubt, emit `Tier3Untranslatable`.
 
 pub mod classifier;
+pub mod cli;
 pub mod report;
 pub mod tier1;
 pub mod tier2;
