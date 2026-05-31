@@ -210,22 +210,38 @@ fn emit_metricql_expr(expr: &Expr) -> Option<String> {
 
         // Check if we need parentheses — for nested expressions involving
         // lower-precedence operators wrapped in higher-precedence context.
-        // We keep it simple: emit parens around + or - sub-expressions
-        // when they appear as the right operand of * or /.
-        let needs_right_parens = matches!(actual_op, BinaryOperator::Multiply | BinaryOperator::Divide)
-            && matches!(
-                actual_right,
+        // Emit parens around `+` or `-` sub-expressions when they appear as
+        // EITHER operand of `*` or `/`. Devin PR #577 round-1 🔴 finding: the
+        // previous version checked only the right operand, so an input like
+        // `(@a + @b) * @c` lost its parens via `unwrap_nested(left)` and was
+        // emitted as `@a + @b * @c` — same syntax, different arithmetic. The
+        // round-trip validate_metricql check at the proposal boundary did NOT
+        // catch this because the wrong output is syntactically valid; only L3
+        // shadow-run would notice the value drift downstream. Static check
+        // closes the gap before the proposal ever leaves the translator.
+        let inner_is_additive = |e: &Expr| {
+            matches!(
+                e,
                 Expr::BinaryOp { op: BinaryOperator::Plus, .. }
                     | Expr::BinaryOp { op: BinaryOperator::Minus, .. }
-            );
+            )
+        };
+        let is_mul_or_div = matches!(actual_op, BinaryOperator::Multiply | BinaryOperator::Divide);
+        let needs_left_parens = is_mul_or_div && inner_is_additive(actual_left);
+        let needs_right_parens = is_mul_or_div && inner_is_additive(actual_right);
 
+        let left_out = if needs_left_parens {
+            format!("({left_str})")
+        } else {
+            left_str
+        };
         let right_out = if needs_right_parens {
             format!("({right_str})")
         } else {
             right_str
         };
 
-        return Some(format!("{left_str} {op_str} {right_out}"));
+        return Some(format!("{left_out} {op_str} {right_out}"));
     }
 
     None
@@ -449,7 +465,42 @@ fn translate_filtered_aggregation(stmt: &Statement) -> Option<String> {
     // Must be handled BEFORE the count/proportion source-not-empty guard below.
     if func_name == "proportion" {
         // `source` holds the event_type extracted from the CASE expression.
-        let filter_str = build_filter_str_from_where_preds(select.selection.as_ref())?;
+        // Devin PR #577 round-1 🚩 finding: if the WHERE clause ALSO has an
+        // event_type predicate, we must either strip it (redundant — same
+        // value as the CASE) or reject (contradictory — different value).
+        // The count/mean/sum path below already does this via
+        // split_where_for_metricql; mirror that hygiene for proportion so
+        // future corpus entries can't trigger the latent bug class.
+        let filter_str = if let Some(where_expr) = select.selection.as_ref() {
+            let preds = collect_and_predicates(where_expr);
+            let mut filter_preds: Vec<&Expr> = Vec::new();
+            for pred in &preds {
+                if let Some(et) = extract_event_type_val(pred) {
+                    if et != source {
+                        // Contradictory: CASE says event_type = source, WHERE
+                        // says event_type = something_else. The two filters
+                        // would never produce rows together; reject to Tier 3
+                        // rather than emit semantically-broken MetricQL.
+                        return None;
+                    }
+                    // Redundant: WHERE event_type = source, same as CASE.
+                    // Strip so the emitted filter doesn't repeat the constraint.
+                    continue;
+                }
+                filter_preds.push(pred);
+            }
+            if filter_preds.is_empty() {
+                None
+            } else {
+                let parts: Option<Vec<String>> = filter_preds
+                    .iter()
+                    .map(|p| serialize_metricql_predicate(p))
+                    .collect();
+                Some(parts?.join(" and "))
+            }
+        } else {
+            None
+        };
         return match filter_str {
             Some(f) => Some(format!("proportion({source}) where {f}")),
             None => Some(format!("proportion({source})")),
@@ -491,25 +542,10 @@ fn translate_filtered_aggregation(stmt: &Statement) -> Option<String> {
     Some(expr)
 }
 
-/// Serialize all WHERE predicates into a MetricQL `and`-joined filter string.
-/// Returns `Ok(None)` if there are no predicates (no WHERE clause or empty),
-/// `Ok(Some(filter))` if all predicates serialize, `None` if any fails.
-fn build_filter_str_from_where_preds(
-    where_expr: Option<&Expr>,
-) -> Option<Option<String>> {
-    let expr = match where_expr {
-        Some(e) => e,
-        None => return Some(None),
-    };
-    let preds = collect_and_predicates(expr);
-    if preds.is_empty() {
-        return Some(None);
-    }
-    let parts: Option<Vec<String>> =
-        preds.iter().map(|p| serialize_metricql_predicate(p)).collect();
-    let joined = parts?.join(" and ");
-    Some(Some(joined))
-}
+// (build_filter_str_from_where_preds removed in PR #577 round-1 🚩 fix.
+// Its only caller was the proportion path, which now inlines the per-predicate
+// loop to also strip redundant event_type predicates. The count/mean/sum
+// path uses split_where_for_metricql + serialize_metricql_predicate directly.)
 
 struct AggInfo {
     func_name: String,
@@ -982,6 +1018,81 @@ mod tests {
         let lookup = SeedLookup::with_ids(&["ctr_metric", "avg_order_value_metric"]);
         let proposal = translate(&stmt, shape, &original, &lookup).await.unwrap();
         assert_eq!(proposal.metric.metricql_expression, "@ctr_metric * @avg_order_value_metric");
+    }
+
+    /// Devin PR #577 round-1 🔴 regression: `(@a + @b) * @c` must NOT emit
+    /// `@a + @b * @c`. The original bug only checked the RIGHT operand for
+    /// additive sub-expressions needing parens; the left operand was emitted
+    /// raw, silently changing arithmetic semantics. Round-trip validate
+    /// didn't catch it because both expressions are syntactically valid.
+    #[tokio::test]
+    async fn composite_arith_left_additive_under_multiply_gets_parens() {
+        let sql = "SELECT ms.user_id, ms.variant_id, \
+                   ((MAX(CASE WHEN ms.metric_id = 'watch_time_metric' THEN ms.metric_value END) \
+                     + MAX(CASE WHEN ms.metric_id = 'session_count_metric' THEN ms.metric_value END)) \
+                    * MAX(CASE WHEN ms.metric_id = 'ctr_metric' THEN ms.metric_value END)) \
+                   AS metric_value \
+                   FROM delta.metric_summaries ms \
+                   WHERE ms.metric_id IN ('watch_time_metric', 'session_count_metric', 'ctr_metric') \
+                   GROUP BY ms.user_id, ms.variant_id";
+        let original = custom_original("left_additive_under_mul");
+        let (stmt, shape) = parse_and_classify(sql);
+        let lookup = SeedLookup::with_ids(&["watch_time_metric", "session_count_metric", "ctr_metric"]);
+        let proposal = translate(&stmt, shape, &original, &lookup).await.unwrap();
+        // The critical assertion: the left-side (additive) operand MUST be
+        // parenthesized. The pre-fix output was `@watch_time_metric +
+        // @session_count_metric * @ctr_metric` — same tokens, different math.
+        assert_eq!(
+            proposal.metric.metricql_expression,
+            "(@watch_time_metric + @session_count_metric) * @ctr_metric"
+        );
+    }
+
+    /// Devin PR #577 round-1 🚩 regression: proportion path now strips
+    /// redundant event_type from WHERE clause (mirrors count/mean/sum path).
+    #[tokio::test]
+    async fn proportion_strips_redundant_event_type_from_where() {
+        // The CASE inside proportion picks event_type = 'purchase_completed'.
+        // WHERE redundantly mentions the same event_type. Output should NOT
+        // include it in the `where` clause.
+        let sql = "SELECT me.user_id, \
+                   CAST(MAX(CASE WHEN me.event_type = 'purchase_completed' THEN 1 ELSE 0 END) AS DOUBLE) \
+                       AS metric_value \
+                   FROM delta.metric_events me \
+                   INNER JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   WHERE me.event_type = 'purchase_completed' AND me.platform = 'mobile' \
+                   GROUP BY me.user_id";
+        let original = custom_original("proportion_redundant_event_type");
+        let (stmt, shape) = parse_and_classify(sql);
+        let lookup = SeedLookup::with_ids(&[]);
+        let proposal = translate(&stmt, shape, &original, &lookup).await.unwrap();
+        assert_eq!(
+            proposal.metric.metricql_expression,
+            "proportion(purchase_completed) where platform = 'mobile'"
+        );
+    }
+
+    /// Devin PR #577 round-1 🚩 regression: proportion path rejects
+    /// contradictory event_type (CASE = X, WHERE = Y) as Tier 3 rather than
+    /// emitting MetricQL whose filter would never match a row.
+    #[tokio::test]
+    async fn proportion_rejects_contradictory_event_type_in_where() {
+        let sql = "SELECT me.user_id, \
+                   CAST(MAX(CASE WHEN me.event_type = 'purchase_completed' THEN 1 ELSE 0 END) AS DOUBLE) \
+                       AS metric_value \
+                   FROM delta.metric_events me \
+                   INNER JOIN delta.exposures eu ON me.user_id = eu.user_id \
+                   WHERE me.event_type = 'page_view' \
+                   GROUP BY me.user_id";
+        let original = custom_original("proportion_contradictory_event_type");
+        let (stmt, shape) = parse_and_classify(sql);
+        let lookup = SeedLookup::with_ids(&[]);
+        let result = translate(&stmt, shape, &original, &lookup).await;
+        assert!(
+            result.is_none(),
+            "expected Tier 3 rejection on contradictory event_type, got Some(proposal with MetricQL: {:?})",
+            result.as_ref().map(|p| &p.metric.metricql_expression)
+        );
     }
 
     #[tokio::test]
