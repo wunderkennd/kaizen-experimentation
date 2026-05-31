@@ -163,6 +163,39 @@ func (j *StandardJob) computeOneShadow(
 		return
 	}
 
+	// Step 8 (B3): invoke the differ to write per-variant equivalence rows.
+	// Only runs when differ is wired; skipping does not affect the compute path.
+	// Failure is non-fatal: the compute already succeeded and the dedup stub is
+	// written.  The 7-day promotion gate will either re-attempt on the next pass
+	// (EvaluatePromotion returns StatusPending when < 7 days of data) or
+	// eventually REJECT if no differ rows accumulate — which is the correct safe
+	// behaviour (never promote with no diff evidence).
+	if j.differ != nil {
+		// Resolve the original metric's type so the differ can apply the correct
+		// tolerance rule (COUNT/PROPORTION → exact; all others → FP tolerance).
+		origMetric, cfgErr := j.config.GetMetric(run.OriginalMetricID)
+		if cfgErr != nil {
+			// Original metric was deleted or was never in config — log and skip.
+			slog.Warn("shadow: original metric not found in config, skipping differ",
+				"shadow_id", shadowIDStr,
+				"original_metric_id", run.OriginalMetricID,
+				"computation_date", computationDate,
+				"err", cfgErr,
+			)
+		} else {
+			if differErr := j.differ.Run(ctx, &run, experimentID, computationDate, origMetric.Type); differErr != nil {
+				slog.Error("shadow: differ failed (non-fatal)",
+					"shadow_id", shadowIDStr,
+					"original_metric_id", run.OriginalMetricID,
+					"computation_date", computationDate,
+					"err", differErr,
+				)
+				// Do NOT transition to FAILED — compute succeeded.  The shadow stays
+				// PENDING; tomorrow's pass will re-compute and retry the differ.
+			}
+		}
+	}
+
 	slog.Info("shadow: computed candidate metric",
 		"shadow_id", shadowIDStr,
 		"original_metric_id", run.OriginalMetricID,

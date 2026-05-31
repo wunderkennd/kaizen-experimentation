@@ -32,6 +32,7 @@ type StandardJob struct {
 	queryLog     querylog.Writer
 	statusWriter status.Writer  // ADR-026 #475: per-metric outcome flushed to PG; nil → flush is a no-op.
 	shadowStore  shadow.Store   // ADR-026 Phase 3 (#437): shadow-run computation; nil → shadow pass is a no-op.
+	differ       *shadow.Differ // ADR-026 Phase 3 B3 (#437): per-variant differ; nil → differ is a no-op.
 }
 
 // StandardJobOption configures optional StandardJob behavior (ADR-026 #475).
@@ -53,6 +54,14 @@ func WithStatusWriter(w status.Writer) StandardJobOption {
 // use the legacy 4-arg constructor.
 func WithShadowStore(s shadow.Store) StandardJobOption {
 	return func(j *StandardJob) { j.shadowStore = s }
+}
+
+// WithDiffer wires a shadow.Differ so the nightly pass writes per-variant
+// equivalence rows after each successful shadow compute (ADR-026 Phase 3 B3
+// #437).  When unset (nil), the differ step is skipped and all existing
+// shadow tests continue to pass without modification.
+func WithDiffer(d *shadow.Differ) StandardJobOption {
+	return func(j *StandardJob) { j.differ = d }
 }
 
 // NewStandardJob creates a new standard metric computation job. Options are

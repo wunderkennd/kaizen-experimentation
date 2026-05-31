@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -212,4 +213,128 @@ func TestStandardJob_ShadowRun_Integration_AlreadyComputedExcluded(t *testing.T)
 		}
 	}
 	assert.True(t, found, "shadow must still appear for a different experimentID on the same date")
+}
+
+// TestStandardJob_ShadowRun_Integration_DifferWritesPerVariantRows: run
+// StandardJob with a real PgStore + a MockValueReader pre-seeded with known
+// per-variant values for the original and shadow candidate.  After job.Run,
+// assert that per-variant ResultRows exist in the DB with non-empty VariantIDs,
+// populated diff_abs/diff_rel, and within_tolerance set correctly.
+//
+// This test uses a MockValueReader (not real Spark) because delta.metric_summaries
+// is not available in the integration test environment.  The correctness of the
+// Spark read-back is covered by the unit tests in differ_test.go; here we verify
+// the PgStore write path (InsertResult → SELECT) end-to-end.
+func TestStandardJob_ShadowRun_Integration_DifferWritesPerVariantRows(t *testing.T) {
+	pool := newIntegTestPool(t)
+	store := shadow.NewPgStore(pool)
+	ctx := context.Background()
+
+	candidate := &commonv1.MetricDefinition{
+		MetricId:        "integ_differ_candidate",
+		Type:            commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
+		SourceEventType: "heartbeat",
+		TypeConfig: &commonv1.MetricDefinition_FilteredMean{
+			FilteredMean: &commonv1.FilteredMeanConfig{
+				FilterSql:   "platform = 'mobile'",
+				ValueColumn: "duration_ms",
+			},
+		},
+	}
+	candidateBytes, err := protojson.Marshal(candidate)
+	require.NoError(t, err)
+
+	// Original metric in seed_config.json is "ctr_recommendation" (type RATIO or MEAN).
+	// We use "watch_time" to match the minimalExperimentFixture convention.
+	shadowID, err := store.Schedule(ctx, "watch_time", json.RawMessage(candidateBytes))
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanupShadow(t, pool, shadowID) })
+
+	cfgStore, err := config.LoadFromFile("../config/testdata/seed_config.json")
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(42)
+	ql := querylog.NewMemWriter()
+	sw := status.NewMockWriter()
+
+	// Pre-seed the MockValueReader with known per-variant values.
+	// The experiment ID comes from seed_config.json.
+	const experimentID = "e0000000-0000-0000-0000-000000000001"
+	computationDate := time.Now().Format("2006-01-02")
+
+	reader := &integMockValueReader{
+		data: map[integReaderKey]map[string]float64{
+			{shadowID.String(), experimentID, computationDate}: {
+				"control":   10.0,
+				"treatment": 10.0, // identical → within_tolerance = true for any type
+			},
+			{"watch_time", experimentID, computationDate}: {
+				"control":   10.0,
+				"treatment": 10.0,
+			},
+		},
+	}
+
+	differ := shadow.NewDiffer(reader, store)
+
+	job := NewStandardJob(cfgStore, renderer, executor, ql,
+		WithStatusWriter(sw),
+		WithShadowStore(store),
+		WithDiffer(differ),
+	)
+
+	_, runErr := job.Run(ctx, experimentID)
+	require.NoError(t, runErr)
+
+	// Fetch all result rows for this shadow from PG.
+	results, err := store.Results(ctx, shadowID)
+	require.NoError(t, err)
+
+	// Filter per-variant rows (non-empty VariantID).
+	var pvRows []shadow.ResultRow
+	for _, r := range results {
+		if r.VariantID != "" {
+			pvRows = append(pvRows, r)
+		}
+	}
+
+	// We expect 2 per-variant rows (control + treatment).
+	assert.Len(t, pvRows, 2,
+		"B3 differ must write one row per variant to metric_shadow_run_results")
+
+	for _, r := range pvRows {
+		assert.NotEmpty(t, r.VariantID, "VariantID must be non-empty")
+		assert.True(t, r.OriginalValue.Valid, "OriginalValue must be set")
+		assert.True(t, r.CandidateValue.Valid, "CandidateValue must be set")
+		assert.True(t, r.DiffAbs.Valid, "DiffAbs must be set when both sides are present")
+		assert.True(t, r.DiffRel.Valid, "DiffRel must be set when both sides are present")
+		assert.True(t, r.WithinTolerance,
+			"variant %s: within_tolerance must be true (identical values)", r.VariantID)
+	}
+}
+
+// integMockValueReader is an in-memory shadow.ValueReader for integration tests.
+// It avoids taking a Spark dependency in the integration test environment.
+type integMockValueReader struct {
+	data map[integReaderKey]map[string]float64
+}
+
+type integReaderKey struct {
+	metricID, experimentID, computationDate string
+}
+
+func (r *integMockValueReader) Read(_ context.Context, metricID, experimentID, computationDate string) (map[string]float64, error) {
+	k := integReaderKey{metricID, experimentID, computationDate}
+	vals, ok := r.data[k]
+	if !ok {
+		return make(map[string]float64), nil
+	}
+	out := make(map[string]float64, len(vals))
+	for v, f := range vals {
+		out[v] = f
+	}
+	return out, nil
 }

@@ -1,10 +1,11 @@
 package jobs
 
-// shadow_runner_test.go — unit tests for the B2 shadow-run computation path
-// inside StandardJob.Run (ADR-026 Phase 3 #437).
+// shadow_runner_test.go — unit tests for the B2 + B3 shadow-run computation
+// path inside StandardJob.Run (ADR-026 Phase 3 #437).
 //
-// These tests use MockStore + MockExecutor; no real Postgres or Spark.
-// Integration tests (//go:build integration) live in shadow_runner_integration_test.go.
+// These tests use MockStore + MockExecutor + mockValueReaderForJobs; no real
+// Postgres or Spark.  Integration tests (//go:build integration) live in
+// shadow_runner_integration_test.go.
 
 import (
 	"context"
@@ -13,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -615,4 +618,225 @@ func TestStandardJob_ShadowRun_DedupAcrossExperimentsInSamePass(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 1,
 		"stub result count must remain 1 after dedup skip; no duplicate rows")
+}
+
+// ---------------------------------------------------------------------------
+// B3 — Differ wire-through tests
+// ---------------------------------------------------------------------------
+
+// mockValueReaderForJobs is an in-memory shadow.ValueReader for use in the
+// jobs package tests.  It adapts the shadow.ValueReader interface
+// (Read(ctx, metricID, experimentID, computationDate)) to a simple map.
+type mockValueReaderForJobs struct {
+	mu   sync.Mutex
+	data map[jobsReaderKey]map[string]float64
+	// errOnRead, when non-nil, is returned by Read for any key.
+	errOnRead error
+}
+
+type jobsReaderKey struct {
+	metricID, experimentID, computationDate string
+}
+
+func newMockValueReaderForJobs() *mockValueReaderForJobs {
+	return &mockValueReaderForJobs{data: make(map[jobsReaderKey]map[string]float64)}
+}
+
+// SetValues pre-seeds per-variant values for (metricID, experimentID, computationDate).
+func (m *mockValueReaderForJobs) SetValues(metricID, experimentID, computationDate string, vals map[string]float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.data[jobsReaderKey{metricID, experimentID, computationDate}] = vals
+}
+
+// SetErr configures an error to be returned by all Read calls.
+func (m *mockValueReaderForJobs) SetErr(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.errOnRead = err
+}
+
+// Read implements shadow.ValueReader.
+func (m *mockValueReaderForJobs) Read(_ context.Context, metricID, experimentID, computationDate string) (map[string]float64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.errOnRead != nil {
+		return nil, m.errOnRead
+	}
+	k := jobsReaderKey{metricID, experimentID, computationDate}
+	vals, ok := m.data[k]
+	if !ok {
+		return make(map[string]float64), nil
+	}
+	out := make(map[string]float64, len(vals))
+	for v, f := range vals {
+		out[v] = f
+	}
+	return out, nil
+}
+
+// perVariantRows filters out stub rows (VariantID == "") from a result set.
+func perVariantRows(rows []shadow.ResultRow) []shadow.ResultRow {
+	var out []shadow.ResultRow
+	for _, r := range rows {
+		if r.VariantID != "" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// setupShadowJobWithDiffer creates a StandardJob wired with MockStore + Differ +
+// the provided value reader.  The fixture must already have the original metric
+// registered so GetMetric succeeds in the differ step.
+func setupShadowJobWithDiffer(
+	t *testing.T,
+	fixturePath string,
+	ms shadow.Store,
+	reader shadow.ValueReader,
+) (*StandardJob, *spark.MockExecutor) {
+	t.Helper()
+	cfgStore, err := config.LoadFromFile(fixturePath)
+	require.NoError(t, err)
+
+	renderer, err := spark.NewSQLRenderer()
+	require.NoError(t, err)
+
+	executor := spark.NewMockExecutor(42)
+	ql := querylog.NewMemWriter()
+	sw := status.NewMockWriter()
+
+	differ := shadow.NewDiffer(reader, ms)
+
+	job := NewStandardJob(cfgStore, renderer, executor, ql,
+		WithStatusWriter(sw),
+		WithShadowStore(ms),
+		WithDiffer(differ),
+	)
+	return job, executor
+}
+
+// TestStandardJob_ShadowRun_InvokesDifferAfterCompute verifies end-to-end that
+// after a successful shadow compute, the Differ writes per-variant ResultRows
+// (distinct from the B2 stub) to the store.
+func TestStandardJob_ShadowRun_InvokesDifferAfterCompute(t *testing.T) {
+	p := minimalExperimentFixture(t)
+	ms := shadow.NewMockStore()
+	ctx := context.Background()
+
+	// Schedule a FILTERED_MEAN shadow for the "watch_time" original metric.
+	// The fixture declares watch_time as type MEAN.
+	candidate := &commonv1.MetricDefinition{
+		MetricId:        "differ_wire_candidate",
+		Type:            commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
+		SourceEventType: "heartbeat",
+		TypeConfig: &commonv1.MetricDefinition_FilteredMean{
+			FilteredMean: &commonv1.FilteredMeanConfig{
+				FilterSql:   "platform = 'mobile'",
+				ValueColumn: "duration_ms",
+			},
+		},
+	}
+	shadowID, err := ms.Schedule(ctx, "watch_time", candidateJSON(t, candidate))
+	require.NoError(t, err)
+
+	// Pre-seed the reader with known original + candidate values per variant.
+	// The job uses time.Now().Format("2006-01-02") internally — use the same
+	// call here so the seeds match the date the job computes.
+	reader := newMockValueReaderForJobs()
+	expID := "e0000000-0000-0000-0000-shadow000001"
+	computationDate := time.Now().Format("2006-01-02")
+
+	reader.SetValues("watch_time", expID, computationDate, map[string]float64{
+		"control":   10.0,
+		"treatment": 12.0,
+	})
+	reader.SetValues(shadowID.String(), expID, computationDate, map[string]float64{
+		"control":   10.0,
+		"treatment": 12.0,
+	})
+
+	job, _ := setupShadowJobWithDiffer(t, p, ms, reader)
+
+	_, runErr := job.Run(ctx, expID)
+	require.NoError(t, runErr, "job.Run must succeed even with differ wired")
+
+	// B2 stub + B3 per-variant rows must both exist.
+	allResults, err := ms.Results(ctx, shadowID)
+	require.NoError(t, err)
+
+	var stubs []shadow.ResultRow
+	for _, r := range allResults {
+		if r.VariantID == "" {
+			stubs = append(stubs, r)
+		}
+	}
+	pvRows := perVariantRows(allResults)
+
+	assert.Len(t, stubs, 1, "B2 must write exactly one stub row")
+	assert.Len(t, pvRows, 2, "B3 differ must write one row per variant (control + treatment)")
+
+	// Every per-variant row must have a non-empty VariantID and within_tolerance = true
+	// (values are identical on both sides).
+	for _, r := range pvRows {
+		assert.NotEmpty(t, r.VariantID)
+		assert.True(t, r.OriginalValue.Valid)
+		assert.True(t, r.CandidateValue.Valid)
+		assert.True(t, r.WithinTolerance, "identical orig/cand must be within_tolerance")
+	}
+}
+
+// TestStandardJob_ShadowRun_DifferFailure_DoesNotFailShadow verifies that when
+// the differ's ValueReader returns an error, the shadow compute still completes
+// successfully (stub written, status = PENDING) and the differ error is absorbed.
+func TestStandardJob_ShadowRun_DifferFailure_DoesNotFailShadow(t *testing.T) {
+	p := minimalExperimentFixture(t)
+	ms := shadow.NewMockStore()
+	ctx := context.Background()
+
+	candidate := &commonv1.MetricDefinition{
+		MetricId:        "differ_failure_candidate",
+		Type:            commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
+		SourceEventType: "heartbeat",
+		TypeConfig: &commonv1.MetricDefinition_FilteredMean{
+			FilteredMean: &commonv1.FilteredMeanConfig{
+				FilterSql:   "platform = 'tv'",
+				ValueColumn: "duration_ms",
+			},
+		},
+	}
+	shadowID, err := ms.Schedule(ctx, "watch_time", candidateJSON(t, candidate))
+	require.NoError(t, err)
+
+	// Wire a reader that always errors.
+	reader := newMockValueReaderForJobs()
+	reader.SetErr(fmt.Errorf("delta.metric_summaries read timeout"))
+
+	job, _ := setupShadowJobWithDiffer(t, p, ms, reader)
+
+	expID := "e0000000-0000-0000-0000-shadow000001"
+	_, runErr := job.Run(ctx, expID)
+	require.NoError(t, runErr, "differ failure must NOT propagate into Run's return error")
+
+	// Compute succeeded → shadow must still be PENDING (not FAILED).
+	run, getErr := ms.Get(ctx, shadowID)
+	require.NoError(t, getErr)
+	assert.Equal(t, shadow.StatusPending, run.Status,
+		"differ failure must NOT transition shadow to FAILED; shadow stays PENDING for tomorrow's pass")
+
+	// B2 stub row must still exist (compute succeeded).
+	allResults, err := ms.Results(ctx, shadowID)
+	require.NoError(t, err)
+
+	var stubs []shadow.ResultRow
+	for _, r := range allResults {
+		if r.VariantID == "" {
+			stubs = append(stubs, r)
+		}
+	}
+	assert.Len(t, stubs, 1, "stub row must be present even when differ fails (compute succeeded)")
+
+	// No per-variant rows must exist (differ never wrote them).
+	pvRows := perVariantRows(allResults)
+	assert.Empty(t, pvRows, "no per-variant rows must be written when differ errors")
 }
