@@ -16,7 +16,7 @@ const TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] 
   { value: 'RATIO',          label: 'Ratio',          description: 'Numerator sum / denominator sum, delta-method variance.' },
   { value: 'COUNT',          label: 'Count',          description: 'Event count per user.' },
   { value: 'PERCENTILE',     label: 'Percentile',     description: 'P-th percentile of a distribution.' },
-  { value: 'CUSTOM',         label: 'Custom SQL',     description: 'Arbitrary Spark SQL (advanced — prefer structured types).' },
+  { value: 'CUSTOM',         label: 'Custom SQL (deprecated)', description: 'Deprecated — use MetricQL or structured types. Existing CUSTOMs continue to work. See migration guide.' },
   { value: 'FILTERED_MEAN',  label: 'Filtered Mean',  description: 'Mean over rows matching a filter (ADR-026 Phase 1).' },
   { value: 'COMPOSITE',      label: 'Composite',      description: 'Combine other metrics with an operator (ADR-026 Phase 1).' },
   { value: 'WINDOWED_COUNT', label: 'Windowed Count', description: 'Event count within N hours of exposure (ADR-026 Phase 1).' },
@@ -25,6 +25,7 @@ const TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] 
 
 export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelectProps) {
   const description = TYPE_OPTIONS.find((o) => o.value === value)?.description ?? '';
+  const isDeprecated = value === 'CUSTOM';
 
   return (
     <div>
@@ -45,6 +46,27 @@ export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelect
         ))}
       </select>
       <p className="mt-1 text-xs text-gray-500" data-testid="metric-type-description">
+        {isDeprecated && (
+          <span data-testid="metric-type-deprecated-icon" className="mr-1">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="inline-block text-amber-500 align-text-bottom"
+              aria-hidden="true"
+            >
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span className="sr-only">Deprecated metric type</span>
+          </span>
+        )}
         {description}
       </p>
     </div>
