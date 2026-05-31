@@ -122,3 +122,75 @@ func TestEvaluatePromotion_ZeroRows(t *testing.T) {
 	assert.Equal(t, 0, total)
 	assert.Contains(t, reason, "7 more days")
 }
+
+// I1: TestEvaluatePromotion_RejectsNonContiguousWindow — 7 passing days that span
+// 9 calendar days (gap at day 4 and 5) → REJECTED with gap dates in the reason.
+func TestEvaluatePromotion_RejectsNonContiguousWindow(t *testing.T) {
+	// Build 7 passing rows using dates with a 2-day gap: days 1,2,3 then days 6,7,8,9.
+	// Calendar span = 9 days (2026-05-01 through 2026-05-09) but only 7 observed.
+	dates := []string{
+		"2026-05-01", "2026-05-02", "2026-05-03",
+		// gap at 2026-05-04 and 2026-05-05
+		"2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09",
+	}
+	var rows []ResultRow
+	for _, d := range dates {
+		rows = append(rows, rowPass(d))
+	}
+	status, dwt, total, reason := EvaluatePromotion(rows)
+	assert.Equal(t, StatusRejected, status)
+	assert.Equal(t, 7, dwt)
+	assert.Equal(t, 7, total)
+	assert.Contains(t, reason, "not contiguous")
+	assert.Contains(t, reason, "2026-05-04")
+	assert.Contains(t, reason, "2026-05-05")
+}
+
+// I1: TestEvaluatePromotion_AcceptsContiguous8Days — 8 contiguous days all
+// passing → APPROVED.
+func TestEvaluatePromotion_AcceptsContiguous8Days(t *testing.T) {
+	var rows []ResultRow
+	for i := 1; i <= 8; i++ {
+		rows = append(rows, rowPass(fmt.Sprintf("2026-05-%02d", i)))
+	}
+	status, dwt, total, reason := EvaluatePromotion(rows)
+	assert.Equal(t, StatusApproved, status)
+	assert.Equal(t, 8, dwt)
+	assert.Equal(t, 8, total)
+	assert.Empty(t, reason)
+}
+
+// I8: TestEvaluatePromotion_SixDaysAllCleanIsPending — 6 contiguous days all
+// passing → StatusPending, reason mentions "1 more day".
+func TestEvaluatePromotion_SixDaysAllCleanIsPending(t *testing.T) {
+	var rows []ResultRow
+	for i := 1; i <= 6; i++ {
+		rows = append(rows, rowPass(fmt.Sprintf("2026-05-%02d", i)))
+	}
+	status, dwt, total, reason := EvaluatePromotion(rows)
+	assert.Equal(t, StatusPending, status)
+	assert.Equal(t, 6, dwt)
+	assert.Equal(t, 6, total)
+	assert.Contains(t, reason, "1 more day")
+}
+
+// I9: TestEvaluatePromotion_DaysWithinToleranceLessThanTotalIsRejected — 7
+// contiguous days, 1 day has a failing tuple → REJECTED.
+// Explicit test that daysWithinTolerance == 6, totalDays == 7 triggers rejection
+// (guards against a refactor that accidentally drops the == clause).
+func TestEvaluatePromotion_DaysWithinToleranceLessThanTotalIsRejected(t *testing.T) {
+	var rows []ResultRow
+	for i := 1; i <= 7; i++ {
+		date := fmt.Sprintf("2026-05-%02d", i)
+		if i == 4 {
+			rows = append(rows, rowFail(date))
+		} else {
+			rows = append(rows, rowPass(date))
+		}
+	}
+	status, dwt, total, reason := EvaluatePromotion(rows)
+	assert.Equal(t, StatusRejected, status)
+	assert.Equal(t, 6, dwt)
+	assert.Equal(t, 7, total)
+	assert.Contains(t, reason, "2026-05-04")
+}

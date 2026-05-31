@@ -208,6 +208,47 @@ func TestGetShadowResults_PopulatesAggregates(t *testing.T) {
 	assert.Len(t, resp.Msg.GetRows(), 14)            // 7 days × 2 variants
 }
 
+// C1: TestGetShadowResults_PreservesNullDoubles — a NULL sql.NullFloat64 must
+// appear as nil in the proto response, while a valid 0.0 must appear as 0.0.
+// Operators need to distinguish "computation failed" (NULL) from "metric is zero".
+func TestGetShadowResults_PreservesNullDoubles(t *testing.T) {
+	client, mockStore := setupShadowTestServer(t)
+	ctx := context.Background()
+
+	schedResp, err := client.ScheduleShadowComputation(ctx, connect.NewRequest(
+		&metricsv1.ScheduleShadowComputationRequest{
+			OriginalMetricId: "watch_time_minutes",
+			CandidateMetric:  candidateMetric(),
+		},
+	))
+	require.NoError(t, err)
+	shadowID := uuid.MustParse(schedResp.Msg.GetShadowId())
+
+	// Insert one row: original_value = NULL, candidate_value = 0.0 (valid zero).
+	require.NoError(t, mockStore.InsertResult(ctx, shadow.ResultRow{
+		ShadowID:        shadowID,
+		ExperimentID:    "exp1",
+		VariantID:       "v1",
+		ComputationDate: "2026-05-01",
+		OriginalValue:   sql.NullFloat64{Valid: false},          // genuine NULL
+		CandidateValue:  sql.NullFloat64{Float64: 0.0, Valid: true}, // legitimate zero
+		WithinTolerance: false,
+	}))
+
+	resp, err := client.GetShadowResults(ctx, connect.NewRequest(
+		&metricsv1.GetShadowResultsRequest{ShadowId: shadowID.String()},
+	))
+	require.NoError(t, err)
+	require.Len(t, resp.Msg.GetRows(), 1)
+	row := resp.Msg.GetRows()[0]
+	assert.Nil(t, row.GetOriginalValue(),
+		"NULL sql.NullFloat64 must serialize to nil DoubleValue, not 0.0")
+	require.NotNil(t, row.GetCandidateValue(),
+		"valid 0.0 sql.NullFloat64 must serialize to non-nil DoubleValue")
+	assert.InDelta(t, 0.0, row.GetCandidateValue().GetValue(), 1e-9,
+		"candidate_value should be 0.0")
+}
+
 // ---- PromoteShadowResult tests ----
 
 func TestPromoteShadow_ApprovesWhen7DaysClean(t *testing.T) {
@@ -329,11 +370,13 @@ func TestPromoteShadow_PendingWhenInsufficientDays(t *testing.T) {
 	assert.Equal(t, shadow.StatusPending, runs[0].Status)
 }
 
-func TestPromoteShadow_AlreadyPromotedReturnsFailedPrecondition(t *testing.T) {
+// I5: TestPromoteShadow_IdempotentOnAlreadyApproved — calling PromoteShadowResult
+// on an already-APPROVED run returns APPROVED + result_id without error (idempotent
+// re-promote; no FailedPrecondition).
+func TestPromoteShadow_IdempotentOnAlreadyApproved(t *testing.T) {
 	client, mockStore := setupShadowTestServer(t)
 	ctx := context.Background()
 
-	// Schedule a run and pre-seed it as APPROVED so the Get succeeds but the CAS fails.
 	schedResp, err := client.ScheduleShadowComputation(ctx, connect.NewRequest(
 		&metricsv1.ScheduleShadowComputationRequest{
 			OriginalMetricId: "watch_time_minutes",
@@ -343,10 +386,62 @@ func TestPromoteShadow_AlreadyPromotedReturnsFailedPrecondition(t *testing.T) {
 	require.NoError(t, err)
 	shadowID := uuid.MustParse(schedResp.Msg.GetShadowId())
 
-	// Pre-set the status to APPROVED to simulate an already-promoted run.
+	// Pre-set status to APPROVED — no results needed; early-return triggers before
+	// EvaluatePromotion.
 	mockStore.SetStatus(shadowID, shadow.StatusApproved)
 
-	// Insert 7 passing days so EvaluatePromotion returns APPROVED.
+	resp, err := client.PromoteShadowResult(ctx, connect.NewRequest(
+		&metricsv1.PromoteShadowResultRequest{ShadowId: shadowID.String()},
+	))
+	require.NoError(t, err)
+	assert.Equal(t, "APPROVED", resp.Msg.GetStatus())
+	assert.Equal(t, shadowID.String(), resp.Msg.GetResultId())
+	assert.Empty(t, resp.Msg.GetReason())
+}
+
+// I5: TestPromoteShadow_ReturnsRejectionReasonForAlreadyRejected — calling
+// PromoteShadowResult on an already-REJECTED run returns REJECTED + original
+// reason without error (idempotent; no FailedPrecondition).
+func TestPromoteShadow_ReturnsRejectionReasonForAlreadyRejected(t *testing.T) {
+	client, mockStore := setupShadowTestServer(t)
+	ctx := context.Background()
+
+	schedResp, err := client.ScheduleShadowComputation(ctx, connect.NewRequest(
+		&metricsv1.ScheduleShadowComputationRequest{
+			OriginalMetricId: "watch_time_minutes",
+			CandidateMetric:  candidateMetric(),
+		},
+	))
+	require.NoError(t, err)
+	shadowID := uuid.MustParse(schedResp.Msg.GetShadowId())
+
+	mockStore.SetStatus(shadowID, shadow.StatusRejected)
+	mockStore.SetRejectionReason(shadowID, "old reason")
+
+	resp, err := client.PromoteShadowResult(ctx, connect.NewRequest(
+		&metricsv1.PromoteShadowResultRequest{ShadowId: shadowID.String()},
+	))
+	require.NoError(t, err)
+	assert.Equal(t, "REJECTED", resp.Msg.GetStatus())
+	assert.Equal(t, "old reason", resp.Msg.GetReason())
+}
+
+// I7: TestPromoteShadow_TransientStoreErrorReturnsInternal — a non-CAS store
+// error during Transition must return CodeInternal (NOT CodeFailedPrecondition).
+func TestPromoteShadow_TransientStoreErrorReturnsInternal(t *testing.T) {
+	client, mockStore := setupShadowTestServer(t)
+	ctx := context.Background()
+
+	schedResp, err := client.ScheduleShadowComputation(ctx, connect.NewRequest(
+		&metricsv1.ScheduleShadowComputationRequest{
+			OriginalMetricId: "watch_time_minutes",
+			CandidateMetric:  candidateMetric(),
+		},
+	))
+	require.NoError(t, err)
+	shadowID := uuid.MustParse(schedResp.Msg.GetShadowId())
+
+	// Insert 7 contiguous passing days so EvaluatePromotion returns APPROVED.
 	for day := 1; day <= 7; day++ {
 		require.NoError(t, mockStore.InsertResult(ctx, shadow.ResultRow{
 			ShadowID:        shadowID,
@@ -359,13 +454,15 @@ func TestPromoteShadow_AlreadyPromotedReturnsFailedPrecondition(t *testing.T) {
 		}))
 	}
 
-	// Call PromoteShadowResult — the CAS should fail since the row is already
-	// APPROVED (not PENDING or RUNNING).
+	// Inject a transient non-CAS error into Transition.
+	mockStore.SetTransitionErr(fmt.Errorf("connection refused"))
+
 	_, err = client.PromoteShadowResult(ctx, connect.NewRequest(
 		&metricsv1.PromoteShadowResultRequest{ShadowId: shadowID.String()},
 	))
 	require.Error(t, err)
-	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeInternal, connect.CodeOf(err),
+		"transient store errors must map to CodeInternal, not CodeFailedPrecondition")
 }
 
 func TestPromoteShadow_NotFound(t *testing.T) {

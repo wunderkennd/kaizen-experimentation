@@ -5,7 +5,10 @@
 // alongside a candidate structured/MetricQL definition.  M3's nightly pass
 // picks up PENDING runs, executes both sides (B2), records per-tuple diffs
 // (B3), and the promotion evaluator (EvaluatePromotion) enforces the
-// 7-consecutive-days-within-tolerance gate before M5 accepts the migration.
+// 7 *consecutive calendar days* within tolerance gate before M5 accepts the
+// migration.  Gaps in the calendar window (non-contiguous observation days)
+// cause REJECTED because the gate must observe equivalence across a full
+// weekly cycle to catch day-of-week / seasonality effects.
 package shadow
 
 import (

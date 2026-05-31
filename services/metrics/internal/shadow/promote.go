@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // EvaluatePromotion examines the accumulated result rows for a shadow run and
-// applies the 7-consecutive-days-within-tolerance gate from ADR-026 Phase 3.
+// applies the 7-consecutive-calendar-days-within-tolerance gate from ADR-026
+// Phase 3.
 //
 // Grouping rules
 // --------------
@@ -22,10 +24,19 @@ import (
 //
 // Status logic
 // ------------
-//   - totalDays < 7               → StatusPending,  reason = "shadow run needs N more days"
+//   - totalDays < 7                                       → StatusPending
 //   - daysWithinTolerance >= 7
-//     AND daysWithinTolerance == totalDays  → StatusApproved,  reason = ""
-//   - otherwise                   → StatusRejected, reason lists the failing dates
+//     AND daysWithinTolerance == totalDays
+//     AND totalDays == dateSpan (contiguous calendar window)  → StatusApproved
+//   - daysWithinTolerance == totalDays
+//     AND totalDays >= 7
+//     AND totalDays != dateSpan                           → StatusRejected (gap)
+//   - otherwise                                          → StatusRejected (failures)
+//
+// Approval requires `totalDays >= 7`, `daysWithinTolerance == totalDays`, AND
+// the observed dates form a contiguous calendar window.  A gap means we never
+// observed equivalence for those gap days, so APPROVED is unsafe (the gate
+// exists specifically to catch day-of-week / weekly seasonality effects).
 //
 // Returns
 // -------
@@ -74,6 +85,34 @@ func EvaluatePromotion(rows []ResultRow) (status Status, daysWithinTolerance, to
 
 	daysWithinTolerance = len(passingDates)
 
+	// Compute the calendar span: max(date) - min(date) + 1 in calendar days.
+	// An empty set is treated as span 0.
+	var allDates []string
+	for d := range byDate {
+		allDates = append(allDates, d)
+	}
+	sort.Strings(allDates)
+
+	dateSpan := 0
+	var gapDates []string
+	if len(allDates) > 0 {
+		minDate, _ := time.Parse("2006-01-02", allDates[0])
+		maxDate, _ := time.Parse("2006-01-02", allDates[len(allDates)-1])
+		dateSpan = int(maxDate.Sub(minDate).Hours()/24) + 1
+
+		// Find any dates in the [min,max] range that are absent from the result set.
+		present := make(map[string]struct{}, len(allDates))
+		for _, d := range allDates {
+			present[d] = struct{}{}
+		}
+		for cursor := minDate; !cursor.After(maxDate); cursor = cursor.AddDate(0, 0, 1) {
+			key := cursor.Format("2006-01-02")
+			if _, ok := present[key]; !ok {
+				gapDates = append(gapDates, key)
+			}
+		}
+	}
+
 	// Apply the gate.
 	if totalDays < 7 {
 		remaining := 7 - totalDays
@@ -87,11 +126,25 @@ func EvaluatePromotion(rows []ResultRow) (status Status, daysWithinTolerance, to
 			fmt.Sprintf("shadow run needs %d more %s of data", remaining, days)
 	}
 
-	if daysWithinTolerance >= 7 && daysWithinTolerance == totalDays {
+	// All days pass tolerance AND the window is contiguous — APPROVED.
+	if daysWithinTolerance >= 7 && daysWithinTolerance == totalDays && totalDays == dateSpan {
 		return StatusApproved, daysWithinTolerance, totalDays, ""
 	}
 
-	// Build a descriptive rejection reason.
+	// All days pass tolerance but the window has gaps — REJECTED (gap).
+	if daysWithinTolerance == totalDays && totalDays >= 7 && totalDays != dateSpan {
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf(
+			"shadow run window is not contiguous: observed %d days spanning %d calendar days",
+			totalDays, dateSpan,
+		))
+		if len(gapDates) > 0 {
+			sb.WriteString(fmt.Sprintf(" (gaps at %s)", strings.Join(gapDates, ", ")))
+		}
+		return StatusRejected, daysWithinTolerance, totalDays, sb.String()
+	}
+
+	// Build a descriptive rejection reason for tolerance failures.
 	var sb strings.Builder
 	nFail := len(failingDates)
 	nObs := totalDays

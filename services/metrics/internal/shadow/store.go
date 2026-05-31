@@ -3,11 +3,25 @@ package shadow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrCASFailure is returned by Transition when zero rows are affected —
+// meaning the row is either missing or not in the expected `from` state.
+// Callers can use errors.Is(err, shadow.ErrCASFailure) to distinguish a
+// logical precondition failure from a transient store error.
+var ErrCASFailure = errors.New("shadow: status CAS failure (row missing or not in expected state)")
+
+// IsCASFailure reports whether err wraps ErrCASFailure.
+// Convenience helper so callers don't need to import "errors" just for Is().
+func IsCASFailure(err error) bool {
+	return errors.Is(err, ErrCASFailure)
+}
 
 // Store is the persistence interface for shadow runs.
 // Implementations: PgStore (production), MockStore (tests).
@@ -74,8 +88,11 @@ func (s *PgStore) Get(ctx context.Context, shadowID uuid.UUID) (*Run, error) {
 	err := row.Scan(&r.ShadowID, &r.OriginalMetricID, &rawCandidate,
 		&r.ScheduledAt, &statusStr, &r.RejectionReason)
 	if err != nil {
-		// pgx uses pgx.ErrNoRows; map to nil so callers can return CodeNotFound.
-		if isNoRows(err) {
+		// pgx.ErrNoRows means the shadow run does not exist; callers map this to
+		// CodeNotFound.  Matches the convention in
+		// services/management/internal/fdr/controller.go:129,229 and
+		// services/management/internal/handlers/errors.go:31.
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("shadow: get %s: %w", shadowID, err)
@@ -136,8 +153,7 @@ func (s *PgStore) Transition(ctx context.Context, shadowID uuid.UUID, from, to S
 		return fmt.Errorf("shadow: transition %s %s→%s: %w", shadowID, from, to, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("shadow: transition %s %s→%s: CAS failure (row missing or not in expected state)",
-			shadowID, from, to)
+		return fmt.Errorf("transition shadow %s %s->%s: %w", shadowID, from, to, ErrCASFailure)
 	}
 	return nil
 }
@@ -193,13 +209,4 @@ func (s *PgStore) InsertResult(ctx context.Context, row ResultRow) error {
 	return nil
 }
 
-// isNoRows reports whether err is a "no rows" sentinel from pgx.
-func isNoRows(err error) bool {
-	// pgx v5 wraps pgx.ErrNoRows; match by string to avoid importing pgx here
-	// (keeps the package dependency surface to pgxpool only).
-	if err == nil {
-		return false
-	}
-	return err.Error() == "no rows in result set"
-}
 

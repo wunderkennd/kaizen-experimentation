@@ -16,6 +16,9 @@ type MockStore struct {
 	mu      sync.Mutex
 	runs    map[uuid.UUID]*Run
 	results []ResultRow
+	// transitionErr, when non-nil, is returned by Transition instead of
+	// performing the CAS.  Use SetTransitionErr to inject a transient error.
+	transitionErr error
 }
 
 // NewMockStore returns an empty MockStore.
@@ -68,18 +71,22 @@ func (m *MockStore) ListPending(_ context.Context) ([]Run, error) {
 	return out, nil
 }
 
-// Transition performs the CAS update.  Returns an error if the row is absent
-// or not in the expected `from` state.
+// Transition performs the CAS update.  Returns an error wrapping ErrCASFailure
+// if the row is absent or not in the expected `from` state.  If a transient
+// error was injected via SetTransitionErr, that error is returned instead.
 func (m *MockStore) Transition(_ context.Context, shadowID uuid.UUID, from, to Status, reason string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Injected transient error takes precedence (for testing CodeInternal path).
+	if m.transitionErr != nil {
+		return m.transitionErr
+	}
 	r, ok := m.runs[shadowID]
 	if !ok {
-		return fmt.Errorf("shadow: mock transition %s %s→%s: row not found", shadowID, from, to)
+		return fmt.Errorf("transition shadow %s %s->%s: %w", shadowID, from, to, ErrCASFailure)
 	}
 	if r.Status != from {
-		return fmt.Errorf("shadow: mock transition %s %s→%s: CAS failure (current status %s)",
-			shadowID, from, to, r.Status)
+		return fmt.Errorf("transition shadow %s %s->%s: %w", shadowID, from, to, ErrCASFailure)
 	}
 	r.Status = to
 	if to == StatusRejected || to == StatusFailed {
@@ -142,4 +149,23 @@ func (m *MockStore) AllResults() []ResultRow {
 	out := make([]ResultRow, len(m.results))
 	copy(out, m.results)
 	return out
+}
+
+// SetTransitionErr injects a transient error to be returned by Transition
+// instead of performing the CAS.  Pass nil to clear the injection.
+// Use this to test the CodeInternal path in PromoteShadowResult.
+func (m *MockStore) SetTransitionErr(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.transitionErr = err
+}
+
+// SetRejectionReason sets the RejectionReason on a run (test helper).
+// Used to pre-seed a REJECTED/FAILED run with a known reason.
+func (m *MockStore) SetRejectionReason(shadowID uuid.UUID, reason string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.runs[shadowID]; ok {
+		r.RejectionReason = reason
+	}
 }

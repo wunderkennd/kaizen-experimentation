@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	metricsv1 "github.com/org/experimentation/gen/go/experimentation/metrics/v1"
 	"github.com/google/uuid"
@@ -122,10 +124,10 @@ func (h *MetricsHandler) GetShadowResults(
 			ExperimentId:    r.ExperimentID,
 			VariantId:       r.VariantID,
 			ComputationDate: r.ComputationDate,
-			OriginalValue:   r.OriginalValue.Float64,
-			CandidateValue:  r.CandidateValue.Float64,
-			DiffAbs:         r.DiffAbs.Float64,
-			DiffRel:         r.DiffRel.Float64,
+			OriginalValue:   nullFloat64ToDoubleValue(r.OriginalValue),
+			CandidateValue:  nullFloat64ToDoubleValue(r.CandidateValue),
+			DiffAbs:         nullFloat64ToDoubleValue(r.DiffAbs),
+			DiffRel:         nullFloat64ToDoubleValue(r.DiffRel),
 			WithinTolerance: r.WithinTolerance,
 		}
 	}
@@ -146,6 +148,10 @@ func (h *MetricsHandler) GetShadowResults(
 // Evaluates the 7-consecutive-days gate and, if passed, atomically transitions
 // the shadow run to APPROVED (or REJECTED).  If there is not yet enough data
 // (StatusPending), returns the current status without mutating the row.
+//
+// Idempotency: if the run is already in a terminal state (APPROVED, REJECTED,
+// or FAILED), the call returns immediately with the stored status and reason
+// without re-evaluating or re-transitioning.
 //
 // The migration tool's "apply" subcommand inspects the response status to
 // decide whether to proceed with the M5 migration.
@@ -184,6 +190,32 @@ func (h *MetricsHandler) PromoteShadowResult(
 			fmt.Errorf("shadow run %s not found", shadowID))
 	}
 
+	// I5: Early-return for terminal statuses — idempotent, no re-evaluation.
+	switch run.Status {
+	case shadow.StatusApproved:
+		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
+		return connect.NewResponse(&metricsv1.PromoteShadowResultResponse{
+			Status:   string(shadow.StatusApproved),
+			ResultId: shadowID.String(),
+		}), nil
+	case shadow.StatusRejected:
+		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
+		return connect.NewResponse(&metricsv1.PromoteShadowResultResponse{
+			Status: string(shadow.StatusRejected),
+			Reason: run.RejectionReason,
+		}), nil
+	case shadow.StatusFailed:
+		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
+		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
+		return connect.NewResponse(&metricsv1.PromoteShadowResultResponse{
+			Status: string(shadow.StatusFailed),
+			Reason: run.RejectionReason,
+		}), nil
+	}
+	// StatusPending and StatusRunning fall through to the evaluate-then-transition flow.
+
 	rows, err := h.shadowStore.Results(ctx, shadowID)
 	if err != nil {
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
@@ -213,8 +245,11 @@ func (h *MetricsHandler) PromoteShadowResult(
 		if casErr != nil {
 			m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
 			m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
-			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("shadow run is not in a promotable state"))
+			// I7: distinguish CAS failure from transient store errors.
+			if shadow.IsCASFailure(casErr) {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, casErr)
+			}
+			return nil, connect.NewError(connect.CodeInternal, casErr)
 		}
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
 		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
@@ -234,8 +269,11 @@ func (h *MetricsHandler) PromoteShadowResult(
 		if casErr != nil {
 			m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "error").Inc()
 			m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "error").Observe(time.Since(start).Seconds())
-			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("shadow run is not in a promotable state"))
+			// I7: distinguish CAS failure from transient store errors.
+			if shadow.IsCASFailure(casErr) {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, casErr)
+			}
+			return nil, connect.NewError(connect.CodeInternal, casErr)
 		}
 		m3metrics.RPCTotal.WithLabelValues("PromoteShadowResult", "ok").Inc()
 		m3metrics.RPCDuration.WithLabelValues("PromoteShadowResult", "ok").Observe(time.Since(start).Seconds())
@@ -250,4 +288,15 @@ func (h *MetricsHandler) PromoteShadowResult(
 		return nil, connect.NewError(connect.CodeInternal,
 			fmt.Errorf("unexpected evaluation status %s", evalStatus))
 	}
+}
+
+// nullFloat64ToDoubleValue converts a sql.NullFloat64 to a *wrapperspb.DoubleValue.
+// Returns nil (proto NULL) when Valid is false, preserving the distinction between
+// a genuine SQL NULL and a legitimate 0.0 value.  Callers can't tell the difference
+// between NULL and 0.0 using a plain proto3 double field; wrapper types solve this.
+func nullFloat64ToDoubleValue(f sql.NullFloat64) *wrapperspb.DoubleValue {
+	if !f.Valid {
+		return nil
+	}
+	return &wrapperspb.DoubleValue{Value: f.Float64}
 }

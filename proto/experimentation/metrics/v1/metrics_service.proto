@@ -6,6 +6,7 @@ import "experimentation/common/v1/metric.proto";
 import "experimentation/common/v1/metricql_diagnostic.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/metrics/v1;metricsv1";
 
@@ -143,15 +144,23 @@ message GetShadowResultsResponse {
 }
 
 // One row from metric_shadow_run_results, returned inline by GetShadowResults.
+// The four double fields use google.protobuf.DoubleValue (nullable wrapper) so
+// callers can distinguish a genuine NULL (nil pointer) from a legitimate 0.0.
+// NULL occurs when the corresponding computation failed for that tuple.
 message ShadowResultRow {
   string experiment_id = 1;
   string variant_id = 2;
   // YYYY-MM-DD date this tuple was computed on.
   string computation_date = 3;
-  double original_value = 4;
-  double candidate_value = 5;
-  double diff_abs = 6;
-  double diff_rel = 7;
+  // NULL when the original-side computation failed for this tuple.
+  google.protobuf.DoubleValue original_value = 4;
+  // NULL when the candidate-side computation failed for this tuple.
+  google.protobuf.DoubleValue candidate_value = 5;
+  // NULL when either original_value or candidate_value is NULL.
+  google.protobuf.DoubleValue diff_abs = 6;
+  // NULL when either original_value or candidate_value is NULL, or when
+  // original_value is zero (division by zero is undefined).
+  google.protobuf.DoubleValue diff_rel = 7;
   bool within_tolerance = 8;
 }
 
@@ -165,7 +174,7 @@ message PromoteShadowResultRequest {
 message PromoteShadowResultResponse {
   // Approval token, populated only on APPROVED status. Equals the shadow_id of
   // the promoted run. Used by M5's MigrateMetricDefinition RPC as
-  // shadow_run_result_id.
+  // shadow_run_result_id. Empty on REJECTED or PENDING.
   string result_id = 1;
   // Terminal status after this call: APPROVED, REJECTED, or PENDING
   // (if not yet enough data to decide).
