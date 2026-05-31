@@ -122,6 +122,85 @@ func TestPgStore_TransitionPersistsRejectionReason(t *testing.T) {
 	assert.Equal(t, reason, run.RejectionReason)
 }
 
+// TestPgStore_ListNeedingComputation_Basic: a PENDING run with no result row is
+// returned; a PENDING run with an existing result row for the date is excluded.
+func TestPgStore_ListNeedingComputation_Basic(t *testing.T) {
+	pool := newTestPool(t)
+	store := NewPgStore(pool)
+	ctx := context.Background()
+	const computationDate = "2026-06-15"
+
+	// Run A: PENDING, no result yet — must be returned.
+	idA, err := store.Schedule(ctx, "orig_lnc_a", json.RawMessage(`{}`))
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanup(t, pool, idA) })
+
+	// Run B: PENDING, but already has a result for computationDate — must be excluded.
+	idB, err := store.Schedule(ctx, "orig_lnc_b", json.RawMessage(`{}`))
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanup(t, pool, idB) })
+	require.NoError(t, store.InsertResult(ctx, ResultRow{
+		ShadowID:        idB,
+		ExperimentID:    "exp_lnc",
+		VariantID:       "v1",
+		ComputationDate: computationDate,
+		WithinTolerance: true,
+	}))
+
+	// Run C: FAILED — must be excluded regardless.
+	idC, err := store.Schedule(ctx, "orig_lnc_c", json.RawMessage(`{}`))
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanup(t, pool, idC) })
+	require.NoError(t, store.Transition(ctx, idC, StatusPending, StatusFailed, "test failure"))
+
+	runs, err := store.ListNeedingComputation(ctx, computationDate)
+	require.NoError(t, err)
+
+	// Collect returned IDs.
+	gotIDs := make(map[uuid.UUID]bool, len(runs))
+	for _, r := range runs {
+		gotIDs[r.ShadowID] = true
+	}
+
+	assert.True(t, gotIDs[idA], "run A (PENDING, no result) must be returned")
+	assert.False(t, gotIDs[idB], "run B (already computed for date) must be excluded")
+	assert.False(t, gotIDs[idC], "run C (FAILED) must be excluded")
+}
+
+// TestPgStore_ListNeedingComputation_DifferentDateNotExcluded: a result for a
+// DIFFERENT date doesn't count as "already computed" for this date.
+func TestPgStore_ListNeedingComputation_DifferentDateNotExcluded(t *testing.T) {
+	pool := newTestPool(t)
+	store := NewPgStore(pool)
+	ctx := context.Background()
+
+	id, err := store.Schedule(ctx, "orig_lnc_diff_date", json.RawMessage(`{}`))
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanup(t, pool, id) })
+
+	// Insert result for 2026-06-14 (yesterday).
+	require.NoError(t, store.InsertResult(ctx, ResultRow{
+		ShadowID:        id,
+		ExperimentID:    "exp_lnc",
+		VariantID:       "v1",
+		ComputationDate: "2026-06-14",
+		WithinTolerance: true,
+	}))
+
+	// Query for 2026-06-15 (today) — run must still be returned.
+	runs, err := store.ListNeedingComputation(ctx, "2026-06-15")
+	require.NoError(t, err)
+
+	found := false
+	for _, r := range runs {
+		if r.ShadowID == id {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "run with result on different date must be returned for today's pass")
+}
+
 // TestPgStore_InsertResultAndResults: round-trip InsertResult → Results.
 func TestPgStore_InsertResultAndResults(t *testing.T) {
 	pool := newTestPool(t)

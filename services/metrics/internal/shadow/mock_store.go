@@ -71,6 +71,30 @@ func (m *MockStore) ListPending(_ context.Context) ([]Run, error) {
 	return out, nil
 }
 
+// ListNeedingComputation returns copies of all PENDING runs for which no result
+// row exists for computationDate (in-memory equivalent of the PgStore query).
+func (m *MockStore) ListNeedingComputation(_ context.Context, computationDate string) ([]Run, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Build a set of shadow IDs that already have a result row for computationDate.
+	alreadyDone := make(map[uuid.UUID]bool)
+	for _, r := range m.results {
+		if r.ComputationDate == computationDate {
+			alreadyDone[r.ShadowID] = true
+		}
+	}
+
+	var out []Run
+	for _, r := range m.runs {
+		if r.Status == StatusPending && !alreadyDone[r.ShadowID] {
+			cp := *r
+			out = append(out, cp)
+		}
+	}
+	return out, nil
+}
+
 // Transition performs the CAS update.  Returns an error wrapping ErrCASFailure
 // if the row is absent or not in the expected `from` state.  If a transient
 // error was injected via SetTransitionErr, that error is returned instead.

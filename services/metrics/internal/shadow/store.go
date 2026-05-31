@@ -34,6 +34,11 @@ type Store interface {
 	// ListPending returns all runs in PENDING status.  Used by B2 to pick up
 	// work in the nightly pass.
 	ListPending(ctx context.Context) ([]Run, error)
+	// ListNeedingComputation returns PENDING runs for which no result row exists
+	// for computationDate yet.  This is the dedup gate: once B3 writes a result
+	// row for (shadow_id, computationDate), the shadow is excluded from this day's
+	// pass.  computationDate must be a "YYYY-MM-DD" string.
+	ListNeedingComputation(ctx context.Context, computationDate string) ([]Run, error)
 	// Transition atomically updates the status of a shadow run using a
 	// compare-and-swap: the row is updated only when its current status equals
 	// `from`.  Returns an error when zero rows are affected (CAS failure).
@@ -124,6 +129,43 @@ func (s *PgStore) ListPending(ctx context.Context) ([]Run, error) {
 		if err := rows.Scan(&r.ShadowID, &r.OriginalMetricID, &rawCandidate,
 			&r.ScheduledAt, &statusStr, &r.RejectionReason); err != nil {
 			return nil, fmt.Errorf("shadow: list pending scan: %w", err)
+		}
+		r.CandidateMetric = json.RawMessage(rawCandidate)
+		r.Status = Status(statusStr)
+		runs = append(runs, r)
+	}
+	return runs, rows.Err()
+}
+
+// ListNeedingComputation returns PENDING runs for which no result row yet exists
+// for computationDate, making it safe to re-query every nightly pass without
+// double-computing days that B3 has already diffed.
+func (s *PgStore) ListNeedingComputation(ctx context.Context, computationDate string) ([]Run, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT shadow_id, original_metric_id, candidate_metric,
+		       scheduled_at, status, COALESCE(rejection_reason, '')
+		FROM metric_shadow_runs
+		WHERE status = 'PENDING'
+		  AND shadow_id NOT IN (
+		        SELECT shadow_id
+		        FROM metric_shadow_run_results
+		        WHERE computation_date = $1::DATE
+		      )
+		ORDER BY scheduled_at
+	`, computationDate)
+	if err != nil {
+		return nil, fmt.Errorf("shadow: list needing computation: %w", err)
+	}
+	defer rows.Close()
+
+	var runs []Run
+	for rows.Next() {
+		var r Run
+		var rawCandidate []byte
+		var statusStr string
+		if err := rows.Scan(&r.ShadowID, &r.OriginalMetricID, &rawCandidate,
+			&r.ScheduledAt, &statusStr, &r.RejectionReason); err != nil {
+			return nil, fmt.Errorf("shadow: list needing computation scan: %w", err)
 		}
 		r.CandidateMetric = json.RawMessage(rawCandidate)
 		r.Status = Status(statusStr)
