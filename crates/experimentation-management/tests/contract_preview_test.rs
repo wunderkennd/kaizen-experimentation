@@ -42,7 +42,9 @@ use experimentation_proto::experimentation::metrics::v1::{
     metric_computation_service_server::{MetricComputationService, MetricComputationServiceServer},
     CompileMetricqlPreviewRequest, CompileMetricqlPreviewResponse, ComputeGuardrailMetricsRequest,
     ComputeMetricsRequest, ComputeMetricsResponse, ExportNotebookRequest, ExportNotebookResponse,
-    GetQueryLogRequest, GetQueryLogResponse,
+    GetQueryLogRequest, GetQueryLogResponse, GetShadowResultsRequest, GetShadowResultsResponse,
+    PromoteShadowResultRequest, PromoteShadowResultResponse, ScheduleShadowComputationRequest,
+    ScheduleShadowComputationResponse,
 };
 
 use experimentation_management::grpc::{ManagementServiceHandler, SharedState};
@@ -123,6 +125,29 @@ impl MetricComputationService for MockM3 {
         &self,
         _req: Request<GetQueryLogRequest>,
     ) -> Result<Response<GetQueryLogResponse>, Status> {
+        Err(Status::unimplemented("stub"))
+    }
+
+    // ADR-026 Phase 3 / Phase B shadow-run RPCs. Not exercised by the
+    // CompileMetricqlPreview contract test; stub to satisfy the trait bound.
+    async fn schedule_shadow_computation(
+        &self,
+        _req: Request<ScheduleShadowComputationRequest>,
+    ) -> Result<Response<ScheduleShadowComputationResponse>, Status> {
+        Err(Status::unimplemented("stub"))
+    }
+
+    async fn get_shadow_results(
+        &self,
+        _req: Request<GetShadowResultsRequest>,
+    ) -> Result<Response<GetShadowResultsResponse>, Status> {
+        Err(Status::unimplemented("stub"))
+    }
+
+    async fn promote_shadow_result(
+        &self,
+        _req: Request<PromoteShadowResultRequest>,
+    ) -> Result<Response<PromoteShadowResultResponse>, Status> {
         Err(Status::unimplemented("stub"))
     }
 }
