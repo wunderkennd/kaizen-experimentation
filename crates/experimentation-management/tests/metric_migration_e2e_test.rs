@@ -51,7 +51,7 @@ use experimentation_proto::experimentation::common::v1::{
 };
 use experimentation_proto::experimentation::management::v1::{
     experiment_management_service_server::ExperimentManagementService,
-    CreateMetricDefinitionRequest, MigrateMetricDefinitionRequest,
+    CreateMetricDefinitionRequest, GetMetricDefinitionRequest, MigrateMetricDefinitionRequest,
 };
 use experimentation_proto::experimentation::metrics::v1::{
     metric_computation_service_client::MetricComputationServiceClient,
@@ -328,11 +328,8 @@ async fn happy_path_custom_to_metricql_with_approved_shadow() {
 
     assert_eq!(resp.new_metric_id, new_id, "echoes new metric_id");
     assert!(!resp.migration_id.is_empty(), "migration_id populated");
-    assert!(
-        Uuid::parse_str(&resp.migration_id).is_ok(),
-        "migration_id is a valid UUID: {}",
-        resp.migration_id
-    );
+    let migration_uuid =
+        Uuid::parse_str(&resp.migration_id).expect("migration_id is a valid UUID");
     assert!(
         !resp.applied_at.is_empty(),
         "applied_at populated (RFC 3339): {}",
@@ -344,6 +341,49 @@ async fn happy_path_custom_to_metricql_with_approved_shadow() {
         "applied_at looks RFC 3339: {}",
         resp.applied_at
     );
+
+    // I1: read back the NEW metric definition to confirm it actually landed
+    // in the DB. The gRPC response alone doesn't prove anything was persisted.
+    let stored_new = handler
+        .get_metric_definition(Request::new(GetMetricDefinitionRequest {
+            metric_id: new_id.clone(),
+        }))
+        .await
+        .expect("new metric is retrievable")
+        .into_inner();
+    assert_eq!(stored_new.r#type(), MetricType::Metricql);
+    assert_eq!(stored_new.metricql_expression, "mean(heartbeat.value)");
+
+    // I1: read back the OLD CUSTOM metric to confirm L7's "never destructive
+    // in-place" guarantee — the original row stays put with type=CUSTOM even
+    // after migration.
+    let stored_old = handler
+        .get_metric_definition(Request::new(GetMetricDefinitionRequest {
+            metric_id: old_id.clone(),
+        }))
+        .await
+        .expect("old CUSTOM row preserved per L7")
+        .into_inner();
+    assert_eq!(stored_old.r#type(), MetricType::Custom);
+
+    // I1: read back the metric_migrations audit row to confirm every column
+    // got bound to the right input (catches accidental argument swaps in the
+    // INSERT). Use the handler's store directly via the new
+    // get_metric_migration_by_id lookup.
+    let shadow_uuid = Uuid::parse_str(&shadow_id).expect("shadow_id is a valid UUID");
+    let audit = handler
+        .store()
+        .get_metric_migration_by_id(migration_uuid)
+        .await
+        .expect("audit row is retrievable");
+    assert_eq!(audit.migration_id, migration_uuid, "migration_id roundtrip");
+    assert_eq!(audit.old_metric_id, old_id, "audit.old_metric_id");
+    assert_eq!(audit.new_metric_id, new_id, "audit.new_metric_id");
+    assert_eq!(
+        audit.shadow_run_result_id, shadow_uuid,
+        "audit.shadow_run_result_id"
+    );
+    assert_eq!(audit.operator, "alice@example.com", "audit.operator");
 }
 
 #[tokio::test]
@@ -739,6 +779,46 @@ async fn missing_new_metric_returns_invalid_argument() {
     assert!(
         err.message().contains("new_metric"),
         "message must mention new_metric, got: {}",
+        err.message()
+    );
+}
+
+// I2: a malformed shadow_run_result_id is a caller bug, not a missing shadow
+// run. The handler must surface it as InvalidArgument from the request-shape
+// stage — BEFORE the M3 GetShadowResults RPC — so callers don't get the
+// misleading FailedPrecondition("shadow_run_result_id not found in M3") that
+// the original ordering produced (the mock M3, and likely the real one,
+// returns NotFound for a UUID it doesn't know about).
+#[tokio::test]
+async fn malformed_shadow_uuid_returns_invalid_argument() {
+    let (m3_addr, _shadow_status) = spawn_mock_m3().await;
+    let Some(handler) = try_handler(m3_addr).await else { return };
+
+    let old_id = unique_id("malformed_uuid_old");
+    let new_id = unique_id("malformed_uuid_new");
+    // We deliberately do NOT seed old_id and do NOT register a shadow result:
+    // a request-shape rejection must fire before either DB or M3 is consulted.
+    // (If the UUID parse moved back behind the M3 call, this test would fail
+    //  with FailedPrecondition / Unavailable instead of InvalidArgument.)
+    let err = handler
+        .migrate_metric_definition(Request::new(MigrateMetricDefinitionRequest {
+            old_metric_id: old_id,
+            new_metric: Some(metricql_replacement(&new_id)),
+            shadow_run_result_id: "not-a-uuid".into(),
+            operator: "alice@example.com".into(),
+        }))
+        .await
+        .expect_err("must reject malformed shadow_run_result_id");
+
+    assert_eq!(err.code(), Code::InvalidArgument);
+    assert!(
+        err.message().contains("shadow_run_result_id"),
+        "message must mention shadow_run_result_id, got: {}",
+        err.message()
+    );
+    assert!(
+        err.message().contains("UUID"),
+        "message must mention UUID, got: {}",
         err.message()
     );
 }

@@ -141,6 +141,13 @@ impl ManagementServiceHandler {
     pub fn new(state: SharedState) -> Self {
         Self { state }
     }
+
+    /// Accessor for the underlying store. Currently used by e2e tests that
+    /// need to assert against rows the handler wrote (e.g., the
+    /// `metric_migrations` audit row written by MigrateMetricDefinition).
+    pub fn store(&self) -> &Arc<ManagementStore> {
+        &self.state.store
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1214,6 +1221,18 @@ impl ExperimentManagementService for ManagementServiceHandler {
             return Err(Status::invalid_argument("operator is required"));
         }
 
+        // Parse shadow_run_result_id as a UUID up front, with the rest of the
+        // request-shape validations. A malformed UUID is a caller bug, not a
+        // missing shadow run; surfacing it as InvalidArgument here avoids
+        // burning an M3 round trip and avoids the misleading
+        // FailedPrecondition("shadow_run_result_id not found in M3") that the
+        // mock M3 (and probably the real one) would otherwise return.
+        let shadow_uuid = Uuid::parse_str(shadow_run_result_id).map_err(|e| {
+            Status::invalid_argument(format!(
+                "shadow_run_result_id is not a valid UUID: {shadow_run_result_id} ({e})"
+            ))
+        })?;
+
         // (b) The new metric MUST NOT be CUSTOM. Migration is exactly the act
         // of leaving CUSTOM behind; allowing CUSTOM → CUSTOM would defeat the
         // whole purpose of the Phase 3 deprecation track.
@@ -1302,16 +1321,10 @@ impl ExperimentManagementService for ManagementServiceHandler {
             )));
         }
 
-        // Parse the shadow_run_result_id into a UUID for the audit row.
-        let shadow_uuid = Uuid::parse_str(shadow_run_result_id).map_err(|e| {
-            Status::invalid_argument(format!(
-                "shadow_run_result_id is not a valid UUID: {shadow_run_result_id} ({e})"
-            ))
-        })?;
-
         // All preconditions cleared: single atomic transaction inserts the
         // new metric + audit row. The old CUSTOM row is left in place per
-        // L7 (non-destructive).
+        // L7 (non-destructive). shadow_uuid was already parsed at the
+        // request-shape stage above.
         let (new_row, migration_id, applied_at) = self
             .state
             .store

@@ -439,6 +439,46 @@ fn metric_type_config_from_json(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Metric migration audit-row domain type (ADR-026 Phase 3 / #437)
+// ---------------------------------------------------------------------------
+
+/// One row from `metric_migrations`. Written by `migrate_metric` and read
+/// back by `get_metric_migration_by_id` (used by the e2e test to verify the
+/// audit columns are bound correctly).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetricMigrationRow {
+    pub migration_id: Uuid,
+    pub old_metric_id: String,
+    pub new_metric_id: String,
+    pub shadow_run_result_id: Uuid,
+    pub operator: String,
+    pub applied_at: DateTime<Utc>,
+}
+
+#[derive(sqlx::FromRow, Debug, Clone)]
+struct MetricMigrationRowSql {
+    migration_id: Uuid,
+    old_metric_id: String,
+    new_metric_id: String,
+    shadow_run_result_id: Uuid,
+    operator: String,
+    applied_at: DateTime<Utc>,
+}
+
+impl From<MetricMigrationRowSql> for MetricMigrationRow {
+    fn from(r: MetricMigrationRowSql) -> Self {
+        MetricMigrationRow {
+            migration_id: r.migration_id,
+            old_metric_id: r.old_metric_id,
+            new_metric_id: r.new_metric_id,
+            shadow_run_result_id: r.shadow_run_result_id,
+            operator: r.operator,
+            applied_at: r.applied_at,
+        }
+    }
+}
+
 impl MetricRow {
     /// Round-trip a stored row back into the proto `MetricDefinition`. Mirrors
     /// the inverse of `create_metric`'s serialisation: flat columns map to
@@ -1087,6 +1127,31 @@ impl ManagementStore {
         tx.commit().await.map_err(StoreError::Db)?;
 
         Ok((MetricRow::from(new_row), audit_row.0, audit_row.1))
+    }
+
+    /// Fetch a single `metric_migrations` audit row by `migration_id`.
+    ///
+    /// Used by the Phase 3 e2e suite to verify that the columns written by
+    /// `migrate_metric` (old_metric_id, new_metric_id, shadow_run_result_id,
+    /// operator) are bound to the right inputs. Returns `StoreError::NotFound`
+    /// if no row matches.
+    pub async fn get_metric_migration_by_id(
+        &self,
+        migration_id: Uuid,
+    ) -> Result<MetricMigrationRow, StoreError> {
+        let row: Option<MetricMigrationRowSql> = sqlx::query_as(
+            r#"SELECT migration_id, old_metric_id, new_metric_id,
+                       shadow_run_result_id, operator, applied_at
+               FROM metric_migrations
+               WHERE migration_id = $1"#,
+        )
+        .bind(migration_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+
+        row.map(MetricMigrationRow::from)
+            .ok_or_else(|| StoreError::NotFound(migration_id.to_string()))
     }
 
     /// Fetch a single metric definition by `metric_id`.
