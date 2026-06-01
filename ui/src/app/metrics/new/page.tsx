@@ -17,11 +17,21 @@ import { WindowedCountSection } from '@/components/metrics/windowed-count-sectio
 import { MetricqlSection } from '@/components/metrics/metricql-section';
 import { MetricFormPreview } from '@/components/metrics/metric-form-preview';
 import { createMetricDefinition, marshalMetricDefinition, listMetricDefinitions } from '@/lib/api';
+import { useToast } from '@/lib/toast-context';
 import {
   validateFilteredMeanConfig,
   validateCompositeConfig,
   validateWindowedCountConfig,
 } from '@/lib/validation';
+// ADR-026 Phase 3 / Task D2 (Lock L5): the L5-locked toast message and the
+// per-type gate live in `@/lib/metric-deprecation` so the helper can be
+// imported from unit tests without colliding with Next.js App Router's
+// strict page-export allowlist (only `default`, `metadata`, `viewport`,
+// `dynamic`, ... may be exported from a page module).
+import {
+  DEPRECATION_TOAST_MESSAGE,
+  shouldShowCustomDeprecationToast,
+} from '@/lib/metric-deprecation';
 import type {
   MetricType,
   MetricDefinition,
@@ -184,6 +194,7 @@ const METRICQL_FORM_EXPERIMENT_ID = '';
 
 export default function NewMetricPage() {
   const router = useRouter();
+  const { addToast } = useToast();
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Fetch the metric catalog so MetricqlSection can power @metric_ref autocomplete.
@@ -213,6 +224,14 @@ export default function NewMetricPage() {
 
     try {
       const created = await createMetricDefinition(metric);
+      // ADR-026 Phase 3 / Task D2 (L5). Decide off the server-echoed `type`
+      // rather than the form state — the server is the source of truth and
+      // also avoids surfacing a toast if M5 coerced the type for any reason.
+      // Toast is queued BEFORE router.push so the persistent ToastProvider
+      // (app/layout.tsx) holds it across the navigation.
+      if (shouldShowCustomDeprecationToast(created)) {
+        addToast(DEPRECATION_TOAST_MESSAGE, 'warning');
+      }
       router.push(`/metrics?created=${encodeURIComponent(created.metricId)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Submission failed';

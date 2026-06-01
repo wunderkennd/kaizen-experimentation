@@ -280,6 +280,69 @@ grpcurl -plaintext [::1]:50055 \
 
 ---
 
+<a id="custom-deprecation"></a>
+## Custom SQL Deprecation
+
+ADR-026 Phase 3 deprecates the `METRIC_TYPE_CUSTOM` metric type in favour of
+the Phase 2 MetricQL expression language and the Phase 1 structured types
+(`FILTERED_MEAN`, `COMPOSITE`, `WINDOWED_COUNT`). Existing CUSTOM metrics
+continue to compute and serve traffic — no behavioural change. New
+`CreateMetricDefinition` calls with `type = METRIC_TYPE_CUSTOM` still succeed,
+but the M5 Rust handler annotates the response with a non-blocking deprecation
+trailer so that operators and tooling can start migrating today.
+
+### Migration paths
+
+- **MetricQL** (preferred for ad-hoc analytical expressions). Set
+  `metric.type = METRIC_TYPE_METRICQL` and put your expression in
+  `metric.metricql_expression`. The M5 validator parses, type-checks, and
+  binds operand references at create time; M3 compiles the AST to Spark SQL
+  at scheduling time. See ADR-026 Phase 2 + the validator at
+  `crates/experimentation-management/src/validators/metricql/`.
+- **Structured types** (preferred for the common patterns covered by the
+  Phase 1 catalog). See the `FILTERED_MEAN`, `COMPOSITE`, and
+  `WINDOWED_COUNT` sections above.
+- **Bulk migration**. The Phase A migration tool (`custom_migrator`, shipped
+  in PR #577 — see `crates/experimentation-management/src/bin/custom_migrator.rs`)
+  translates eligible CUSTOM metrics to MetricQL or structured types in batch
+  with a dry-run preview report. Use it for portfolios that need to move off
+  CUSTOM before the UI sunset.
+
+### What the deprecation trailer does
+
+On a successful `CreateMetricDefinition` call where the requested type is
+`METRIC_TYPE_CUSTOM`, the M5 Rust handler attaches the gRPC metadata header
+`x-kaizen-deprecation` to the response. The header value carries a stable
+machine-parseable key/value envelope:
+
+```
+kind=metric_type; type=CUSTOM; message=<human-readable rationale + pointer to this section>
+```
+
+The trailer is **non-blocking**: the create itself succeeds, the row lands
+in PostgreSQL, and downstream M3 scheduling proceeds normally. Existing
+automation that ignores response metadata continues to work unchanged. M5
+also emits a structured `tracing::info!` event under the
+`m5.deprecation` target so that log aggregators (Loki/DD/Honeycomb) can
+build deprecation curves without a metrics-crate dependency.
+
+The Go variant of M5 (legacy service kept until full Rust cutover) ships a
+symmetric trailer on its own create handler — clients see the same header
+regardless of which backend served the call.
+
+### When CUSTOM will be hidden from UI
+
+Per the ADR-026 Phase 3 plan (Lock L6), the M6 UI will hide
+`METRIC_TYPE_CUSTOM` from the metric-creation form after a four-week sunset
+window from the date the deprecation trailer first ships in production. Reads
+and edits of pre-existing CUSTOM rows remain supported. The trailer + log
+event provide the runway: if your team is still creating CUSTOM metrics when
+the window closes, switch to MetricQL or the structured types using the
+migration paths above. The metric type itself remains in the proto enum
+indefinitely so historical rows continue to serialize.
+
+---
+
 ## See Also
 
 - ADR-026: `docs/adrs/026-custom-metrics-layer.md` — architecture + Phase 2 (MetricQL) + Phase 3 (CUSTOM deprecation) roadmap.
