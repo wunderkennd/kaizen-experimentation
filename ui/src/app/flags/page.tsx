@@ -17,14 +17,24 @@ const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   JSON: 'bg-orange-100 text-orange-800',
 };
 
+const ALL_FLAG_TYPES: FlagType[] = ['BOOLEAN', 'STRING', 'NUMERIC', 'JSON'];
+
 function FlagListContent() {
   const { canAtLeast, user } = useAuth();
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<FlagType | ''>('');
   const inputRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(inputRef);
+
+  const hasActiveFilters = search !== '' || typeFilter !== '';
+
+  const clearFilters = useCallback(() => {
+    setSearch('');
+    setTypeFilter('');
+  }, []);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -44,14 +54,21 @@ function FlagListContent() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const filtered = useMemo(() => {
-    if (!search) return flags;
-    const q = search.toLowerCase();
-    return flags.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.description.toLowerCase().includes(q),
-    );
-  }, [flags, search]);
+    let result = flags;
+    if (typeFilter) {
+      result = result.filter((f) => f.type === typeFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (f) =>
+          f.name.toLowerCase().includes(q) ||
+          f.description.toLowerCase().includes(q) ||
+          f.flagId.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [flags, typeFilter, search]);
 
   return (
     <div>
@@ -127,7 +144,7 @@ function FlagListContent() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search by name or description..."
+            placeholder="Search by name, ID, or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-md border border-gray-300 py-1.5 pl-9 pr-10 text-sm shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -140,11 +157,23 @@ function FlagListContent() {
             </span>
           </div>
         </div>
-        {search && (
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as FlagType | '')}
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          data-testid="type-filter"
+          aria-label="Filter by flag type"
+        >
+          <option value="">All Types</option>
+          {ALL_FLAG_TYPES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+        {hasActiveFilters && (
           <button
-            onClick={() => setSearch('')}
+            onClick={clearFilters}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-            data-testid="clear-search-toolbar"
+            data-testid="clear-filters-toolbar"
           >
             Clear filters
           </button>
@@ -153,9 +182,9 @@ function FlagListContent() {
 
           {filtered.length === 0 ? (
             <div className="py-12 text-center" data-testid="no-filter-matches">
-              <p className="text-sm text-gray-500">No flags match your search.</p>
+              <p className="text-sm text-gray-500">No flags match your filters.</p>
               <button
-                onClick={() => setSearch('')}
+                onClick={clearFilters}
                 className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
                 data-testid="clear-filters-empty"
               >
