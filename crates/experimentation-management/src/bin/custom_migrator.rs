@@ -8,7 +8,7 @@
 //! | `scan`      | Implemented   | Fetch all CUSTOM metrics from M5; write to JSON.         |
 //! | `translate` | Implemented   | Classify + translate scan output; write proposals JSON.  |
 //! | `shadow`    | Implemented   | Schedule shadow computations on M3; poll until APPROVED. |
-//! | `apply`     | Stub (Phase C)| Apply APPROVED proposals via `M5::MigrateMetricDefinition`. |
+//! | `apply`     | Implemented   | Apply APPROVED proposals via `M5::MigrateMetricDefinition`. |
 //!
 //! ## Migration workflow
 //!
@@ -23,8 +23,12 @@
 //! custom_migrator shadow --proposals proposals.json --m3-addr http://localhost:50056 \
 //!     --duration 7d --output shadow.json
 //!
-//! # Step 4 — (Phase C) apply APPROVED proposals after operator review.
-//! custom_migrator apply --proposals proposals.json --shadow-results shadow.json --confirm
+//! # Step 4a — preview the migrations without mutating M5.
+//! custom_migrator apply --shadow-results shadow.json --m5-addr http://localhost:50055 --dry-run
+//!
+//! # Step 4b — apply the APPROVED proposals after operator review.
+//! custom_migrator apply --shadow-results shadow.json --m5-addr http://localhost:50055 \
+//!     --operator alice@example.com --confirm
 //! ```
 
 use std::fs::File;
@@ -40,7 +44,7 @@ use experimentation_management::migration::cli::{json_to_metric_definition, tran
 use experimentation_proto::experimentation::common::v1::{MetricDefinition, MetricType};
 use experimentation_proto::experimentation::management::v1::{
     experiment_management_service_client::ExperimentManagementServiceClient,
-    ListMetricDefinitionsRequest,
+    ListMetricDefinitionsRequest, MigrateMetricDefinitionRequest,
 };
 use experimentation_proto::experimentation::metrics::v1::{
     metric_computation_service_client::MetricComputationServiceClient,
@@ -144,23 +148,60 @@ enum Cmd {
 
     /// Apply APPROVED migration proposals to M5.
     ///
-    /// **NOT YET IMPLEMENTED — requires ADR-026 Phase C (M5 MigrateMetricDefinition RPC).**
+    /// Reads the `ShadowOutput` JSON produced by `custom_migrator shadow`,
+    /// filters to outcomes with `status == APPROVED` and a non-empty
+    /// `result_id`, and for each surviving outcome calls M5's
+    /// `MigrateMetricDefinition` RPC (ADR-026 Phase 3 — Lock L7 two-step apply).
+    ///
+    /// Operator workflow:
+    ///
+    ///   1. `--dry-run` first — prints the planned migrations as a table
+    ///      and exits 0 without mutating M5.
+    ///   2. `--confirm --operator <name>` — sequentially applies each
+    ///      APPROVED outcome via `MigrateMetricDefinition`. Per-outcome
+    ///      failures DO NOT abort the run (apply-as-much-as-possible)
+    ///      but DO drive the final exit code to 1.
+    ///
+    /// `--dry-run` and `--confirm` are mutually exclusive (one must be set).
+    ///
+    /// Exit codes: `0` (all OK / nothing to apply), `1` (at least one
+    /// migration failed), `2` (fatal — couldn't read input or connect to M5).
     Apply {
         /// Path to the proposals JSON produced by `custom_migrator translate`.
+        /// Kept for cross-reference / audit; the binding input is `--shadow-results`.
         #[arg(long)]
-        proposals: PathBuf,
+        proposals: Option<PathBuf>,
 
-        /// Path to the shadow-results JSON produced by `custom_migrator shadow`.
+        /// Path to the `ShadowOutput` JSON produced by `custom_migrator shadow`.
+        /// APPROVED outcomes here drive the migrations applied to M5.
         #[arg(long)]
         shadow_results: PathBuf,
 
-        /// Print what would be applied without making any changes.
+        /// gRPC address of the M5 management service (e.g. "http://localhost:50055").
+        #[arg(long)]
+        m5_addr: String,
+
+        /// Operator identifier written to M5's `metric_migrations` audit row
+        /// (e.g. user email or service id). REQUIRED when `--confirm` is set;
+        /// optional for `--dry-run`.
+        #[arg(long)]
+        operator: Option<String>,
+
+        /// Print the planned migrations as a table and exit without mutating M5.
+        /// Mutually exclusive with --confirm.
         #[arg(long, group = "mode")]
         dry_run: bool,
 
-        /// Actually apply the APPROVED proposals. Mutually exclusive with --dry-run.
+        /// Actually apply the APPROVED migrations. Requires --operator.
+        /// Mutually exclusive with --dry-run.
         #[arg(long, group = "mode")]
         confirm: bool,
+
+        /// Optional path for a sidecar audit JSON (`ApplyOutput`) capturing
+        /// per-outcome results. Defaults to `<shadow_results>.apply.json`
+        /// in `--confirm` mode; suppressed in `--dry-run` mode.
+        #[arg(long)]
+        output: Option<PathBuf>,
     },
 }
 
@@ -198,8 +239,35 @@ async fn main() {
                 }
             }
         }
-        Cmd::Apply { proposals, shadow_results, dry_run, confirm } => {
-            run_or_log(apply_stub(&proposals, &shadow_results, dry_run, confirm))
+        Cmd::Apply {
+            proposals,
+            shadow_results,
+            m5_addr,
+            operator,
+            dry_run,
+            confirm,
+            output,
+        } => {
+            // The apply subcommand owns its exit-code semantics (0 OK / 1
+            // per-outcome failures / 2 fatal). See `apply_subcommand` for
+            // the contract.
+            match apply_subcommand(
+                proposals.as_deref(),
+                &shadow_results,
+                &m5_addr,
+                operator.as_deref(),
+                dry_run,
+                confirm,
+                output.as_deref(),
+            )
+            .await
+            {
+                Ok(code) => code,
+                Err(e) => {
+                    tracing::error!(error = %e, "{:#}", e);
+                    2
+                }
+            }
         }
     };
 
@@ -905,38 +973,416 @@ fn rfc3339_now() -> String {
 }
 
 // ---------------------------------------------------------------------------
-// apply — stub (Phase C implements)
+// apply — Lock L7 two-step apply (ADR-026 Phase 3 / #437)
 // ---------------------------------------------------------------------------
+//
+// Reads the ShadowOutput JSON produced by `shadow`, filters to APPROVED
+// outcomes, and calls M5's MigrateMetricDefinition for each one (added in
+// commit c259513). The handler re-validates the APPROVED state with M3
+// internally; we never bypass that gate.
+//
+// `--dry-run` prints a tabular plan without touching M5; `--confirm`
+// (paired with `--operator`) actually mutates and exits non-zero on any
+// per-outcome failure.
 
-fn apply_stub(
-    proposals: &Path,
-    shadow_results: &Path,
+/// One outcome record per APPROVED shadow result that the apply subcommand
+/// attempted to migrate. Written to the sidecar `ApplyOutput` JSON for the
+/// audit trail referenced by the operator runbook.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ApplyOutcome {
+    /// ID of the original CUSTOM metric being migrated.
+    pub original_metric_id: String,
+    /// ID of the replacement metric (echoed from
+    /// `MigrateMetricDefinitionResponse.new_metric_id`). Empty on failure.
+    pub new_metric_id: String,
+    /// `shadow_run_result_id` fed into MigrateMetricDefinition. Copied from
+    /// the input `ShadowOutcome.result_id` regardless of success.
+    pub shadow_run_result_id: String,
+    /// `metric_migrations.migration_id` returned by M5 on success. Empty on
+    /// failure.
+    pub migration_id: String,
+    /// RFC 3339 server-side timestamp from `MigrateMetricDefinitionResponse.
+    /// applied_at`. Empty on failure.
+    pub applied_at: String,
+    /// `OK` on success; otherwise the canonical tonic Code as a string
+    /// (`INVALID_ARGUMENT`, `FAILED_PRECONDITION`, `UNAVAILABLE`, ...).
+    pub status: String,
+    /// On success: empty. On failure: the verbatim Status message from M5.
+    pub error: String,
+}
+
+/// Top-level audit-JSON written next to the input shadow results in
+/// `--confirm` mode. Captures the operator, when the apply ran, and one row
+/// per APPROVED outcome that was attempted.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ApplyOutput {
+    /// RFC 3339 timestamp captured before the first MigrateMetricDefinition call.
+    pub apply_started_at: String,
+    /// RFC 3339 timestamp captured after the last outcome was processed.
+    pub apply_completed_at: String,
+    /// Operator identifier (from `--operator`) recorded for the audit trail.
+    pub operator: String,
+    /// Path to the input `--shadow-results` file (for cross-reference).
+    pub shadow_results_path: String,
+    /// One entry per APPROVED outcome that was attempted.
+    pub outcomes: Vec<ApplyOutcome>,
+    /// Convenience aggregates so a downstream consumer doesn't have to scan
+    /// the `outcomes` array. `total_attempted == succeeded + failed`.
+    pub total_attempted: usize,
+    pub succeeded: usize,
+    pub failed: usize,
+}
+
+/// Run the apply workflow. Returns the process exit code:
+///
+///   * `0` — every APPROVED outcome was applied successfully (or there were
+///     no APPROVED outcomes to apply; this is treated as a no-op, not an
+///     error, since operators may run apply prophylactically).
+///   * `1` — at least one per-outcome MigrateMetricDefinition call failed.
+///     Successful migrations are still committed; the audit JSON captures
+///     which ones succeeded and which didn't.
+///   * `2` — fatal (couldn't read input JSON, couldn't connect to M5,
+///     --confirm without --operator). Surface via `Err` so `main()` logs.
+async fn apply_subcommand(
+    proposals_path: Option<&Path>,
+    shadow_results_path: &Path,
+    m5_addr: &str,
+    operator: Option<&str>,
     dry_run: bool,
     confirm: bool,
-) -> Result<()> {
-    eprintln!("ERROR: apply not yet implemented in this release.");
-    eprintln!();
-    eprintln!("  proposals      : {}", proposals.display());
-    eprintln!("  shadow-results : {}", shadow_results.display());
-    eprintln!("  --dry-run      : {dry_run}");
-    eprintln!("  --confirm      : {confirm}");
-    eprintln!();
-    eprintln!(
-        "Requires ADR-026 Phase 3 Task C \
-         (M5 MigrateMetricDefinition RPC + APPROVED approval gate)."
+    output_path: Option<&Path>,
+) -> Result<i32> {
+    info!(
+        proposals = ?proposals_path.map(|p| p.display().to_string()),
+        shadow_results = %shadow_results_path.display(),
+        m5_addr,
+        dry_run,
+        confirm,
+        "starting apply workflow"
     );
-    eprintln!(
-        "See docs/adrs/026-custom-metrics-layer.md §Phase-C and \
-         the active plan in docs/superpowers/plans/."
+
+    // (0) clap's group="mode" already enforces mutual exclusion; require one.
+    if !dry_run && !confirm {
+        anyhow::bail!(
+            "one of --dry-run or --confirm is required \
+             (--dry-run previews, --confirm mutates)"
+        );
+    }
+
+    // (0b) --confirm requires --operator. Without an operator the audit row
+    // would be ambiguous; refuse before opening any RPC channel.
+    if confirm && operator.map(str::trim).unwrap_or("").is_empty() {
+        anyhow::bail!(
+            "--operator is required when --confirm is set \
+             (the operator identifier is written to M5's metric_migrations \
+             audit row; refusing to apply with an empty operator)"
+        );
+    }
+
+    // (1) Read the ShadowOutput JSON.
+    let raw = std::fs::read_to_string(shadow_results_path).with_context(|| {
+        format!(
+            "reading shadow results JSON from {}",
+            shadow_results_path.display()
+        )
+    })?;
+    let shadow: ShadowOutput = serde_json::from_str(&raw).with_context(|| {
+        format!(
+            "parsing shadow results JSON from {}",
+            shadow_results_path.display()
+        )
+    })?;
+    info!(
+        total_outcomes = shadow.outcomes.len(),
+        "loaded ShadowOutput"
     );
-    eprintln!();
-    eprintln!(
-        "SAFETY NOTE: The apply subcommand is intentionally gated behind Phase C \
-         to ensure M5 performs a full re-validation (MetricLookup-backed cycle \
-         detection + store write) before any CUSTOM metric is irreversibly migrated. \
-         Never apply proposals with ad-hoc scripts; wait for Phase C."
+
+    // (2) Filter to APPROVED outcomes with a non-empty result_id, logging
+    // each skip by its status so the operator can see why everything that
+    // didn't run was excluded.
+    let (approved, skipped) = partition_outcomes(&shadow.outcomes);
+    log_skipped_outcomes(&skipped);
+
+    // (3) Short-circuit: nothing to apply is not an error.
+    if approved.is_empty() {
+        warn!(
+            "no APPROVED outcomes to apply (skipped={}); exiting 0",
+            skipped.len()
+        );
+        println!(
+            "No APPROVED outcomes to apply in {} (skipped {} non-APPROVED).",
+            shadow_results_path.display(),
+            skipped.len()
+        );
+        return Ok(0);
+    }
+
+    // (4) --dry-run: print plan and exit. Never connect to M5.
+    if dry_run {
+        print_dry_run_plan(&approved);
+        return Ok(0);
+    }
+
+    // (5) --confirm: connect to M5 and apply each APPROVED outcome.
+    let operator_str = operator
+        .expect("operator required for --confirm; checked above")
+        .trim()
+        .to_string();
+
+    let mut client = ExperimentManagementServiceClient::connect(m5_addr.to_string())
+        .await
+        .with_context(|| format!("connecting to M5 at {m5_addr}"))?;
+
+    let apply_started_at = rfc3339_now();
+    let mut outcomes: Vec<ApplyOutcome> = Vec::with_capacity(approved.len());
+    let mut succeeded: usize = 0;
+    let mut failed: usize = 0;
+
+    // Apply-as-much-as-possible: per-outcome failures don't abort the run
+    // (operators want partial progress to land), but DO drive exit code 1
+    // at the end so CI / wrappers can detect incomplete applies.
+    for cand in &approved {
+        let outcome = apply_one(&mut client, cand, &operator_str).await;
+        if outcome.status == "OK" {
+            succeeded += 1;
+            info!(
+                original_metric_id = %outcome.original_metric_id,
+                new_metric_id = %outcome.new_metric_id,
+                migration_id = %outcome.migration_id,
+                applied_at = %outcome.applied_at,
+                "migration applied"
+            );
+        } else {
+            failed += 1;
+            warn!(
+                original_metric_id = %outcome.original_metric_id,
+                shadow_run_result_id = %outcome.shadow_run_result_id,
+                status = %outcome.status,
+                error = %outcome.error,
+                "migration failed"
+            );
+        }
+        outcomes.push(outcome);
+    }
+
+    let apply_completed_at = rfc3339_now();
+
+    // (6) Write the sidecar audit JSON. Default to <shadow>.apply.json so
+    // operators don't have to remember to pass --output.
+    let audit_path = output_path
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| default_audit_path(shadow_results_path));
+    let total_attempted = outcomes.len();
+    let audit = ApplyOutput {
+        apply_started_at,
+        apply_completed_at,
+        operator: operator_str,
+        shadow_results_path: shadow_results_path.display().to_string(),
+        outcomes,
+        total_attempted,
+        succeeded,
+        failed,
+    };
+    let audit_json = serde_json::to_string_pretty(&audit)
+        .context("serializing ApplyOutput audit JSON")?;
+    std::fs::write(&audit_path, audit_json).with_context(|| {
+        format!("writing ApplyOutput audit JSON to {}", audit_path.display())
+    })?;
+
+    // (7) One-line summary and exit code.
+    println!(
+        "Applied {}/{} APPROVED outcomes ({} failed). Audit JSON: {}",
+        succeeded, total_attempted, failed, audit_path.display()
     );
-    std::process::exit(2);
+    info!(
+        succeeded,
+        failed,
+        total_attempted,
+        audit = %audit_path.display(),
+        "apply complete"
+    );
+
+    Ok(if failed > 0 { 1 } else { 0 })
+}
+
+/// Partition outcomes into `(approved, skipped)`. `approved` keeps only the
+/// outcomes that are safe to apply: `status == APPROVED` AND non-empty
+/// `result_id` (an APPROVED status without a result_id is malformed input —
+/// the shadow workflow only populates result_id on APPROVED, but defending
+/// here closes the gap if a hand-edited file ever shows up).
+fn partition_outcomes(
+    outcomes: &[ShadowOutcome],
+) -> (Vec<ShadowOutcome>, Vec<ShadowOutcome>) {
+    let mut approved = Vec::new();
+    let mut skipped = Vec::new();
+    for o in outcomes {
+        if o.status == "APPROVED" && !o.result_id.is_empty() {
+            approved.push(o.clone());
+        } else {
+            skipped.push(o.clone());
+        }
+    }
+    (approved, skipped)
+}
+
+/// Log each skipped outcome at WARN with its status, so the operator can
+/// see what was excluded and why without having to grep the input JSON.
+fn log_skipped_outcomes(skipped: &[ShadowOutcome]) {
+    for o in skipped {
+        if o.status == "APPROVED" {
+            // APPROVED but empty result_id — input malformed; flag loudly.
+            warn!(
+                original_metric_id = %o.original_metric_id,
+                "skipping outcome: APPROVED status but empty result_id (malformed input)"
+            );
+        } else {
+            info!(
+                original_metric_id = %o.original_metric_id,
+                status = %o.status,
+                reason = %o.reason,
+                "skipping non-APPROVED outcome"
+            );
+        }
+    }
+}
+
+/// Print the planned migrations as a simple pipe-separated table. Operators
+/// run `--dry-run` first; the output is meant to be human-skimmable, not
+/// machine-parseable (the sidecar JSON is the machine-readable artifact).
+fn print_dry_run_plan(approved: &[ShadowOutcome]) {
+    println!("DRY RUN — would apply {} APPROVED migration(s):", approved.len());
+    println!(
+        "  {:<32} | {:<32} | {:<14} | {:<36} | {:<6}",
+        "old_metric_id", "new_metric_id", "type", "shadow_run_result_id", "days"
+    );
+    println!(
+        "  {:-<32}-+-{:-<32}-+-{:-<14}-+-{:-<36}-+-{:-<6}",
+        "", "", "", "", ""
+    );
+    for o in approved {
+        let new_id = o
+            .candidate_metric
+            .get("metric_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let type_label = describe_candidate_type(&o.candidate_metric);
+        let days = if o.total_days > 0 {
+            format!("{}/{}", o.days_within_tolerance, o.total_days)
+        } else {
+            "-".to_string()
+        };
+        println!(
+            "  {:<32} | {:<32} | {:<14} | {:<36} | {:<6}",
+            o.original_metric_id, new_id, type_label, o.result_id, days
+        );
+    }
+    println!();
+    println!("DRY RUN — no migrations applied. Re-run with --confirm --operator <name> to apply.");
+}
+
+/// Human-readable label for the candidate metric's type, derived from the
+/// echoed `candidate_metric` JSON (which is in `migration::report::metric_to_json`
+/// shape — keys are `filtered_mean` / `composite` / `windowed_count` /
+/// `metricql_expression` / `custom_sql`).
+fn describe_candidate_type(candidate: &serde_json::Value) -> String {
+    if candidate.get("filtered_mean").is_some() {
+        return "FILTERED_MEAN".to_string();
+    }
+    if candidate.get("composite").is_some() {
+        return "COMPOSITE".to_string();
+    }
+    if candidate.get("windowed_count").is_some() {
+        return "WINDOWED_COUNT".to_string();
+    }
+    if candidate
+        .get("metricql_expression")
+        .and_then(|v| v.as_str())
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
+        return "METRICQL".to_string();
+    }
+    // Fall back to the numeric `type` field if it's present and recognised.
+    match candidate.get("type").and_then(|v| v.as_i64()) {
+        Some(1) => "MEAN".to_string(),
+        Some(2) => "RATIO".to_string(),
+        Some(3) => "PROPORTION".to_string(),
+        Some(4) => "COUNT".to_string(),
+        Some(5) => "RATE".to_string(),
+        Some(6) => "CUSTOM".to_string(),
+        Some(other) => format!("type={other}"),
+        None => "unknown".to_string(),
+    }
+}
+
+/// Apply one APPROVED outcome via `MigrateMetricDefinition`. Returns an
+/// `ApplyOutcome` capturing success or failure verbatim — never panics, so
+/// the outer loop can continue with the next outcome.
+async fn apply_one(
+    client: &mut ExperimentManagementServiceClient<tonic::transport::Channel>,
+    outcome: &ShadowOutcome,
+    operator: &str,
+) -> ApplyOutcome {
+    // (a) Re-decode the candidate MetricDefinition from the echoed JSON. We
+    // intentionally use the same helper as the shadow subcommand
+    // (`json_to_metric_definition`) so this round-trips with the JSON shape
+    // written by `metric_to_json`. A decode failure here is a malformed
+    // ShadowOutput input — we surface it as InvalidArgument-style failure
+    // for this outcome rather than aborting the whole apply run.
+    let new_metric = match json_to_metric_definition(&outcome.candidate_metric) {
+        Ok(m) => m,
+        Err(e) => {
+            return ApplyOutcome {
+                original_metric_id: outcome.original_metric_id.clone(),
+                new_metric_id: String::new(),
+                shadow_run_result_id: outcome.result_id.clone(),
+                migration_id: String::new(),
+                applied_at: String::new(),
+                status: "INVALID_INPUT".to_string(),
+                error: format!("decoding candidate_metric: {e:#}"),
+            };
+        }
+    };
+
+    // (b) Build and send the request.
+    let req = MigrateMetricDefinitionRequest {
+        old_metric_id: outcome.original_metric_id.clone(),
+        new_metric: Some(new_metric),
+        shadow_run_result_id: outcome.result_id.clone(),
+        operator: operator.to_string(),
+    };
+
+    match client.migrate_metric_definition(req).await {
+        Ok(resp) => {
+            let inner = resp.into_inner();
+            ApplyOutcome {
+                original_metric_id: outcome.original_metric_id.clone(),
+                new_metric_id: inner.new_metric_id,
+                shadow_run_result_id: outcome.result_id.clone(),
+                migration_id: inner.migration_id,
+                applied_at: inner.applied_at,
+                status: "OK".to_string(),
+                error: String::new(),
+            }
+        }
+        Err(status) => ApplyOutcome {
+            original_metric_id: outcome.original_metric_id.clone(),
+            new_metric_id: String::new(),
+            shadow_run_result_id: outcome.result_id.clone(),
+            migration_id: String::new(),
+            applied_at: String::new(),
+            status: format!("{:?}", status.code()).to_uppercase(),
+            error: status.message().to_string(),
+        },
+    }
+}
+
+/// Default sidecar audit path: `<shadow>.apply.json`. Mirrors the convention
+/// `<shadow>.apply.json` referenced in the operator runbook.
+fn default_audit_path(shadow_results_path: &Path) -> PathBuf {
+    let mut s = shadow_results_path.as_os_str().to_owned();
+    s.push(".apply.json");
+    PathBuf::from(s)
 }
 
 // ---------------------------------------------------------------------------
@@ -1580,5 +2026,840 @@ mod tests {
             .outcomes
             .iter()
             .all(|o| o.original_metric_id != "m_skip"));
+    }
+
+    // -----------------------------------------------------------------------
+    // apply — pure-function unit tests
+    // -----------------------------------------------------------------------
+
+    fn approved_outcome(id: &str, result_id: &str) -> ShadowOutcome {
+        ShadowOutcome {
+            original_metric_id: id.to_string(),
+            shadow_id: format!("s-{}", id),
+            result_id: result_id.to_string(),
+            status: "APPROVED".to_string(),
+            reason: String::new(),
+            days_within_tolerance: 7,
+            total_days: 7,
+            // Minimal candidate_metric that round-trips through
+            // `json_to_metric_definition` — same shape `proposal_entry` uses.
+            candidate_metric: serde_json::json!({
+                "metric_id": format!("{}_v2", id),
+                "name": format!("{} v2", id),
+                "type": 1,
+            }),
+        }
+    }
+
+    #[test]
+    fn partition_outcomes_keeps_only_approved_with_result_id() {
+        let outcomes = vec![
+            approved_outcome("a", "uuid-a"),
+            outcome("b", "REJECTED"),
+            outcome("c", "PENDING"),
+            outcome("d", "SCHEDULING_FAILED"),
+            // APPROVED with empty result_id is malformed — must be skipped.
+            {
+                let mut o = approved_outcome("malformed", "");
+                o.result_id = String::new();
+                o
+            },
+        ];
+        let (approved, skipped) = partition_outcomes(&outcomes);
+        assert_eq!(approved.len(), 1, "only the valid APPROVED outcome survives");
+        assert_eq!(approved[0].original_metric_id, "a");
+        assert_eq!(skipped.len(), 4, "everything else is skipped");
+    }
+
+    #[test]
+    fn describe_candidate_type_handles_tier1_and_tier2() {
+        assert_eq!(
+            describe_candidate_type(&serde_json::json!({"filtered_mean": {}})),
+            "FILTERED_MEAN"
+        );
+        assert_eq!(
+            describe_candidate_type(&serde_json::json!({"composite": {}})),
+            "COMPOSITE"
+        );
+        assert_eq!(
+            describe_candidate_type(&serde_json::json!({"windowed_count": {}})),
+            "WINDOWED_COUNT"
+        );
+        assert_eq!(
+            describe_candidate_type(
+                &serde_json::json!({"metricql_expression": "mean(x.v)"})
+            ),
+            "METRICQL"
+        );
+        // Empty metricql_expression should NOT count as METRICQL — fall
+        // through to numeric `type`.
+        assert_eq!(
+            describe_candidate_type(
+                &serde_json::json!({"metricql_expression": "", "type": 1})
+            ),
+            "MEAN"
+        );
+        assert_eq!(
+            describe_candidate_type(&serde_json::json!({})),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn default_audit_path_appends_apply_json_suffix() {
+        assert_eq!(
+            default_audit_path(Path::new("shadow.json")),
+            PathBuf::from("shadow.json.apply.json")
+        );
+        assert_eq!(
+            default_audit_path(Path::new("/tmp/run-42/shadow.json")),
+            PathBuf::from("/tmp/run-42/shadow.json.apply.json")
+        );
+    }
+
+    #[test]
+    fn cli_rejects_dry_run_and_confirm_together() {
+        // clap's group="mode" enforces this at parse time. We verify by
+        // calling try_parse_from with both flags and asserting an error.
+        // (Cli doesn't derive Debug, so we match on `is_err` + render manually.)
+        let result = Cli::try_parse_from([
+            "custom_migrator",
+            "apply",
+            "--shadow-results", "/tmp/s.json",
+            "--m5-addr", "http://localhost:50055",
+            "--dry-run",
+            "--confirm",
+        ]);
+        let err = match result {
+            Ok(_) => panic!("--dry-run and --confirm must be mutually exclusive"),
+            Err(e) => e,
+        };
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("cannot be used with") || rendered.contains("mutually exclusive"),
+            "error should mention mutual exclusion; got: {rendered}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Mock M5 — programmable MigrateMetricDefinition responses
+    // -----------------------------------------------------------------------
+    //
+    // The mock implements the full `ExperimentManagementService` trait so it
+    // can back a real tonic server, but only `migrate_metric_definition`
+    // returns useful responses. The other 26 RPCs panic via `unimplemented`
+    // (we never call them from the apply path; any unexpected call is a
+    // test bug we want to surface loudly).
+
+    /// Programmed result for one MigrateMetricDefinition call. Tests push a
+    /// sequence into `MockM5.migrate_script`; the mock pops front-to-back.
+    /// If the script empties before a call, the mock returns `Code::Internal`
+    /// with a "no script entries" message — preserves the test's intent
+    /// (don't silently fall through to a meaningless Ok).
+    enum MigrateResult {
+        Ok {
+            new_metric_id: String,
+            migration_id: String,
+            applied_at: String,
+        },
+        Err(Code, String),
+    }
+
+    struct MockM5 {
+        migrate_script: Mutex<Vec<MigrateResult>>,
+        migrate_calls: Mutex<Vec<MigrateMetricDefinitionRequest>>,
+    }
+
+    impl MockM5 {
+        fn new(script: Vec<MigrateResult>) -> Self {
+            Self {
+                migrate_script: Mutex::new(script),
+                migrate_calls: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl experimentation_proto::experimentation::management::v1::experiment_management_service_server::ExperimentManagementService
+        for MockM5
+    {
+        async fn migrate_metric_definition(
+            &self,
+            request: Request<MigrateMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::MigrateMetricDefinitionResponse>, Status>
+        {
+            let req = request.into_inner();
+            self.migrate_calls.lock().unwrap().push(req.clone());
+            let mut script = self.migrate_script.lock().unwrap();
+            if script.is_empty() {
+                return Err(Status::new(
+                    Code::Internal,
+                    "MockM5 migrate_script exhausted",
+                ));
+            }
+            match script.remove(0) {
+                MigrateResult::Ok {
+                    new_metric_id,
+                    migration_id,
+                    applied_at,
+                } => Ok(Response::new(
+                    experimentation_proto::experimentation::management::v1::MigrateMetricDefinitionResponse {
+                        new_metric_id,
+                        migration_id,
+                        applied_at,
+                    },
+                )),
+                MigrateResult::Err(code, msg) => Err(Status::new(code, msg)),
+            }
+        }
+
+        // ---- Stubs for the rest of the trait surface ----
+        // We never call these from the apply workflow; any unexpected call
+        // is a test-design bug. `unimplemented!` panics with a clear message,
+        // which will fail the test loudly rather than silently returning
+        // bogus data.
+
+        async fn create_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::CreateExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: create_experiment")
+        }
+        async fn get_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: get_experiment")
+        }
+        async fn update_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::UpdateExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: update_experiment")
+        }
+        async fn list_experiments(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ListExperimentsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListExperimentsResponse>, Status> {
+            unimplemented!("MockM5 stub: list_experiments")
+        }
+        async fn start_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::StartExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: start_experiment")
+        }
+        async fn conclude_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ConcludeExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: conclude_experiment")
+        }
+        async fn archive_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ArchiveExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: archive_experiment")
+        }
+        async fn pause_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::PauseExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: pause_experiment")
+        }
+        async fn resume_experiment(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ResumeExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            unimplemented!("MockM5 stub: resume_experiment")
+        }
+        async fn create_metric_definition(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::CreateMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::MetricDefinition>, Status> {
+            unimplemented!("MockM5 stub: create_metric_definition")
+        }
+        async fn get_metric_definition(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::MetricDefinition>, Status> {
+            unimplemented!("MockM5 stub: get_metric_definition")
+        }
+        async fn list_metric_definitions(
+            &self,
+            _r: Request<ListMetricDefinitionsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListMetricDefinitionsResponse>, Status> {
+            unimplemented!("MockM5 stub: list_metric_definitions")
+        }
+        async fn create_layer(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::CreateLayerRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Layer>, Status> {
+            unimplemented!("MockM5 stub: create_layer")
+        }
+        async fn get_layer(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetLayerRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Layer>, Status> {
+            unimplemented!("MockM5 stub: get_layer")
+        }
+        async fn get_layer_allocations(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetLayerAllocationsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::GetLayerAllocationsResponse>, Status> {
+            unimplemented!("MockM5 stub: get_layer_allocations")
+        }
+        async fn create_targeting_rule(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::CreateTargetingRuleRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::TargetingRule>, Status> {
+            unimplemented!("MockM5 stub: create_targeting_rule")
+        }
+        async fn create_surrogate_model(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::CreateSurrogateModelRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::SurrogateModelConfig>, Status> {
+            unimplemented!("MockM5 stub: create_surrogate_model")
+        }
+        async fn list_surrogate_models(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ListSurrogateModelsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListSurrogateModelsResponse>, Status> {
+            unimplemented!("MockM5 stub: list_surrogate_models")
+        }
+        async fn get_surrogate_calibration(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetSurrogateCalibrationRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::SurrogateModelConfig>, Status> {
+            unimplemented!("MockM5 stub: get_surrogate_calibration")
+        }
+        async fn trigger_surrogate_recalibration(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::TriggerSurrogateRecalibrationRequest>,
+        ) -> Result<Response<()>, Status> {
+            unimplemented!("MockM5 stub: trigger_surrogate_recalibration")
+        }
+        type StreamConfigUpdatesStream = std::pin::Pin<
+            Box<
+                dyn tokio_stream::Stream<
+                        Item = Result<
+                            experimentation_proto::experimentation::management::v1::ConfigUpdateEvent,
+                            Status,
+                        >,
+                    > + Send,
+            >,
+        >;
+        async fn stream_config_updates(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::StreamConfigUpdatesRequest>,
+        ) -> Result<Response<Self::StreamConfigUpdatesStream>, Status> {
+            unimplemented!("MockM5 stub: stream_config_updates")
+        }
+        async fn get_portfolio_allocation(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetPortfolioAllocationRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::GetPortfolioAllocationResponse>, Status> {
+            unimplemented!("MockM5 stub: get_portfolio_allocation")
+        }
+        async fn validate_metricql(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ValidateMetricqlRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ValidateMetricqlResponse>, Status> {
+            unimplemented!("MockM5 stub: validate_metricql")
+        }
+        async fn preview_metric_definition(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::PreviewMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::PreviewMetricDefinitionResponse>, Status> {
+            unimplemented!("MockM5 stub: preview_metric_definition")
+        }
+    }
+
+    /// Spawn a mock M5 server. Returns the bound address and an Arc handle
+    /// to the mock so tests can inspect the recorded calls.
+    async fn spawn_mock_m5(mock: MockM5) -> (SocketAddr, std::sync::Arc<MockM5>) {
+        use experimentation_proto::experimentation::management::v1::experiment_management_service_server::ExperimentManagementServiceServer;
+        let arc = std::sync::Arc::new(mock);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        // tonic's generated server takes ownership; clone via Arc indirection.
+        let server_handle = ArcMockM5(arc.clone());
+        tokio::spawn(async move {
+            Server::builder()
+                .add_service(ExperimentManagementServiceServer::new(server_handle))
+                .serve_with_incoming(TcpListenerStream::new(listener))
+                .await
+                .ok();
+        });
+        tokio::task::yield_now().await;
+        (addr, arc)
+    }
+
+    /// Thin newtype wrapper so we can implement the service trait on an
+    /// `Arc<MockM5>` (tonic's generated `*ServiceServer::new` needs an owned
+    /// `impl Service`).
+    struct ArcMockM5(std::sync::Arc<MockM5>);
+
+    #[tonic::async_trait]
+    impl experimentation_proto::experimentation::management::v1::experiment_management_service_server::ExperimentManagementService
+        for ArcMockM5
+    {
+        async fn migrate_metric_definition(
+            &self,
+            request: Request<MigrateMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::MigrateMetricDefinitionResponse>, Status> {
+            self.0.migrate_metric_definition(request).await
+        }
+        async fn create_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::CreateExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.create_experiment(r).await
+        }
+        async fn get_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.get_experiment(r).await
+        }
+        async fn update_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::UpdateExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.update_experiment(r).await
+        }
+        async fn list_experiments(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ListExperimentsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListExperimentsResponse>, Status> {
+            self.0.list_experiments(r).await
+        }
+        async fn start_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::StartExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.start_experiment(r).await
+        }
+        async fn conclude_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ConcludeExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.conclude_experiment(r).await
+        }
+        async fn archive_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ArchiveExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.archive_experiment(r).await
+        }
+        async fn pause_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::PauseExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.pause_experiment(r).await
+        }
+        async fn resume_experiment(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ResumeExperimentRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Experiment>, Status> {
+            self.0.resume_experiment(r).await
+        }
+        async fn create_metric_definition(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::CreateMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::MetricDefinition>, Status> {
+            self.0.create_metric_definition(r).await
+        }
+        async fn get_metric_definition(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::MetricDefinition>, Status> {
+            self.0.get_metric_definition(r).await
+        }
+        async fn list_metric_definitions(
+            &self,
+            r: Request<ListMetricDefinitionsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListMetricDefinitionsResponse>, Status> {
+            self.0.list_metric_definitions(r).await
+        }
+        async fn create_layer(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::CreateLayerRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Layer>, Status> {
+            self.0.create_layer(r).await
+        }
+        async fn get_layer(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetLayerRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::Layer>, Status> {
+            self.0.get_layer(r).await
+        }
+        async fn get_layer_allocations(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetLayerAllocationsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::GetLayerAllocationsResponse>, Status> {
+            self.0.get_layer_allocations(r).await
+        }
+        async fn create_targeting_rule(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::CreateTargetingRuleRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::TargetingRule>, Status> {
+            self.0.create_targeting_rule(r).await
+        }
+        async fn create_surrogate_model(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::CreateSurrogateModelRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::SurrogateModelConfig>, Status> {
+            self.0.create_surrogate_model(r).await
+        }
+        async fn list_surrogate_models(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ListSurrogateModelsRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListSurrogateModelsResponse>, Status> {
+            self.0.list_surrogate_models(r).await
+        }
+        async fn get_surrogate_calibration(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetSurrogateCalibrationRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::common::v1::SurrogateModelConfig>, Status> {
+            self.0.get_surrogate_calibration(r).await
+        }
+        async fn trigger_surrogate_recalibration(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::TriggerSurrogateRecalibrationRequest>,
+        ) -> Result<Response<()>, Status> {
+            self.0.trigger_surrogate_recalibration(r).await
+        }
+        type StreamConfigUpdatesStream = std::pin::Pin<
+            Box<
+                dyn tokio_stream::Stream<
+                        Item = Result<
+                            experimentation_proto::experimentation::management::v1::ConfigUpdateEvent,
+                            Status,
+                        >,
+                    > + Send,
+            >,
+        >;
+        async fn stream_config_updates(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::StreamConfigUpdatesRequest>,
+        ) -> Result<Response<Self::StreamConfigUpdatesStream>, Status> {
+            unimplemented!("ArcMockM5: stream_config_updates")
+        }
+        async fn get_portfolio_allocation(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetPortfolioAllocationRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::GetPortfolioAllocationResponse>, Status> {
+            self.0.get_portfolio_allocation(r).await
+        }
+        async fn validate_metricql(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ValidateMetricqlRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ValidateMetricqlResponse>, Status> {
+            self.0.validate_metricql(r).await
+        }
+        async fn preview_metric_definition(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::PreviewMetricDefinitionRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::PreviewMetricDefinitionResponse>, Status> {
+            self.0.preview_metric_definition(r).await
+        }
+    }
+
+    /// Write a `ShadowOutput` JSON to a temp dir and return the paths.
+    fn write_shadow_output_to_disk(
+        outcomes: Vec<ShadowOutcome>,
+    ) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("shadow.json");
+        let out = ShadowOutput {
+            schedule_started_at: "2026-01-01T00:00:00Z".into(),
+            schedule_completed_at: "2026-01-01T01:00:00Z".into(),
+            outcomes,
+        };
+        std::fs::write(&path, serde_json::to_string_pretty(&out).unwrap()).unwrap();
+        (dir, path)
+    }
+
+    // -----------------------------------------------------------------------
+    // Workflow tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_dry_run_prints_plan_and_makes_no_rpc_calls() {
+        // 1 APPROVED + 1 REJECTED. dry_run must not call M5.
+        let outcomes = vec![
+            approved_outcome("m_a", "result-1"),
+            outcome("m_r", "REJECTED"),
+        ];
+        let (_dir, shadow_path) = write_shadow_output_to_disk(outcomes);
+
+        // Mock with an empty script — if dry_run calls migrate, it would
+        // get back "exhausted" and the call would still be recorded.
+        let mock = MockM5::new(vec![]);
+        let (addr, arc) = spawn_mock_m5(mock).await;
+
+        let exit_code = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            None,
+            true,  // dry_run
+            false, // confirm
+            None,
+        )
+        .await
+        .expect("dry_run should never return Err");
+
+        assert_eq!(exit_code, 0, "dry_run exits 0");
+        assert_eq!(
+            arc.migrate_calls.lock().unwrap().len(),
+            0,
+            "dry_run must not call MigrateMetricDefinition"
+        );
+        // No sidecar audit file in dry_run mode.
+        assert!(
+            !default_audit_path(&shadow_path).exists(),
+            "dry_run must not write the audit sidecar"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_confirm_applies_all_approved_outcomes() {
+        let outcomes = vec![
+            approved_outcome("m_a", "result-1"),
+            approved_outcome("m_b", "result-2"),
+            outcome("m_skip", "REJECTED"),
+        ];
+        let (_dir, shadow_path) = write_shadow_output_to_disk(outcomes);
+
+        let script = vec![
+            MigrateResult::Ok {
+                new_metric_id: "m_a_v2".into(),
+                migration_id: "mig-1".into(),
+                applied_at: "2026-01-01T01:00:00Z".into(),
+            },
+            MigrateResult::Ok {
+                new_metric_id: "m_b_v2".into(),
+                migration_id: "mig-2".into(),
+                applied_at: "2026-01-01T01:00:01Z".into(),
+            },
+        ];
+        let mock = MockM5::new(script);
+        let (addr, arc) = spawn_mock_m5(mock).await;
+
+        let exit_code = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            Some("test@example.com"),
+            false, // dry_run
+            true,  // confirm
+            None,
+        )
+        .await
+        .expect("apply_subcommand returns Ok with code 0 on success");
+
+        assert_eq!(exit_code, 0, "all APPROVED outcomes succeeded => exit 0");
+        let calls = arc.migrate_calls.lock().unwrap();
+        assert_eq!(calls.len(), 2, "must call migrate exactly twice");
+        // Verify the request fields: operator, shadow_run_result_id, old/new ids.
+        assert_eq!(calls[0].operator, "test@example.com");
+        assert_eq!(calls[0].old_metric_id, "m_a");
+        assert_eq!(calls[0].shadow_run_result_id, "result-1");
+        assert_eq!(
+            calls[0].new_metric.as_ref().map(|m| m.metric_id.as_str()),
+            Some("m_a_v2")
+        );
+        assert_eq!(calls[1].old_metric_id, "m_b");
+        assert_eq!(calls[1].shadow_run_result_id, "result-2");
+
+        // Audit JSON written to the default path with both outcomes recorded.
+        let audit_path = default_audit_path(&shadow_path);
+        let audit_raw = std::fs::read_to_string(&audit_path).unwrap();
+        let audit: ApplyOutput = serde_json::from_str(&audit_raw).unwrap();
+        assert_eq!(audit.total_attempted, 2);
+        assert_eq!(audit.succeeded, 2);
+        assert_eq!(audit.failed, 0);
+        assert_eq!(audit.operator, "test@example.com");
+        assert!(audit.outcomes.iter().all(|o| o.status == "OK"));
+        assert_eq!(audit.outcomes[0].new_metric_id, "m_a_v2");
+        assert_eq!(audit.outcomes[0].migration_id, "mig-1");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_confirm_continues_on_partial_failure_and_exits_nonzero() {
+        let outcomes = vec![
+            approved_outcome("m_ok", "result-1"),
+            approved_outcome("m_fail", "result-2"),
+        ];
+        let (_dir, shadow_path) = write_shadow_output_to_disk(outcomes);
+
+        let script = vec![
+            MigrateResult::Ok {
+                new_metric_id: "m_ok_v2".into(),
+                migration_id: "mig-1".into(),
+                applied_at: "2026-01-01T01:00:00Z".into(),
+            },
+            MigrateResult::Err(
+                Code::FailedPrecondition,
+                "shadow run result must be APPROVED but is REJECTED".into(),
+            ),
+        ];
+        let mock = MockM5::new(script);
+        let (addr, arc) = spawn_mock_m5(mock).await;
+
+        let exit_code = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            Some("test@example.com"),
+            false,
+            true,
+            None,
+        )
+        .await
+        .expect("partial failure should not raise — exit code carries the result");
+
+        assert_eq!(exit_code, 1, "any per-outcome failure => exit 1");
+        let calls = arc.migrate_calls.lock().unwrap();
+        assert_eq!(
+            calls.len(),
+            2,
+            "second outcome must still be attempted (apply-as-much-as-possible)"
+        );
+
+        let audit_path = default_audit_path(&shadow_path);
+        let audit: ApplyOutput =
+            serde_json::from_str(&std::fs::read_to_string(&audit_path).unwrap()).unwrap();
+        assert_eq!(audit.total_attempted, 2);
+        assert_eq!(audit.succeeded, 1);
+        assert_eq!(audit.failed, 1);
+        let ok = audit.outcomes.iter().find(|o| o.status == "OK").unwrap();
+        assert_eq!(ok.original_metric_id, "m_ok");
+        let bad = audit.outcomes.iter().find(|o| o.status != "OK").unwrap();
+        assert_eq!(bad.original_metric_id, "m_fail");
+        assert_eq!(bad.status, "FAILEDPRECONDITION");
+        assert!(
+            bad.error.contains("REJECTED"),
+            "error message propagated: {}",
+            bad.error
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_confirm_without_operator_fails_before_any_rpc() {
+        let outcomes = vec![approved_outcome("m_a", "result-1")];
+        let (_dir, shadow_path) = write_shadow_output_to_disk(outcomes);
+
+        let mock = MockM5::new(vec![]);
+        let (addr, arc) = spawn_mock_m5(mock).await;
+
+        let result = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            None, // no operator
+            false,
+            true, // confirm
+            None,
+        )
+        .await;
+
+        let err = result.expect_err("must reject --confirm without --operator");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("operator"),
+            "error must mention --operator; got: {msg}"
+        );
+        assert_eq!(
+            arc.migrate_calls.lock().unwrap().len(),
+            0,
+            "must not call M5 when --operator is missing"
+        );
+        // Also: empty/whitespace --operator string is rejected.
+        let result_ws = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            Some("   "),
+            false,
+            true,
+            None,
+        )
+        .await;
+        assert!(result_ws.is_err(), "whitespace-only operator must be rejected");
+        assert_eq!(arc.migrate_calls.lock().unwrap().len(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_with_no_approved_outcomes_is_a_noop_exit_zero() {
+        let outcomes = vec![
+            outcome("a", "REJECTED"),
+            outcome("b", "PENDING"),
+            outcome("c", "SCHEDULING_FAILED"),
+        ];
+        let (_dir, shadow_path) = write_shadow_output_to_disk(outcomes);
+
+        let mock = MockM5::new(vec![]);
+        let (addr, arc) = spawn_mock_m5(mock).await;
+
+        let exit_code = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            Some("test@example.com"),
+            false,
+            true, // confirm
+            None,
+        )
+        .await
+        .expect("no APPROVED is not an error");
+
+        assert_eq!(exit_code, 0, "no APPROVED => exit 0 (no-op)");
+        assert_eq!(
+            arc.migrate_calls.lock().unwrap().len(),
+            0,
+            "no RPC calls when nothing to apply"
+        );
+        // Also: no audit file should be written when there's nothing to apply.
+        assert!(
+            !default_audit_path(&shadow_path).exists(),
+            "no audit file when no APPROVED outcomes"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn apply_confirm_with_custom_output_path_writes_audit_there() {
+        // Spot-check that --output overrides the default <shadow>.apply.json.
+        let outcomes = vec![approved_outcome("m_a", "result-1")];
+        let (dir, shadow_path) = write_shadow_output_to_disk(outcomes);
+
+        let script = vec![MigrateResult::Ok {
+            new_metric_id: "m_a_v2".into(),
+            migration_id: "mig-1".into(),
+            applied_at: "2026-01-01T01:00:00Z".into(),
+        }];
+        let mock = MockM5::new(script);
+        let (addr, _arc) = spawn_mock_m5(mock).await;
+
+        let custom_audit = dir.path().join("audit.json");
+        let exit_code = apply_subcommand(
+            None,
+            &shadow_path,
+            &format!("http://{addr}"),
+            Some("test@example.com"),
+            false,
+            true,
+            Some(&custom_audit),
+        )
+        .await
+        .unwrap();
+        assert_eq!(exit_code, 0);
+        assert!(custom_audit.exists(), "audit JSON at the --output path");
+        assert!(
+            !default_audit_path(&shadow_path).exists(),
+            "default audit path must be empty when --output is set"
+        );
     }
 }
