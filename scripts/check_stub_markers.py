@@ -60,8 +60,12 @@ ALLOW_PATTERN = re.compile(
     re.VERBOSE,
 )
 
-# Files we look at. Anything else is ignored.
-SOURCE_SUFFIXES = (".rs", ".go", ".ts", ".tsx", ".js", ".jsx", ".py")
+# Files we look at. Anything else is ignored. Python is intentionally
+# absent: the marker patterns are Rust / Go / tonic / gRPC idioms that
+# don't occur naturally in `.py`, and this script's own docstring would
+# match its own patterns under self-test (it lists `todo!()` etc. as
+# documentation, not as a real call).
+SOURCE_SUFFIXES = (".rs", ".go", ".ts", ".tsx", ".js", ".jsx")
 
 # Path fragments that mark a file as test/fixture/generated; exclude them.
 EXCLUDE_FRAGMENTS = (
