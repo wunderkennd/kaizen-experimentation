@@ -964,6 +964,131 @@ impl ManagementStore {
         Ok(MetricRow::from(row))
     }
 
+    /// Atomic CUSTOM-metric migration (ADR-026 Phase 3 / #437).
+    ///
+    /// Inserts a new `metric_definitions` row for the replacement metric AND
+    /// an audit row in `metric_migrations` linking old to new, with the
+    /// shadow result id and operator, in a single transaction. Either both
+    /// inserts succeed or both roll back. The old CUSTOM row in
+    /// `metric_definitions` is NOT touched — per ADR-026 Phase 3, the
+    /// original stays for read-compat and audit.
+    ///
+    /// Error mapping:
+    ///
+    /// - `StoreError::AlreadyExists("old metric already migrated")` on
+    ///   unique-constraint violation against `uq_metric_migrations_old`.
+    /// - `StoreError::AlreadyExists("new metric_id already exists: <id>")` on
+    ///   unique-constraint violation against the `metric_definitions` PK.
+    /// - `StoreError::Db` for any other database error.
+    ///
+    /// Returns the `(new_metric_row, migration_id, applied_at)` triple from
+    /// the inserted rows. Caller maps these into the gRPC response.
+    pub async fn migrate_metric(
+        &self,
+        new_metric: &MetricDefinition,
+        old_metric_id: &str,
+        shadow_run_result_id: Uuid,
+        operator: &str,
+    ) -> Result<(MetricRow, Uuid, DateTime<Utc>), StoreError> {
+        let type_config_json = build_metric_type_config(new_metric);
+
+        let mut tx = self.pool.begin().await.map_err(StoreError::Db)?;
+
+        // 1. Insert the new metric_definitions row.
+        let new_row: MetricRowSql = sqlx::query_as(
+            r#"INSERT INTO metric_definitions (
+                   metric_id, name, description, type,
+                   source_event_type, numerator_event_type, denominator_event_type,
+                   percentile, custom_sql,
+                   lower_is_better, is_qoe_metric,
+                   cuped_covariate_metric_id, minimum_detectable_effect,
+                   stakeholder, aggregation_level, type_config, metricql_expression
+               ) VALUES (
+                   $1, $2, $3, $4,
+                   $5, $6, $7,
+                   $8, $9,
+                   $10, $11,
+                   $12, $13,
+                   $14, $15, $16, $17
+               )
+               RETURNING
+                   metric_id, name, description, type,
+                   source_event_type, numerator_event_type, denominator_event_type,
+                   percentile, custom_sql,
+                   lower_is_better, is_qoe_metric,
+                   cuped_covariate_metric_id, minimum_detectable_effect,
+                   stakeholder, aggregation_level, type_config, metricql_expression, created_at"#,
+        )
+        .bind(&new_metric.metric_id)
+        .bind(&new_metric.name)
+        .bind(opt_str(&new_metric.description))
+        .bind(metric_type_to_sql(new_metric.r#type()))
+        .bind(opt_str(&new_metric.source_event_type))
+        .bind(opt_str(&new_metric.numerator_event_type))
+        .bind(opt_str(&new_metric.denominator_event_type))
+        .bind(opt_pos_f64(new_metric.percentile))
+        .bind(opt_str(&new_metric.custom_sql))
+        .bind(new_metric.lower_is_better)
+        .bind(new_metric.is_qoe_metric)
+        .bind(opt_str(&new_metric.cuped_covariate_metric_id))
+        .bind(opt_pos_f64(new_metric.minimum_detectable_effect))
+        .bind(stakeholder_to_sql(new_metric.stakeholder()))
+        .bind(aggregation_level_to_sql(new_metric.aggregation_level()))
+        .bind(type_config_json.map(sqlx::types::Json))
+        .bind(opt_str(&new_metric.metricql_expression))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("unique") || msg.contains("duplicate") {
+                StoreError::AlreadyExists(format!(
+                    "new metric_id already exists: {}",
+                    new_metric.metric_id
+                ))
+            } else {
+                StoreError::Db(e)
+            }
+        })?;
+
+        // 2. Insert the audit row into metric_migrations.
+        // We RETURNING migration_id + applied_at because both are DB-defaulted
+        // (gen_random_uuid() and NOW() respectively).
+        let audit_row: (Uuid, DateTime<Utc>) = sqlx::query_as(
+            r#"INSERT INTO metric_migrations
+                   (old_metric_id, new_metric_id, shadow_run_result_id, operator)
+               VALUES ($1, $2, $3, $4)
+               RETURNING migration_id, applied_at"#,
+        )
+        .bind(old_metric_id)
+        .bind(&new_metric.metric_id)
+        .bind(shadow_run_result_id)
+        .bind(operator)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            // uq_metric_migrations_old → "old metric already migrated".
+            // Other unique violations (none expected on this row) → generic.
+            if (msg.contains("unique") || msg.contains("duplicate"))
+                && msg.contains("uq_metric_migrations_old")
+            {
+                StoreError::AlreadyExists(format!(
+                    "old metric already migrated: {old_metric_id}"
+                ))
+            } else if msg.contains("unique") || msg.contains("duplicate") {
+                StoreError::AlreadyExists(format!(
+                    "migration audit-row collision for old metric: {old_metric_id}"
+                ))
+            } else {
+                StoreError::Db(e)
+            }
+        })?;
+
+        tx.commit().await.map_err(StoreError::Db)?;
+
+        Ok((MetricRow::from(new_row), audit_row.0, audit_row.1))
+    }
+
     /// Fetch a single metric definition by `metric_id`.
     ///
     /// Returns `StoreError::NotFound` if no row matches.
