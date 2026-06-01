@@ -158,7 +158,7 @@ describe('Flag List Page', () => {
     await user.type(screen.getByTestId('flag-search'), 'dark_mode');
     expect(screen.getByTestId('flag-count')).toHaveTextContent('1');
 
-    const clearBtn = screen.getByTestId('clear-search-toolbar');
+    const clearBtn = screen.getByTestId('clear-filters-toolbar');
     await user.click(clearBtn);
 
     expect(screen.getByTestId('flag-search')).toHaveValue('');

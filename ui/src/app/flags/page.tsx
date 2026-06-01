@@ -144,7 +144,7 @@ function FlagListContent() {
           <button
             onClick={() => setSearch('')}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-            data-testid="clear-search-toolbar"
+            data-testid="clear-filters-toolbar"
           >
             Clear filters
           </button>
