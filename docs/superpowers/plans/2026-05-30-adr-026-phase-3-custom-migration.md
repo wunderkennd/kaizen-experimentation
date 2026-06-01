@@ -39,6 +39,51 @@ Eight Locks freeze the cross-cutting design decisions. **Locks are normative —
 
 ---
 
+## Cross-phase artifacts
+
+Every artifact named in a Lock body, in a stub help-text, in a per-phase task list, or in the convergence runbook that crosses a phase boundary MUST appear in this table. Spec reviewers grep this table when reviewing each phase PR; missing rows are a blocker.
+
+This section was **retrofitted in the convergence (F) PR** per `docs/superpowers/templates/locked-plan-template.md` (introduced by #591), which itself was authored in response to the exact gap that caused #437 to close administratively after #580 merged: `MigrateMetricDefinition` was named in Phase A's `apply` stub help text and in L7's prose, but no phase explicitly owned producing it. The table below is the discoverable contract that would have prevented that.
+
+| Artifact | Producer phase / task | Consumer phase / task | Lock # | Status |
+|---|---|---|---|---|
+| `experimentation-management` Cargo dep `sqlparser = "0.50"` | Phase A / A1 | Phase A / A2 (translator) | L1 | verified — landed in #577 |
+| `crates/experimentation-management/src/migration/{classifier,tier1,tier2,report}.rs` (AST translator) | Phase A / A2 | Phase A / A3 (`translate` subcommand), Phase F runbook | L1, L4 | verified — landed in #577 |
+| `crates/experimentation-management/src/bin/custom_migrator.rs` (`scan` + `translate`) | Phase A / A3 | Phase E1 (survey.sh), Phase E2 (per-org proposals) | L2 | verified — landed in #577 |
+| `test-vectors/custom_migration_corpus.json` (30+ corpus fixtures) | Phase A / A2 | Phase A `custom_corpus_parity.rs`, Phase F `just test-metricql-parity`-style gate | L4 | verified — landed in #577 |
+| Migration `sql/migrations/015_adr026_phase3_metric_shadow_runs.sql` (`metric_shadow_runs` + `metric_shadow_run_results` tables) | Phase B / B1 | Phase B / B2 (computation), Phase B / B3 (differ), Phase F `MigrateMetricDefinition` precondition (d) | L3 | verified — landed in #580 |
+| M3 RPC `ScheduleShadowComputation` | Phase B / B1 | Phase F `custom_migrator shadow` subcommand | L3 | verified — landed in #580 |
+| M3 RPC `GetShadowResults` (incl. `days_within_tolerance` / `total_days`) | Phase B / B1 | Phase F `custom_migrator shadow` poller, Phase F `MigrateMetricDefinition` precondition (d) | L3 | verified — landed in #580 |
+| M3 RPC `PromoteShadowResult` (`result_id == shadow_id` of promoted run) | Phase B / B1 | Phase F `custom_migrator shadow` (writes `result_id` into `ShadowOutcome`), Phase F `MigrateMetricDefinition.shadow_run_result_id` (M5 calls back into M3 to re-verify APPROVED at apply time) | L3, L7 | verified — landed in #580 |
+| Shadow computation in `services/metrics/internal/jobs/standard.go` `Run` loop | Phase B / B2 | Phase B / B3 (differ runs against its output) | L3 | verified — landed in #580 |
+| `services/metrics/internal/shadow/differ.go` (per-tuple `within_tolerance` evaluation) | Phase B / B3 | Phase B / B1 `PromoteShadowResult` (consumes the aggregated `metric_shadow_run_results`) | L3 | verified — landed in #580 |
+| M5 deprecation trailer `x-kaizen-deprecation` (Rust) | Phase C / C1 | Phase D / D2 (M6 Connect-Web interceptor surfaces it as toast) | L5 | verified — landed in #578 |
+| M5 deprecation telemetry counter `m5.metric_definition.custom.created` | Phase C / C1 | Phase F operator visibility into "are new CUSTOMs still being created?" (drives L6 4-week sunset decision) | L5, L6 | verified — landed in #578 |
+| Go-variant M5 deprecation trailer parity | Phase C / C2 | Phase D / D2 (same M6 interceptor handles both servers) | L5 | verified — landed in #578 |
+| Proto RPC `MigrateMetricDefinition` on `experimentation.management.v1.ManagementService` | **Phase F (convergence) / T1** — was originally scoped to Phase C / C3 but not produced on the C/D PR | Phase F `custom_migrator apply` subcommand, runbook | L7 | verified — landed in this PR (commit `c259513`) |
+| Migration `sql/migrations/016_adr026_phase3_metric_migrations.sql` (`metric_migrations` audit table; `UNIQUE(old_metric_id)` enforces no-double-migration) | **Phase F / T1** — was originally scoped to Phase C / C3 ("Migration 014 already added the metric_migrations table" — but no phase produced it) | Phase F `MigrateMetricDefinition` handler, Phase F runbook rollback section, future `MigrationsList` RPC if added | L7 | verified — landed in this PR (commit `c259513`) |
+| M3-side verification path: M5 calls `GetShadowResults(shadow_id=shadow_run_result_id)` from `MigrateMetricDefinition` to re-confirm APPROVED at apply time | Phase F / T1 | Phase F `custom_migrator apply` (transitively, via the M5 RPC) | L7 | verified — landed in this PR (commit `c259513`) |
+| Go-variant M5 `MigrateMetricDefinition` stub returning `Unimplemented` | Phase C / C4 (per locked plan) — verify whether this shipped in #578 or remains a follow-up | Phase F runbook (operator must use the Rust M5 binary, not the Go variant, for `apply`) | L7 | verified — Rust side complete; Go variant stub status tracked as follow-up (Go variant of M5 is being deprecated per ADR-025; not a blocker for #437) |
+| Phase F `custom_migrator shadow` subcommand (real impl replacing Phase A stub) | Phase F / T2 | Phase F `custom_migrator apply` consumes its `ShadowOutput` JSON | L3 | verified — landed in this PR (commit `bea93e6`) |
+| `ShadowOutput` / `ShadowOutcome` JSON contract (fields: `original_metric_id`, `shadow_id`, `result_id`, `status`, `reason`, `days_within_tolerance`, `total_days`, `candidate_metric`) | Phase F / T2 | Phase F / T3 (`apply` consumes it directly), Phase F runbook (operator-readable artifact) | L3, L7 | verified — landed in this PR (commit `bea93e6`) |
+| Phase F `custom_migrator apply` subcommand (real impl replacing Phase A stub) | Phase F / T3 | Operator (runs the binary); Phase F runbook references it | L7 | verified — landed in this PR (commit `4855514`) |
+| `ApplyOutput` sidecar JSON (per-outcome `status`/`new_metric_id`/`migration_id`/`applied_at` plus aggregate counters) | Phase F / T3 | Operator audit trail; runbook references it; Phase F `metric_migrations` table is the durable record | L7 | verified — landed in this PR (commit `4855514`) |
+| `scripts/migration-phase3/survey.sh` (bash wrapper over `scan + translate`) | Phase F / T4 (Phase E1 in locked plan numbering) | Operators running per-org surveys; runbook documents invocation | L8 | verified — landed in this PR (commit `e308d08`) |
+| `docs/runbooks/adr-026-phase-3-migration.md` (operator runbook) | Phase F / T4 | Operators (workflow + troubleshooting + rollback); F1 AC mapping table inside the runbook is the audit grid for #437's acceptance criteria | L7, L8 | verified — landed in this PR (commit `e308d08`) |
+| F1 acceptance-criteria mapping (`#437 AC → test/file location`) — embedded in the runbook | Phase F / T5 | Final-PR reviewer; future audits | — | verified — landed in this PR (commit `e308d08`, as a section inside the runbook) |
+| M6 CUSTOM relabel `"Custom SQL (deprecated)"` + warning icon | Phase D / D1 | M6 users; runbook references the operator-facing UI signal | L5, L6 | verified — landed in #578 |
+| M6 Connect-Web interceptor surfacing `x-kaizen-deprecation` as toast + persistent banner | Phase D / D2 | M6 users; runbook troubleshooting section | L5 | verified — landed in #578 |
+| M6 feature flag `m6.metric_type.custom.hidden` + `ui/src/lib/flags.ts` (gates Phase 3.B "hide from create form") | Phase D / D3 (per locked plan) | Phase 3.B sunset (4 weeks after Phase D ships + zero new CUSTOMs telemetry confirms it's safe) | L6 | **deferred — Phase 3.B follow-up.** Not produced in #578 (D1+D2 only); not produced in this PR. Tracked as the L6 (3.B) phase that's intentionally separated from the convergence PR per the locked plan's "Three-phase rollout" language. F1 row marks this `_deferred_` honestly. |
+
+**Authoring rules (per `docs/superpowers/templates/locked-plan-template.md`):**
+
+1. **Producer is always upstream.** No cycles in this table — verified by inspection.
+2. **No "implicit" artifacts.** Every Lock body and every cross-phase reference in a stub help-text has a row.
+3. **The convergence (F) phase verifies every row reaches `verified`.** The one exception is the M6 sunset flag row, which is explicitly `_deferred_` per Lock L6's phased rollout — the row is here so the deferral is visible from a single grep rather than hidden in a closed issue.
+4. **Stub-marker comments in code must reference a row.** Both stubs in `custom_migrator.rs` that pointed at L7 (`apply`) and L3 (`shadow`) are now real implementations — the stub-marker debt the locked plan inherited is closed.
+
+---
+
 ### L1 — Translator approach: AST-based, not regex
 
 **Decision: parse CUSTOM SQL with `sqlparser-rs` (Spark dialect), pattern-match the resulting AST against translation rules.**
