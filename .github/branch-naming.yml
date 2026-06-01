@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Branch-naming allowlist for the kaizen-experimentation repo.
+#
+# Read by:
+#   - `.github/workflows/branch-naming.yml` (GitHub Action, advisory comment)
+#   - `just check-branch-name`              (local pre-push CLI check)
+#
+# To add a new branch-name family that should be allowed, add a regex to
+# `allowed_patterns` below in the same PR that creates the first branch using
+# it. The action will then accept the new pattern; the local recipe picks it
+# up automatically.
+#
+# Patterns are Python regexes, anchored with ^…$. Test against the full
+# branch name (the part after refs/heads/, e.g. "agent-3/feat/foo").
+# ─────────────────────────────────────────────────────────────────────────────
+
+allowed_patterns:
+  # ── Canonical: agent-owned feature work tied to an ADR ────────────────────
+  # Per CLAUDE.md: `agent-N/<verb>/adr-XXX-<slug>` for agent-N implementation
+  # branches. The verb set matches conventional-commit verbs the repo uses
+  # (see CONTRIBUTING.md: feat, fix, refactor, test, docs, chore, perf, port).
+  # `design` is repo-specific (RFC / ADR design-lock branches) and documented
+  # in CLAUDE.md + CONTRIBUTING.md alongside the conventional set.
+  - "^agent-[0-9]+/(feat|fix|port|design|chore|refactor|docs|test|perf)/[a-z0-9-]+$"
+
+  # ── Infrastructure (Pulumi / GCP / AWS stacks) ────────────────────────────
+  # The infra-N agents own the Pulumi modules under infra/pkg/.
+  - "^infra-[0-9]+/(feat|fix|chore|refactor)/[a-z0-9-]+$"
+
+  # ── Design-system / Palette polish (parallel convention) ──────────────────
+  # The palette stream is M6 UI hygiene work with its own dispatch tooling;
+  # branches typically named `palette/<slug>` or `palette-<slug>-<digits>`.
+  # Documented as a recognized alternate; not part of the agent-N taxonomy.
+  - "^palette[/-][a-z0-9-]+(?:-[0-9]+)?$"
+
+  # ── Repo-wide hygiene work not tied to a single agent or ADR ──────────────
+  # `chore/<slug>` for justfile / docs / CI / tooling changes that don't fit
+  # an agent-N owner. Use sparingly; prefer agent-N/chore/... when possible.
+  - "^chore/[a-z0-9-]+$"

