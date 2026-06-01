@@ -2,9 +2,11 @@ syntax = "proto3";
 
 package experimentation.metrics.v1;
 
+import "experimentation/common/v1/metric.proto";
 import "experimentation/common/v1/metricql_diagnostic.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/metrics/v1;metricsv1";
 
@@ -28,6 +30,16 @@ service MetricComputationService {
   // metric set -- clients do NOT pass it, to prevent autocomplete-time
   // info leakage about other experiments' metrics.
   rpc CompileMetricqlPreview(CompileMetricqlPreviewRequest) returns (CompileMetricqlPreviewResponse);
+
+  // ADR-026 Phase 3 #437: shadow-run pipeline for CUSTOM-metric migration.
+  // The migration tool (custom_migrator) submits a candidate definition;
+  // M3 runs it alongside the original during the standard nightly pass, the
+  // differ records per-tuple equivalence, and PromoteShadowResult enforces
+  // the 7-consecutive-days-within-tolerance gate before M5 accepts the
+  // migration.
+  rpc ScheduleShadowComputation(ScheduleShadowComputationRequest) returns (ScheduleShadowComputationResponse);
+  rpc GetShadowResults(GetShadowResultsRequest) returns (GetShadowResultsResponse);
+  rpc PromoteShadowResult(PromoteShadowResultRequest) returns (PromoteShadowResultResponse);
 }
 
 message ComputeMetricsRequest { string experiment_id = 1; }
@@ -91,4 +103,83 @@ message CompileMetricqlPreviewResponse {
   string compiled_sql = 1;
   // Parse + semantic diagnostics. Empty when compiled_sql is populated.
   repeated experimentation.common.v1.MetricqlDiagnostic diagnostics = 2;
+}
+
+// ADR-026 Phase 3 shadow-run messages (#437).
+
+// ScheduleShadowComputation: the migration tool submits the candidate
+// MetricDefinition alongside the original metric's ID. M3 will run both
+// during every subsequent nightly pass until the shadow run reaches a
+// terminal state (APPROVED, REJECTED, or FAILED).
+message ScheduleShadowComputationRequest {
+  // ID of the existing CUSTOM metric to migrate. Must not be empty.
+  string original_metric_id = 1;
+  // The candidate structured/MetricQL definition to evaluate.
+  // Must be non-nil and have a non-empty metric_id.
+  experimentation.common.v1.MetricDefinition candidate_metric = 2;
+}
+
+message ScheduleShadowComputationResponse {
+  // UUID that uniquely identifies this shadow run.  Clients pass this to
+  // GetShadowResults and PromoteShadowResult.
+  string shadow_id = 1;
+}
+
+// GetShadowResults: poll the current state of a shadow run.
+message GetShadowResultsRequest {
+  // UUID returned by ScheduleShadowComputation.
+  string shadow_id = 1;
+}
+
+message GetShadowResultsResponse {
+  string shadow_id = 1;
+  // Current lifecycle status: PENDING, RUNNING, APPROVED, REJECTED, or FAILED.
+  string status = 2;
+  // All per-(experiment, variant, date) result rows collected so far.
+  repeated ShadowResultRow rows = 3;
+  // Count of distinct computation_dates where ALL tuples were within tolerance.
+  int32 days_within_tolerance = 4;
+  // Total count of distinct computation_dates present in `rows`.
+  int32 total_days = 5;
+}
+
+// One row from metric_shadow_run_results, returned inline by GetShadowResults.
+// The four double fields use google.protobuf.DoubleValue (nullable wrapper) so
+// callers can distinguish a genuine NULL (nil pointer) from a legitimate 0.0.
+// NULL occurs when the corresponding computation failed for that tuple.
+message ShadowResultRow {
+  string experiment_id = 1;
+  string variant_id = 2;
+  // YYYY-MM-DD date this tuple was computed on.
+  string computation_date = 3;
+  // NULL when the original-side computation failed for this tuple.
+  google.protobuf.DoubleValue original_value = 4;
+  // NULL when the candidate-side computation failed for this tuple.
+  google.protobuf.DoubleValue candidate_value = 5;
+  // NULL when either original_value or candidate_value is NULL.
+  google.protobuf.DoubleValue diff_abs = 6;
+  // NULL when either original_value or candidate_value is NULL, or when
+  // original_value is zero (division by zero is undefined).
+  google.protobuf.DoubleValue diff_rel = 7;
+  bool within_tolerance = 8;
+}
+
+// PromoteShadowResult: ask M3 to evaluate the 7-day gate and, if passed,
+// transition the shadow run to APPROVED so M5 can accept the migration.
+message PromoteShadowResultRequest {
+  // UUID returned by ScheduleShadowComputation.
+  string shadow_id = 1;
+}
+
+message PromoteShadowResultResponse {
+  // Approval token, populated only on APPROVED status. Equals the shadow_id of
+  // the promoted run. Used by M5's MigrateMetricDefinition RPC as
+  // shadow_run_result_id. Empty on REJECTED or PENDING.
+  string result_id = 1;
+  // Terminal status after this call: APPROVED, REJECTED, or PENDING
+  // (if not yet enough data to decide).
+  string status = 2;
+  // Human-readable explanation populated on REJECTED or PENDING.
+  // Empty on APPROVED.
+  string reason = 3;
 }

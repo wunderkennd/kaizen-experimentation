@@ -48,6 +48,15 @@ const (
 	// MetricComputationServiceCompileMetricqlPreviewProcedure is the fully-qualified name of the
 	// MetricComputationService's CompileMetricqlPreview RPC.
 	MetricComputationServiceCompileMetricqlPreviewProcedure = "/experimentation.metrics.v1.MetricComputationService/CompileMetricqlPreview"
+	// MetricComputationServiceScheduleShadowComputationProcedure is the fully-qualified name of the
+	// MetricComputationService's ScheduleShadowComputation RPC.
+	MetricComputationServiceScheduleShadowComputationProcedure = "/experimentation.metrics.v1.MetricComputationService/ScheduleShadowComputation"
+	// MetricComputationServiceGetShadowResultsProcedure is the fully-qualified name of the
+	// MetricComputationService's GetShadowResults RPC.
+	MetricComputationServiceGetShadowResultsProcedure = "/experimentation.metrics.v1.MetricComputationService/GetShadowResults"
+	// MetricComputationServicePromoteShadowResultProcedure is the fully-qualified name of the
+	// MetricComputationService's PromoteShadowResult RPC.
+	MetricComputationServicePromoteShadowResultProcedure = "/experimentation.metrics.v1.MetricComputationService/PromoteShadowResult"
 )
 
 // MetricComputationServiceClient is a client for the
@@ -69,6 +78,15 @@ type MetricComputationServiceClient interface {
 	// metric set -- clients do NOT pass it, to prevent autocomplete-time
 	// info leakage about other experiments' metrics.
 	CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error)
+	// ADR-026 Phase 3 #437: shadow-run pipeline for CUSTOM-metric migration.
+	// The migration tool (custom_migrator) submits a candidate definition;
+	// M3 runs it alongside the original during the standard nightly pass, the
+	// differ records per-tuple equivalence, and PromoteShadowResult enforces
+	// the 7-consecutive-days-within-tolerance gate before M5 accepts the
+	// migration.
+	ScheduleShadowComputation(context.Context, *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error)
+	GetShadowResults(context.Context, *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error)
+	PromoteShadowResult(context.Context, *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error)
 }
 
 // NewMetricComputationServiceClient constructs a client for the
@@ -113,16 +131,37 @@ func NewMetricComputationServiceClient(httpClient connect.HTTPClient, baseURL st
 			connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
 			connect.WithClientOptions(opts...),
 		),
+		scheduleShadowComputation: connect.NewClient[v1.ScheduleShadowComputationRequest, v1.ScheduleShadowComputationResponse](
+			httpClient,
+			baseURL+MetricComputationServiceScheduleShadowComputationProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("ScheduleShadowComputation")),
+			connect.WithClientOptions(opts...),
+		),
+		getShadowResults: connect.NewClient[v1.GetShadowResultsRequest, v1.GetShadowResultsResponse](
+			httpClient,
+			baseURL+MetricComputationServiceGetShadowResultsProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("GetShadowResults")),
+			connect.WithClientOptions(opts...),
+		),
+		promoteShadowResult: connect.NewClient[v1.PromoteShadowResultRequest, v1.PromoteShadowResultResponse](
+			httpClient,
+			baseURL+MetricComputationServicePromoteShadowResultProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("PromoteShadowResult")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // metricComputationServiceClient implements MetricComputationServiceClient.
 type metricComputationServiceClient struct {
-	computeMetrics          *connect.Client[v1.ComputeMetricsRequest, v1.ComputeMetricsResponse]
-	computeGuardrailMetrics *connect.Client[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse]
-	exportNotebook          *connect.Client[v1.ExportNotebookRequest, v1.ExportNotebookResponse]
-	getQueryLog             *connect.Client[v1.GetQueryLogRequest, v1.GetQueryLogResponse]
-	compileMetricqlPreview  *connect.Client[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse]
+	computeMetrics            *connect.Client[v1.ComputeMetricsRequest, v1.ComputeMetricsResponse]
+	computeGuardrailMetrics   *connect.Client[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse]
+	exportNotebook            *connect.Client[v1.ExportNotebookRequest, v1.ExportNotebookResponse]
+	getQueryLog               *connect.Client[v1.GetQueryLogRequest, v1.GetQueryLogResponse]
+	compileMetricqlPreview    *connect.Client[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse]
+	scheduleShadowComputation *connect.Client[v1.ScheduleShadowComputationRequest, v1.ScheduleShadowComputationResponse]
+	getShadowResults          *connect.Client[v1.GetShadowResultsRequest, v1.GetShadowResultsResponse]
+	promoteShadowResult       *connect.Client[v1.PromoteShadowResultRequest, v1.PromoteShadowResultResponse]
 }
 
 // ComputeMetrics calls experimentation.metrics.v1.MetricComputationService.ComputeMetrics.
@@ -152,6 +191,23 @@ func (c *metricComputationServiceClient) CompileMetricqlPreview(ctx context.Cont
 	return c.compileMetricqlPreview.CallUnary(ctx, req)
 }
 
+// ScheduleShadowComputation calls
+// experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation.
+func (c *metricComputationServiceClient) ScheduleShadowComputation(ctx context.Context, req *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error) {
+	return c.scheduleShadowComputation.CallUnary(ctx, req)
+}
+
+// GetShadowResults calls experimentation.metrics.v1.MetricComputationService.GetShadowResults.
+func (c *metricComputationServiceClient) GetShadowResults(ctx context.Context, req *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error) {
+	return c.getShadowResults.CallUnary(ctx, req)
+}
+
+// PromoteShadowResult calls
+// experimentation.metrics.v1.MetricComputationService.PromoteShadowResult.
+func (c *metricComputationServiceClient) PromoteShadowResult(ctx context.Context, req *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error) {
+	return c.promoteShadowResult.CallUnary(ctx, req)
+}
+
 // MetricComputationServiceHandler is an implementation of the
 // experimentation.metrics.v1.MetricComputationService service.
 type MetricComputationServiceHandler interface {
@@ -171,6 +227,15 @@ type MetricComputationServiceHandler interface {
 	// metric set -- clients do NOT pass it, to prevent autocomplete-time
 	// info leakage about other experiments' metrics.
 	CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error)
+	// ADR-026 Phase 3 #437: shadow-run pipeline for CUSTOM-metric migration.
+	// The migration tool (custom_migrator) submits a candidate definition;
+	// M3 runs it alongside the original during the standard nightly pass, the
+	// differ records per-tuple equivalence, and PromoteShadowResult enforces
+	// the 7-consecutive-days-within-tolerance gate before M5 accepts the
+	// migration.
+	ScheduleShadowComputation(context.Context, *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error)
+	GetShadowResults(context.Context, *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error)
+	PromoteShadowResult(context.Context, *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error)
 }
 
 // NewMetricComputationServiceHandler builds an HTTP handler from the service implementation. It
@@ -210,6 +275,24 @@ func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opt
 		connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
 		connect.WithHandlerOptions(opts...),
 	)
+	metricComputationServiceScheduleShadowComputationHandler := connect.NewUnaryHandler(
+		MetricComputationServiceScheduleShadowComputationProcedure,
+		svc.ScheduleShadowComputation,
+		connect.WithSchema(metricComputationServiceMethods.ByName("ScheduleShadowComputation")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServiceGetShadowResultsHandler := connect.NewUnaryHandler(
+		MetricComputationServiceGetShadowResultsProcedure,
+		svc.GetShadowResults,
+		connect.WithSchema(metricComputationServiceMethods.ByName("GetShadowResults")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServicePromoteShadowResultHandler := connect.NewUnaryHandler(
+		MetricComputationServicePromoteShadowResultProcedure,
+		svc.PromoteShadowResult,
+		connect.WithSchema(metricComputationServiceMethods.ByName("PromoteShadowResult")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/experimentation.metrics.v1.MetricComputationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MetricComputationServiceComputeMetricsProcedure:
@@ -222,6 +305,12 @@ func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opt
 			metricComputationServiceGetQueryLogHandler.ServeHTTP(w, r)
 		case MetricComputationServiceCompileMetricqlPreviewProcedure:
 			metricComputationServiceCompileMetricqlPreviewHandler.ServeHTTP(w, r)
+		case MetricComputationServiceScheduleShadowComputationProcedure:
+			metricComputationServiceScheduleShadowComputationHandler.ServeHTTP(w, r)
+		case MetricComputationServiceGetShadowResultsProcedure:
+			metricComputationServiceGetShadowResultsHandler.ServeHTTP(w, r)
+		case MetricComputationServicePromoteShadowResultProcedure:
+			metricComputationServicePromoteShadowResultHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -249,4 +338,16 @@ func (UnimplementedMetricComputationServiceHandler) GetQueryLog(context.Context,
 
 func (UnimplementedMetricComputationServiceHandler) CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview is not implemented"))
+}
+
+func (UnimplementedMetricComputationServiceHandler) ScheduleShadowComputation(context.Context, *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation is not implemented"))
+}
+
+func (UnimplementedMetricComputationServiceHandler) GetShadowResults(context.Context, *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.GetShadowResults is not implemented"))
+}
+
+func (UnimplementedMetricComputationServiceHandler) PromoteShadowResult(context.Context, *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.PromoteShadowResult is not implemented"))
 }

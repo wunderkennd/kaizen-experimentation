@@ -12,6 +12,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/known/emptypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -629,11 +630,466 @@ func (x *CompileMetricqlPreviewResponse) GetDiagnostics() []*v1.MetricqlDiagnost
 	return nil
 }
 
+// ScheduleShadowComputation: the migration tool submits the candidate
+// MetricDefinition alongside the original metric's ID. M3 will run both
+// during every subsequent nightly pass until the shadow run reaches a
+// terminal state (APPROVED, REJECTED, or FAILED).
+type ScheduleShadowComputationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ID of the existing CUSTOM metric to migrate. Must not be empty.
+	OriginalMetricId string `protobuf:"bytes,1,opt,name=original_metric_id,json=originalMetricId,proto3" json:"original_metric_id,omitempty"`
+	// The candidate structured/MetricQL definition to evaluate.
+	// Must be non-nil and have a non-empty metric_id.
+	CandidateMetric *v1.MetricDefinition `protobuf:"bytes,2,opt,name=candidate_metric,json=candidateMetric,proto3" json:"candidate_metric,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ScheduleShadowComputationRequest) Reset() {
+	*x = ScheduleShadowComputationRequest{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduleShadowComputationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduleShadowComputationRequest) ProtoMessage() {}
+
+func (x *ScheduleShadowComputationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduleShadowComputationRequest.ProtoReflect.Descriptor instead.
+func (*ScheduleShadowComputationRequest) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ScheduleShadowComputationRequest) GetOriginalMetricId() string {
+	if x != nil {
+		return x.OriginalMetricId
+	}
+	return ""
+}
+
+func (x *ScheduleShadowComputationRequest) GetCandidateMetric() *v1.MetricDefinition {
+	if x != nil {
+		return x.CandidateMetric
+	}
+	return nil
+}
+
+type ScheduleShadowComputationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// UUID that uniquely identifies this shadow run.  Clients pass this to
+	// GetShadowResults and PromoteShadowResult.
+	ShadowId      string `protobuf:"bytes,1,opt,name=shadow_id,json=shadowId,proto3" json:"shadow_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScheduleShadowComputationResponse) Reset() {
+	*x = ScheduleShadowComputationResponse{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduleShadowComputationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduleShadowComputationResponse) ProtoMessage() {}
+
+func (x *ScheduleShadowComputationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduleShadowComputationResponse.ProtoReflect.Descriptor instead.
+func (*ScheduleShadowComputationResponse) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ScheduleShadowComputationResponse) GetShadowId() string {
+	if x != nil {
+		return x.ShadowId
+	}
+	return ""
+}
+
+// GetShadowResults: poll the current state of a shadow run.
+type GetShadowResultsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// UUID returned by ScheduleShadowComputation.
+	ShadowId      string `protobuf:"bytes,1,opt,name=shadow_id,json=shadowId,proto3" json:"shadow_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetShadowResultsRequest) Reset() {
+	*x = GetShadowResultsRequest{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetShadowResultsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetShadowResultsRequest) ProtoMessage() {}
+
+func (x *GetShadowResultsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetShadowResultsRequest.ProtoReflect.Descriptor instead.
+func (*GetShadowResultsRequest) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetShadowResultsRequest) GetShadowId() string {
+	if x != nil {
+		return x.ShadowId
+	}
+	return ""
+}
+
+type GetShadowResultsResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	ShadowId string                 `protobuf:"bytes,1,opt,name=shadow_id,json=shadowId,proto3" json:"shadow_id,omitempty"`
+	// Current lifecycle status: PENDING, RUNNING, APPROVED, REJECTED, or FAILED.
+	Status string `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	// All per-(experiment, variant, date) result rows collected so far.
+	Rows []*ShadowResultRow `protobuf:"bytes,3,rep,name=rows,proto3" json:"rows,omitempty"`
+	// Count of distinct computation_dates where ALL tuples were within tolerance.
+	DaysWithinTolerance int32 `protobuf:"varint,4,opt,name=days_within_tolerance,json=daysWithinTolerance,proto3" json:"days_within_tolerance,omitempty"`
+	// Total count of distinct computation_dates present in `rows`.
+	TotalDays     int32 `protobuf:"varint,5,opt,name=total_days,json=totalDays,proto3" json:"total_days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetShadowResultsResponse) Reset() {
+	*x = GetShadowResultsResponse{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetShadowResultsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetShadowResultsResponse) ProtoMessage() {}
+
+func (x *GetShadowResultsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetShadowResultsResponse.ProtoReflect.Descriptor instead.
+func (*GetShadowResultsResponse) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetShadowResultsResponse) GetShadowId() string {
+	if x != nil {
+		return x.ShadowId
+	}
+	return ""
+}
+
+func (x *GetShadowResultsResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *GetShadowResultsResponse) GetRows() []*ShadowResultRow {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+func (x *GetShadowResultsResponse) GetDaysWithinTolerance() int32 {
+	if x != nil {
+		return x.DaysWithinTolerance
+	}
+	return 0
+}
+
+func (x *GetShadowResultsResponse) GetTotalDays() int32 {
+	if x != nil {
+		return x.TotalDays
+	}
+	return 0
+}
+
+// One row from metric_shadow_run_results, returned inline by GetShadowResults.
+// The four double fields use google.protobuf.DoubleValue (nullable wrapper) so
+// callers can distinguish a genuine NULL (nil pointer) from a legitimate 0.0.
+// NULL occurs when the corresponding computation failed for that tuple.
+type ShadowResultRow struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ExperimentId string                 `protobuf:"bytes,1,opt,name=experiment_id,json=experimentId,proto3" json:"experiment_id,omitempty"`
+	VariantId    string                 `protobuf:"bytes,2,opt,name=variant_id,json=variantId,proto3" json:"variant_id,omitempty"`
+	// YYYY-MM-DD date this tuple was computed on.
+	ComputationDate string `protobuf:"bytes,3,opt,name=computation_date,json=computationDate,proto3" json:"computation_date,omitempty"`
+	// NULL when the original-side computation failed for this tuple.
+	OriginalValue *wrapperspb.DoubleValue `protobuf:"bytes,4,opt,name=original_value,json=originalValue,proto3" json:"original_value,omitempty"`
+	// NULL when the candidate-side computation failed for this tuple.
+	CandidateValue *wrapperspb.DoubleValue `protobuf:"bytes,5,opt,name=candidate_value,json=candidateValue,proto3" json:"candidate_value,omitempty"`
+	// NULL when either original_value or candidate_value is NULL.
+	DiffAbs *wrapperspb.DoubleValue `protobuf:"bytes,6,opt,name=diff_abs,json=diffAbs,proto3" json:"diff_abs,omitempty"`
+	// NULL when either original_value or candidate_value is NULL, or when
+	// original_value is zero (division by zero is undefined).
+	DiffRel         *wrapperspb.DoubleValue `protobuf:"bytes,7,opt,name=diff_rel,json=diffRel,proto3" json:"diff_rel,omitempty"`
+	WithinTolerance bool                    `protobuf:"varint,8,opt,name=within_tolerance,json=withinTolerance,proto3" json:"within_tolerance,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ShadowResultRow) Reset() {
+	*x = ShadowResultRow{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShadowResultRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShadowResultRow) ProtoMessage() {}
+
+func (x *ShadowResultRow) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShadowResultRow.ProtoReflect.Descriptor instead.
+func (*ShadowResultRow) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ShadowResultRow) GetExperimentId() string {
+	if x != nil {
+		return x.ExperimentId
+	}
+	return ""
+}
+
+func (x *ShadowResultRow) GetVariantId() string {
+	if x != nil {
+		return x.VariantId
+	}
+	return ""
+}
+
+func (x *ShadowResultRow) GetComputationDate() string {
+	if x != nil {
+		return x.ComputationDate
+	}
+	return ""
+}
+
+func (x *ShadowResultRow) GetOriginalValue() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.OriginalValue
+	}
+	return nil
+}
+
+func (x *ShadowResultRow) GetCandidateValue() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.CandidateValue
+	}
+	return nil
+}
+
+func (x *ShadowResultRow) GetDiffAbs() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.DiffAbs
+	}
+	return nil
+}
+
+func (x *ShadowResultRow) GetDiffRel() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.DiffRel
+	}
+	return nil
+}
+
+func (x *ShadowResultRow) GetWithinTolerance() bool {
+	if x != nil {
+		return x.WithinTolerance
+	}
+	return false
+}
+
+// PromoteShadowResult: ask M3 to evaluate the 7-day gate and, if passed,
+// transition the shadow run to APPROVED so M5 can accept the migration.
+type PromoteShadowResultRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// UUID returned by ScheduleShadowComputation.
+	ShadowId      string `protobuf:"bytes,1,opt,name=shadow_id,json=shadowId,proto3" json:"shadow_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PromoteShadowResultRequest) Reset() {
+	*x = PromoteShadowResultRequest{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PromoteShadowResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PromoteShadowResultRequest) ProtoMessage() {}
+
+func (x *PromoteShadowResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PromoteShadowResultRequest.ProtoReflect.Descriptor instead.
+func (*PromoteShadowResultRequest) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *PromoteShadowResultRequest) GetShadowId() string {
+	if x != nil {
+		return x.ShadowId
+	}
+	return ""
+}
+
+type PromoteShadowResultResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Approval token, populated only on APPROVED status. Equals the shadow_id of
+	// the promoted run. Used by M5's MigrateMetricDefinition RPC as
+	// shadow_run_result_id. Empty on REJECTED or PENDING.
+	ResultId string `protobuf:"bytes,1,opt,name=result_id,json=resultId,proto3" json:"result_id,omitempty"`
+	// Terminal status after this call: APPROVED, REJECTED, or PENDING
+	// (if not yet enough data to decide).
+	Status string `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	// Human-readable explanation populated on REJECTED or PENDING.
+	// Empty on APPROVED.
+	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PromoteShadowResultResponse) Reset() {
+	*x = PromoteShadowResultResponse{}
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PromoteShadowResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PromoteShadowResultResponse) ProtoMessage() {}
+
+func (x *PromoteShadowResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_experimentation_metrics_v1_metrics_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PromoteShadowResultResponse.ProtoReflect.Descriptor instead.
+func (*PromoteShadowResultResponse) Descriptor() ([]byte, []int) {
+	return file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PromoteShadowResultResponse) GetResultId() string {
+	if x != nil {
+		return x.ResultId
+	}
+	return ""
+}
+
+func (x *PromoteShadowResultResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *PromoteShadowResultResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 var File_experimentation_metrics_v1_metrics_service_proto protoreflect.FileDescriptor
 
 const file_experimentation_metrics_v1_metrics_service_proto_rawDesc = "" +
 	"\n" +
-	"0experimentation/metrics/v1/metrics_service.proto\x12\x1aexperimentation.metrics.v1\x1a3experimentation/common/v1/metricql_diagnostic.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"<\n" +
+	"0experimentation/metrics/v1/metrics_service.proto\x12\x1aexperimentation.metrics.v1\x1a&experimentation/common/v1/metric.proto\x1a3experimentation/common/v1/metricql_diagnostic.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/wrappers.proto\"<\n" +
 	"\x15ComputeMetricsRequest\x12#\n" +
 	"\rexperiment_id\x18\x01 \x01(\tR\fexperimentId\"E\n" +
 	"\x1eComputeGuardrailMetricsRequest\x12#\n" +
@@ -675,13 +1131,46 @@ const file_experimentation_metrics_v1_metrics_service_proto_rawDesc = "" +
 	"\x13metricql_expression\x18\x02 \x01(\tR\x12metricqlExpression\"\x94\x01\n" +
 	"\x1eCompileMetricqlPreviewResponse\x12!\n" +
 	"\fcompiled_sql\x18\x01 \x01(\tR\vcompiledSql\x12O\n" +
-	"\vdiagnostics\x18\x02 \x03(\v2-.experimentation.common.v1.MetricqlDiagnosticR\vdiagnostics2\x9a\x05\n" +
+	"\vdiagnostics\x18\x02 \x03(\v2-.experimentation.common.v1.MetricqlDiagnosticR\vdiagnostics\"\xa8\x01\n" +
+	" ScheduleShadowComputationRequest\x12,\n" +
+	"\x12original_metric_id\x18\x01 \x01(\tR\x10originalMetricId\x12V\n" +
+	"\x10candidate_metric\x18\x02 \x01(\v2+.experimentation.common.v1.MetricDefinitionR\x0fcandidateMetric\"@\n" +
+	"!ScheduleShadowComputationResponse\x12\x1b\n" +
+	"\tshadow_id\x18\x01 \x01(\tR\bshadowId\"6\n" +
+	"\x17GetShadowResultsRequest\x12\x1b\n" +
+	"\tshadow_id\x18\x01 \x01(\tR\bshadowId\"\xe3\x01\n" +
+	"\x18GetShadowResultsResponse\x12\x1b\n" +
+	"\tshadow_id\x18\x01 \x01(\tR\bshadowId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12?\n" +
+	"\x04rows\x18\x03 \x03(\v2+.experimentation.metrics.v1.ShadowResultRowR\x04rows\x122\n" +
+	"\x15days_within_tolerance\x18\x04 \x01(\x05R\x13daysWithinTolerance\x12\x1d\n" +
+	"\n" +
+	"total_days\x18\x05 \x01(\x05R\ttotalDays\"\xa9\x03\n" +
+	"\x0fShadowResultRow\x12#\n" +
+	"\rexperiment_id\x18\x01 \x01(\tR\fexperimentId\x12\x1d\n" +
+	"\n" +
+	"variant_id\x18\x02 \x01(\tR\tvariantId\x12)\n" +
+	"\x10computation_date\x18\x03 \x01(\tR\x0fcomputationDate\x12C\n" +
+	"\x0eoriginal_value\x18\x04 \x01(\v2\x1c.google.protobuf.DoubleValueR\roriginalValue\x12E\n" +
+	"\x0fcandidate_value\x18\x05 \x01(\v2\x1c.google.protobuf.DoubleValueR\x0ecandidateValue\x127\n" +
+	"\bdiff_abs\x18\x06 \x01(\v2\x1c.google.protobuf.DoubleValueR\adiffAbs\x127\n" +
+	"\bdiff_rel\x18\a \x01(\v2\x1c.google.protobuf.DoubleValueR\adiffRel\x12)\n" +
+	"\x10within_tolerance\x18\b \x01(\bR\x0fwithinTolerance\"9\n" +
+	"\x1aPromoteShadowResultRequest\x12\x1b\n" +
+	"\tshadow_id\x18\x01 \x01(\tR\bshadowId\"j\n" +
+	"\x1bPromoteShadowResultResponse\x12\x1b\n" +
+	"\tresult_id\x18\x01 \x01(\tR\bresultId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason2\xbd\b\n" +
 	"\x18MetricComputationService\x12w\n" +
 	"\x0eComputeMetrics\x121.experimentation.metrics.v1.ComputeMetricsRequest\x1a2.experimentation.metrics.v1.ComputeMetricsResponse\x12\x89\x01\n" +
 	"\x17ComputeGuardrailMetrics\x12:.experimentation.metrics.v1.ComputeGuardrailMetricsRequest\x1a2.experimentation.metrics.v1.ComputeMetricsResponse\x12w\n" +
 	"\x0eExportNotebook\x121.experimentation.metrics.v1.ExportNotebookRequest\x1a2.experimentation.metrics.v1.ExportNotebookResponse\x12n\n" +
 	"\vGetQueryLog\x12..experimentation.metrics.v1.GetQueryLogRequest\x1a/.experimentation.metrics.v1.GetQueryLogResponse\x12\x8f\x01\n" +
-	"\x16CompileMetricqlPreview\x129.experimentation.metrics.v1.CompileMetricqlPreviewRequest\x1a:.experimentation.metrics.v1.CompileMetricqlPreviewResponseB\x8b\x02\n" +
+	"\x16CompileMetricqlPreview\x129.experimentation.metrics.v1.CompileMetricqlPreviewRequest\x1a:.experimentation.metrics.v1.CompileMetricqlPreviewResponse\x12\x98\x01\n" +
+	"\x19ScheduleShadowComputation\x12<.experimentation.metrics.v1.ScheduleShadowComputationRequest\x1a=.experimentation.metrics.v1.ScheduleShadowComputationResponse\x12}\n" +
+	"\x10GetShadowResults\x123.experimentation.metrics.v1.GetShadowResultsRequest\x1a4.experimentation.metrics.v1.GetShadowResultsResponse\x12\x86\x01\n" +
+	"\x13PromoteShadowResult\x126.experimentation.metrics.v1.PromoteShadowResultRequest\x1a7.experimentation.metrics.v1.PromoteShadowResultResponseB\x8b\x02\n" +
 	"\x1ecom.experimentation.metrics.v1B\x13MetricsServiceProtoP\x01ZJgithub.com/org/experimentation/gen/go/experimentation/metrics/v1;metricsv1\xa2\x02\x03EMX\xaa\x02\x1aExperimentation.Metrics.V1\xca\x02\x1aExperimentation\\Metrics\\V1\xe2\x02&Experimentation\\Metrics\\V1\\GPBMetadata\xea\x02\x1cExperimentation::Metrics::V1b\x06proto3"
 
 var (
@@ -696,43 +1185,64 @@ func file_experimentation_metrics_v1_metrics_service_proto_rawDescGZIP() []byte 
 	return file_experimentation_metrics_v1_metrics_service_proto_rawDescData
 }
 
-var file_experimentation_metrics_v1_metrics_service_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_experimentation_metrics_v1_metrics_service_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_experimentation_metrics_v1_metrics_service_proto_goTypes = []any{
-	(*ComputeMetricsRequest)(nil),          // 0: experimentation.metrics.v1.ComputeMetricsRequest
-	(*ComputeGuardrailMetricsRequest)(nil), // 1: experimentation.metrics.v1.ComputeGuardrailMetricsRequest
-	(*ComputeMetricsResponse)(nil),         // 2: experimentation.metrics.v1.ComputeMetricsResponse
-	(*ExportNotebookRequest)(nil),          // 3: experimentation.metrics.v1.ExportNotebookRequest
-	(*ExportNotebookResponse)(nil),         // 4: experimentation.metrics.v1.ExportNotebookResponse
-	(*GetQueryLogRequest)(nil),             // 5: experimentation.metrics.v1.GetQueryLogRequest
-	(*GetQueryLogResponse)(nil),            // 6: experimentation.metrics.v1.GetQueryLogResponse
-	(*QueryLogEntry)(nil),                  // 7: experimentation.metrics.v1.QueryLogEntry
-	(*CompileMetricqlPreviewRequest)(nil),  // 8: experimentation.metrics.v1.CompileMetricqlPreviewRequest
-	(*CompileMetricqlPreviewResponse)(nil), // 9: experimentation.metrics.v1.CompileMetricqlPreviewResponse
-	(*timestamppb.Timestamp)(nil),          // 10: google.protobuf.Timestamp
-	(*v1.MetricqlDiagnostic)(nil),          // 11: experimentation.common.v1.MetricqlDiagnostic
+	(*ComputeMetricsRequest)(nil),             // 0: experimentation.metrics.v1.ComputeMetricsRequest
+	(*ComputeGuardrailMetricsRequest)(nil),    // 1: experimentation.metrics.v1.ComputeGuardrailMetricsRequest
+	(*ComputeMetricsResponse)(nil),            // 2: experimentation.metrics.v1.ComputeMetricsResponse
+	(*ExportNotebookRequest)(nil),             // 3: experimentation.metrics.v1.ExportNotebookRequest
+	(*ExportNotebookResponse)(nil),            // 4: experimentation.metrics.v1.ExportNotebookResponse
+	(*GetQueryLogRequest)(nil),                // 5: experimentation.metrics.v1.GetQueryLogRequest
+	(*GetQueryLogResponse)(nil),               // 6: experimentation.metrics.v1.GetQueryLogResponse
+	(*QueryLogEntry)(nil),                     // 7: experimentation.metrics.v1.QueryLogEntry
+	(*CompileMetricqlPreviewRequest)(nil),     // 8: experimentation.metrics.v1.CompileMetricqlPreviewRequest
+	(*CompileMetricqlPreviewResponse)(nil),    // 9: experimentation.metrics.v1.CompileMetricqlPreviewResponse
+	(*ScheduleShadowComputationRequest)(nil),  // 10: experimentation.metrics.v1.ScheduleShadowComputationRequest
+	(*ScheduleShadowComputationResponse)(nil), // 11: experimentation.metrics.v1.ScheduleShadowComputationResponse
+	(*GetShadowResultsRequest)(nil),           // 12: experimentation.metrics.v1.GetShadowResultsRequest
+	(*GetShadowResultsResponse)(nil),          // 13: experimentation.metrics.v1.GetShadowResultsResponse
+	(*ShadowResultRow)(nil),                   // 14: experimentation.metrics.v1.ShadowResultRow
+	(*PromoteShadowResultRequest)(nil),        // 15: experimentation.metrics.v1.PromoteShadowResultRequest
+	(*PromoteShadowResultResponse)(nil),       // 16: experimentation.metrics.v1.PromoteShadowResultResponse
+	(*timestamppb.Timestamp)(nil),             // 17: google.protobuf.Timestamp
+	(*v1.MetricqlDiagnostic)(nil),             // 18: experimentation.common.v1.MetricqlDiagnostic
+	(*v1.MetricDefinition)(nil),               // 19: experimentation.common.v1.MetricDefinition
+	(*wrapperspb.DoubleValue)(nil),            // 20: google.protobuf.DoubleValue
 }
 var file_experimentation_metrics_v1_metrics_service_proto_depIdxs = []int32{
-	10, // 0: experimentation.metrics.v1.ComputeMetricsResponse.completed_at:type_name -> google.protobuf.Timestamp
-	10, // 1: experimentation.metrics.v1.GetQueryLogRequest.after:type_name -> google.protobuf.Timestamp
-	10, // 2: experimentation.metrics.v1.GetQueryLogRequest.before:type_name -> google.protobuf.Timestamp
+	17, // 0: experimentation.metrics.v1.ComputeMetricsResponse.completed_at:type_name -> google.protobuf.Timestamp
+	17, // 1: experimentation.metrics.v1.GetQueryLogRequest.after:type_name -> google.protobuf.Timestamp
+	17, // 2: experimentation.metrics.v1.GetQueryLogRequest.before:type_name -> google.protobuf.Timestamp
 	7,  // 3: experimentation.metrics.v1.GetQueryLogResponse.entries:type_name -> experimentation.metrics.v1.QueryLogEntry
-	10, // 4: experimentation.metrics.v1.QueryLogEntry.computed_at:type_name -> google.protobuf.Timestamp
-	11, // 5: experimentation.metrics.v1.CompileMetricqlPreviewResponse.diagnostics:type_name -> experimentation.common.v1.MetricqlDiagnostic
-	0,  // 6: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:input_type -> experimentation.metrics.v1.ComputeMetricsRequest
-	1,  // 7: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:input_type -> experimentation.metrics.v1.ComputeGuardrailMetricsRequest
-	3,  // 8: experimentation.metrics.v1.MetricComputationService.ExportNotebook:input_type -> experimentation.metrics.v1.ExportNotebookRequest
-	5,  // 9: experimentation.metrics.v1.MetricComputationService.GetQueryLog:input_type -> experimentation.metrics.v1.GetQueryLogRequest
-	8,  // 10: experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview:input_type -> experimentation.metrics.v1.CompileMetricqlPreviewRequest
-	2,  // 11: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
-	2,  // 12: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
-	4,  // 13: experimentation.metrics.v1.MetricComputationService.ExportNotebook:output_type -> experimentation.metrics.v1.ExportNotebookResponse
-	6,  // 14: experimentation.metrics.v1.MetricComputationService.GetQueryLog:output_type -> experimentation.metrics.v1.GetQueryLogResponse
-	9,  // 15: experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview:output_type -> experimentation.metrics.v1.CompileMetricqlPreviewResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	17, // 4: experimentation.metrics.v1.QueryLogEntry.computed_at:type_name -> google.protobuf.Timestamp
+	18, // 5: experimentation.metrics.v1.CompileMetricqlPreviewResponse.diagnostics:type_name -> experimentation.common.v1.MetricqlDiagnostic
+	19, // 6: experimentation.metrics.v1.ScheduleShadowComputationRequest.candidate_metric:type_name -> experimentation.common.v1.MetricDefinition
+	14, // 7: experimentation.metrics.v1.GetShadowResultsResponse.rows:type_name -> experimentation.metrics.v1.ShadowResultRow
+	20, // 8: experimentation.metrics.v1.ShadowResultRow.original_value:type_name -> google.protobuf.DoubleValue
+	20, // 9: experimentation.metrics.v1.ShadowResultRow.candidate_value:type_name -> google.protobuf.DoubleValue
+	20, // 10: experimentation.metrics.v1.ShadowResultRow.diff_abs:type_name -> google.protobuf.DoubleValue
+	20, // 11: experimentation.metrics.v1.ShadowResultRow.diff_rel:type_name -> google.protobuf.DoubleValue
+	0,  // 12: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:input_type -> experimentation.metrics.v1.ComputeMetricsRequest
+	1,  // 13: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:input_type -> experimentation.metrics.v1.ComputeGuardrailMetricsRequest
+	3,  // 14: experimentation.metrics.v1.MetricComputationService.ExportNotebook:input_type -> experimentation.metrics.v1.ExportNotebookRequest
+	5,  // 15: experimentation.metrics.v1.MetricComputationService.GetQueryLog:input_type -> experimentation.metrics.v1.GetQueryLogRequest
+	8,  // 16: experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview:input_type -> experimentation.metrics.v1.CompileMetricqlPreviewRequest
+	10, // 17: experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation:input_type -> experimentation.metrics.v1.ScheduleShadowComputationRequest
+	12, // 18: experimentation.metrics.v1.MetricComputationService.GetShadowResults:input_type -> experimentation.metrics.v1.GetShadowResultsRequest
+	15, // 19: experimentation.metrics.v1.MetricComputationService.PromoteShadowResult:input_type -> experimentation.metrics.v1.PromoteShadowResultRequest
+	2,  // 20: experimentation.metrics.v1.MetricComputationService.ComputeMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
+	2,  // 21: experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics:output_type -> experimentation.metrics.v1.ComputeMetricsResponse
+	4,  // 22: experimentation.metrics.v1.MetricComputationService.ExportNotebook:output_type -> experimentation.metrics.v1.ExportNotebookResponse
+	6,  // 23: experimentation.metrics.v1.MetricComputationService.GetQueryLog:output_type -> experimentation.metrics.v1.GetQueryLogResponse
+	9,  // 24: experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview:output_type -> experimentation.metrics.v1.CompileMetricqlPreviewResponse
+	11, // 25: experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation:output_type -> experimentation.metrics.v1.ScheduleShadowComputationResponse
+	13, // 26: experimentation.metrics.v1.MetricComputationService.GetShadowResults:output_type -> experimentation.metrics.v1.GetShadowResultsResponse
+	16, // 27: experimentation.metrics.v1.MetricComputationService.PromoteShadowResult:output_type -> experimentation.metrics.v1.PromoteShadowResultResponse
+	20, // [20:28] is the sub-list for method output_type
+	12, // [12:20] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_experimentation_metrics_v1_metrics_service_proto_init() }
@@ -746,7 +1256,7 @@ func file_experimentation_metrics_v1_metrics_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_experimentation_metrics_v1_metrics_service_proto_rawDesc), len(file_experimentation_metrics_v1_metrics_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
