@@ -286,7 +286,7 @@ describe('MetricqlEditor', () => {
   // so the editor must register the linter unconditionally and forward the
   // raw value (null / undefined / '') through to the RPC boundary.
 
-  test('linter_fires_when_experimentId_is_undefined_global_scope', async () => {
+  test('linter fires when experimentId is undefined (global-scope path)', async () => {
     const { validateMetricql } = await import('@/lib/api');
     const mocked = vi.mocked(validateMetricql);
     mocked.mockResolvedValueOnce({
@@ -330,7 +330,7 @@ describe('MetricqlEditor', () => {
     );
   });
 
-  test('linter_fires_when_experimentId_is_null_global_scope', async () => {
+  test('linter fires when experimentId is null (global-scope path)', async () => {
     const { validateMetricql } = await import('@/lib/api');
     const mocked = vi.mocked(validateMetricql);
     mocked.mockResolvedValueOnce({

@@ -272,6 +272,12 @@ describe('MetricqlSection', () => {
       },
       { timeout: 3000 },
     );
+
+    // MetricqlSection normalises `experimentId ?? ''` for MetricqlPreview
+    // (which requires a non-nullable string). Verify the preview stub
+    // receives the empty wire signal, mirroring the linter's RPC wire shape.
+    const previewToggle = screen.getByTestId('metricql-preview-toggle');
+    expect(previewToggle.getAttribute('data-experiment-id')).toBe('');
   });
 
   test('linter activates when experimentId prop is omitted entirely', async () => {
