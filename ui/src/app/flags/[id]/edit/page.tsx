@@ -120,11 +120,14 @@ function EditFlagContent() {
 
       <form onSubmit={handleSubmit} className="max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-sm" data-testid="edit-flag-form">
         <div className="mb-4">
-          <label htmlFor="flag-name" className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+          <label htmlFor="flag-name" className="mb-1 block text-sm font-medium text-gray-700">
+            Name <span className="text-red-500">*</span>
+          </label>
           <input
             id="flag-name"
             type="text"
             required
+            aria-required="true"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"

@@ -233,10 +233,14 @@ function FlagDetailContent() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="primary-metric" className="mb-1 block text-xs font-medium text-gray-700">Primary Metric ID</label>
+                  <label htmlFor="primary-metric" className="mb-1 block text-xs font-medium text-gray-700">
+                    Primary Metric ID <span className="text-red-500">*</span>
+                  </label>
                   <input
                     id="primary-metric"
                     type="text"
+                    required
+                    aria-required="true"
                     value={primaryMetricId}
                     onChange={(e) => setPrimaryMetricId(e.target.value)}
                     placeholder="e.g. click_through_rate"
