@@ -87,6 +87,7 @@ EXCLUDE_FRAGMENTS = (
     "/graphify-out/",
 )
 EXCLUDE_SUFFIXES = (
+    # Canonical test-file conventions (per language).
     "_test.rs",
     "_test.go",
     "_test.py",
@@ -96,6 +97,25 @@ EXCLUDE_SUFFIXES = (
     ".spec.ts",
     ".spec.tsx",
     ".spec.js",
+    # Test-helper modules. Rust convention: a feature's test support lives
+    # in `<feature>_test_support.rs` or bare `test_support.rs` next to
+    # `lib.rs` (e.g. `crates/experimentation-management/src/contract_test_support.rs`).
+    # Same pattern for `_test_helpers`, `_test_utils`, `_test_fixtures`, and
+    # for the Go / TS equivalents. These files contain mock impls of trait /
+    # interface surfaces; stub markers in them are scaffolding, not work.
+    "test_support.rs",
+    "test_support.go",
+    "test_helpers.rs",
+    "test_helpers.go",
+    "test_helpers.ts",
+    "test_helpers.tsx",
+    "test_utils.rs",
+    "test_utils.go",
+    "test_utils.ts",
+    "test_utils.tsx",
+    "test_fixtures.rs",
+    "test_fixtures.go",
+    "test_fixtures.ts",
 )
 
 # Context window (lines above the marker) in which an allow comment must
