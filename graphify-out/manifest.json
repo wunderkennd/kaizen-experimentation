@@ -115,17 +115,17 @@
     "semantic_hash": "29505cdedb9ff91ced230ec758044a03"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/metricql_corpus_parity.rs": {
-    "mtime": 1780173245.2973359,
+    "mtime": 1780338877.1850584,
     "ast_hash": "b0c3515c9520c43a129bef5f926ac651",
     "semantic_hash": "b0c3515c9520c43a129bef5f926ac651"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/custom_corpus_parity.rs": {
-    "mtime": 1780259061.935322,
+    "mtime": 1780350353.862924,
     "ast_hash": "d77b4bae9f55165aace7019ad77a140e",
     "semantic_hash": "d77b4bae9f55165aace7019ad77a140e"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/migration_report_test.rs": {
-    "mtime": 1780259061.9360957,
+    "mtime": 1780350353.86399,
     "ast_hash": "45e8ce19c267138056b56de8ae0caf07",
     "semantic_hash": "45e8ce19c267138056b56de8ae0caf07"
   },
@@ -145,17 +145,17 @@
     "semantic_hash": "6f8949679285cf7bc4631fbaba4c3fec"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/contract_preview_test.rs": {
-    "mtime": 1780173245.2972348,
-    "ast_hash": "2c64cd2a51f5954b1c1728f4ba50514b",
-    "semantic_hash": "2c64cd2a51f5954b1c1728f4ba50514b"
+    "mtime": 1780350353.8624856,
+    "ast_hash": "49b42860b1c62754632ad4c4d3a67a8d",
+    "semantic_hash": "49b42860b1c62754632ad4c4d3a67a8d"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/metric_deprecation_e2e_test.rs": {
-    "mtime": 1780259061.935878,
+    "mtime": 1780350353.863521,
     "ast_hash": "76003d0a8c46f24449400154f92bb4d0",
     "semantic_hash": "76003d0a8c46f24449400154f92bb4d0"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/custom_migrator_cli_test.rs": {
-    "mtime": 1780259061.9355423,
+    "mtime": 1780350353.8631868,
     "ast_hash": "0132cb6d07dc37300384d9916d1cd0ef",
     "semantic_hash": "0132cb6d07dc37300384d9916d1cd0ef"
   },
@@ -165,7 +165,7 @@
     "semantic_hash": "ab2a4787fe6fb71d8198d430a4241bba"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/testdata/report.golden.json": {
-    "mtime": 1780259061.936482,
+    "mtime": 1780350353.8644357,
     "ast_hash": "fa2d0e668611074eccce049f85fdf4cd",
     "semantic_hash": "fa2d0e668611074eccce049f85fdf4cd"
   },
@@ -180,27 +180,27 @@
     "semantic_hash": "29a859f8ab47f25732885fe49ba531c3"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/contract_test_support.rs": {
-    "mtime": 1780173245.295283,
+    "mtime": 1780362981.9006844,
     "ast_hash": "1958566aef4af559b4c44f7d72945839",
     "semantic_hash": "1958566aef4af559b4c44f7d72945839"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/config.rs": {
-    "mtime": 1780173245.2948515,
+    "mtime": 1780338877.1761968,
     "ast_hash": "131ee903fcc34976c6d0ee0a4ccc3cfe",
     "semantic_hash": "131ee903fcc34976c6d0ee0a4ccc3cfe"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/lib.rs": {
-    "mtime": 1780259061.9321003,
+    "mtime": 1780350353.8572862,
     "ast_hash": "cd162c6cb1218c7ee110e522a43070a1",
     "semantic_hash": "cd162c6cb1218c7ee110e522a43070a1"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/store.rs": {
-    "mtime": 1780173245.2959504,
+    "mtime": 1780362981.9020514,
     "ast_hash": "6348d6082629620d37952fedc310c41a",
     "semantic_hash": "6348d6082629620d37952fedc310c41a"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/grpc.rs": {
-    "mtime": 1780259061.9315648,
+    "mtime": 1780362981.9014218,
     "ast_hash": "4e5ecd38d9dc5100de8734d5904bfc56",
     "semantic_hash": "4e5ecd38d9dc5100de8734d5904bfc56"
   },
@@ -220,17 +220,17 @@
     "semantic_hash": "e2f832ac38c39aa67ebafbbef948c297"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/bin/custom_migrator.rs": {
-    "mtime": 1780259061.9305766,
+    "mtime": 1780362981.9002812,
     "ast_hash": "07c911600e00b17f504b4482c4e85365",
     "semantic_hash": "07c911600e00b17f504b4482c4e85365"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/cycle.rs": {
-    "mtime": 1780173245.2960846,
+    "mtime": 1780338877.1817875,
     "ast_hash": "6b1ea5fb0b902de3830780b764f2efcd",
     "semantic_hash": "6b1ea5fb0b902de3830780b764f2efcd"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/mod.rs": {
-    "mtime": 1780173245.2971072,
+    "mtime": 1780338877.1830428,
     "ast_hash": "13c2b0e78ffae9ee35e34084ad19f979",
     "semantic_hash": "13c2b0e78ffae9ee35e34084ad19f979"
   },
@@ -240,67 +240,67 @@
     "semantic_hash": "a1ab2d29098f45821169ccc2c6de27f2"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/metricql/mod.rs": {
-    "mtime": 1780173245.2967365,
+    "mtime": 1780338877.1827106,
     "ast_hash": "bcde62d95a6c6368dbcf99ec4bd728c3",
     "semantic_hash": "bcde62d95a6c6368dbcf99ec4bd728c3"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/metricql/analyze.rs": {
-    "mtime": 1780173245.2962828,
+    "mtime": 1780338877.1819549,
     "ast_hash": "c092c7386bef5a134a3d1355076ed2ad",
     "semantic_hash": "c092c7386bef5a134a3d1355076ed2ad"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/metricql/ast.rs": {
-    "mtime": 1780173245.2964268,
+    "mtime": 1780338877.182358,
     "ast_hash": "e0b4d5458d16d2acadc4b70645589855",
     "semantic_hash": "e0b4d5458d16d2acadc4b70645589855"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/metricql/lexer.rs": {
-    "mtime": 1780173245.2966104,
+    "mtime": 1780338877.1825988,
     "ast_hash": "4a671f292a7861d194e2646522d0331a",
     "semantic_hash": "4a671f292a7861d194e2646522d0331a"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/metricql/diagnostic.rs": {
-    "mtime": 1780173245.2965076,
+    "mtime": 1780338877.1824865,
     "ast_hash": "509d573a5c8e6b714cbf9c8a13426ffb",
     "semantic_hash": "509d573a5c8e6b714cbf9c8a13426ffb"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/validators/metricql/parser.rs": {
-    "mtime": 1780173245.2968566,
+    "mtime": 1780338877.182829,
     "ast_hash": "c10bd895f267778b88b5a4ea4f60246b",
     "semantic_hash": "c10bd895f267778b88b5a4ea4f60246b"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/tier1.rs": {
-    "mtime": 1780259061.9346983,
+    "mtime": 1780350353.86112,
     "ast_hash": "57563c8acfb462f227d92b893362331c",
     "semantic_hash": "57563c8acfb462f227d92b893362331c"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/classifier.rs": {
-    "mtime": 1780259061.932641,
+    "mtime": 1780350353.8582568,
     "ast_hash": "3c3895afa2e558b6a590cf64e32a5f38",
     "semantic_hash": "3c3895afa2e558b6a590cf64e32a5f38"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/test_support.rs": {
-    "mtime": 1780259061.9341004,
+    "mtime": 1780350353.8603585,
     "ast_hash": "91e0cb70b36561e76f50db1d2203b9ba",
     "semantic_hash": "91e0cb70b36561e76f50db1d2203b9ba"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/report.rs": {
-    "mtime": 1780259061.9337556,
+    "mtime": 1780350353.8598933,
     "ast_hash": "5e2650bc805be8710351ac25b39302b4",
     "semantic_hash": "5e2650bc805be8710351ac25b39302b4"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/mod.rs": {
-    "mtime": 1780259061.9333522,
+    "mtime": 1780350353.8590856,
     "ast_hash": "bd3fd2f6db1f9cfdd4f10742e661ea9a",
     "semantic_hash": "bd3fd2f6db1f9cfdd4f10742e661ea9a"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/tier2.rs": {
-    "mtime": 1780259061.9350348,
+    "mtime": 1780350353.8616095,
     "ast_hash": "c74b9785a4a763ded911936e03afa7c8",
     "semantic_hash": "c74b9785a4a763ded911936e03afa7c8"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/src/migration/cli.rs": {
-    "mtime": 1780259061.9330595,
+    "mtime": 1780362981.9017618,
     "ast_hash": "a0bdbb566b019e4fdb217c0d17b15c9e",
     "semantic_hash": "a0bdbb566b019e4fdb217c0d17b15c9e"
   },
@@ -1305,7 +1305,7 @@
     "semantic_hash": "e802d73b30345ab159718a754e694f05"
   },
   "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/crates/experimentation-management/tests/testdata/report.golden.md": {
-    "mtime": 1780259061.9368205,
+    "mtime": 1780350353.864926,
     "ast_hash": "846089ef1db9c2e5d5ba9dced5b84e7d",
     "semantic_hash": "846089ef1db9c2e5d5ba9dced5b84e7d"
   },
@@ -1488,5 +1488,1555 @@
     "mtime": 1776566179.697839,
     "ast_hash": "37f16918e6334d1ac02845fdd9d83a1b",
     "semantic_hash": "37f16918e6334d1ac02845fdd9d83a1b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/web/package.json": {
+    "mtime": 1774238653.4286034,
+    "ast_hash": "e9df589478b335d7612beb3173e4ed8b",
+    "semantic_hash": "e9df589478b335d7612beb3173e4ed8b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/web/tsconfig.json": {
+    "mtime": 1774238653.4290318,
+    "ast_hash": "474d4c69157273a9fc68b06ecfac77f4",
+    "semantic_hash": "474d4c69157273a9fc68b06ecfac77f4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/web/src/index.test.ts": {
+    "mtime": 1774238653.4287412,
+    "ast_hash": "cea5637b5e3843f372f2f9d870c37252",
+    "semantic_hash": "cea5637b5e3843f372f2f9d870c37252"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/web/src/murmur3.ts": {
+    "mtime": 1774238653.428935,
+    "ast_hash": "62c9ac82bc38ed2ec9d9c00aed6d2cfa",
+    "semantic_hash": "62c9ac82bc38ed2ec9d9c00aed6d2cfa"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/web/src/index.ts": {
+    "mtime": 1774238653.428857,
+    "ast_hash": "2c7d7d742acd8606e4c6c3aaeefb2429",
+    "semantic_hash": "2c7d7d742acd8606e4c6c3aaeefb2429"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-go/murmur3.go": {
+    "mtime": 1774238653.4271228,
+    "ast_hash": "6e280a05e4e99a1c284383aa7652596a",
+    "semantic_hash": "6e280a05e4e99a1c284383aa7652596a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-go/experimentation.go": {
+    "mtime": 1774238653.4267604,
+    "ast_hash": "19c3841dc35ba5e899307c3b6f2bfc66",
+    "semantic_hash": "19c3841dc35ba5e899307c3b6f2bfc66"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-go/hash_pure.go": {
+    "mtime": 1774277967.2593892,
+    "ast_hash": "673c61a99e8e2e0172330bcf07e40245",
+    "semantic_hash": "673c61a99e8e2e0172330bcf07e40245"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-go/experimentation_test.go": {
+    "mtime": 1774238653.426855,
+    "ast_hash": "20454ca3e80c0c4f4f3563e24eb81361",
+    "semantic_hash": "20454ca3e80c0c4f4f3563e24eb81361"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/ios/Package.swift": {
+    "mtime": 1774238653.4260225,
+    "ast_hash": "5efb0394d2f767c7d1ab34025e83af4e",
+    "semantic_hash": "5efb0394d2f767c7d1ab34025e83af4e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/ios/Tests/ExperimentationTests/LocalProviderTests.swift": {
+    "mtime": 1774238653.4264958,
+    "ast_hash": "c72f769f62adc086bc44e6a6bb78fc47",
+    "semantic_hash": "c72f769f62adc086bc44e6a6bb78fc47"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/ios/Tests/ExperimentationTests/MockProviderTests.swift": {
+    "mtime": 1774238653.4265652,
+    "ast_hash": "111184ea24a5870fa6edc08e4df055b0",
+    "semantic_hash": "111184ea24a5870fa6edc08e4df055b0"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/ios/Sources/Experimentation/LocalProvider.swift": {
+    "mtime": 1774238653.4263275,
+    "ast_hash": "c845af3bd2b63c96fcbedfcf6d635972",
+    "semantic_hash": "c845af3bd2b63c96fcbedfcf6d635972"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/ios/Sources/Experimentation/ExperimentClient.swift": {
+    "mtime": 1774238653.4262497,
+    "ast_hash": "54e1a3d8bc7c8d51ad4c24bfbe651b64",
+    "semantic_hash": "54e1a3d8bc7c8d51ad4c24bfbe651b64"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/experimentation/client.py": {
+    "mtime": 1774244209.188341,
+    "ast_hash": "e42441c8b1600f1951f649aba684b400",
+    "semantic_hash": "e42441c8b1600f1951f649aba684b400"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/experimentation/__init__.py": {
+    "mtime": 1774238653.4272714,
+    "ast_hash": "dab2d667144d5a60b4b67479abe68d6c",
+    "semantic_hash": "dab2d667144d5a60b4b67479abe68d6c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/experimentation/types.py": {
+    "mtime": 1774238653.4275105,
+    "ast_hash": "97e0a0edc0f0dce1052b84b126c7e4cf",
+    "semantic_hash": "97e0a0edc0f0dce1052b84b126c7e4cf"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/experimentation/providers.py": {
+    "mtime": 1774238653.4274395,
+    "ast_hash": "ec4d3772d133d0c0fb9f5e8495191f7c",
+    "semantic_hash": "ec4d3772d133d0c0fb9f5e8495191f7c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/tests/test_remote_provider.py": {
+    "mtime": 1774238653.428425,
+    "ast_hash": "93ddce092041546483d9c4412599e276",
+    "semantic_hash": "93ddce092041546483d9c4412599e276"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/tests/test_mock_provider.py": {
+    "mtime": 1774238653.428288,
+    "ast_hash": "97b57f6c8c8067417a57ff4b2836a262",
+    "semantic_hash": "97b57f6c8c8067417a57ff4b2836a262"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/tests/__init__.py": {
+    "mtime": 1774238653.428106,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/tests/test_local_provider.py": {
+    "mtime": 1774238653.4282048,
+    "ast_hash": "e78897cb98d4e3fb1cd05efdf903b996",
+    "semantic_hash": "e78897cb98d4e3fb1cd05efdf903b996"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/src/experimentation/client.py": {
+    "mtime": 1774244209.1884568,
+    "ast_hash": "e42441c8b1600f1951f649aba684b400",
+    "semantic_hash": "e42441c8b1600f1951f649aba684b400"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/src/experimentation/__init__.py": {
+    "mtime": 1774238653.427761,
+    "ast_hash": "2a6ece77186c29b1ff58d1c64f80aaf8",
+    "semantic_hash": "2a6ece77186c29b1ff58d1c64f80aaf8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/src/experimentation/types.py": {
+    "mtime": 1774238653.4280167,
+    "ast_hash": "97e0a0edc0f0dce1052b84b126c7e4cf",
+    "semantic_hash": "97e0a0edc0f0dce1052b84b126c7e4cf"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/server-python/src/experimentation/providers.py": {
+    "mtime": 1774238653.4279203,
+    "ast_hash": "ec4d3772d133d0c0fb9f5e8495191f7c",
+    "semantic_hash": "ec4d3772d133d0c0fb9f5e8495191f7c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/gradlew": {
+    "mtime": 1774238653.4248636,
+    "ast_hash": "f2cc5dea1e5914d55cee1ecf4f8d6038",
+    "semantic_hash": "f2cc5dea1e5914d55cee1ecf4f8d6038"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/build.gradle.kts": {
+    "mtime": 1774238653.4243193,
+    "ast_hash": "377de62a7676a786ce227fe8a13b11a7",
+    "semantic_hash": "377de62a7676a786ce227fe8a13b11a7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/settings.gradle.kts": {
+    "mtime": 1774238653.4249866,
+    "ast_hash": "8c17beb2b68dcd055141188dc35e98c4",
+    "semantic_hash": "8c17beb2b68dcd055141188dc35e98c4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/src/test/kotlin/com/experimentation/sdk/MockProviderTest.kt": {
+    "mtime": 1774238653.4258816,
+    "ast_hash": "93c6ce5b45df1b11669196a1a54a6035",
+    "semantic_hash": "93c6ce5b45df1b11669196a1a54a6035"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/src/test/kotlin/com/experimentation/sdk/LocalProviderTest.kt": {
+    "mtime": 1774244209.1882045,
+    "ast_hash": "a63c5c288bae0700c8e2accc17f445cb",
+    "semantic_hash": "a63c5c288bae0700c8e2accc17f445cb"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/src/main/kotlin/com/experimentation/sdk/ExperimentClient.kt": {
+    "mtime": 1774238653.4253519,
+    "ast_hash": "a58fafed8ddd25c558606ac046fcc712",
+    "semantic_hash": "a58fafed8ddd25c558606ac046fcc712"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/sdks/android/src/main/kotlin/com/experimentation/sdk/LocalProvider.kt": {
+    "mtime": 1774238653.425445,
+    "ast_hash": "5acff68d8931465127fbcc3bbb9c75c6",
+    "semantic_hash": "5acff68d8931465127fbcc3bbb9c75c6"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/cmd/main.go": {
+    "mtime": 1774694620.2679713,
+    "ast_hash": "a2187d827b61ceff6e34865fde6b275c",
+    "semantic_hash": "a2187d827b61ceff6e34865fde6b275c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/metrics/metrics.go": {
+    "mtime": 1774244209.1893651,
+    "ast_hash": "72bd4239ab91e429fa4b5815f2a1c9a0",
+    "semantic_hash": "72bd4239ab91e429fa4b5815f2a1c9a0"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/metrics/metrics_test.go": {
+    "mtime": 1774244209.1894581,
+    "ast_hash": "24dac3f93ce0c38372ae56ce7cc96bd1",
+    "semantic_hash": "24dac3f93ce0c38372ae56ce7cc96bd1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/auth/auth_test.go": {
+    "mtime": 1774238653.4346104,
+    "ast_hash": "399286a398fa6b6430edb6c1c9331f86",
+    "semantic_hash": "399286a398fa6b6430edb6c1c9331f86"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/auth/stream_interceptor.go": {
+    "mtime": 1774238653.434814,
+    "ast_hash": "263106051b83bf6c90e06fb26e36df02",
+    "semantic_hash": "263106051b83bf6c90e06fb26e36df02"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/auth/interceptor.go": {
+    "mtime": 1774901149.5656464,
+    "ast_hash": "897a8516073fd2d0ba37a5f52d45ff18",
+    "semantic_hash": "897a8516073fd2d0ba37a5f52d45ff18"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/auth/identity.go": {
+    "mtime": 1774238653.4346883,
+    "ast_hash": "e2929a19b4e27ff9a8b4897097265090",
+    "semantic_hash": "e2929a19b4e27ff9a8b4897097265090"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/fdr/controller.go": {
+    "mtime": 1774694620.268179,
+    "ast_hash": "4321e856f10ac67ebf8e1f658c1f2513",
+    "semantic_hash": "4321e856f10ac67ebf8e1f658c1f2513"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/fdr/controller_test.go": {
+    "mtime": 1774694620.2683184,
+    "ast_hash": "ffc15e83d9d122496f209c881f75dab9",
+    "semantic_hash": "ffc15e83d9d122496f209c881f75dab9"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/sequential/processor_test.go": {
+    "mtime": 1774244209.190064,
+    "ast_hash": "3a631792513b65a95b57237c774396ff",
+    "semantic_hash": "3a631792513b65a95b57237c774396ff"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/sequential/processor.go": {
+    "mtime": 1774238653.4372985,
+    "ast_hash": "bfe153257dd8cc6a8cfae1f18cf0ddf6",
+    "semantic_hash": "bfe153257dd8cc6a8cfae1f18cf0ddf6"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/sequential/consumer.go": {
+    "mtime": 1774244209.1895804,
+    "ast_hash": "e6d4b67404dfd90fed8b783b0748adfd",
+    "semantic_hash": "e6d4b67404dfd90fed8b783b0748adfd"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/state/machine_test.go": {
+    "mtime": 1774238653.4376373,
+    "ast_hash": "01aec2ac160f285eee67cd82cca9adc2",
+    "semantic_hash": "01aec2ac160f285eee67cd82cca9adc2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/state/machine.go": {
+    "mtime": 1774238653.4375517,
+    "ast_hash": "0a9214f41fef7b9337d743ad473352c2",
+    "semantic_hash": "0a9214f41fef7b9337d743ad473352c2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/streaming/notifier.go": {
+    "mtime": 1774238653.438976,
+    "ast_hash": "454a07ce40f5722471d2bf3cda18d3bc",
+    "semantic_hash": "454a07ce40f5722471d2bf3cda18d3bc"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/streaming/notifier_test.go": {
+    "mtime": 1774238653.439041,
+    "ast_hash": "35901e0b05d2dac2965f278e9f95d6a5",
+    "semantic_hash": "35901e0b05d2dac2965f278e9f95d6a5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/guardrail/processor_test.go": {
+    "mtime": 1774244209.1890693,
+    "ast_hash": "9324d290667732a7f89e7d89670c8537",
+    "semantic_hash": "9324d290667732a7f89e7d89670c8537"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/guardrail/processor.go": {
+    "mtime": 1774238653.4350739,
+    "ast_hash": "c5a7ae35895c4a16176ec1641b054f04",
+    "semantic_hash": "c5a7ae35895c4a16176ec1641b054f04"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/guardrail/consumer.go": {
+    "mtime": 1774244209.1889207,
+    "ast_hash": "ccdbb85b65a7046dfc3a1098dbe8cd7b",
+    "semantic_hash": "ccdbb85b65a7046dfc3a1098dbe8cd7b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/guardrail/alert_test.go": {
+    "mtime": 1774238653.4349225,
+    "ast_hash": "63692c5b89299d0a40b6b0f5737c7d84",
+    "semantic_hash": "63692c5b89299d0a40b6b0f5737c7d84"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/mlrate/publisher_test.go": {
+    "mtime": 1774694620.2692401,
+    "ast_hash": "8475db9967905d0d74f5fe96d8845f71",
+    "semantic_hash": "8475db9967905d0d74f5fe96d8845f71"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/mlrate/publisher.go": {
+    "mtime": 1774694620.2690766,
+    "ast_hash": "2cd72e01d7a9e9dcfc6e87445fee205b",
+    "semantic_hash": "2cd72e01d7a9e9dcfc6e87445fee205b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/surrogate/publisher_test.go": {
+    "mtime": 1774238653.4392228,
+    "ast_hash": "647d8bd5a74e1125ea5f858bcd26bb4b",
+    "semantic_hash": "647d8bd5a74e1125ea5f858bcd26bb4b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/surrogate/publisher.go": {
+    "mtime": 1774238653.439149,
+    "ast_hash": "89dba0a841f652800fbd5055443b90b7",
+    "semantic_hash": "89dba0a841f652800fbd5055443b90b7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/portfolio/optimizer_test.go": {
+    "mtime": 1774901149.567769,
+    "ast_hash": "c4edaa37d61b82d59f7b5efed14d1fb7",
+    "semantic_hash": "c4edaa37d61b82d59f7b5efed14d1fb7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/portfolio/optimizer.go": {
+    "mtime": 1774901149.5676396,
+    "ast_hash": "57a7965eed2b736a3925af74c1d97fe4",
+    "semantic_hash": "57a7965eed2b736a3925af74c1d97fe4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/service.go": {
+    "mtime": 1774901149.566916,
+    "ast_hash": "64fe73071f40bcd69cce40238af03199",
+    "semantic_hash": "64fe73071f40bcd69cce40238af03199"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/m1m5_contract_test.go": {
+    "mtime": 1774238653.436074,
+    "ast_hash": "ac8d1c1b4e4d7b485ee776d4161753f5",
+    "semantic_hash": "ac8d1c1b4e4d7b485ee776d4161753f5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/m5m6_contract_test.go": {
+    "mtime": 1774238653.4361775,
+    "ast_hash": "2673cbfe9a065c3eee31239a2784458c",
+    "semantic_hash": "2673cbfe9a065c3eee31239a2784458c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/stream.go": {
+    "mtime": 1774901149.567319,
+    "ast_hash": "f649680c5e588c062d0223d2d6d7d720",
+    "semantic_hash": "f649680c5e588c062d0223d2d6d7d720"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/surrogate.go": {
+    "mtime": 1774238653.4368153,
+    "ast_hash": "e8e69e9513e889f855b23624ed0e333c",
+    "semantic_hash": "e8e69e9513e889f855b23624ed0e333c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/stress_test.go": {
+    "mtime": 1775494711.3092568,
+    "ast_hash": "d1156f5791876fcb34a4afc0b3ba269d",
+    "semantic_hash": "d1156f5791876fcb34a4afc0b3ba269d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/targeting.go": {
+    "mtime": 1774238653.436894,
+    "ast_hash": "d03fb33eb9582639f4b35be478e7c72b",
+    "semantic_hash": "d03fb33eb9582639f4b35be478e7c72b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/layer.go": {
+    "mtime": 1774238653.4358654,
+    "ast_hash": "94dde6e15a746506cf8d84b7fc93d653",
+    "semantic_hash": "94dde6e15a746506cf8d84b7fc93d653"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/conclude.go": {
+    "mtime": 1775494711.3070104,
+    "ast_hash": "45d1ca6815ccb59c7d73a10a896d0cce",
+    "semantic_hash": "45d1ca6815ccb59c7d73a10a896d0cce"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/lifecycle.go": {
+    "mtime": 1775494711.3083243,
+    "ast_hash": "c56d4f15bd7ce4d60b07c8bf5d2a3527",
+    "semantic_hash": "c56d4f15bd7ce4d60b07c8bf5d2a3527"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/metricql_stubs.go": {
+    "mtime": 1780338877.1920998,
+    "ast_hash": "033977c0b1ccd3706b246ed0d0437e7f",
+    "semantic_hash": "033977c0b1ccd3706b246ed0d0437e7f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/stream_test.go": {
+    "mtime": 1774238653.4366255,
+    "ast_hash": "696d766f122e73b2ef1c2c488e210068",
+    "semantic_hash": "696d766f122e73b2ef1c2c488e210068"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/metric.go": {
+    "mtime": 1774238653.4362662,
+    "ast_hash": "0c754deccfa5d86808b731f8daa9ea26",
+    "semantic_hash": "0c754deccfa5d86808b731f8daa9ea26"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/portfolio_integration_test.go": {
+    "mtime": 1775494711.3087292,
+    "ast_hash": "258a70873966ed9caf87ddc5bf5fde42",
+    "semantic_hash": "258a70873966ed9caf87ddc5bf5fde42"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/integration_test.go": {
+    "mtime": 1775494711.3077793,
+    "ast_hash": "959d4ffa4440eea1dbf21fb9987d1dfb",
+    "semantic_hash": "959d4ffa4440eea1dbf21fb9987d1dfb"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/auth_helpers.go": {
+    "mtime": 1774238653.4353251,
+    "ast_hash": "d4603e1ccf6f6881fba1acb39d8d3f75",
+    "semantic_hash": "d4603e1ccf6f6881fba1acb39d8d3f75"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/portfolio.go": {
+    "mtime": 1774901149.566265,
+    "ast_hash": "1bb089a94555b2f44d0ba1162a573807",
+    "semantic_hash": "1bb089a94555b2f44d0ba1162a573807"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/experiment_crud.go": {
+    "mtime": 1774238653.4355872,
+    "ast_hash": "0b9c9ed04859c15901f3c12a77992a23",
+    "semantic_hash": "0b9c9ed04859c15901f3c12a77992a23"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/stream_management.go": {
+    "mtime": 1774901149.5674639,
+    "ast_hash": "7f020a58d8b69bbb9e3eb1a420666533",
+    "semantic_hash": "7f020a58d8b69bbb9e3eb1a420666533"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/metric_integration_test.go": {
+    "mtime": 1774277145.106209,
+    "ast_hash": "10b9b0f7929c088fff3b47eb9d2e2969",
+    "semantic_hash": "10b9b0f7929c088fff3b47eb9d2e2969"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/handlers/errors.go": {
+    "mtime": 1774238653.435457,
+    "ast_hash": "c934fc0805e93569a4a927489612a55a",
+    "semantic_hash": "c934fc0805e93569a4a927489612a55a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/adaptive/processor_test.go": {
+    "mtime": 1774345905.6878161,
+    "ast_hash": "9e0b613c633a3a55b1550d5507f0b777",
+    "semantic_hash": "9e0b613c633a3a55b1550d5507f0b777"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/adaptive/processor.go": {
+    "mtime": 1774345905.6873736,
+    "ast_hash": "247a3579178f531d701114cbcf47c8df",
+    "semantic_hash": "247a3579178f531d701114cbcf47c8df"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/adaptive/trigger.go": {
+    "mtime": 1774345905.688141,
+    "ast_hash": "b5e6b3857cefd2cebcb068de847b8b73",
+    "semantic_hash": "b5e6b3857cefd2cebcb068de847b8b73"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/metric_test.go": {
+    "mtime": 1774277145.1076784,
+    "ast_hash": "9c051f77e43017f76a484505071f87a3",
+    "semantic_hash": "9c051f77e43017f76a484505071f87a3"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/experiment_test.go": {
+    "mtime": 1775494711.3103883,
+    "ast_hash": "e11afbdc775c3db0c524bdb66f68c373",
+    "semantic_hash": "e11afbdc775c3db0c524bdb66f68c373"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/surrogate_test.go": {
+    "mtime": 1774238653.4399488,
+    "ast_hash": "161c456b4cf3ea9ff88ca398fbf7da5c",
+    "semantic_hash": "161c456b4cf3ea9ff88ca398fbf7da5c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/surrogate.go": {
+    "mtime": 1774238653.4398048,
+    "ast_hash": "4ea474866ab3457a8da1daebb1160607",
+    "semantic_hash": "4ea474866ab3457a8da1daebb1160607"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/targeting.go": {
+    "mtime": 1774238653.4400213,
+    "ast_hash": "87d483e0d2bb82a26e60451cba0d43e7",
+    "semantic_hash": "87d483e0d2bb82a26e60451cba0d43e7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/experiment.go": {
+    "mtime": 1775494711.3098857,
+    "ast_hash": "76c399f71b239cc3b4524a44ef84f2a8",
+    "semantic_hash": "76c399f71b239cc3b4524a44ef84f2a8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/validation/metric.go": {
+    "mtime": 1774277145.1073737,
+    "ast_hash": "c486853627b166d40e71a6d759674615",
+    "semantic_hash": "c486853627b166d40e71a6d759674615"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/audit.go": {
+    "mtime": 1774238653.4377694,
+    "ast_hash": "bcb01556991d90da2d411c87b3216361",
+    "semantic_hash": "bcb01556991d90da2d411c87b3216361"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/db.go": {
+    "mtime": 1774238653.4379697,
+    "ast_hash": "06e2226c09fafd025a02932c1d7ce479",
+    "semantic_hash": "06e2226c09fafd025a02932c1d7ce479"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/layer_convert.go": {
+    "mtime": 1774238653.438213,
+    "ast_hash": "edc48b49634e3d28130697290ee1f1a1",
+    "semantic_hash": "edc48b49634e3d28130697290ee1f1a1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/convert.go": {
+    "mtime": 1774901149.5683181,
+    "ast_hash": "145ad6c10e0594620a34f65945a7b184",
+    "semantic_hash": "145ad6c10e0594620a34f65945a7b184"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/surrogate.go": {
+    "mtime": 1774238653.438654,
+    "ast_hash": "f3d2451598c249837feaaf1e86184644",
+    "semantic_hash": "f3d2451598c249837feaaf1e86184644"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/targeting.go": {
+    "mtime": 1774238653.4387882,
+    "ast_hash": "c3b8a81a46fbb7c121ebd0a26e455f2d",
+    "semantic_hash": "c3b8a81a46fbb7c121ebd0a26e455f2d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/layer.go": {
+    "mtime": 1774238653.438147,
+    "ast_hash": "9b778d45384a32cda760a3edc451becd",
+    "semantic_hash": "9b778d45384a32cda760a3edc451becd"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/targeting_convert.go": {
+    "mtime": 1774238653.4388583,
+    "ast_hash": "c2b5a8a6ae09ad7135e0dbba46ea4c47",
+    "semantic_hash": "c2b5a8a6ae09ad7135e0dbba46ea4c47"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/experiment.go": {
+    "mtime": 1774901149.568718,
+    "ast_hash": "b43a75e08aa99ec8ea5a350468afea24",
+    "semantic_hash": "b43a75e08aa99ec8ea5a350468afea24"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/metric.go": {
+    "mtime": 1774277145.106646,
+    "ast_hash": "58e82306f907ae7cc580db4f5d40a9f9",
+    "semantic_hash": "58e82306f907ae7cc580db4f5d40a9f9"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/surrogate_convert.go": {
+    "mtime": 1774238653.4387176,
+    "ast_hash": "ddc8ad79559dbb5a75d9b3a0a59dc3fe",
+    "semantic_hash": "ddc8ad79559dbb5a75d9b3a0a59dc3fe"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/store/metric_convert.go": {
+    "mtime": 1774277145.1069465,
+    "ast_hash": "17156b131d4ab80818d26e7cba73b5de",
+    "semantic_hash": "17156b131d4ab80818d26e7cba73b5de"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/allocation/allocator.go": {
+    "mtime": 1774238653.4343457,
+    "ast_hash": "11c09eb8bc51e5a785de0ea70e8de472",
+    "semantic_hash": "11c09eb8bc51e5a785de0ea70e8de472"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/management/internal/allocation/allocator_test.go": {
+    "mtime": 1774244209.1887736,
+    "ast_hash": "4189e8bb6000451db056acc8fe562d82",
+    "semantic_hash": "4189e8bb6000451db056acc8fe562d82"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/cmd/main.go": {
+    "mtime": 1779122030.5897994,
+    "ast_hash": "63d6e246598f19268ce02791d3515150",
+    "semantic_hash": "63d6e246598f19268ce02791d3515150"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/session_level_mean_expected.sql": {
+    "mtime": 1774244209.1930668,
+    "ast_hash": "e0acb2638b8523995402bc63519f1c13",
+    "semantic_hash": "e0acb2638b8523995402bc63519f1c13"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/feedback_loop_contamination_expected.sql": {
+    "mtime": 1774282100.8602037,
+    "ast_hash": "85c6c3b0e2b88284bc6232cce6494f31",
+    "semantic_hash": "85c6c3b0e2b88284bc6232cce6494f31"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/mlrate_features_expected.sql": {
+    "mtime": 1775531791.6874769,
+    "ast_hash": "57e1065810979d1630102670ad0b8c76",
+    "semantic_hash": "57e1065810979d1630102670ad0b8c76"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/guardrail_metric_expected.sql": {
+    "mtime": 1774238653.4499574,
+    "ast_hash": "b45c4b1da5e78352350317577a5557ba",
+    "semantic_hash": "b45c4b1da5e78352350317577a5557ba"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/proportion_expected.sql": {
+    "mtime": 1774244209.1927032,
+    "ast_hash": "901611b8d7b7e80728b68d4caf6feeed",
+    "semantic_hash": "901611b8d7b7e80728b68d4caf6feeed"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/lifecycle_mean_expected.sql": {
+    "mtime": 1774244209.192489,
+    "ast_hash": "3a2378d3b1c1b9c7dd730068592aef7c",
+    "semantic_hash": "3a2378d3b1c1b9c7dd730068592aef7c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/windowed_count_with_filter_expected.sql": {
+    "mtime": 1778026664.1283834,
+    "ast_hash": "7508478a9fa9753b4565329ac30105e3",
+    "semantic_hash": "7508478a9fa9753b4565329ac30105e3"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/count_expected.sql": {
+    "mtime": 1774244209.1923816,
+    "ast_hash": "88b9d972fc5f18cca1a59b94a8d2762e",
+    "semantic_hash": "88b9d972fc5f18cca1a59b94a8d2762e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/cuped_covariate_expected.sql": {
+    "mtime": 1774238653.4497948,
+    "ast_hash": "49ebfc1d4f06e06c0b7cdddf59096d14",
+    "semantic_hash": "49ebfc1d4f06e06c0b7cdddf59096d14"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/ebvs_rate_expected.sql": {
+    "mtime": 1776721247.722939,
+    "ast_hash": "3d9d858dcb675816e62cccc599645e91",
+    "semantic_hash": "3d9d858dcb675816e62cccc599645e91"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/windowed_count_1h_expected.sql": {
+    "mtime": 1778026664.127712,
+    "ast_hash": "f6ab3964d5f44da0a51678391262f034",
+    "semantic_hash": "f6ab3964d5f44da0a51678391262f034"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_add_expected.sql": {
+    "mtime": 1778026664.1230547,
+    "ast_hash": "4fb6a0667ce6eb3ec3bac9be83faaa1d",
+    "semantic_hash": "4fb6a0667ce6eb3ec3bac9be83faaa1d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_multiply_expected.sql": {
+    "mtime": 1778026664.1241937,
+    "ast_hash": "a4874e51b7e59084f4ca3d0ae4e20964",
+    "semantic_hash": "a4874e51b7e59084f4ca3d0ae4e20964"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/mean_expected.sql": {
+    "mtime": 1774244209.1926074,
+    "ast_hash": "6713faa55bae88bf1861447159922f3f",
+    "semantic_hash": "6713faa55bae88bf1861447159922f3f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/filtered_mean_multi_clause_expected.sql": {
+    "mtime": 1778026664.1257155,
+    "ast_hash": "927470f4b52a7bd5da3cf169106d150f",
+    "semantic_hash": "927470f4b52a7bd5da3cf169106d150f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/ratio_delta_method_expected.sql": {
+    "mtime": 1774238653.4504507,
+    "ast_hash": "4fdcf75185c36ad856c6e5917c035926",
+    "semantic_hash": "4fdcf75185c36ad856c6e5917c035926"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/qoe_metric_expected.sql": {
+    "mtime": 1774244209.1928163,
+    "ast_hash": "59f278830974e841393ca95f2f050149",
+    "semantic_hash": "59f278830974e841393ca95f2f050149"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/interleaving_score_expected.sql": {
+    "mtime": 1774238653.450033,
+    "ast_hash": "1255fe00646a5f5a0f7b05779d230935",
+    "semantic_hash": "1255fe00646a5f5a0f7b05779d230935"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/qoe_engagement_correlation_expected.sql": {
+    "mtime": 1774238653.4503174,
+    "ast_hash": "c7d432ec7511e7212aa67d9144a83eab",
+    "semantic_hash": "c7d432ec7511e7212aa67d9144a83eab"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_weighted_sum_nonuniform_expected.sql": {
+    "mtime": 1778026664.1248016,
+    "ast_hash": "464be14810830354d04ef04f47c83fc8",
+    "semantic_hash": "464be14810830354d04ef04f47c83fc8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/ratio_expected.sql": {
+    "mtime": 1774244209.1929405,
+    "ast_hash": "dc4783f0baada138b528ce6590dd1b3e",
+    "semantic_hash": "dc4783f0baada138b528ce6590dd1b3e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/content_consumption_expected.sql": {
+    "mtime": 1774238653.4496508,
+    "ast_hash": "f9830bca8932b1bdf82defa22b4f1c1f",
+    "semantic_hash": "f9830bca8932b1bdf82defa22b4f1c1f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_subtract_expected.sql": {
+    "mtime": 1778026664.1245146,
+    "ast_hash": "d27b98c43b2526a62ba412227c9b3877",
+    "semantic_hash": "d27b98c43b2526a62ba412227c9b3877"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/windowed_count_no_filter_expected.sql": {
+    "mtime": 1778026664.1280355,
+    "ast_hash": "0fa6f5fa018a93b519fac58b1dd7e12e",
+    "semantic_hash": "0fa6f5fa018a93b519fac58b1dd7e12e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/windowed_count_168h_expected.sql": {
+    "mtime": 1778026664.1271245,
+    "ast_hash": "3596b5708badceb8b3c72980f794693f",
+    "semantic_hash": "3596b5708badceb8b3c72980f794693f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_weighted_sum_three_operands_expected.sql": {
+    "mtime": 1778026664.1251771,
+    "ast_hash": "13e333330d009f2797bc9a2a3075eaa1",
+    "semantic_hash": "13e333330d009f2797bc9a2a3075eaa1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/filtered_mean_simple_expected.sql": {
+    "mtime": 1778026664.1259732,
+    "ast_hash": "8740786664d3bd53ca461923324cde45",
+    "semantic_hash": "8740786664d3bd53ca461923324cde45"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_weighted_sum_uniform_expected.sql": {
+    "mtime": 1778026664.1254349,
+    "ast_hash": "d2d6503a645ed844e7962b08b7c8bc83",
+    "semantic_hash": "d2d6503a645ed844e7962b08b7c8bc83"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/mlrate_crossfit_predict_expected.sql": {
+    "mtime": 1775531791.6872525,
+    "ast_hash": "ac1554fed4101660c1ece8925823cac4",
+    "semantic_hash": "ac1554fed4101660c1ece8925823cac4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/daily_treatment_effect_expected.sql": {
+    "mtime": 1774238653.449884,
+    "ast_hash": "005cf6080de1554542f024e409675fc1",
+    "semantic_hash": "005cf6080de1554542f024e409675fc1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/filtered_mean_value_column_filter_expected.sql": {
+    "mtime": 1778026664.1263356,
+    "ast_hash": "65f98feee0ec26c142256b237c4c9dcd",
+    "semantic_hash": "65f98feee0ec26c142256b237c4c9dcd"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/surrogate_input_expected.sql": {
+    "mtime": 1774238653.4506524,
+    "ast_hash": "0106b75cd4d59277ad89be33c3ba0ae8",
+    "semantic_hash": "0106b75cd4d59277ad89be33c3ba0ae8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/golden/composite_divide_expected.sql": {
+    "mtime": 1778026664.1236951,
+    "ast_hash": "5468bfca8469aea7df211af8ece725ee",
+    "semantic_hash": "5468bfca8469aea7df211af8ece725ee"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/testdata/synthetic/generator.go": {
+    "mtime": 1774238653.4507766,
+    "ast_hash": "51d4392b5914c78c6b9c07945ddda935",
+    "semantic_hash": "51d4392b5914c78c6b9c07945ddda935"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/m3m4_edge_case_contract_test.go": {
+    "mtime": 1774244209.190854,
+    "ast_hash": "68ca55bf8bf03fd1b25ea97b21bcfbe5",
+    "semantic_hash": "68ca55bf8bf03fd1b25ea97b21bcfbe5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/m3m5_wire_format_contract_test.go": {
+    "mtime": 1779514776.2400692,
+    "ast_hash": "b5e24a01be4349a13a7c73ef301db662",
+    "semantic_hash": "b5e24a01be4349a13a7c73ef301db662"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/m3m4_contract_test.go": {
+    "mtime": 1779067520.15661,
+    "ast_hash": "6f043b99da89540d5b98e5f65aff4dc8",
+    "semantic_hash": "6f043b99da89540d5b98e5f65aff4dc8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/m3m4_pg_cache_contract_test.go": {
+    "mtime": 1774238653.4448283,
+    "ast_hash": "adfeb7080c3457d741f729e36943d60d",
+    "semantic_hash": "adfeb7080c3457d741f729e36943d60d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/integration_test.go": {
+    "mtime": 1779122030.5902586,
+    "ast_hash": "605af6acbdfdda92451014633f8989eb",
+    "semantic_hash": "605af6acbdfdda92451014633f8989eb"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/handler.go": {
+    "mtime": 1780350353.870445,
+    "ast_hash": "a36c1537c92ccb8d8793572e7dd71481",
+    "semantic_hash": "a36c1537c92ccb8d8793572e7dd71481"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/preview.go": {
+    "mtime": 1780338877.1928995,
+    "ast_hash": "3b5f8b6c8ed05491afb516454be9ea10",
+    "semantic_hash": "3b5f8b6c8ed05491afb516454be9ea10"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/handler_coverage_test.go": {
+    "mtime": 1774238653.4424405,
+    "ast_hash": "0e2536c77b3426817a297c6294992fff",
+    "semantic_hash": "0e2536c77b3426817a297c6294992fff"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/preview_test.go": {
+    "mtime": 1780338877.1929805,
+    "ast_hash": "92a78a3c337077be6183e2b3c9b91623",
+    "semantic_hash": "92a78a3c337077be6183e2b3c9b91623"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/handler_test.go": {
+    "mtime": 1774238653.4425504,
+    "ast_hash": "c74996783f2b589527a9ee5fb5a3de61",
+    "semantic_hash": "c74996783f2b589527a9ee5fb5a3de61"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/shadow_handler_test.go": {
+    "mtime": 1780350353.8715749,
+    "ast_hash": "b9a0727490ac2f8f3321e80d7c8fd583",
+    "semantic_hash": "b9a0727490ac2f8f3321e80d7c8fd583"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/handler/shadow_handler.go": {
+    "mtime": 1780350353.871049,
+    "ast_hash": "9d40d7d00a7ae4211508a8d6ce02ad0e",
+    "semantic_hash": "9d40d7d00a7ae4211508a8d6ce02ad0e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metrics/metrics.go": {
+    "mtime": 1774238653.445093,
+    "ast_hash": "e46283fda04e6be5ed364920ce720417",
+    "semantic_hash": "e46283fda04e6be5ed364920ce720417"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metrics/metrics_test.go": {
+    "mtime": 1774238653.4451728,
+    "ast_hash": "4910f7ccc8c707cf9355e7fc350f4756",
+    "semantic_hash": "4910f7ccc8c707cf9355e7fc350f4756"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/config/loader.go": {
+    "mtime": 1779514776.2364666,
+    "ast_hash": "92e190dc3dfa3682a7d61875fc921893",
+    "semantic_hash": "92e190dc3dfa3682a7d61875fc921893"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/config/loader_coverage_test.go": {
+    "mtime": 1774238653.4413252,
+    "ast_hash": "dcf653083ca5f4069ae67be5f6e4294e",
+    "semantic_hash": "dcf653083ca5f4069ae67be5f6e4294e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/config/bench_test.go": {
+    "mtime": 1774238653.4411526,
+    "ast_hash": "cb894c3cd09c01222aa87c02764aa93b",
+    "semantic_hash": "cb894c3cd09c01222aa87c02764aa93b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/config/loader_test.go": {
+    "mtime": 1778120921.168091,
+    "ast_hash": "8b82e0640b202a98cecb6bbb80673487",
+    "semantic_hash": "8b82e0640b202a98cecb6bbb80673487"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/config/testdata/seed_adr026_phase1.json": {
+    "mtime": 1778295467.3480616,
+    "ast_hash": "09df8da42e14f2097501367a2be6144a",
+    "semantic_hash": "09df8da42e14f2097501367a2be6144a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/config/testdata/seed_config.json": {
+    "mtime": 1775531791.6826084,
+    "ast_hash": "8dae453a5aa6a666f9ca937f14226275",
+    "semantic_hash": "8dae453a5aa6a666f9ca937f14226275"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/store_test.go": {
+    "mtime": 1780350353.880806,
+    "ast_hash": "bbc8ae7d9843967b429df3d3ac4f07a2",
+    "semantic_hash": "bbc8ae7d9843967b429df3d3ac4f07a2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/store.go": {
+    "mtime": 1780350353.8805327,
+    "ast_hash": "a46e5d2c5e573b4a70f6e1e77ba82538",
+    "semantic_hash": "a46e5d2c5e573b4a70f6e1e77ba82538"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/mock_store.go": {
+    "mtime": 1780350353.8787315,
+    "ast_hash": "b7bf6b5d9e97eb11c0f613bd08cc1a04",
+    "semantic_hash": "b7bf6b5d9e97eb11c0f613bd08cc1a04"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/mock_store_test.go": {
+    "mtime": 1780350353.8791146,
+    "ast_hash": "6b6355f6f70d576dc647c3568a26e3bf",
+    "semantic_hash": "6b6355f6f70d576dc647c3568a26e3bf"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/promote.go": {
+    "mtime": 1780350353.879466,
+    "ast_hash": "836df9b9bfe3b49ac8b27d69b519cc30",
+    "semantic_hash": "836df9b9bfe3b49ac8b27d69b519cc30"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/differ.go": {
+    "mtime": 1780350353.87783,
+    "ast_hash": "5c9f77eb0a7310fbe42c922604c82496",
+    "semantic_hash": "5c9f77eb0a7310fbe42c922604c82496"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/promote_test.go": {
+    "mtime": 1780350353.879852,
+    "ast_hash": "306d99885e441eda501affbf883d2d30",
+    "semantic_hash": "306d99885e441eda501affbf883d2d30"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/differ_test.go": {
+    "mtime": 1780350353.8782408,
+    "ast_hash": "a77cbdb6d95d85dce9ae6056c90db925",
+    "semantic_hash": "a77cbdb6d95d85dce9ae6056c90db925"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/shadow/shadow.go": {
+    "mtime": 1780350353.8802192,
+    "ast_hash": "7fafc5f2cf22d7f40f3a0a83bc396893",
+    "semantic_hash": "7fafc5f2cf22d7f40f3a0a83bc396893"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/status/pg_writer.go": {
+    "mtime": 1779122030.5935228,
+    "ast_hash": "64492b473c9443c74e266469b663cd24",
+    "semantic_hash": "64492b473c9443c74e266469b663cd24"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/status/status.go": {
+    "mtime": 1779122030.593796,
+    "ast_hash": "13defcd8efd1e75bfcb7c333580ab908",
+    "semantic_hash": "13defcd8efd1e75bfcb7c333580ab908"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/status/mock_writer.go": {
+    "mtime": 1779122030.592992,
+    "ast_hash": "fa71fd582d9432d9aafb190e6f1df238",
+    "semantic_hash": "fa71fd582d9432d9aafb190e6f1df238"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/status/pg_writer_test.go": {
+    "mtime": 1779122030.593669,
+    "ast_hash": "ce3e025fa42a657fa033e59400545cb8",
+    "semantic_hash": "ce3e025fa42a657fa033e59400545cb8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/recalconsumer/consumer.go": {
+    "mtime": 1774238653.4456797,
+    "ast_hash": "8203b79cb0c4ad6d28356ab5a614e8e0",
+    "semantic_hash": "8203b79cb0c4ad6d28356ab5a614e8e0"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/recalconsumer/consumer_test.go": {
+    "mtime": 1774238653.4457767,
+    "ast_hash": "17f93ae1fab26f4118f3e8dd66eaf58e",
+    "semantic_hash": "17f93ae1fab26f4118f3e8dd66eaf58e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/publisher_test.go": {
+    "mtime": 1774238653.440774,
+    "ast_hash": "3805f3144d5306e77a1d54960c651e4d",
+    "semantic_hash": "3805f3144d5306e77a1d54960c651e4d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/publisher_integration_test.go": {
+    "mtime": 1774238653.4406965,
+    "ast_hash": "a516a20b506d2e1885536d7c1c5ddf87",
+    "semantic_hash": "a516a20b506d2e1885536d7c1c5ddf87"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/tracker.go": {
+    "mtime": 1774238653.440845,
+    "ast_hash": "33a34319c3ac81718bb1a25a956c976a",
+    "semantic_hash": "33a34319c3ac81718bb1a25a956c976a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/tracker_test.go": {
+    "mtime": 1774238653.4409978,
+    "ast_hash": "1f32447d20be61f46fdb51fbd48640f5",
+    "semantic_hash": "1f32447d20be61f46fdb51fbd48640f5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/m3m5_schema_test.go": {
+    "mtime": 1774238653.4405422,
+    "ast_hash": "65e4885bd70cf0adee7591dae4d163e4",
+    "semantic_hash": "65e4885bd70cf0adee7591dae4d163e4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/m3m5_guardrail_contract_test.go": {
+    "mtime": 1774238653.4404643,
+    "ast_hash": "247f5876a7b6b34ac1ff7c12ca3bd42a",
+    "semantic_hash": "247f5876a7b6b34ac1ff7c12ca3bd42a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/tracker_coverage_test.go": {
+    "mtime": 1774238653.4409206,
+    "ast_hash": "eaee6bdbb6d2ea916a523b82109f4071",
+    "semantic_hash": "eaee6bdbb6d2ea916a523b82109f4071"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/alerts/publisher.go": {
+    "mtime": 1774238653.4406118,
+    "ast_hash": "0b2cbca8a850541bb5770415220ea3f8",
+    "semantic_hash": "0b2cbca8a850541bb5770415220ea3f8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/surrogate/model_test.go": {
+    "mtime": 1774238653.4492648,
+    "ast_hash": "5c90bf1065c48cf649489199712521b1",
+    "semantic_hash": "5c90bf1065c48cf649489199712521b1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/surrogate/writer_test.go": {
+    "mtime": 1774238653.449451,
+    "ast_hash": "e8f1deb269eb209d013b48848692137d",
+    "semantic_hash": "e8f1deb269eb209d013b48848692137d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/surrogate/writer.go": {
+    "mtime": 1774238653.4493647,
+    "ast_hash": "ed5e024186837fab65f839feb64bfb17",
+    "semantic_hash": "ed5e024186837fab65f839feb64bfb17"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/surrogate/model.go": {
+    "mtime": 1774238653.4491699,
+    "ast_hash": "9666d193c1bfc80b114e2e74fecf0194",
+    "semantic_hash": "9666d193c1bfc80b114e2e74fecf0194"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/export/databricks_test.go": {
+    "mtime": 1774238653.4419816,
+    "ast_hash": "9609690e5d3ac6bf8f676d339516eb18",
+    "semantic_hash": "9609690e5d3ac6bf8f676d339516eb18"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/export/bench_test.go": {
+    "mtime": 1774238653.4417636,
+    "ast_hash": "b3277ea111e92461f43b69d966ab1486",
+    "semantic_hash": "b3277ea111e92461f43b69d966ab1486"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/export/notebook_test.go": {
+    "mtime": 1774238653.4421353,
+    "ast_hash": "edc7c26183ca1bdff64056df3c44ac52",
+    "semantic_hash": "edc7c26183ca1bdff64056df3c44ac52"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/export/notebook.go": {
+    "mtime": 1774238653.4420598,
+    "ast_hash": "4f5685946ba2160020809a5b8eb8fb7c",
+    "semantic_hash": "4f5685946ba2160020809a5b8eb8fb7c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/export/databricks.go": {
+    "mtime": 1774238653.4418883,
+    "ast_hash": "dba3e2b8f3f67a391ef444c1ead69a4f",
+    "semantic_hash": "dba3e2b8f3f67a391ef444c1ead69a4f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/content_consumption_test.go": {
+    "mtime": 1774238653.4430482,
+    "ast_hash": "17fefa79bfca082caaf76156dc84ba13",
+    "semantic_hash": "17fefa79bfca082caaf76156dc84ba13"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/chaos_test.go": {
+    "mtime": 1774244209.1904838,
+    "ast_hash": "98ef7fda02891d51409b8ef720b65e61",
+    "semantic_hash": "98ef7fda02891d51409b8ef720b65e61"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/content_consumption.go": {
+    "mtime": 1774238653.4429557,
+    "ast_hash": "5cc750cdd80b9a67ec8551b53dd60594",
+    "semantic_hash": "5cc750cdd80b9a67ec8551b53dd60594"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/status_map.go": {
+    "mtime": 1779514776.239442,
+    "ast_hash": "d330ed38cadf2b0fb5d4a9cca610c39f",
+    "semantic_hash": "d330ed38cadf2b0fb5d4a9cca610c39f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/recalibration.go": {
+    "mtime": 1774238653.4439714,
+    "ast_hash": "2a18eab8034f33720c381f16d521c884",
+    "semantic_hash": "2a18eab8034f33720c381f16d521c884"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/recalibration_test.go": {
+    "mtime": 1774238653.4440894,
+    "ast_hash": "1a11b66449396008eded15aead1c0725",
+    "semantic_hash": "1a11b66449396008eded15aead1c0725"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/mlrate.go": {
+    "mtime": 1775531791.6834633,
+    "ast_hash": "621ff8a0524d7194a66b8c2470ca2e5d",
+    "semantic_hash": "621ff8a0524d7194a66b8c2470ca2e5d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/shadow_runner_test.go": {
+    "mtime": 1780350353.8736317,
+    "ast_hash": "e5fd4f1b08e57c3e76850cad0242a2ff",
+    "semantic_hash": "e5fd4f1b08e57c3e76850cad0242a2ff"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/guardrail_test.go": {
+    "mtime": 1774238653.443535,
+    "ast_hash": "d9e50e46e33905b320c133d246317ada",
+    "semantic_hash": "d9e50e46e33905b320c133d246317ada"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/interleaving.go": {
+    "mtime": 1774238653.4436235,
+    "ast_hash": "37b6f3b42e05c5863b2c6280b9d98b96",
+    "semantic_hash": "37b6f3b42e05c5863b2c6280b9d98b96"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/dag.go": {
+    "mtime": 1779514776.2369206,
+    "ast_hash": "1724c86b933dc8e77b7f7e5532e25406",
+    "semantic_hash": "1724c86b933dc8e77b7f7e5532e25406"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/coverage_improvements_test.go": {
+    "mtime": 1779122030.5906994,
+    "ast_hash": "9b7d666e0ccb286ba84202e320483db3",
+    "semantic_hash": "9b7d666e0ccb286ba84202e320483db3"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/shadow_runner.go": {
+    "mtime": 1780350353.8721702,
+    "ast_hash": "7c25131f3e65ec298b242d0bf123c58c",
+    "semantic_hash": "7c25131f3e65ec298b242d0bf123c58c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/standard.go": {
+    "mtime": 1780350353.877208,
+    "ast_hash": "10cc0b400fd57bf82ebbf70a99770eb3",
+    "semantic_hash": "10cc0b400fd57bf82ebbf70a99770eb3"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/dag_test.go": {
+    "mtime": 1779514776.2373354,
+    "ast_hash": "1799f6822f88058e484ee22e2e132aae",
+    "semantic_hash": "1799f6822f88058e484ee22e2e132aae"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/mock_value_provider.go": {
+    "mtime": 1774238653.4439006,
+    "ast_hash": "890d5d52862cd2f299b7960c7525366e",
+    "semantic_hash": "890d5d52862cd2f299b7960c7525366e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/surrogate_test.go": {
+    "mtime": 1774238653.444385,
+    "ast_hash": "c7f6705016ea9142b8854c8a002576c7",
+    "semantic_hash": "c7f6705016ea9142b8854c8a002576c7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/surrogate.go": {
+    "mtime": 1774238653.444321,
+    "ast_hash": "31a22d4c5b7b59b553b81cb4eee89b30",
+    "semantic_hash": "31a22d4c5b7b59b553b81cb4eee89b30"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/shadow_runner_integration_test.go": {
+    "mtime": 1780350353.8728695,
+    "ast_hash": "78950f67f49ceaed8742e296dd9eca1a",
+    "semantic_hash": "78950f67f49ceaed8742e296dd9eca1a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/interleaving_test.go": {
+    "mtime": 1774238653.4437146,
+    "ast_hash": "b93a2470598adf43c6c939217b6620e8",
+    "semantic_hash": "b93a2470598adf43c6c939217b6620e8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/bench_test.go": {
+    "mtime": 1774238653.4427972,
+    "ast_hash": "14e5214724ac0ef86689e89c0e74315b",
+    "semantic_hash": "14e5214724ac0ef86689e89c0e74315b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/feedback_loop.go": {
+    "mtime": 1774282100.8588078,
+    "ast_hash": "b8ff6c20ebc664859b53ff68cef34915",
+    "semantic_hash": "b8ff6c20ebc664859b53ff68cef34915"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/provider_metrics.go": {
+    "mtime": 1774270015.1132455,
+    "ast_hash": "229064df823eb40a201bd05fce9eac6a",
+    "semantic_hash": "229064df823eb40a201bd05fce9eac6a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/e2e_pipeline_test.go": {
+    "mtime": 1774238653.4433231,
+    "ast_hash": "f7a69d1011b9fdc14965d9e1d3a6009f",
+    "semantic_hash": "f7a69d1011b9fdc14965d9e1d3a6009f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/mlrate_test.go": {
+    "mtime": 1775531791.6836874,
+    "ast_hash": "d15a1d7cd04c0e7cc1b375e00fde45c2",
+    "semantic_hash": "d15a1d7cd04c0e7cc1b375e00fde45c2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/status_map_test.go": {
+    "mtime": 1779122030.5926435,
+    "ast_hash": "e5017052805c6cf19166cfb1512298e1",
+    "semantic_hash": "e5017052805c6cf19166cfb1512298e1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/latency_sla_test.go": {
+    "mtime": 1775531791.68307,
+    "ast_hash": "d7b8a09cb3ac0aef7c5257c2626d1be5",
+    "semantic_hash": "d7b8a09cb3ac0aef7c5257c2626d1be5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/standard_test.go": {
+    "mtime": 1779514776.2387862,
+    "ast_hash": "89cc42a324c70b844ba423eba8ce3860",
+    "semantic_hash": "89cc42a324c70b844ba423eba8ce3860"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/guardrail.go": {
+    "mtime": 1774238653.4434292,
+    "ast_hash": "dbc02035ef3eb012d30cbcc03c22a9dc",
+    "semantic_hash": "dbc02035ef3eb012d30cbcc03c22a9dc"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/jobs/testdata/e2e_pipeline_config.json": {
+    "mtime": 1774238653.4444952,
+    "ast_hash": "06a1ae34241dc9ee5aae1e55b05c3fa8",
+    "semantic_hash": "06a1ae34241dc9ee5aae1e55b05c3fa8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/querylog/writer_test.go": {
+    "mtime": 1774244209.191187,
+    "ast_hash": "f1893988ccfdf983402d01ee31e004a4",
+    "semantic_hash": "f1893988ccfdf983402d01ee31e004a4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/querylog/writer.go": {
+    "mtime": 1774244209.191011,
+    "ast_hash": "713a532075bb11a3e17047a19f73fd40",
+    "semantic_hash": "713a532075bb11a3e17047a19f73fd40"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/querylog/writer_coverage_test.go": {
+    "mtime": 1774238653.4453955,
+    "ast_hash": "f90b8fad7a707a046758fc631de8f5e7",
+    "semantic_hash": "f90b8fad7a707a046758fc631de8f5e7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/cycle.go": {
+    "mtime": 1779514776.242015,
+    "ast_hash": "f084d85b6f4eb60ab8e8921b1eac1877",
+    "semantic_hash": "f084d85b6f4eb60ab8e8921b1eac1877"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/cycle_test.go": {
+    "mtime": 1779514776.242103,
+    "ast_hash": "aeaaadf369e5357d0e86241ea1c48f02",
+    "semantic_hash": "aeaaadf369e5357d0e86241ea1c48f02"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/analyze_test.go": {
+    "mtime": 1779514776.24099,
+    "ast_hash": "6abac49ffbe08fe852e746048079cfce",
+    "semantic_hash": "6abac49ffbe08fe852e746048079cfce"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/lexer_test.go": {
+    "mtime": 1779514776.24226,
+    "ast_hash": "4c9637c0b06775d323066fd3dc1537b9",
+    "semantic_hash": "4c9637c0b06775d323066fd3dc1537b9"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/parser_test.go": {
+    "mtime": 1779514776.242459,
+    "ast_hash": "031c0cbee6705d346f03b6001b8c6702",
+    "semantic_hash": "031c0cbee6705d346f03b6001b8c6702"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/ast_test.go": {
+    "mtime": 1779514776.2412157,
+    "ast_hash": "8ccb29a03ea32791a72401c59d2ae3af",
+    "semantic_hash": "8ccb29a03ea32791a72401c59d2ae3af"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/lexer.go": {
+    "mtime": 1779514776.2421837,
+    "ast_hash": "a995a727400ab292d1869125160ce82b",
+    "semantic_hash": "a995a727400ab292d1869125160ce82b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/ast.go": {
+    "mtime": 1779514776.2411036,
+    "ast_hash": "6ceac5eb2734eb56fb5b26929a4a75d0",
+    "semantic_hash": "6ceac5eb2734eb56fb5b26929a4a75d0"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/compile.go": {
+    "mtime": 1779514776.2416162,
+    "ast_hash": "4edaddb9eeb5982c9ea5b84c80759fd1",
+    "semantic_hash": "4edaddb9eeb5982c9ea5b84c80759fd1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/parser.go": {
+    "mtime": 1779514776.24236,
+    "ast_hash": "1b46651605951ad78ec10ecb6b427ea7",
+    "semantic_hash": "1b46651605951ad78ec10ecb6b427ea7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/analyze.go": {
+    "mtime": 1779514776.2408483,
+    "ast_hash": "abd05e5607182ff5348630172aa2f7b7",
+    "semantic_hash": "abd05e5607182ff5348630172aa2f7b7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/corpus_parity_test.go": {
+    "mtime": 1780338877.1966836,
+    "ast_hash": "c786d1ca74d0345557b8cc13023342e9",
+    "semantic_hash": "c786d1ca74d0345557b8cc13023342e9"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/compile_test.go": {
+    "mtime": 1779514776.2419221,
+    "ast_hash": "9dd258679dbe13e8cca9cb2739effe15",
+    "semantic_hash": "9dd258679dbe13e8cca9cb2739effe15"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_with_division.golden.sql": {
+    "mtime": 1779514776.2447774,
+    "ast_hash": "f200a9805c127432b7df14c0495305a2",
+    "semantic_hash": "f200a9805c127432b7df14c0495305a2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/mean_filtered.golden.sql": {
+    "mtime": 1779514776.2493303,
+    "ast_hash": "a93ac5c1da1569e505954b70f38ba24f",
+    "semantic_hash": "a93ac5c1da1569e505954b70f38ba24f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_in_list.golden.sql": {
+    "mtime": 1779514776.2464862,
+    "ast_hash": "8db5f6fd5152ac65d83791a1a7965a0a",
+    "semantic_hash": "8db5f6fd5152ac65d83791a1a7965a0a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/mean_within_hours.golden.sql": {
+    "mtime": 1779514776.2497005,
+    "ast_hash": "5d32cbad33c7483cdb639966e65f147c",
+    "semantic_hash": "5d32cbad33c7483cdb639966e65f147c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_op_gte.golden.sql": {
+    "mtime": 1779514776.2478735,
+    "ast_hash": "204b7e140d4f1b06d101152f3a2c0877",
+    "semantic_hash": "204b7e140d4f1b06d101152f3a2c0877"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/count_filtered.golden.sql": {
+    "mtime": 1779514776.2459035,
+    "ast_hash": "0ea9748fffb410ebca6cc0123a12d8c2",
+    "semantic_hash": "0ea9748fffb410ebca6cc0123a12d8c2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/percentile_filtered.golden.sql": {
+    "mtime": 1779514776.2510786,
+    "ast_hash": "6a24aa264d5529b5d42e9d88fce71430",
+    "semantic_hash": "6a24aa264d5529b5d42e9d88fce71430"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_op_gt.golden.sql": {
+    "mtime": 1779514776.2474973,
+    "ast_hash": "f61d0f0159e0b90db5d23d033c2b39ee",
+    "semantic_hash": "f61d0f0159e0b90db5d23d033c2b39ee"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/count_windowed.golden.sql": {
+    "mtime": 1779514776.2460608,
+    "ast_hash": "08e91f5cf3775a81393255c87372a0fa",
+    "semantic_hash": "08e91f5cf3775a81393255c87372a0fa"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/nested_composite_parens.golden.sql": {
+    "mtime": 1779514776.2505953,
+    "ast_hash": "16116edf6174a5dc23b25a2172be4f65",
+    "semantic_hash": "16116edf6174a5dc23b25a2172be4f65"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/sum_filtered.golden.sql": {
+    "mtime": 1779514776.252372,
+    "ast_hash": "1fd8e37f8216f1e16fb475607d08b3a9",
+    "semantic_hash": "1fd8e37f8216f1e16fb475607d08b3a9"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/nested_arithmetic_deep.golden.sql": {
+    "mtime": 1779514776.2501974,
+    "ast_hash": "2e55018ff8ac98fc3228e902b5df4a6f",
+    "semantic_hash": "2e55018ff8ac98fc3228e902b5df4a6f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_subtraction.golden.sql": {
+    "mtime": 1779514776.2440195,
+    "ast_hash": "841cc646f13374d87d6c3b750b5a1a74",
+    "semantic_hash": "841cc646f13374d87d6c3b750b5a1a74"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/count_distinct_simple.golden.sql": {
+    "mtime": 1779514776.245669,
+    "ast_hash": "829ff55853add4b02adbd486d0968b08",
+    "semantic_hash": "829ff55853add4b02adbd486d0968b08"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_op_lte.golden.sql": {
+    "mtime": 1779514776.2488594,
+    "ast_hash": "d17b76f027fff32fa3259292068d9490",
+    "semantic_hash": "d17b76f027fff32fa3259292068d9490"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/sum_simple.golden.sql": {
+    "mtime": 1779514776.2526324,
+    "ast_hash": "e396ee2a3215be80e2eba4f28497e11e",
+    "semantic_hash": "e396ee2a3215be80e2eba4f28497e11e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/count_windowed_hours.golden.sql": {
+    "mtime": 1779514776.2463028,
+    "ast_hash": "863cc643a8c4d1767df52fa359855047",
+    "semantic_hash": "863cc643a8c4d1767df52fa359855047"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/negate_double.golden.sql": {
+    "mtime": 1779514776.2499428,
+    "ast_hash": "329224883db0601daf3a9378c60b5866",
+    "semantic_hash": "329224883db0601daf3a9378c60b5866"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_multi.golden.sql": {
+    "mtime": 1779514776.246954,
+    "ast_hash": "aaa52d79af475607d49de22c6b96f57f",
+    "semantic_hash": "aaa52d79af475607d49de22c6b96f57f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/ratio_top_level.golden.sql": {
+    "mtime": 1779514776.2521403,
+    "ast_hash": "ab794986fe5f9694482bac725a45b2c5",
+    "semantic_hash": "ab794986fe5f9694482bac725a45b2c5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_with_negate.golden.sql": {
+    "mtime": 1779514776.245354,
+    "ast_hash": "3386d5e78c9276136c1b2cf1661f631b",
+    "semantic_hash": "3386d5e78c9276136c1b2cf1661f631b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_namespaced.golden.sql": {
+    "mtime": 1779514776.2472186,
+    "ast_hash": "ee1189f068334e9e6591635cdef2622a",
+    "semantic_hash": "ee1189f068334e9e6591635cdef2622a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/percentile_simple.golden.sql": {
+    "mtime": 1779514776.2513645,
+    "ast_hash": "f638fb9d913cca7cd085a46db6c93af6",
+    "semantic_hash": "f638fb9d913cca7cd085a46db6c93af6"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_three_predicates.golden.sql": {
+    "mtime": 1779514776.2490408,
+    "ast_hash": "900e7a0da474d060265e10f1108183a3",
+    "semantic_hash": "900e7a0da474d060265e10f1108183a3"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/proportion_filtered.golden.sql": {
+    "mtime": 1779514776.2516282,
+    "ast_hash": "d0754f178d6ae3ff9e814b3bb6508223",
+    "semantic_hash": "d0754f178d6ae3ff9e814b3bb6508223"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/mean_simple.golden.sql": {
+    "mtime": 1779514776.2495558,
+    "ast_hash": "81d10528de3010398620f213dc2ac0bc",
+    "semantic_hash": "81d10528de3010398620f213dc2ac0bc"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_with_ratio.golden.sql": {
+    "mtime": 1779514776.2455142,
+    "ast_hash": "5c297ef576f8a7e4ba3b0ad724bfe3ad",
+    "semantic_hash": "5c297ef576f8a7e4ba3b0ad724bfe3ad"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_two_refs.golden.sql": {
+    "mtime": 1779514776.2445042,
+    "ast_hash": "13467bb1fe66cb7ba1519d2e779425ba",
+    "semantic_hash": "13467bb1fe66cb7ba1519d2e779425ba"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_op_lt.golden.sql": {
+    "mtime": 1779514776.248198,
+    "ast_hash": "ac79c07a64b8569e1af7e203a150d888",
+    "semantic_hash": "ac79c07a64b8569e1af7e203a150d888"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/percentile_50.golden.sql": {
+    "mtime": 1779514776.2508216,
+    "ast_hash": "1036075e44eaf13fc789bc8ea4982ace",
+    "semantic_hash": "1036075e44eaf13fc789bc8ea4982ace"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/proportion_simple.golden.sql": {
+    "mtime": 1779514776.2518911,
+    "ast_hash": "33d352d7d38c4d43da6afd16e93fd3d7",
+    "semantic_hash": "33d352d7d38c4d43da6afd16e93fd3d7"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/filter_in_numbers.golden.sql": {
+    "mtime": 1779514776.246761,
+    "ast_hash": "3dc5ea17eb3ca247a707d22dbb611918",
+    "semantic_hash": "3dc5ea17eb3ca247a707d22dbb611918"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_literal_mul.golden.sql": {
+    "mtime": 1779514776.2437568,
+    "ast_hash": "ed9c6d7b06f7bef9175a04334b9e78e8",
+    "semantic_hash": "ed9c6d7b06f7bef9175a04334b9e78e8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/metricql/testdata/composite_two_ratios.golden.sql": {
+    "mtime": 1779514776.2442794,
+    "ast_hash": "9ba05e7fc79484769337d3c4e088cd4d",
+    "semantic_hash": "9ba05e7fc79484769337d3c4e088cd4d"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/retry_test.go": {
+    "mtime": 1774238653.4474297,
+    "ast_hash": "da85e99c73682272de2614b19b72f063",
+    "semantic_hash": "da85e99c73682272de2614b19b72f063"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/mock_executor_test.go": {
+    "mtime": 1774238653.446013,
+    "ast_hash": "ed2e9d31295c8e0be6397082cb2f447e",
+    "semantic_hash": "ed2e9d31295c8e0be6397082cb2f447e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/validate_test.go": {
+    "mtime": 1774238653.4490478,
+    "ast_hash": "9a1e38548773863ee55717613a6bf557",
+    "semantic_hash": "9a1e38548773863ee55717613a6bf557"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/renderer_test.go": {
+    "mtime": 1778026664.1215706,
+    "ast_hash": "69046ff61e086f00114d56d8bd943196",
+    "semantic_hash": "69046ff61e086f00114d56d8bd943196"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/renderer.go": {
+    "mtime": 1779514776.253068,
+    "ast_hash": "da524da8dd1363893db4cf144aab0150",
+    "semantic_hash": "da524da8dd1363893db4cf144aab0150"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/template_validation_test.go": {
+    "mtime": 1776721247.72245,
+    "ast_hash": "692b868910b9a0d2f5f87d68054e772f",
+    "semantic_hash": "692b868910b9a0d2f5f87d68054e772f"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/validate.go": {
+    "mtime": 1774238653.448973,
+    "ast_hash": "f3b17ca077a53fd1f34399a2969e53c2",
+    "semantic_hash": "f3b17ca077a53fd1f34399a2969e53c2"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/retry.go": {
+    "mtime": 1774238653.4472866,
+    "ast_hash": "788a0067afdc0ac361e4da8719bf4f33",
+    "semantic_hash": "788a0067afdc0ac361e4da8719bf4f33"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/executor.go": {
+    "mtime": 1774238653.4458802,
+    "ast_hash": "b880fce0721acc8387213548b278dc7b",
+    "semantic_hash": "b880fce0721acc8387213548b278dc7b"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/renderer_bench_test.go": {
+    "mtime": 1774238653.446196,
+    "ast_hash": "a4d25591b80563d82ba039acbdb98628",
+    "semantic_hash": "a4d25591b80563d82ba039acbdb98628"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/metrics/internal/spark/mock_executor.go": {
+    "mtime": 1774238653.4459455,
+    "ast_hash": "166c049d8aa305d9da0b0b03a2e75799",
+    "semantic_hash": "166c049d8aa305d9da0b0b03a2e75799"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/orchestration/cmd/main.go": {
+    "mtime": 1774238653.4510155,
+    "ast_hash": "19f596dabeab23fb7ca98e5f9e9ebb57",
+    "semantic_hash": "19f596dabeab23fb7ca98e5f9e9ebb57"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/orchestration/internal/handler/handler.go": {
+    "mtime": 1774238653.451264,
+    "ast_hash": "d1ff45e95cd97d4adbe10a9bcc392566",
+    "semantic_hash": "d1ff45e95cd97d4adbe10a9bcc392566"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/orchestration/internal/handler/handler_test.go": {
+    "mtime": 1774238653.451351,
+    "ast_hash": "747647ce3e22464e2d9da2dd6824c3ae",
+    "semantic_hash": "747647ce3e22464e2d9da2dd6824c3ae"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/orchestration/internal/querylog/writer_test.go": {
+    "mtime": 1774238653.451567,
+    "ast_hash": "52324b33e1a58bdfb7922e2e5b7358d1",
+    "semantic_hash": "52324b33e1a58bdfb7922e2e5b7358d1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/services/orchestration/internal/querylog/writer.go": {
+    "mtime": 1774238653.4514775,
+    "ast_hash": "32cf1893f4b2c146d58473282850f7d6",
+    "semantic_hash": "32cf1893f4b2c146d58473282850f7d6"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/proto/buf.yaml": {
+    "mtime": 1779067520.1554947,
+    "ast_hash": "6491a20b3f059ba8dbe579906290cd63",
+    "semantic_hash": "6491a20b3f059ba8dbe579906290cd63"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/proto/buf.gen.yaml": {
+    "mtime": 1774238653.416885,
+    "ast_hash": "386879814d1a67c55ef0468632d3faea",
+    "semantic_hash": "386879814d1a67c55ef0468632d3faea"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/design/deployment_architecture.md": {
+    "mtime": 1774244209.184809,
+    "ast_hash": "815424c13f36ba6d02d714e94608f570",
+    "semantic_hash": "815424c13f36ba6d02d714e94608f570"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/design/design_doc_v7.0.md": {
+    "mtime": 1774244209.185029,
+    "ast_hash": "eaa38bd5def4da9d70886552a4bffd06",
+    "semantic_hash": "eaa38bd5def4da9d70886552a4bffd06"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/design/agent-teams-vs-multiclaude-evaluation.md": {
+    "mtime": 1774244209.1845686,
+    "ast_hash": "a3cdc7b97f7a708c350e3dc76e04eafa",
+    "semantic_hash": "a3cdc7b97f7a708c350e3dc76e04eafa"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/design/git-strategy-claude-multiclaude.md": {
+    "mtime": 1774244209.1851308,
+    "ast_hash": "dd54ee8abc46bc827c96f52eb408b3f5",
+    "semantic_hash": "dd54ee8abc46bc827c96f52eb408b3f5"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/customer-integration-outline.md": {
+    "mtime": 1777149147.2187808,
+    "ast_hash": "486c0f391ffde1090171b8f269c83ad1",
+    "semantic_hash": "486c0f391ffde1090171b8f269c83ad1"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/streaming-integration.md": {
+    "mtime": 1778120921.165527,
+    "ast_hash": "6afe4fa6bd371dd1755dfaaf19e4c23e",
+    "semantic_hash": "6afe4fa6bd371dd1755dfaaf19e4c23e"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/pr-triage-and-cleanup.md": {
+    "mtime": 1774694620.2653375,
+    "ast_hash": "7ef1e59a5541fe36c36958e3b4a71459",
+    "semantic_hash": "7ef1e59a5541fe36c36958e3b4a71459"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/git-hygiene.md": {
+    "mtime": 1774901149.562126,
+    "ast_hash": "7d72f47fb4fe5ae86b8fc8bd7b4685e8",
+    "semantic_hash": "7d72f47fb4fe5ae86b8fc8bd7b4685e8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/streaming-video-sequence.md": {
+    "mtime": 1779481417.6907175,
+    "ast_hash": "4782fdb7df1e9b06a0e3e0814d4a763c",
+    "semantic_hash": "4782fdb7df1e9b06a0e3e0814d4a763c"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/github-issues-workflow.md": {
+    "mtime": 1774901149.5623004,
+    "ast_hash": "8906a2a777584b483d1663d7bf215038",
+    "semantic_hash": "8906a2a777584b483d1663d7bf215038"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/gastown-setup.md": {
+    "mtime": 1774694620.2647274,
+    "ast_hash": "23224e960aed4e34ae2e02d8eee8d033",
+    "semantic_hash": "23224e960aed4e34ae2e02d8eee8d033"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/orchestration-workflow.md": {
+    "mtime": 1774901149.5629284,
+    "ast_hash": "8b121cf7dc0afd6ee4fc52808bf95aee",
+    "semantic_hash": "8b121cf7dc0afd6ee4fc52808bf95aee"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/customer-integration-authoring-plan.md": {
+    "mtime": 1777148248.3757036,
+    "ast_hash": "01b174a9f59a5b555341cbad4543d3f6",
+    "semantic_hash": "01b174a9f59a5b555341cbad4543d3f6"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/palette.md": {
+    "mtime": 1778805891.7491982,
+    "ast_hash": "365bb3814b3c04e40a721cb49802a160",
+    "semantic_hash": "365bb3814b3c04e40a721cb49802a160"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/merge-conflict-resolution.md": {
+    "mtime": 1778805891.7486534,
+    "ast_hash": "d83f36a7994cec925853bf7f547c1f89",
+    "semantic_hash": "d83f36a7994cec925853bf7f547c1f89"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/integration/03-architecture-overview.md": {
+    "mtime": 1777148248.377484,
+    "ast_hash": "62626324ec9e702f7a9622407615f17a",
+    "semantic_hash": "62626324ec9e702f7a9622407615f17a"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/integration/README.md": {
+    "mtime": 1777148248.3780572,
+    "ast_hash": "68b4f254e19567a95686b2583c106f96",
+    "semantic_hash": "68b4f254e19567a95686b2583c106f96"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/integration/02-core-concepts.md": {
+    "mtime": 1777148248.3769603,
+    "ast_hash": "d2ee9c55df6f21abf346d73e6d4827f8",
+    "semantic_hash": "d2ee9c55df6f21abf346d73e6d4827f8"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/integration/01-introduction.md": {
+    "mtime": 1777148248.3765402,
+    "ast_hash": "8ff0d759f682143a40fd48dd02b803d4",
+    "semantic_hash": "8ff0d759f682143a40fd48dd02b803d4"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/integration/templates/feature-chapter-template.md": {
+    "mtime": 1777148248.3784604,
+    "ast_hash": "9a664a7e88ae752a87853340273b1289",
+    "semantic_hash": "9a664a7e88ae752a87853340273b1289"
+  },
+  "/Users/kennethsylvain/.multiclaude/repos/kaizen-experimentation/docs/guides/integration/templates/sdk-chapter-template.md": {
+    "mtime": 1777148248.3788004,
+    "ast_hash": "1f005a0fa48432577164d2219f974b67",
+    "semantic_hash": "1f005a0fa48432577164d2219f974b67"
   }
 }
