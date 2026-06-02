@@ -338,11 +338,6 @@ impl ConstraintSolver {
         self.impressions.record(selected_arm);
     }
 
-    /// Current EMA impression fractions (for audit and diagnostics).
-    pub fn impression_fractions(&self) -> &HashMap<String, f64> {
-        self.impressions.fractions()
-    }
-
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /// Last-resort: if per-arm bounds alone are feasible, distribute uniformly

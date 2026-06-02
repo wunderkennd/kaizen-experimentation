@@ -204,11 +204,6 @@ impl LinUcbPolicy {
         &self.experiment_id
     }
 
-    /// Get the feature keys.
-    pub fn feature_keys(&self) -> &[String] {
-        &self.feature_keys
-    }
-
     /// Get the arms.
     pub fn arms(&self) -> &[LinUcbArm] {
         &self.arms

@@ -146,11 +146,6 @@ impl MadMixer {
         }
     }
 
-    /// Returns the configured randomization fraction (ε).
-    pub fn randomization_fraction(&self) -> f64 {
-        self.config.randomization_fraction
-    }
-
     /// Returns the arm IDs available for randomization.
     pub fn arm_ids(&self) -> &[String] {
         &self.config.arm_ids
