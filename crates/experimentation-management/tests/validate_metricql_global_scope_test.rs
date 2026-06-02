@@ -17,9 +17,10 @@
 //! cargo test -p experimentation-management --test validate_metricql_global_scope_test
 //! ```
 //!
-//! A pure-Rust safety-net unit test for the same contract lives in
+//! Pure-Rust safety-net unit tests for the same contract live in
 //! `crates/experimentation-management/src/grpc.rs` (`mod tests`); see
-//! `empty_experiment_id_no_longer_returns_invalid_argument`.
+//! `global_scope_empty_catalog_flags_unknown_ref_with_position` and
+//! `global_scope_with_known_id_validates_clean`.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -108,7 +109,7 @@ async fn empty_experiment_id_with_known_metric_returns_valid() {
     let response = handler
         .validate_metricql(Request::new(ValidateMetricqlRequest {
             experiment_id: String::new(),
-            metricql_expression: expression.clone(),
+            metricql_expression: expression,
         }))
         .await
         .expect("validate_metricql must accept empty experiment_id")
@@ -121,7 +122,7 @@ async fn empty_experiment_id_with_known_metric_returns_valid() {
     );
     assert_eq!(
         response.referenced_metric_ids,
-        vec![metric_id.clone()],
+        vec![metric_id],
         "referenced_metric_ids must surface the resolved @ref"
     );
 }
@@ -143,7 +144,7 @@ async fn empty_experiment_id_with_unknown_metric_returns_diagnostic() {
     let response = handler
         .validate_metricql(Request::new(ValidateMetricqlRequest {
             experiment_id: String::new(),
-            metricql_expression: expression.clone(),
+            metricql_expression: expression,
         }))
         .await
         .expect("validate_metricql must accept empty experiment_id")

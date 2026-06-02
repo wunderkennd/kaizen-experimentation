@@ -11,13 +11,14 @@
 //! On connect, the server first back-fills all currently RUNNING/PAUSED
 //! experiments (so M1 can recover after restart), then streams live updates.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
@@ -1613,20 +1614,20 @@ impl ExperimentManagementService for ManagementServiceHandler {
         // an experiment exists. The per-experiment path stays `None` for now —
         // existence checks already run at write-time on CreateMetricDefinition,
         // and an experiment-scoped catalog lookup belongs in a later sub-task.
-        let global_set: Option<std::collections::HashSet<String>> =
-            if req.experiment_id.trim().is_empty() {
-                let rows = self
-                    .state
-                    .store
-                    .list_metrics(MetricFilter::default())
-                    .await
-                    .map_err(|err| {
-                        Status::internal(format!("failed to load global metric catalog: {err}"))
-                    })?;
-                Some(rows.into_iter().map(|r| r.metric_id).collect())
-            } else {
-                None
-            };
+        let global_set: Option<HashSet<String>> = if req.experiment_id.trim().is_empty() {
+            debug!("validate_metricql: empty experiment_id, loading global metric catalog");
+            let rows = self
+                .state
+                .store
+                .list_metrics(MetricFilter::default())
+                .await
+                .map_err(|err| {
+                    Status::internal(format!("failed to load global metric catalog: {err}"))
+                })?;
+            Some(rows.into_iter().map(|r| r.metric_id).collect())
+        } else {
+            None
+        };
         let ctx = validators::metricql::ValidateContext {
             known_metric_ids: global_set.as_ref(),
         };
