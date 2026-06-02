@@ -1602,34 +1602,45 @@ mod tests {
         }
 
         // ---- Stubs for the rest of the trait surface ----
+        // These mock-impl stubs live inside `#[cfg(test)] mod tests` and
+        // satisfy `MetricComputationService` so the test can mock just the
+        // shadow-run RPCs exercised by `apply`. The stub-marker CI check
+        // (scripts/check_stub_markers.py) is filename-based and can't see
+        // inside a `#[cfg(test)]` block; one `// stub-allow:` per method
+        // is the documented escape hatch.
         async fn compute_metrics(
             &self,
             _req: Request<ComputeMetricsRequest>,
         ) -> Result<Response<ComputeMetricsResponse>, Status> {
+            // stub-allow: tracked-in #437 (test-mock for MetricComputationService trait surface)
             Err(Status::unimplemented("stub"))
         }
         async fn compute_guardrail_metrics(
             &self,
             _req: Request<ComputeGuardrailMetricsRequest>,
         ) -> Result<Response<ComputeMetricsResponse>, Status> {
+            // stub-allow: tracked-in #437 (test-mock for MetricComputationService trait surface)
             Err(Status::unimplemented("stub"))
         }
         async fn export_notebook(
             &self,
             _req: Request<ExportNotebookRequest>,
         ) -> Result<Response<ExportNotebookResponse>, Status> {
+            // stub-allow: tracked-in #437 (test-mock for MetricComputationService trait surface)
             Err(Status::unimplemented("stub"))
         }
         async fn get_query_log(
             &self,
             _req: Request<GetQueryLogRequest>,
         ) -> Result<Response<GetQueryLogResponse>, Status> {
+            // stub-allow: tracked-in #437 (test-mock for MetricComputationService trait surface)
             Err(Status::unimplemented("stub"))
         }
         async fn compile_metricql_preview(
             &self,
             _req: Request<CompileMetricqlPreviewRequest>,
         ) -> Result<Response<CompileMetricqlPreviewResponse>, Status> {
+            // stub-allow: tracked-in #437 (test-mock for MetricComputationService trait surface)
             Err(Status::unimplemented("stub"))
         }
     }
