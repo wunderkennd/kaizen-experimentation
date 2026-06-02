@@ -337,7 +337,7 @@ All five client SDKs (Web/TypeScript, iOS/Swift, Android/Kotlin, Server-Go, Serv
 - **LocalProvider**: Hash-based variant assignment using cached experiment configs. The variant selection algorithm replicates the Rust service exactly: `relative_bucket = bucket - start; cumulative += fraction * alloc_size; if relative < cumulative → return variant; fallthrough → last variant`. Web SDK uses pure-TS MurmurHash3 (or optional WASM); mobile SDKs use UniFFI bindings (guarded by `#if canImport` on iOS and conditional source set on Android); Go SDK uses CGo FFI (with pure-Go fallback behind `!cgo || !has_ffi` build tag); Python SDK uses `mmh3` library.
 - **MockProvider**: Returns deterministic, configurable assignments for unit testing.
 
-A **ResilientProvider** (or equivalent `ExperimentClient` with fallback) wraps these in a fallback chain: Remote → Local cache → null/default.
+The **`ExperimentClient`** class wraps these in a fallback chain: Remote → Local cache → null/default. The fallback chain is enabled via the optional `fallback` constructor parameter; see ADR-007.
 
 **Implementation note (v6.0)**: All SDK RemoteProviders use JSON HTTP (ConnectRPC JSON mode) rather than binary gRPC, simplifying client-side requirements. The endpoint pattern is `POST /experimentation.assignment.v1.AssignmentService/GetAssignment` with `Content-Type: application/json`. LocalProviders in all five SDKs have been validated against the first 10 test vectors from `test-vectors/hash_vectors.json`. Total SDK test count: 206+ across all platforms.
 

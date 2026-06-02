@@ -15,7 +15,9 @@ All client SDKs implement an `ExperimentProvider` interface with three concrete 
 - **LocalProvider**: Uses WASM-compiled hash library (web) or UniFFI hash library (mobile) with a cached config snapshot. Produces deterministic assignments offline. Config snapshot refreshed periodically when network is available.
 - **MockProvider**: Returns deterministic, configurable assignments for unit testing product code.
 
-A `ResilientProvider` wraps these in a fallback chain: Remote → Local cache → Static defaults. Product code calls `getAssignment()` on the ResilientProvider and is unaware of which backend served the result.
+The top-level SDK class is `ExperimentClient`, constructed with a primary provider and an optional `fallback` provider (`ExperimentClient(provider, fallback)`). It wraps these in a fallback chain: Remote → Local cache → Static defaults. Product code calls `getAssignment()` on the `ExperimentClient` and is unaware of which backend served the result.
+
+> **Implementation note**: All 5 SDKs ship this as `ExperimentClient(provider, fallback)` — see `sdks/{ios,android,server-go,web,server-python}/`. The `fallback` parameter (named `fallbackProvider` in TypeScript / `FallbackProvider` in Go) is what implements the chain. Earlier drafts of this ADR named this a separate "resilient wrapper" class; that name was dropped and the resilience logic was folded into `ExperimentClient` itself.
 
 ## Alternatives Considered
 - **Remote-only SDK**: Simplest, but mobile apps in poor network conditions would show default experiences instead of experiment variants. Unacceptable for global SVOD.

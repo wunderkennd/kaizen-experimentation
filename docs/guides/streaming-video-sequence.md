@@ -137,7 +137,7 @@ Key contracts:
 - **Hash parity is non-negotiable.** Web (`sdks/web`), iOS, Android, and
   the server SDKs all use the same MurmurHash3 + salt. The
   `test-vectors/hash_vectors.json` golden file gates every SDK release.
-- **ResilientProvider fallback.** If M1 is unreachable from the BFF, the
+- **ExperimentClient fallback chain.** If M1 is unreachable from the BFF, the
   server SDK falls through to the LocalProvider (WASM/CGo hash + cached
   config) and finally to static defaults (`DEFAULT_ASSIGNMENT`). See
   `docs/design/sdk_provider.mermaid`.

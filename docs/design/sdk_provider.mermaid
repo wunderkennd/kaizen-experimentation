@@ -1,7 +1,7 @@
 flowchart TB
     APP["Application Code<br/><i>calls getAssignment(userId, experimentId)</i>"]
 
-    subgraph RP["ResilientProvider (fallback chain)"]
+    subgraph RP["ExperimentClient (with fallback chain)"]
         direction TB
         R["1. RemoteProvider<br/>gRPC to M1 Assignment Service"]
         L["2. LocalProvider<br/>WASM/UniFFI hash + cached config"]
