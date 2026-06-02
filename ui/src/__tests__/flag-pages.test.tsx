@@ -127,15 +127,16 @@ describe('Flag List Page', () => {
     expect(screen.queryByText('dark_mode_rollout')).not.toBeInTheDocument();
   });
 
-  it('shows no-filter-matches when search has no results', async () => {
+  it('shows no-filter-matches when filters have no results', async () => {
     await renderAndWait();
     const user = userEvent.setup();
 
     await user.type(screen.getByTestId('flag-search'), 'zzzznonexistent');
     expect(screen.getByTestId('no-filter-matches')).toBeInTheDocument();
+    expect(screen.getByText('No flags match your filters.')).toBeInTheDocument();
   });
 
-  it('clears search when "Clear filters" button in empty state is clicked', async () => {
+  it('clears filters when "Clear filters" button in empty state is clicked', async () => {
     await renderAndWait();
     const user = userEvent.setup();
 
@@ -151,7 +152,7 @@ describe('Flag List Page', () => {
     expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
   });
 
-  it('clears search when "Clear filters" button in toolbar is clicked', async () => {
+  it('clears filters when "Clear filters" button in toolbar is clicked', async () => {
     await renderAndWait();
     const user = userEvent.setup();
 
@@ -163,6 +164,31 @@ describe('Flag List Page', () => {
 
     expect(screen.getByTestId('flag-search')).toHaveValue('');
     expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+  });
+
+  it('filters flags by type', async () => {
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    const typeFilter = screen.getByTestId('type-filter');
+    await user.selectOptions(typeFilter, 'JSON');
+
+    expect(screen.getByText('player_config_override')).toBeInTheDocument();
+    expect(screen.queryByText('dark_mode_rollout')).not.toBeInTheDocument();
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('1');
+
+    await user.selectOptions(typeFilter, ''); // All types
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+  });
+
+  it('searches flags by ID', async () => {
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByTestId('flag-search'), 'flag-bool-rollout');
+    expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
+    expect(screen.queryByText('checkout_flow_variant')).not.toBeInTheDocument();
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('1');
   });
 
   it('renders correct type badge colors', async () => {
