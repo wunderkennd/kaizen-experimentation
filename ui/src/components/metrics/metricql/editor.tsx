@@ -45,9 +45,12 @@ export interface MetricqlEditorProps {
   disabled?: boolean;
   /**
    * Experiment ID for the autocomplete provider (B3) and lint provider (B4).
-   * Received but unused in B2; included so B6 can pass it through without API churn.
+   * `null` / `undefined` / `''` all mean "global scope" — the M5 ValidateMetricql
+   * handler builds the known-metric set from the full metric_definitions catalog
+   * when the request's experiment_id is empty (Issue #571 Task 1). This lets
+   * the metric-creation form (which has no experimentId yet) get live diagnostics.
    */
-  experimentId?: string;
+  experimentId?: string | null;
   /**
    * Known metric IDs for autocomplete (B3).
    * Received but unused in B2; included so B6 can pass it through without API churn.
@@ -83,7 +86,9 @@ export function MetricqlEditor({
   // experimentId is captured at mount for the linter. If B6 changes the
   // experimentId, it will remount the editor (key prop change), so this ref
   // is always fresh within a mount lifetime.
-  const experimentIdRef = useRef(experimentId);
+  // Type allows null/undefined to flow through — the linter normalises to ''
+  // at the RPC boundary (see diagnostics.ts), which M5 treats as global scope.
+  const experimentIdRef = useRef<string | null | undefined>(experimentId);
   useEffect(() => {
     experimentIdRef.current = experimentId;
   }, [experimentId]);
@@ -105,17 +110,17 @@ export function MetricqlEditor({
         // B3: @metric_ref autocomplete. Always included; when knownMetricIds
         // is not provided the ref starts empty and the menu simply never opens.
         metricqlAutocomplete({ getKnownMetricIds: () => knownMetricIdsRef.current }),
-        // B4: inline MetricQL diagnostics. Only active when an experimentId is
-        // provided — the ValidateMetricql RPC requires one to resolve @metric_ref
-        // references in context. When absent, no linter is registered and the
-        // editor renders without error underlines (safe for standalone usage).
-        ...(experimentIdRef.current
-          ? [metricqlLinter({
-              experimentId: experimentIdRef.current,
-              debounceMs: 500,
-              timeoutMs: 2000,
-            })]
-          : []),
+        // B4: inline MetricQL diagnostics. Registered unconditionally — the
+        // linter forwards experimentId (which may be null / undefined / '')
+        // straight to ValidateMetricql, and M5 treats an empty experiment_id
+        // as global scope, building the known-metric set from the full catalog
+        // (Issue #571). This means the metric-creation form (no experimentId
+        // bound yet) still gets live diagnostics as the operator types.
+        metricqlLinter({
+          experimentId: experimentIdRef.current,
+          debounceMs: 500,
+          timeoutMs: 2000,
+        }),
         EditorState.transactionFilter.of((tr) => {
           // Multi-line is ALLOWED (unlike sql-editor.tsx).
           // Reject only transactions that would exceed maxLength.
