@@ -708,9 +708,11 @@ impl ExperimentManagementService for ManagementServiceHandler {
         request: Request<ValidateMetricqlRequest>,
     ) -> Result<Response<ValidateMetricqlResponse>, Status> {
         let req = request.into_inner();
-        if req.experiment_id.trim().is_empty() {
-            return Err(Status::invalid_argument("experiment_id is required"));
-        }
+        // In-memory stub: empty experiment_id is accepted (matches
+        // grpc.rs::validate_metricql contract — ADR-026 Phase 2 follow-up #571).
+        // Existence checks against the global catalog are exercised by the
+        // integration test (`tests/validate_metricql_global_scope_test.rs`), not
+        // this stub, which only asserts wire-format behavior.
         // Contract test stub: delegate to the validator directly (no DB needed).
         use crate::validators::metricql::{validate_metricql as vm, ValidateContext};
         if req.metricql_expression.trim().is_empty() {

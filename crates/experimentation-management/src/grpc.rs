@@ -52,7 +52,7 @@ use experimentation_proto::experimentation::metrics::v1::{
 };
 
 use crate::bucket_reuse;
-use crate::store::{ExperimentRow, ManagementStore, StoreError, VariantRow};
+use crate::store::{ExperimentRow, ManagementStore, MetricFilter, StoreError, VariantRow};
 use crate::validators;
 
 // Broadcast channel capacity. Slow subscribers will see RecvError::Lagged.
@@ -1588,11 +1588,8 @@ impl ExperimentManagementService for ManagementServiceHandler {
     ) -> Result<Response<ValidateMetricqlResponse>, Status> {
         let req = request.into_inner();
 
-        if req.experiment_id.trim().is_empty() {
-            return Err(Status::invalid_argument("experiment_id is required"));
-        }
-
         // Per plan L8: empty expression returns one diagnostic, not an RPC error.
+        // (Empty `experiment_id` is now valid — see global-scope branch below.)
         if req.metricql_expression.trim().is_empty() {
             return Ok(Response::new(ValidateMetricqlResponse {
                 diagnostics: vec![ProtoMetricqlDiagnostic {
@@ -1609,10 +1606,30 @@ impl ExperimentManagementService for ManagementServiceHandler {
             }));
         }
 
-        // Pass None for known_metric_ids — existence checks are enforced at
-        // write time (CreateMetricDefinition). The live-lint path only needs to
-        // catch parse/semantic structural errors during interactive editing.
-        let ctx = validators::metricql::ValidateContext { known_metric_ids: None };
+        // ADR-026 Phase 2 follow-up (#571): empty `experiment_id` is the global
+        // scope used by the metric-creation form (which has no experiment
+        // context). Build `known_metric_ids` from the full metric_definitions
+        // table so the live-lint surface can flag unresolved @refs even before
+        // an experiment exists. The per-experiment path stays `None` for now —
+        // existence checks already run at write-time on CreateMetricDefinition,
+        // and an experiment-scoped catalog lookup belongs in a later sub-task.
+        let global_set: Option<std::collections::HashSet<String>> =
+            if req.experiment_id.trim().is_empty() {
+                let rows = self
+                    .state
+                    .store
+                    .list_metrics(MetricFilter::default())
+                    .await
+                    .map_err(|err| {
+                        Status::internal(format!("failed to load global metric catalog: {err}"))
+                    })?;
+                Some(rows.into_iter().map(|r| r.metric_id).collect())
+            } else {
+                None
+            };
+        let ctx = validators::metricql::ValidateContext {
+            known_metric_ids: global_set.as_ref(),
+        };
 
         let response =
             match validators::metricql::validate_metricql(&req.metricql_expression, &ctx) {
