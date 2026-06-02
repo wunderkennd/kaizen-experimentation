@@ -1,0 +1,54 @@
+name: Stub-marker check
+
+# Fails the PR if it introduces new runtime-stub markers
+# (`todo!()`, `unimplemented!()`, `Status::unimplemented(`,
+# `codes.Unimplemented`, `NOT YET IMPLEMENTED`) in non-test code without an
+# adjacent `// stub-allow:` comment pointing at a tracking issue or a
+# cross-phase artifacts row.
+#
+# Existing markers on `main` are grandfathered — the check inspects only
+# the PR diff's added lines. See
+# `docs/superpowers/templates/locked-plan-template.md` for the process
+# intervention this workflow enforces.
+#
+# Status: advisory (continue-on-error). Flip `continue-on-error: false`
+# once the violation rate hits ~zero to convert this into a blocking gate.
+
+on:
+  pull_request:
+    # `edited` excluded: title/body/base-branch edits don't change the diff.
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # advisory — flip to false to enforce
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # We need both sides of the PR for `git diff`.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Detect new stub markers
+        # SECURITY: SHAs are immutable and contain no shell metacharacters
+        # (40 hex chars), so direct interpolation is safe — unlike a branch
+        # name. We still funnel them through `env:` to follow the same
+        # hardening pattern as `.github/workflows/branch-naming.yml`.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 scripts/check_stub_markers.py \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --format=github
