@@ -18,8 +18,15 @@ export interface MetricqlSectionProps {
   /** The current MetricQL expression value (drives the form's metricqlExpression field). */
   value: string;
   onChange: (next: string) => void;
-  /** Experiment ID for the validator (B4) + preview (B5/C2) RPCs. */
-  experimentId: string;
+  /**
+   * Experiment ID for the validator (B4) + preview (B5/C2) RPCs.
+   *
+   * Omit (or pass `null` / `undefined`) when the section is rendered outside an
+   * experiment binding — e.g. the metric creation form. M5's ValidateMetricql
+   * handler treats an empty experiment_id as global scope and builds the known
+   * metric set from the full catalog (Issue #571 Task 1).
+   */
+  experimentId?: string | null;
   /**
    * Known metric IDs from the form's cached ListMetricDefinitions response.
    * Powers the @-autocomplete (B3). Optimistic cache updates (just-created
@@ -69,7 +76,9 @@ export function MetricqlSection({
       </div>
 
       <MetricqlPreview
-        experimentId={experimentId}
+        // Normalise null/undefined → '' so the preview RPC matches the wire
+        // format (M5 treats empty experiment_id as global scope, Issue #571).
+        experimentId={experimentId ?? ''}
         metricqlExpression={value}
         hasErrors={hasObviousErrors}
         className="mt-2"
