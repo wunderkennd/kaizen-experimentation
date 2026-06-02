@@ -170,9 +170,15 @@ mod tests {
     /// Verify that all three call paths produce bit-identical Welch SE values.
     ///
     /// Uses the same fixture as `test_basic_ttest` ([1,2,3,4,5] vs [2,3,4,5,6]).
-    /// `welch_standard_error` is the canonical primitive; `cate::compute_welch_se`
-    /// delegates to it. This test asserts `assert_eq!` (bit-identical f64), not
-    /// a float-tolerance comparison. See issue #583.
+    /// All three paths ultimately delegate to `welch_standard_error`:
+    ///
+    /// 1. Direct call to the canonical primitive `welch_standard_error`.
+    /// 2. `cate::compute_welch_se` (delegates to the canonical primitive).
+    /// 3. `tost::tost_equivalence_test` (delegates to the canonical primitive;
+    ///    exposes the SE as `TostResult::std_error`).
+    ///
+    /// All three `assert_eq!` comparisons are bit-identical f64 — not
+    /// float-tolerance comparisons. See issue #583.
     #[test]
     fn welch_se_parity_across_call_paths() {
         let control = vec![1.0f64, 2.0, 3.0, 4.0, 5.0];
@@ -200,5 +206,11 @@ mod tests {
             se_canonical, se_cate,
             "welch SE must be bit-identical across all call paths (issue #583)"
         );
+
+        // Path 3: tost::tost_equivalence_test (delegates to Path 1 via welch_standard_error)
+        let tost_config = crate::tost::TostConfig { delta: 1.0, alpha: 0.05 };
+        let tost_result = crate::tost::tost_equivalence_test(&control, &treatment, &tost_config)
+            .expect("tost_equivalence_test should not fail on valid data");
+        assert_eq!(se_canonical, tost_result.std_error, "tost path");
     }
 }
