@@ -1,7 +1,7 @@
 # ADR-026: Custom Metrics Definition Layer
 
-- **Status**: Phase 1 Implemented · Phase 2 #435 Implemented (M3 MetricQL parser/compiler) · #436 (M5 validation + M6 editor) and Phase 3 Proposed
-- **Date**: 2026-03-17 (proposed) · 2026-05-17 (Phase 1 implemented) · 2026-05-18 (M3 dependency ordering) · 2026-05-22 (Phase 2 M3 MetricQL implemented)
+- **Status**: Phase 1 Implemented · Phase 2 Implemented · Phase 3 Implemented
+- **Date**: 2026-03-17 (proposed) · 2026-05-17 (Phase 1 implemented) · 2026-05-18 (M3 dependency ordering) · 2026-05-22 (Phase 2 M3 MetricQL implemented) · 2026-05-30 (Phase 2 M5+M6 implemented) · 2026-06-01 (Phase 3 implemented)
 - **Author**: Agent-6 / Devin (requested by @wunderkennd)
 
 ## Implementation status
@@ -12,8 +12,8 @@
 | Phase 1 (M6 UI) | Metric creation form for new types + operator runbook | **Implemented** (Closes #434) | #555 |
 | **Phase 1 (M3 dependency ordering)** | M3 scheduler computes a topological DAG over COMPOSITE operand dependencies (Kahn's algorithm with defense-in-depth cycle detection); new `metric_computation_status` table (migration 012) so M4a can distinguish `skipped_upstream_failure` from `missing`; downstream COMPOSITEs marked skipped even when fail-fast short-circuits the loop | **Implemented** (Closes #475) | PR opened by this branch |
 | **Phase 2 (M3 MetricQL parser/compiler)** | Hand-rolled lexer + recursive-descent parser + typed AST in `services/metrics/internal/metricql/`, semantic analyzer, DFS 3-color cycle detector (ported from M5 Rust), Spark SQL codegen via `text/template`, proto field `metricql_expression` (#20), migration 013, M3 scheduler integration (topo-order DAG operand extraction via `@metric_refs`, upstream-failure gate symmetric to COMPOSITE, generalized skip-propagation pass), 34 golden-file SQL tests | **Implemented** (Closes #435) | PR opened by this branch |
-| Phase 2 (M5 validation + M6 editor) | M5 server-side MetricQL validation, M6 expression editor with inline diagnostics | Proposed | #436 |
-| Phase 3 | Deprecate `METRIC_TYPE_CUSTOM`: migrate existing CUSTOM metrics, deprecation warnings, UI removal | Proposed | #437 |
+| Phase 2 (M5 validation + M6 editor) | M5 server-side MetricQL validation, M6 expression editor with inline diagnostics | **Implemented** (Closes #436) | #570 |
+| Phase 3 | Deprecate `METRIC_TYPE_CUSTOM`: migrate existing CUSTOM metrics, deprecation warnings, UI removal | **Implemented** (Closes #437) | #592 |
 
 Phase 1 deferred ownership of Go M5 (`services/management/`) — the canonical implementation now lives in Rust M5 (`crates/experimentation-management/`) per ADR-025. The Go MetricStore was not extended; metric CRUD for the new types is Rust-only going forward.
 

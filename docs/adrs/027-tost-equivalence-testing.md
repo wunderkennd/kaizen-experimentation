@@ -2,7 +2,11 @@
 
 ## Status
 
-**Proposed**
+| Component | Status | PR |
+|-----------|--------|----|
+| Core implementation (`tost.rs`, CUPED composition, power analysis, golden files) | **Implemented** (Closes #443) | #443 |
+| M5 validation + conclusion logic | Proposed | — |
+| M6 equivalence results view | Proposed | — |
 
 ## Context
 
