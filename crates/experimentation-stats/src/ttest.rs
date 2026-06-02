@@ -5,6 +5,57 @@
 use experimentation_core::error::{assert_finite, Error, Result};
 use statrs::distribution::{ContinuousCDF, StudentsT};
 
+// ---------------------------------------------------------------------------
+// Canonical Welch SE primitive — shared across ttest, tost, cate (Closes #583)
+// ---------------------------------------------------------------------------
+
+/// Standard error and Welch-Satterthwaite degrees of freedom for a two-sample
+/// Welch t-statistic.
+///
+/// This is the **canonical** Welch SE primitive for the `experimentation-stats`
+/// crate. All modules (`ttest`, `tost`, `cate`) must delegate to this function
+/// rather than duplicating the formula. See issue #583.
+pub(crate) struct WelchSe {
+    /// Pooled standard error: `sqrt(var_c / n_c + var_t / n_t)`.
+    pub(crate) se: f64,
+    /// Welch-Satterthwaite degrees of freedom.
+    pub(crate) df: f64,
+}
+
+/// Compute the Welch standard error and Satterthwaite degrees of freedom.
+///
+/// # Arguments
+/// * `n_c`   — number of observations in the control group (must be > 1).
+/// * `n_t`   — number of observations in the treatment group (must be > 1).
+/// * `var_c` — sample variance of the control group.
+/// * `var_t` — sample variance of the treatment group.
+///
+/// # Errors
+/// Returns [`Error::Numerical`] if the pooled standard error is exactly zero
+/// (both groups have zero variance). Panics (fail-fast) on NaN / non-finite
+/// intermediate values via [`assert_finite`].
+pub(crate) fn welch_standard_error(
+    n_c: f64,
+    n_t: f64,
+    var_c: f64,
+    var_t: f64,
+) -> Result<WelchSe> {
+    let se = (var_c / n_c + var_t / n_t).sqrt();
+    assert_finite(se, "standard error");
+    if se == 0.0 {
+        return Err(Error::Numerical(
+            "standard error is zero (no variance in data)".into(),
+        ));
+    }
+
+    let df_num = (var_c / n_c + var_t / n_t).powi(2);
+    let df_den =
+        (var_c / n_c).powi(2) / (n_c - 1.0) + (var_t / n_t).powi(2) / (n_t - 1.0);
+    let df = df_num / df_den;
+    assert_finite(df, "degrees of freedom");
+    Ok(WelchSe { se, df })
+}
+
 /// Result of a two-sample Welch's t-test.
 #[derive(Debug, Clone)]
 pub struct TTestResult {
@@ -60,18 +111,7 @@ pub fn welch_ttest(control: &[f64], treatment: &[f64], alpha: f64) -> Result<TTe
     assert_finite(var_c, "control variance");
     assert_finite(var_t, "treatment variance");
 
-    let se = (var_c / n_c + var_t / n_t).sqrt();
-    assert_finite(se, "standard error");
-
-    if se == 0.0 {
-        return Err(Error::Numerical("standard error is zero (no variance in data)".into()));
-    }
-
-    // Welch-Satterthwaite degrees of freedom
-    let df_num = (var_c / n_c + var_t / n_t).powi(2);
-    let df_den = (var_c / n_c).powi(2) / (n_c - 1.0) + (var_t / n_t).powi(2) / (n_t - 1.0);
-    let df = df_num / df_den;
-    assert_finite(df, "degrees of freedom");
+    let WelchSe { se, df } = welch_standard_error(n_c, n_t, var_c, var_t)?;
 
     let effect = mean_t - mean_c;
     let t_stat = effect / se;
@@ -125,5 +165,40 @@ mod tests {
         let treatment = vec![1.1, 2.1, 3.1, 4.1, 5.1];
         let result = welch_ttest(&control, &treatment, 0.05).unwrap();
         assert!(result.p_value >= 0.0 && result.p_value <= 1.0);
+    }
+
+    /// Verify that all three call paths produce bit-identical Welch SE values.
+    ///
+    /// Uses the same fixture as `test_basic_ttest` ([1,2,3,4,5] vs [2,3,4,5,6]).
+    /// `welch_standard_error` is the canonical primitive; `cate::compute_welch_se`
+    /// delegates to it. This test asserts `assert_eq!` (bit-identical f64), not
+    /// a float-tolerance comparison. See issue #583.
+    #[test]
+    fn welch_se_parity_across_call_paths() {
+        let control = vec![1.0f64, 2.0, 3.0, 4.0, 5.0];
+        let treatment = vec![2.0f64, 3.0, 4.0, 5.0, 6.0];
+
+        // Compute moments from the raw slices (same arithmetic as cate.rs)
+        let n_c = control.len() as f64;
+        let n_t = treatment.len() as f64;
+        let mean_c = control.iter().sum::<f64>() / n_c;
+        let mean_t = treatment.iter().sum::<f64>() / n_t;
+        let var_c =
+            control.iter().map(|x| (x - mean_c).powi(2)).sum::<f64>() / (n_c - 1.0);
+        let var_t =
+            treatment.iter().map(|x| (x - mean_t).powi(2)).sum::<f64>() / (n_t - 1.0);
+
+        // Path 1: canonical primitive
+        let se_canonical = welch_standard_error(n_c, n_t, var_c, var_t)
+            .expect("canonical welch_standard_error should not fail on valid data")
+            .se;
+
+        // Path 2: cate::compute_welch_se (delegates to Path 1)
+        let se_cate = crate::cate::compute_welch_se(&control, &treatment);
+
+        assert_eq!(
+            se_canonical, se_cate,
+            "welch SE must be bit-identical across all call paths (issue #583)"
+        );
     }
 }

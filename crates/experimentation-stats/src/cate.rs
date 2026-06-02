@@ -11,7 +11,7 @@ use experimentation_core::error::{assert_finite, Error, Result};
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 
 use crate::multiple_comparison::benjamini_hochberg;
-use crate::ttest::welch_ttest;
+use crate::ttest::{welch_standard_error, welch_ttest, WelchSe};
 
 /// Input data for a single subgroup (lifecycle segment).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -288,8 +288,19 @@ pub fn cochran_q_test(
     })
 }
 
-/// Compute Welch standard error from raw samples.
-fn compute_welch_se(control: &[f64], treatment: &[f64]) -> f64 {
+/// Compute Welch standard error from raw sample slices.
+///
+/// Delegates to [`crate::ttest::welch_standard_error`], the canonical Welch SE
+/// primitive for this crate (issue #583). The Welch-Satterthwaite degrees of
+/// freedom (`df`) are intentionally discarded — callers that need `df` should
+/// invoke `welch_standard_error` directly.
+///
+/// # Panics
+/// Panics with `.expect` if `welch_standard_error` returns `Err` (i.e., zero
+/// variance in both groups). Call sites in `cate_analysis` only reach this
+/// function after `welch_ttest` has already returned `Ok` on the same data,
+/// which guarantees non-zero SE.
+pub(crate) fn compute_welch_se(control: &[f64], treatment: &[f64]) -> f64 {
     let n_c = control.len() as f64;
     let n_t = treatment.len() as f64;
 
@@ -299,8 +310,8 @@ fn compute_welch_se(control: &[f64], treatment: &[f64]) -> f64 {
     let var_c = control.iter().map(|x| (x - mean_c).powi(2)).sum::<f64>() / (n_c - 1.0);
     let var_t = treatment.iter().map(|x| (x - mean_t).powi(2)).sum::<f64>() / (n_t - 1.0);
 
-    let se = (var_c / n_c + var_t / n_t).sqrt();
-    assert_finite(se, "welch_se");
+    let WelchSe { se, df: _ } = welch_standard_error(n_c, n_t, var_c, var_t)
+        .expect("welch SE computation failed: zero variance in pooled samples");
     se
 }
 
