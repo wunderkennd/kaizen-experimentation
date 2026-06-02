@@ -19,6 +19,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import { MetricqlEditor } from './editor';
 
+// Mock the API client so the linter (B4) does not hit the network.
+// Tests that need a specific response override the mock per-test via mockResolvedValueOnce.
+vi.mock('@/lib/api', () => ({
+  validateMetricql: vi.fn().mockResolvedValue({ diagnostics: [], referencedMetricIds: [] }),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -47,8 +53,12 @@ function getEditorView(container: HTMLElement) {
 // ---------------------------------------------------------------------------
 
 describe('MetricqlEditor', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset DOM between tests — RTL cleanup handles this but be explicit.
+    // Also clear API mock call history so linter-RPC assertions don't see
+    // calls from prior tests in this file.
+    const { validateMetricql } = await import('@/lib/api');
+    vi.mocked(validateMetricql).mockClear();
   });
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -264,5 +274,98 @@ describe('MetricqlEditor', () => {
         />,
       ),
     ).not.toThrow();
+  });
+
+  // ─── Live-lint registration on global-scope (Issue #571 Task 2) ──────────
+  //
+  // The metric-creation form has no experimentId at creation time.  Previously
+  // the editor short-circuited and skipped registering the linter when
+  // experimentId was falsy, which meant operators got NO inline diagnostics
+  // while authoring a brand-new metric.  M5's ValidateMetricql handler now
+  // treats an empty experiment_id as the global-scope signal (Task 1 of #571),
+  // so the editor must register the linter unconditionally and forward the
+  // raw value (null / undefined / '') through to the RPC boundary.
+
+  test('linter_fires_when_experimentId_is_undefined_global_scope', async () => {
+    const { validateMetricql } = await import('@/lib/api');
+    const mocked = vi.mocked(validateMetricql);
+    mocked.mockResolvedValueOnce({
+      diagnostics: [{
+        severity: 1,
+        message: 'unresolved metric: @unknown_metric',
+        span: { startOffset: 0, endOffset: 15, line: 1, column: 1 },
+      }],
+      referencedMetricIds: [],
+    });
+
+    render(
+      <MetricqlEditor
+        value="@unknown_metric"
+        onChange={() => {}}
+        ariaLabel="MetricQL expression"
+        experimentId={undefined}
+      />,
+    );
+
+    const wrapper = screen.getByTestId('metricql-editor');
+    await waitFor(() => {
+      expect(wrapper.querySelector('.cm-editor')).not.toBeNull();
+    });
+
+    // The linter is registered unconditionally and CM6's `delay: 500` debounce
+    // schedules the source fn on doc init.  Wait for the validateMetricql RPC
+    // to be invoked — that proves the linter is active.  The RPC must receive
+    // experimentId='' (the normalised wire value for global scope) regardless
+    // of whether the caller passed null, undefined, or ''.
+    await waitFor(
+      () => {
+        expect(mocked).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
+
+    expect(mocked).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: '@unknown_metric' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  test('linter_fires_when_experimentId_is_null_global_scope', async () => {
+    const { validateMetricql } = await import('@/lib/api');
+    const mocked = vi.mocked(validateMetricql);
+    mocked.mockResolvedValueOnce({
+      diagnostics: [{
+        severity: 1,
+        message: 'unresolved metric: @missing',
+        span: { startOffset: 0, endOffset: 8, line: 1, column: 1 },
+      }],
+      referencedMetricIds: [],
+    });
+
+    render(
+      <MetricqlEditor
+        value="@missing"
+        onChange={() => {}}
+        ariaLabel="MetricQL expression"
+        experimentId={null}
+      />,
+    );
+
+    const wrapper = screen.getByTestId('metricql-editor');
+    await waitFor(() => {
+      expect(wrapper.querySelector('.cm-editor')).not.toBeNull();
+    });
+
+    await waitFor(
+      () => {
+        expect(mocked).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
+
+    expect(mocked).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: '@missing' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 });
