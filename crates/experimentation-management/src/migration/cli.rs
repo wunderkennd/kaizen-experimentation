@@ -197,7 +197,11 @@ pub struct TierCounts {
 ///
 /// Only the fields that the scan serializes are read; everything else stays at
 /// proto3 defaults. `custom_sql` is the field the classifier reads.
-fn json_to_metric_definition(v: &Value) -> Result<MetricDefinition> {
+///
+/// `pub` so the `custom_migrator` binary's `shadow` subcommand can reuse the
+/// same JSON shape when reading candidates back out of `proposals.json`
+/// (T2 round-trip closer for `metric_to_json`).
+pub fn json_to_metric_definition(v: &Value) -> Result<MetricDefinition> {
     use experimentation_proto::experimentation::common::v1::{
         metric_definition::TypeConfig, CompositeConfig, CompositeOperand, FilteredMeanConfig,
         WindowedCountConfig,

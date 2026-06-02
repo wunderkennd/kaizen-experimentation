@@ -211,6 +211,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Module runbooks | `docs/runbooks/m4a-analysis.md`, `docs/runbooks/m4b-policy.md` |
 | Infra runbook (adding a Cloud Run service) | `docs/runbooks/gcp-compute-services.md` (registry pattern at `infra/pkg/gcp/services/`, established by #542 / PR #546) |
 | Operator runbook (creating M5 custom metrics) | `docs/runbooks/m5-metric-definitions.md` (Tier 1 types FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #434) |
+| Operator runbook (ADR-026 Phase 3 migration) | `docs/runbooks/adr-026-phase-3-migration.md` (scan + translate + shadow + apply workflow for legacy CUSTOM metrics; #437) |
 | Work tracking | GitHub Issues (Milestones = Sprints, Issues = Tasks) |
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |

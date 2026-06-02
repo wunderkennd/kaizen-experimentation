@@ -38,6 +38,27 @@ service ExperimentManagementService {
   rpc GetMetricDefinition(GetMetricDefinitionRequest) returns (experimentation.common.v1.MetricDefinition);
   rpc ListMetricDefinitions(ListMetricDefinitionsRequest) returns (ListMetricDefinitionsResponse);
 
+  // MigrateMetricDefinition (ADR-026 Phase 3 / #437) — Lock L7 two-step
+  // apply contract. Operators call this from `custom_migrator apply` once
+  // a candidate's shadow run has been APPROVED by M3.
+  //
+  // The handler enforces (in this order):
+  //   1. new_metric.type != CUSTOM (InvalidArgument).
+  //   2. new_metric.metric_id != old_metric_id (InvalidArgument).
+  //   3. old_metric_id exists AND its type is CUSTOM (InvalidArgument).
+  //   4. validate_metric_definition(new_metric) passes — same validator
+  //      used by CreateMetricDefinition (InvalidArgument).
+  //   5. shadow_run_result_id resolves to an APPROVED row via M3's
+  //      GetShadowResults (FailedPrecondition if not APPROVED; Unavailable
+  //      if M3 itself errors).
+  //
+  // On success, a single atomic transaction inserts the new metric into
+  // metric_definitions and an audit row into metric_migrations. On any
+  // unique-constraint collision the call returns AlreadyExists. The old
+  // CUSTOM row is NOT deleted — it remains for read-compat / audit per
+  // ADR-026 Phase 3 non-goals.
+  rpc MigrateMetricDefinition(MigrateMetricDefinitionRequest) returns (MigrateMetricDefinitionResponse);
+
   // Layer management.
   rpc CreateLayer(CreateLayerRequest) returns (experimentation.common.v1.Layer);
   rpc GetLayer(GetLayerRequest) returns (experimentation.common.v1.Layer);
@@ -135,6 +156,38 @@ message ListMetricDefinitionsRequest {
 message ListMetricDefinitionsResponse {
   repeated experimentation.common.v1.MetricDefinition metrics = 1;
   string next_page_token = 2;
+}
+
+// --- MigrateMetricDefinition (ADR-026 Phase 3 / #437) ---
+
+// MigrateMetricDefinition — Lock L7 two-step apply contract. Migrates a
+// CUSTOM (raw-SQL) metric to a structured / MetricQL replacement once its
+// shadow run has been APPROVED by M3. See the rpc comment in
+// ExperimentManagementService above for the full precondition order.
+message MigrateMetricDefinitionRequest {
+  // The CUSTOM metric being deprecated. MUST exist + MUST have type=CUSTOM.
+  string old_metric_id = 1;
+  // The replacement metric definition. MUST NOT have type=CUSTOM.
+  // MUST have metric_id != old_metric_id.
+  experimentation.common.v1.MetricDefinition new_metric = 2;
+  // The result_id returned by M3's PromoteShadowResult (which equals the
+  // shadow_id of the promoted run — see metrics_service.proto). M5 verifies
+  // via M3's GetShadowResults RPC that this resolves to an APPROVED
+  // metric_shadow_runs row before creating the new metric. Encodes the
+  // L7 two-step gate.
+  string shadow_run_result_id = 3;
+  // Operator identifier for the audit log (e.g., user email or service id).
+  string operator = 4;
+}
+
+message MigrateMetricDefinitionResponse {
+  // The metric_id of the newly-created replacement metric (echo of
+  // request.new_metric.metric_id).
+  string new_metric_id = 1;
+  // The migration_id of the audit-log row in metric_migrations.
+  string migration_id = 2;
+  // RFC 3339 timestamp the migration was committed (server time).
+  string applied_at = 3;
 }
 
 // --- PreviewMetricDefinition (ADR-026 Phase 2 / #436) ---

@@ -39,7 +39,8 @@ use experimentation_proto::experimentation::management::v1::{
     GetMetricDefinitionRequest, GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
     GetSurrogateCalibrationRequest, ListExperimentsRequest, ListExperimentsResponse,
     ListMetricDefinitionsRequest, ListMetricDefinitionsResponse, ListSurrogateModelsRequest,
-    ListSurrogateModelsResponse, PauseExperimentRequest,
+    ListSurrogateModelsResponse, MigrateMetricDefinitionRequest,
+    MigrateMetricDefinitionResponse, PauseExperimentRequest,
     PortfolioStats as ProtoPortfolioStats, PreviewMetricDefinitionRequest,
     PreviewMetricDefinitionResponse, ResumeExperimentRequest, StartExperimentRequest,
     StreamConfigUpdatesRequest, TriggerSurrogateRecalibrationRequest, UpdateExperimentRequest,
@@ -47,7 +48,7 @@ use experimentation_proto::experimentation::management::v1::{
 };
 use experimentation_proto::experimentation::metrics::v1::{
     metric_computation_service_client::MetricComputationServiceClient,
-    CompileMetricqlPreviewRequest,
+    CompileMetricqlPreviewRequest, GetShadowResultsRequest,
 };
 
 use crate::bucket_reuse;
@@ -139,6 +140,13 @@ pub struct ManagementServiceHandler {
 impl ManagementServiceHandler {
     pub fn new(state: SharedState) -> Self {
         Self { state }
+    }
+
+    /// Accessor for the underlying store. Currently used by e2e tests that
+    /// need to assert against rows the handler wrote (e.g., the
+    /// `metric_migrations` audit row written by MigrateMetricDefinition).
+    pub fn store(&self) -> &Arc<ManagementStore> {
+        &self.state.store
     }
 }
 
@@ -1165,6 +1173,179 @@ impl ExperimentManagementService for ManagementServiceHandler {
         Ok(Response::new(ListMetricDefinitionsResponse {
             metrics,
             next_page_token: String::new(),
+        }))
+    }
+
+    // ---------------------------------------------------------------------------
+    // MigrateMetricDefinition (ADR-026 Phase 3 / #437)
+    // ---------------------------------------------------------------------------
+    //
+    // Lock L7 two-step apply contract: operators call this from
+    // `custom_migrator apply` once a candidate's shadow run has been APPROVED
+    // by M3. The handler enforces preconditions in a deliberate order so
+    // callers get the most helpful error first:
+    //
+    //   1. (b) new_metric.type != CUSTOM           → InvalidArgument
+    //   2. (c) new_metric.metric_id != old_metric_id → InvalidArgument
+    //   3. (a) old_metric_id exists AND is CUSTOM   → InvalidArgument
+    //   4. (e) validate_metric_definition(new)      → InvalidArgument
+    //   5. (d) M3 shadow status == APPROVED        → FailedPrecondition
+    //
+    // Cheap proto-field checks (1, 2) run first so we never burn DB or RPC
+    // round trips on obvious operator mistakes. Cross-service checks (3, 5)
+    // run after local validation (4) so we never call M3 on a request that
+    // would have failed anyway.
+    //
+    // On success a single atomic transaction (see `ManagementStore::migrate_metric`)
+    // inserts the new metric_definitions row + the metric_migrations audit
+    // row. Unique-constraint violations on either side surface as AlreadyExists.
+    async fn migrate_metric_definition(
+        &self,
+        request: Request<MigrateMetricDefinitionRequest>,
+    ) -> Result<Response<MigrateMetricDefinitionResponse>, Status> {
+        let req = request.into_inner();
+        let old_metric_id = req.old_metric_id.trim();
+        let shadow_run_result_id = req.shadow_run_result_id.trim();
+        let operator = req.operator.trim();
+        let new_metric = req
+            .new_metric
+            .ok_or_else(|| Status::invalid_argument("new_metric is required"))?;
+
+        if old_metric_id.is_empty() {
+            return Err(Status::invalid_argument("old_metric_id is required"));
+        }
+        if shadow_run_result_id.is_empty() {
+            return Err(Status::invalid_argument("shadow_run_result_id is required"));
+        }
+        if operator.is_empty() {
+            return Err(Status::invalid_argument("operator is required"));
+        }
+
+        // Parse shadow_run_result_id as a UUID up front, with the rest of the
+        // request-shape validations. A malformed UUID is a caller bug, not a
+        // missing shadow run; surfacing it as InvalidArgument here avoids
+        // burning an M3 round trip and avoids the misleading
+        // FailedPrecondition("shadow_run_result_id not found in M3") that the
+        // mock M3 (and probably the real one) would otherwise return.
+        let shadow_uuid = Uuid::parse_str(shadow_run_result_id).map_err(|e| {
+            Status::invalid_argument(format!(
+                "shadow_run_result_id is not a valid UUID: {shadow_run_result_id} ({e})"
+            ))
+        })?;
+
+        // (b) The new metric MUST NOT be CUSTOM. Migration is exactly the act
+        // of leaving CUSTOM behind; allowing CUSTOM → CUSTOM would defeat the
+        // whole purpose of the Phase 3 deprecation track.
+        if new_metric.r#type() == MetricType::Custom {
+            return Err(Status::invalid_argument(
+                "new metric must not be CUSTOM (migrate to FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT, or METRICQL)",
+            ));
+        }
+
+        // (c) The new metric_id MUST differ from the old. Allowing same-id
+        // would be an in-place mutation, which Phase 3 explicitly forbids
+        // (L7: "Never destructive in-place").
+        if new_metric.metric_id.trim() == old_metric_id {
+            return Err(Status::invalid_argument(
+                "new metric_id must differ from old_metric_id (in-place migration is forbidden)",
+            ));
+        }
+
+        // (a) The old metric MUST exist AND its type MUST be CUSTOM. We use
+        // get_metric_type because the cycle-detection lookup already exposes
+        // it cheaply (single-column SELECT). NotFound + non-CUSTOM both map
+        // to InvalidArgument so the operator gets a clear actionable error
+        // distinct from a missing-new-metric or shadow-not-approved error.
+        match self.state.store.get_metric_type(old_metric_id).await {
+            Ok(MetricType::Custom) => {}
+            Ok(other) => {
+                return Err(Status::invalid_argument(format!(
+                    "old metric must be CUSTOM but is {:?}: {old_metric_id}",
+                    other
+                )));
+            }
+            Err(StoreError::NotFound(_)) => {
+                return Err(Status::invalid_argument(format!(
+                    "old metric does not exist: {old_metric_id}"
+                )));
+            }
+            Err(e) => return Err(store_err_to_status(e)),
+        }
+
+        // (e) Re-run the standard CreateMetricDefinition validator on the
+        // replacement. This catches MetricQL parse errors, COMPOSITE cycles,
+        // FILTERED_MEAN value_column violations, etc. Same code path as
+        // Create — the migration RPC never bypasses validation.
+        validators::validate_metric_definition(&new_metric, self.state.store.as_ref())
+            .await
+            .map_err(|boxed| *boxed)?;
+
+        // (d) The shadow run identified by shadow_run_result_id MUST be
+        // APPROVED. PromoteShadowResult returns result_id == shadow_id of the
+        // promoted run, so we look it up via GetShadowResults. The L7
+        // two-step gate hinges on this check: a candidate that has not been
+        // approved by M3's 7-day rolling differ can never reach M5's write
+        // path. Network errors from M3 surface as Unavailable (the operator
+        // can retry); non-APPROVED status surfaces as FailedPrecondition
+        // (different error class: caller did not prepare correctly).
+        let mut metrics_client = self.state.metrics_client.clone();
+        let shadow_resp = metrics_client
+            .get_shadow_results(Request::new(GetShadowResultsRequest {
+                shadow_id: shadow_run_result_id.to_string(),
+            }))
+            .await
+            .map_err(|status| {
+                // Propagate the actual code if it's already Unavailable / NotFound,
+                // otherwise wrap as Unavailable since M5 cannot proceed without
+                // M3's verdict.
+                match status.code() {
+                    tonic::Code::NotFound => Status::failed_precondition(format!(
+                        "shadow_run_result_id not found in M3: {shadow_run_result_id}"
+                    )),
+                    tonic::Code::Unavailable => Status::unavailable(format!(
+                        "M3 unavailable while verifying shadow run: {}",
+                        status.message()
+                    )),
+                    _ => Status::unavailable(format!(
+                        "M3 GetShadowResults failed: {}",
+                        status.message()
+                    )),
+                }
+            })?
+            .into_inner();
+
+        if shadow_resp.status != "APPROVED" {
+            return Err(Status::failed_precondition(format!(
+                "shadow run result must be APPROVED but is {}: {}",
+                shadow_resp.status, shadow_run_result_id
+            )));
+        }
+
+        // All preconditions cleared: single atomic transaction inserts the
+        // new metric + audit row. The old CUSTOM row is left in place per
+        // L7 (non-destructive). shadow_uuid was already parsed at the
+        // request-shape stage above.
+        let (new_row, migration_id, applied_at) = self
+            .state
+            .store
+            .migrate_metric(&new_metric, old_metric_id, shadow_uuid, operator)
+            .await
+            .map_err(store_err_to_status)?;
+
+        info!(
+            target: "m5.migration",
+            old_metric_id = %old_metric_id,
+            new_metric_id = %new_row.metric_id,
+            shadow_run_result_id = %shadow_run_result_id,
+            operator = %operator,
+            migration_id = %migration_id,
+            "migrated CUSTOM metric definition"
+        );
+
+        Ok(Response::new(MigrateMetricDefinitionResponse {
+            new_metric_id: new_row.metric_id,
+            migration_id: migration_id.to_string(),
+            applied_at: applied_at.to_rfc3339(),
         }))
     }
 
