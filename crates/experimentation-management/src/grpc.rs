@@ -2026,6 +2026,48 @@ mod tests {
         assert!(!diags.is_empty());
     }
 
+    // ── Global-scope known_metric_ids (#571 safety-net) ──────────────────────
+    // The real RPC-level test lives in
+    // `tests/validate_metricql_global_scope_test.rs` and is DATABASE_URL-gated.
+    // These two pure-Rust tests prove the validator-layer contract used by the
+    // empty-experiment_id branch of `validate_metricql`, so the contract
+    // doesn't regress in CI environments without Postgres.
+
+    #[test]
+    fn global_scope_empty_catalog_flags_unknown_ref_with_position() {
+        // Simulates the empty-experiment_id branch with an empty global
+        // catalog: `Some(&empty)` triggers existence checks and an unresolved
+        // @ref must come back with a 1-indexed line:col via internal_to_proto_diag.
+        use std::collections::HashSet;
+        let empty: HashSet<String> = HashSet::new();
+        let ctx = ValidateContext { known_metric_ids: Some(&empty) };
+        let src = "@watch_time + 0";
+        let diags = validators::metricql::validate_metricql(src, &ctx).unwrap_err();
+        assert_eq!(diags.len(), 1, "expected one unresolved-ref diagnostic, got: {diags:?}");
+        let proto = internal_to_proto_diag(diags.into_iter().next().unwrap(), src);
+        assert!(
+            proto.message.contains("@watch_time"),
+            "diagnostic must reference the unresolved id; got: {}",
+            proto.message
+        );
+        let span = proto.span.expect("span must be present");
+        assert!(span.line >= 1, "line must be 1-indexed; got {}", span.line);
+        assert!(span.column >= 1, "column must be 1-indexed; got {}", span.column);
+    }
+
+    #[test]
+    fn global_scope_with_known_id_validates_clean() {
+        // Simulates the empty-experiment_id branch with a catalog containing
+        // `watch_time`: the same expression as above must validate cleanly.
+        use std::collections::HashSet;
+        let mut catalog: HashSet<String> = HashSet::new();
+        catalog.insert("watch_time".to_string());
+        let ctx = ValidateContext { known_metric_ids: Some(&catalog) };
+        let refs = validators::metricql::validate_metricql("@watch_time + 0", &ctx)
+            .expect("expression with known @ref must validate");
+        assert_eq!(refs, vec!["watch_time"]);
+    }
+
     #[test]
     fn multiline_expression_error_attributed_to_line2() {
         // "mean(heartbeat.value)\nand wrong" — the "and" part will parse/fail
