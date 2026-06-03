@@ -182,16 +182,6 @@ function isFormValid(state: MetricFormState): boolean {
   }
 }
 
-/**
- * Experiment ID is not available on the metric creation form (a metric is not
- * yet bound to an experiment at creation time). The MetricQL validator (B4)
- * and preview RPC (B5/C2) accept an empty string — the server resolves
- * @metric_ref existence from the global metric catalog, not per-experiment.
- * A follow-up spec can thread a real experimentId here once the form-shell
- * supports experiment context.
- */
-const METRICQL_FORM_EXPERIMENT_ID = '';
-
 export default function NewMetricPage() {
   const router = useRouter();
   const { addToast } = useToast();
@@ -304,10 +294,16 @@ export default function NewMetricPage() {
               />
             )}
             {state.type === 'METRICQL' && (
+              // experimentId is intentionally omitted — a metric is not yet
+              // bound to an experiment at creation time. The B4 linter forwards
+              // an empty experiment_id to M5's ValidateMetricql, which treats
+              // empty as global scope and builds the known-metric set from the
+              // full catalog (Issue #571). Live diagnostics activate as the
+              // operator types.
               <MetricqlSection
                 value={state.metricqlExpression}
                 onChange={(next) => dispatch({ type: 'SET_METRICQL_EXPRESSION', value: next })}
-                experimentId={METRICQL_FORM_EXPERIMENT_ID}
+                experimentId={null}
                 knownMetricIds={knownMetricIds}
                 disabled={state.submitting}
               />

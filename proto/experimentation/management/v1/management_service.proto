@@ -216,7 +216,9 @@ message PreviewMetricDefinitionResponse {
 // against the experiment's metric catalog. No side effects; safe to call
 // at the editor's debounce cadence (~500ms per keystroke pause).
 message ValidateMetricqlRequest {
-  // Scopes the known-metric-ids lookup. Required.
+  // Scopes the known-metric-ids lookup. Empty string = global scope:
+  // the validator builds known_metric_ids from the full metric_definitions
+  // table. Set to a specific experiment id to scope to that experiment.
   string experiment_id = 1;
   // The MetricQL source text to validate. Empty source returns one
   // diagnostic "empty expression".

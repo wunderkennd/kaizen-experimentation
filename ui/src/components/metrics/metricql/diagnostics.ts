@@ -30,11 +30,22 @@ export type { ValidateMetricqlRpcResponse };
 
 export interface MetricqlLinterOptions {
   /**
-   * Experiment ID passed to the ValidateMetricql RPC. Required.
+   * Experiment ID passed to the ValidateMetricql RPC.
+   *
+   * Empty / null / undefined all mean "global scope" — Issue #571 Task 1 taught
+   * the M5 ValidateMetricql handler to build the known-metric set from the full
+   * metric_definitions table (instead of an experiment's bound metrics) when
+   * the request's experiment_id is empty. This lets the metric-creation form,
+   * which has no experimentId yet, register the linter and receive live
+   * diagnostics as the operator types.
+   *
    * Captured at mount; if the experimentId prop changes, the editor is
    * remounted by the parent form (B6) so this capture is always fresh.
+   *
+   * Normalised to `''` at the RPC boundary so the wire format stays a plain
+   * string (matches `ValidateMetricqlRequest.experiment_id: string` in proto).
    */
-  experimentId: string;
+  experimentId: string | null | undefined;
 
   /**
    * Injected validate function — defaults to the real API client.
@@ -77,6 +88,10 @@ export interface MetricqlLinterOptions {
 export function metricqlLintSource(opts: MetricqlLinterOptions) {
   const timeoutMs = opts.timeoutMs ?? 2000;
   const validate = opts.validateFn ?? validateMetricql;
+  // Normalise null / undefined to '' at construction time so every RPC call
+  // sees the same wire-format string (matches proto). M5 treats '' as the
+  // global-scope signal (Issue #571 Task 1).
+  const experimentIdWire = opts.experimentId ?? '';
 
   // Mutable state shared across lint invocations for this editor instance.
   let currentController: AbortController | null = null;
@@ -103,7 +118,7 @@ export function metricqlLintSource(opts: MetricqlLinterOptions) {
 
     try {
       const response = await validate(
-        { experimentId: opts.experimentId, metricqlExpression: source },
+        { experimentId: experimentIdWire, metricqlExpression: source },
         { signal: ctl.signal },
       );
       clearTimeout(timer);
@@ -178,9 +193,12 @@ export function metricqlLintSource(opts: MetricqlLinterOptions) {
  *
  * Usage (inside the MetricqlEditor mount-once useEffect):
  *
- *   if (experimentId) {
- *     extensions.push(metricqlLinter({ experimentId, debounceMs: 500, timeoutMs: 2000 }));
- *   }
+ *   extensions.push(metricqlLinter({ experimentId, debounceMs: 500, timeoutMs: 2000 }));
+ *
+ * Registered unconditionally — when experimentId is null / undefined / '' the
+ * linter forwards an empty experiment_id to ValidateMetricql, which M5 treats
+ * as global scope (Issue #571). This means standalone usage (e.g. the metric
+ * creation form) still surfaces inline diagnostics.
  *
  * The `delay` option on `linter()` is the debounce — CM6 fires the source
  * function only after `debounceMs` ms of idle, so we don't need a separate

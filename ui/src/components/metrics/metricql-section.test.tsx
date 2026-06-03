@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MetricqlSection } from './metricql-section';
 
 // ---------------------------------------------------------------------------
@@ -213,5 +213,103 @@ describe('MetricqlSection', () => {
     await screen.findByTestId('metricql-editor');
     // The helper text includes "@metric_id" in a <code> element.
     expect(screen.getByText('@metric_id')).toBeInTheDocument();
+  });
+
+  // ─── Global-scope live-lint (Issue #571 Task 2) ────────────────────────────
+  //
+  // The metric-creation form renders MetricqlSection with experimentId={null}
+  // because a metric is not yet bound to an experiment at creation time.
+  // The linter must still activate and forward an empty experiment_id to M5's
+  // ValidateMetricql RPC, which builds the known-metric set from the global
+  // catalog (Task 1 of #571). These tests mirror the new-metric form's call
+  // shape and verify the squiggle path is wired end-to-end.
+
+  test('linter activates and surfaces diagnostics when experimentId is null', async () => {
+    const { validateMetricql } = await import('@/lib/api');
+    const mocked = vi.mocked(validateMetricql);
+    mocked.mockResolvedValueOnce({
+      diagnostics: [{
+        severity: 1,
+        message: 'unresolved metric: @unknown_metric',
+        span: { startOffset: 0, endOffset: 15, line: 1, column: 1 },
+      }],
+      referencedMetricIds: [],
+    });
+
+    render(
+      <MetricqlSection
+        value="@unknown_metric"
+        onChange={() => {}}
+        experimentId={null}
+        knownMetricIds={[]}
+      />,
+    );
+
+    await screen.findByTestId('metricql-editor');
+
+    // The CM6 linter has a 500ms `delay` debounce. Wait for the RPC to fire.
+    await waitFor(
+      () => {
+        expect(mocked).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
+
+    // Verify the empty wire signal that M5 interprets as global scope.
+    expect(mocked).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: '@unknown_metric' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    // After the response resolves, CM6 paints lint markers into the DOM as
+    // `.cm-lintRange` (with severity-specific subclass `.cm-lintRange-error`).
+    // This is the squiggle assertion.
+    await waitFor(
+      () => {
+        const editor = screen.getByTestId('metricql-editor');
+        const lintRange = editor.querySelector('.cm-lintRange-error');
+        expect(lintRange).not.toBeNull();
+      },
+      { timeout: 3000 },
+    );
+
+    // MetricqlSection normalises `experimentId ?? ''` for MetricqlPreview
+    // (which requires a non-nullable string). Verify the preview stub
+    // receives the empty wire signal, mirroring the linter's RPC wire shape.
+    const previewToggle = screen.getByTestId('metricql-preview-toggle');
+    expect(previewToggle.getAttribute('data-experiment-id')).toBe('');
+  });
+
+  test('linter activates when experimentId prop is omitted entirely', async () => {
+    // Omitting the prop (vs. passing null) exercises the `undefined` codepath
+    // through the optional `experimentId?: string | null` type.
+    const { validateMetricql } = await import('@/lib/api');
+    const mocked = vi.mocked(validateMetricql);
+    mocked.mockResolvedValueOnce({
+      diagnostics: [],
+      referencedMetricIds: [],
+    });
+
+    render(
+      <MetricqlSection
+        value="@another"
+        onChange={() => {}}
+        knownMetricIds={[]}
+      />,
+    );
+
+    await screen.findByTestId('metricql-editor');
+
+    await waitFor(
+      () => {
+        expect(mocked).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
+
+    expect(mocked).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: '@another' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 });

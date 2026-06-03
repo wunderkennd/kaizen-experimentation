@@ -184,6 +184,48 @@ describe('metricqlLintSource', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Global-scope normalisation (Issue #571 Task 2)
+  //
+  // The metric-creation form has no experimentId. M5's ValidateMetricql handler
+  // now treats an empty experiment_id string as global scope (Task 1 of #571).
+  // The linter accepts string | null | undefined and normalises to '' at the
+  // RPC boundary so the wire format stays a plain string matching the proto.
+  // -------------------------------------------------------------------------
+
+  test('normalises null experimentId to empty string at the RPC boundary', async () => {
+    const validate = mockValidate(okResponse());
+    const source = metricqlLintSource({ experimentId: null, validateFn: validate });
+
+    await source(makeView('mean(@ctr)'));
+    expect(validate).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: 'mean(@ctr)' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  test('normalises undefined experimentId to empty string at the RPC boundary', async () => {
+    const validate = mockValidate(okResponse());
+    const source = metricqlLintSource({ experimentId: undefined, validateFn: validate });
+
+    await source(makeView('mean(@ctr)'));
+    expect(validate).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: 'mean(@ctr)' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  test('passes empty-string experimentId through unchanged', async () => {
+    const validate = mockValidate(okResponse());
+    const source = metricqlLintSource({ experimentId: '', validateFn: validate });
+
+    await source(makeView('mean(@ctr)'));
+    expect(validate).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: 'mean(@ctr)' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  // -------------------------------------------------------------------------
   // AbortController — cancel-in-flight
   // -------------------------------------------------------------------------
 

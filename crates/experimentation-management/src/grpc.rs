@@ -11,13 +11,14 @@
 //! On connect, the server first back-fills all currently RUNNING/PAUSED
 //! experiments (so M1 can recover after restart), then streams live updates.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
@@ -1588,11 +1589,8 @@ impl ExperimentManagementService for ManagementServiceHandler {
     ) -> Result<Response<ValidateMetricqlResponse>, Status> {
         let req = request.into_inner();
 
-        if req.experiment_id.trim().is_empty() {
-            return Err(Status::invalid_argument("experiment_id is required"));
-        }
-
         // Per plan L8: empty expression returns one diagnostic, not an RPC error.
+        // (Empty `experiment_id` is now valid — see global-scope branch below.)
         if req.metricql_expression.trim().is_empty() {
             return Ok(Response::new(ValidateMetricqlResponse {
                 diagnostics: vec![ProtoMetricqlDiagnostic {
@@ -1609,10 +1607,35 @@ impl ExperimentManagementService for ManagementServiceHandler {
             }));
         }
 
-        // Pass None for known_metric_ids — existence checks are enforced at
-        // write time (CreateMetricDefinition). The live-lint path only needs to
-        // catch parse/semantic structural errors during interactive editing.
-        let ctx = validators::metricql::ValidateContext { known_metric_ids: None };
+        // ADR-026 Phase 2 follow-up (#571): empty `experiment_id` is the global
+        // scope used by the metric-creation form (which has no experiment
+        // context). Build `known_metric_ids` from the full metric_definitions
+        // table so the live-lint surface can flag unresolved @refs even before
+        // an experiment exists. The per-experiment path stays `None` for now —
+        // existence checks already run at write-time on CreateMetricDefinition,
+        // and an experiment-scoped catalog lookup belongs in a later sub-task.
+        let global_set: Option<HashSet<String>> = if req.experiment_id.trim().is_empty() {
+            debug!("validate_metricql: empty experiment_id, loading global metric catalog");
+            // `list_metric_ids` runs `SELECT metric_id FROM metric_definitions`
+            // rather than `list_metrics(MetricFilter::default())`'s 18-column
+            // SELECT — this handler runs on every ~500ms lint cycle and the
+            // wider query was deserialising large JSON / SQL text blobs that
+            // get immediately discarded. (Devin PR #595 🟡 perf finding.)
+            let ids = self
+                .state
+                .store
+                .list_metric_ids()
+                .await
+                .map_err(|err| {
+                    Status::internal(format!("failed to load global metric catalog: {err}"))
+                })?;
+            Some(ids.into_iter().collect())
+        } else {
+            None
+        };
+        let ctx = validators::metricql::ValidateContext {
+            known_metric_ids: global_set.as_ref(),
+        };
 
         let response =
             match validators::metricql::validate_metricql(&req.metricql_expression, &ctx) {
@@ -2007,6 +2030,48 @@ mod tests {
         assert!(result.is_err(), "count(login.foo) should fail semantic analysis");
         let diags = result.unwrap_err();
         assert!(!diags.is_empty());
+    }
+
+    // ── Global-scope known_metric_ids (#571 safety-net) ──────────────────────
+    // The real RPC-level test lives in
+    // `tests/validate_metricql_global_scope_test.rs` and is DATABASE_URL-gated.
+    // These two pure-Rust tests prove the validator-layer contract used by the
+    // empty-experiment_id branch of `validate_metricql`, so the contract
+    // doesn't regress in CI environments without Postgres.
+
+    #[test]
+    fn global_scope_empty_catalog_flags_unknown_ref_with_position() {
+        // Simulates the empty-experiment_id branch with an empty global
+        // catalog: `Some(&empty)` triggers existence checks and an unresolved
+        // @ref must come back with a 1-indexed line:col via internal_to_proto_diag.
+        use std::collections::HashSet;
+        let empty: HashSet<String> = HashSet::new();
+        let ctx = ValidateContext { known_metric_ids: Some(&empty) };
+        let src = "@watch_time + 0";
+        let diags = validators::metricql::validate_metricql(src, &ctx).unwrap_err();
+        assert_eq!(diags.len(), 1, "expected one unresolved-ref diagnostic, got: {diags:?}");
+        let proto = internal_to_proto_diag(diags.into_iter().next().unwrap(), src);
+        assert!(
+            proto.message.contains("@watch_time"),
+            "diagnostic must reference the unresolved id; got: {}",
+            proto.message
+        );
+        let span = proto.span.expect("span must be present");
+        assert!(span.line >= 1, "line must be 1-indexed; got {}", span.line);
+        assert!(span.column >= 1, "column must be 1-indexed; got {}", span.column);
+    }
+
+    #[test]
+    fn global_scope_with_known_id_validates_clean() {
+        // Simulates the empty-experiment_id branch with a catalog containing
+        // `watch_time`: the same expression as above must validate cleanly.
+        use std::collections::HashSet;
+        let mut catalog: HashSet<String> = HashSet::new();
+        catalog.insert("watch_time".to_string());
+        let ctx = ValidateContext { known_metric_ids: Some(&catalog) };
+        let refs = validators::metricql::validate_metricql("@watch_time + 0", &ctx)
+            .expect("expression with known @ref must validate");
+        assert_eq!(refs, vec!["watch_time"]);
     }
 
     #[test]

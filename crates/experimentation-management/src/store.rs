@@ -1216,6 +1216,24 @@ impl ManagementStore {
         Ok(rows.into_iter().map(MetricRow::from).collect())
     }
 
+    /// List just the `metric_id` column from `metric_definitions`. Used by
+    /// `validate_metricql`'s global-scope path (#571) which only needs a
+    /// `HashSet<String>` of ids to validate `@metric_ref` resolution and
+    /// runs on every ~500ms lint cycle. `list_metrics()` fetches all 18
+    /// columns including potentially large `custom_sql` / `type_config` /
+    /// `metricql_expression` text blobs — overkill for a global-scope
+    /// existence check. No filter argument: the global catalog is always
+    /// all-rows by definition. (Devin PR #595 🟡 perf finding.)
+    pub async fn list_metric_ids(&self) -> Result<Vec<String>, StoreError> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT metric_id FROM metric_definitions ORDER BY metric_id",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Db)?;
+        Ok(rows.into_iter().map(|(id,)| id).collect())
+    }
+
     /// True if a metric with the given id exists.
     pub async fn exists_metric(&self, metric_id: &str) -> Result<bool, StoreError> {
         let row: (bool,) = sqlx::query_as(
