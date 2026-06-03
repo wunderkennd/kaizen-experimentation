@@ -2,7 +2,11 @@
 
 ## Status
 
-**Proposed**
+| Component | Scope | Status | PR |
+|-----------|-------|--------|----|
+| **Core implementation** | `tost.rs`, CUPED composition, power analysis, golden files | **Implemented** (Closes #443) | #443 |
+| Phase 2 (M5) | M5 server-side equivalence conclusion logic | Proposed | — |
+| Phase 2 (M6) | M6 equivalence results view in experiment dashboard | Proposed | — |
 
 ## Context
 

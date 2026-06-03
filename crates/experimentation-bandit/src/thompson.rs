@@ -1,8 +1,7 @@
 //! Thompson Sampling for binary and continuous rewards.
 //!
 //! When a [`crate::reward_composer::RewardComposer`] is attached to the policy
-//! (via [`ThompsonSamplingPolicy::with_reward_composer`] or by constructing with
-//! [`ThompsonSamplingPolicy::new_multi_objective`]), multi-objective rewards are
+//! (via [`ThompsonSamplingPolicy::new_multi_objective`]), multi-objective rewards are
 //! composed into a scalar before the Beta posterior is updated. The composer's
 //! EMA normalizer state is persisted alongside the arm posteriors.
 
@@ -170,12 +169,6 @@ impl ThompsonSamplingPolicy {
             total_rewards: 0,
             reward_composer: Some(RewardComposer::new(objectives, method)),
         }
-    }
-
-    /// Attach or replace the reward composer on an existing policy.
-    pub fn with_reward_composer(mut self, composer: RewardComposer) -> Self {
-        self.reward_composer = Some(composer);
-        self
     }
 
     /// Get experiment ID.

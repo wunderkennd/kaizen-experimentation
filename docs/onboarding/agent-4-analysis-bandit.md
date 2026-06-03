@@ -54,8 +54,11 @@ crates/experimentation-stats/
 │   ├── lib.rs
 │   ├── ttest.rs           # Welch's t-test, effect size, CI
 │   ├── srm.rs             # Chi-squared SRM check
-│   ├── distribution.rs    # t-distribution CDF/quantile (statrs)
-│   └── fail_fast.rs       # NaN/Infinity/overflow detection
+│   └── distribution.rs    # t-distribution CDF/quantile (statrs)
+│
+│   # NaN / Infinity / overflow detection lives in
+│   # `experimentation-core::assert_finite!()` — used via the macro
+│   # throughout this crate (see ttest.rs, cuped.rs, etc.).
 └── tests/
     ├── ttest_golden.rs    # Verified against R t.test()
     └── srm_golden.rs      # Verified against R chisq.test()

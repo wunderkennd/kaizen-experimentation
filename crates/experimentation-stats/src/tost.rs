@@ -37,6 +37,8 @@
 use experimentation_core::error::{assert_finite, Error, Result};
 use statrs::distribution::{ContinuousCDF, Normal, StudentsT};
 
+use crate::ttest::welch_standard_error;
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -386,28 +388,6 @@ fn validate_config(config: &TostConfig) -> Result<()> {
         ));
     }
     Ok(())
-}
-
-struct WelchSe {
-    se: f64,
-    df: f64,
-}
-
-fn welch_standard_error(n_c: f64, n_t: f64, var_c: f64, var_t: f64) -> Result<WelchSe> {
-    let se = (var_c / n_c + var_t / n_t).sqrt();
-    assert_finite(se, "standard error");
-    if se == 0.0 {
-        return Err(Error::Numerical(
-            "standard error is zero (no variance in data)".into(),
-        ));
-    }
-
-    let df_num = (var_c / n_c + var_t / n_t).powi(2);
-    let df_den = (var_c / n_c).powi(2) / (n_c - 1.0)
-        + (var_t / n_t).powi(2) / (n_t - 1.0);
-    let df = df_num / df_den;
-    assert_finite(df, "degrees of freedom");
-    Ok(WelchSe { se, df })
 }
 
 fn tost_from_moments(
