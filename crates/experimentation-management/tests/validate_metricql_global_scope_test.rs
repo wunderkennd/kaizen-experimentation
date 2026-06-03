@@ -3,8 +3,11 @@
 //! These tests exercise the live-lint path used by the M6 metric-creation form,
 //! which has no experiment context yet. When `experiment_id` is empty the M5
 //! handler must build its `known_metric_ids` set from the global
-//! `metric_definitions` table (via `ManagementStore::list_metrics(default)`),
-//! NOT reject the request with `INVALID_ARGUMENT`.
+//! `metric_definitions` table (via `ManagementStore::list_metric_ids()` — a
+//! lightweight `SELECT metric_id` introduced in response to Devin PR #595 🟡
+//! perf finding; the wider `list_metrics()` was deserialising 18 columns
+//! including large JSON/SQL blobs on every ~500ms lint cycle), NOT reject
+//! the request with `INVALID_ARGUMENT`.
 //!
 //! ## Running this suite
 //!

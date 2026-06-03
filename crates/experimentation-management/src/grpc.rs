@@ -53,7 +53,7 @@ use experimentation_proto::experimentation::metrics::v1::{
 };
 
 use crate::bucket_reuse;
-use crate::store::{ExperimentRow, ManagementStore, MetricFilter, StoreError, VariantRow};
+use crate::store::{ExperimentRow, ManagementStore, StoreError, VariantRow};
 use crate::validators;
 
 // Broadcast channel capacity. Slow subscribers will see RecvError::Lagged.
@@ -1616,15 +1616,20 @@ impl ExperimentManagementService for ManagementServiceHandler {
         // and an experiment-scoped catalog lookup belongs in a later sub-task.
         let global_set: Option<HashSet<String>> = if req.experiment_id.trim().is_empty() {
             debug!("validate_metricql: empty experiment_id, loading global metric catalog");
-            let rows = self
+            // `list_metric_ids` runs `SELECT metric_id FROM metric_definitions`
+            // rather than `list_metrics(MetricFilter::default())`'s 18-column
+            // SELECT — this handler runs on every ~500ms lint cycle and the
+            // wider query was deserialising large JSON / SQL text blobs that
+            // get immediately discarded. (Devin PR #595 🟡 perf finding.)
+            let ids = self
                 .state
                 .store
-                .list_metrics(MetricFilter::default())
+                .list_metric_ids()
                 .await
                 .map_err(|err| {
                     Status::internal(format!("failed to load global metric catalog: {err}"))
                 })?;
-            Some(rows.into_iter().map(|r| r.metric_id).collect())
+            Some(ids.into_iter().collect())
         } else {
             None
         };
