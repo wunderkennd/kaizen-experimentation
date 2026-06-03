@@ -24,7 +24,8 @@ use experimentation_proto::experimentation::management::v1::{
     GetLayerAllocationsRequest, GetLayerAllocationsResponse, GetLayerRequest,
     GetMetricDefinitionRequest, GetSurrogateCalibrationRequest, ListExperimentsRequest,
     ListExperimentsResponse, ListMetricDefinitionsRequest, ListMetricDefinitionsResponse,
-    ListSurrogateModelsRequest, ListSurrogateModelsResponse, PauseExperimentRequest,
+    ListSurrogateModelsRequest, ListSurrogateModelsResponse,
+    MigrateMetricDefinitionRequest, MigrateMetricDefinitionResponse, PauseExperimentRequest,
     PreviewMetricDefinitionRequest, PreviewMetricDefinitionResponse,
     ResumeExperimentRequest, StartExperimentRequest, StreamConfigUpdatesRequest,
     GetPortfolioAllocationRequest, GetPortfolioAllocationResponse,
@@ -567,6 +568,21 @@ impl ExperimentManagementService for ManagementServiceHandler {
             metrics,
             next_page_token: String::new(),
         }))
+    }
+
+    async fn migrate_metric_definition(
+        &self,
+        _request: Request<MigrateMetricDefinitionRequest>,
+    ) -> Result<Response<MigrateMetricDefinitionResponse>, Status> {
+        // The in-memory contract-test handler doesn't carry the M3 shadow
+        // gate or the atomic-transaction store. MigrateMetricDefinition is
+        // exercised end-to-end via the PG-backed e2e suite in
+        // tests/metric_migration_e2e_test.rs and unit-tested via the
+        // production handler in src/grpc.rs.
+        Err(Status::unimplemented(
+            "MigrateMetricDefinition is not implemented in the in-memory contract-test handler; \
+             use the production handler in src/grpc.rs (PG-backed) for end-to-end testing.",
+        ))
     }
 
     async fn create_layer(
