@@ -44,7 +44,8 @@ function FlagDetailContent() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handlePromote = async () => {
+  const handlePromote = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!primaryMetricId.trim()) return;
     setPromoting(true);
     setPromoteError(null);
@@ -216,7 +217,7 @@ function FlagDetailContent() {
               Promote to Experiment
             </button>
           ) : (
-            <div data-testid="promote-form">
+            <form onSubmit={handlePromote} data-testid="promote-form">
               <h3 className="mb-3 text-sm font-semibold text-gray-900">Promote to Experiment</h3>
               <div className="mb-3 flex flex-wrap items-end gap-3">
                 <div>
@@ -249,7 +250,7 @@ function FlagDetailContent() {
                   />
                 </div>
                 <button
-                  onClick={handlePromote}
+                  type="submit"
                   disabled={promoting || !primaryMetricId.trim()}
                   className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
                   data-testid="promote-submit"
@@ -281,6 +282,7 @@ function FlagDetailContent() {
                   {promoting ? 'Promoting...' : 'Promote'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowPromote(false)}
                   className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
@@ -290,7 +292,7 @@ function FlagDetailContent() {
               {promoteError && (
                 <p className="text-sm text-red-600" data-testid="promote-error">{promoteError}</p>
               )}
-            </div>
+            </form>
           )}
         </div>
       )}
