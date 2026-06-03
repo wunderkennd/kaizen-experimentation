@@ -78,11 +78,14 @@ function CreateFlagContent() {
 
       <form onSubmit={handleSubmit} className="max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4">
-          <label htmlFor="flag-name" className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+          <label htmlFor="flag-name" className="mb-1 block text-sm font-medium text-gray-700">
+            Name <span className="text-red-500">*</span>
+          </label>
           <input
             id="flag-name"
             type="text"
             required
+            aria-required="true"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. dark_mode_rollout"
