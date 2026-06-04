@@ -21,6 +21,25 @@ function CreateFlagContent() {
   const [type, setType] = useState<FlagType>('BOOLEAN');
   const [defaultValue, setDefaultValue] = useState('false');
   const [enabled, setEnabled] = useState(false);
+
+  const handleTypeChange = (newType: FlagType) => {
+    setType(newType);
+    // Set sensible default values when type changes
+    switch (newType) {
+      case 'BOOLEAN':
+        setDefaultValue('false');
+        break;
+      case 'NUMERIC':
+        setDefaultValue('0');
+        break;
+      case 'JSON':
+        setDefaultValue('{}');
+        break;
+      case 'STRING':
+        setDefaultValue('');
+        break;
+    }
+  };
   const [rolloutPct, setRolloutPct] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +130,8 @@ function CreateFlagContent() {
           <select
             id="flag-type"
             value={type}
-            onChange={(e) => setType(e.target.value as FlagType)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            onChange={(e) => handleTypeChange(e.target.value as FlagType)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             data-testid="flag-type-select"
           >
             {FLAG_TYPES.map((t) => (
@@ -123,14 +142,34 @@ function CreateFlagContent() {
 
         <div className="mb-4">
           <label htmlFor="flag-default" className="mb-1 block text-sm font-medium text-gray-700">Default Value</label>
-          <input
-            id="flag-default"
-            type="text"
-            value={defaultValue}
-            onChange={(e) => setDefaultValue(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            data-testid="flag-default-input"
-          />
+          {type === 'BOOLEAN' ? (
+            <select
+              id="flag-default"
+              value={defaultValue}
+              onChange={(e) => setDefaultValue(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              data-testid="flag-default-input"
+            >
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          ) : (
+            <input
+              id="flag-default"
+              type={type === 'NUMERIC' ? 'number' : 'text'}
+              value={defaultValue}
+              onChange={(e) => setDefaultValue(e.target.value)}
+              placeholder={type === 'JSON' ? '{ "key": "value" }' : ''}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              data-testid="flag-default-input"
+            />
+          )}
+          {type === 'JSON' && (
+            <p className="mt-1 text-xs text-gray-500">Must be a valid JSON string.</p>
+          )}
+          {type === 'NUMERIC' && (
+            <p className="mt-1 text-xs text-gray-500">Enter a numeric value.</p>
+          )}
         </div>
 
         <div className="mb-4 flex items-center gap-2">
