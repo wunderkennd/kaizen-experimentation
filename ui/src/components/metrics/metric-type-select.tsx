@@ -10,7 +10,7 @@ interface MetricTypeSelectProps {
 
 // Order: legacy types first (most-used), then new ADR-026 Phase 1 types.
 // Labels match METRIC_TYPE_BADGE / ALL_METRIC_TYPES in src/app/metrics/page.tsx.
-const TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] = [
+const ALL_TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] = [
   { value: 'MEAN',           label: 'Mean',           description: 'Average of a numeric value per user (e.g. watch time).' },
   { value: 'PROPORTION',     label: 'Proportion',     description: 'Binary event rate per user (e.g. conversion).' },
   { value: 'RATIO',          label: 'Ratio',          description: 'Numerator sum / denominator sum, delta-method variance.' },
@@ -23,8 +23,34 @@ const TYPE_OPTIONS: { value: MetricType; label: string; description: string }[] 
   { value: 'METRICQL',      label: 'MetricQL expression', description: 'Custom expression with arithmetic, filters, and @metric_ref references (ADR-026 Phase 2).' },
 ];
 
+// ADR-026 Phase 3 — L6 phase 3.B sunset gate.
+//
+// Flag key (canonical): `m6.metric_type.custom.hidden` (default: false).
+// Today the gate is read from a Next.js public env var so operators can flip
+// it at deploy time without depending on an M7 UI flag client:
+//
+//   NEXT_PUBLIC_METRIC_TYPE_CUSTOM_HIDDEN=true
+//
+// When this repo grows a first-class M7 UI flag client, replace the env-var
+// read below with the equivalent `useFeatureFlag('m6.metric_type.custom.hidden')`
+// call — the option-filter logic stays the same. The flag key above is the
+// stable contract.
+//
+// Flipping the gate begins the 2-cycle countdown for #602 (proto enum removal).
+// The 4-week zero-CUSTOMs criterion is observed via the
+// `metric_definition_custom_created_total` counter emitted from M5 (see
+// crates/experimentation-management/src/grpc.rs::create_metric_definition).
+//
+// Locked plan: docs/superpowers/plans/2026-05-30-adr-026-phase-3-custom-migration.md (L6).
+function isCustomHidden(): boolean {
+  return process.env.NEXT_PUBLIC_METRIC_TYPE_CUSTOM_HIDDEN === 'true';
+}
+
 export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelectProps) {
-  const description = TYPE_OPTIONS.find((o) => o.value === value)?.description ?? '';
+  const options = isCustomHidden()
+    ? ALL_TYPE_OPTIONS.filter((o) => o.value !== 'CUSTOM')
+    : ALL_TYPE_OPTIONS;
+  const description = options.find((o) => o.value === value)?.description ?? '';
   const isDeprecated = value === 'CUSTOM';
 
   return (
@@ -41,7 +67,7 @@ export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelect
         data-testid="metric-type-select"
         className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
       >
-        {TYPE_OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
