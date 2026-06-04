@@ -1109,11 +1109,36 @@ impl ExperimentManagementService for ManagementServiceHandler {
                 "x-kaizen-deprecation",
                 tonic::metadata::MetadataValue::from_static(DEPRECATION_HEADER_CUSTOM),
             );
+            // ADR-026 Phase 3 — L6 phase 3.B observable trigger telemetry.
+            //
+            // Canonical counter key: `metric_definition_custom_created_total`.
+            //
+            // This is the counter the L6 sunset-gate operators watch to confirm
+            // the "4 weeks of zero new CUSTOMs" criterion before flipping the
+            // M6 flag `m6.metric_type.custom.hidden`. Once flipped, a separate
+            // 2-cycle clock starts toward #602 (proto enum removal).
+            //
+            // M5 (`experimentation-management`) currently does NOT depend on
+            // the `prometheus` or `metrics` facade crates. Rather than pull
+            // either in for a single counter (which would be a separate
+            // ADR-level decision), we annotate the existing `tracing::info!`
+            // with a `monotonic_counter.*` field. When this crate later wires
+            // a Prometheus exporter via `tracing-subscriber` +
+            // `metrics-tracing-context`, the field automatically projects to
+            // a Prometheus counter of the same name with no call-site change.
+            // Until then, the counter is observable via structured log
+            // aggregation (Loki / CloudWatch Logs Insights / Datadog) by
+            // filtering `target=m5.deprecation` and counting
+            // `event=metric_definition_created`.
+            //
+            // Refs: #602 (proto enum removal trigger),
+            //       docs/superpowers/plans/2026-05-30-adr-026-phase-3-custom-migration.md (L6).
             tracing::info!(
                 target: "m5.deprecation",
                 metric_type = "CUSTOM",
                 metric_id = %metric_id_for_log,
                 event = "metric_definition_created",
+                monotonic_counter.metric_definition_custom_created_total = 1u64,
                 "custom metric created — emitting x-kaizen-deprecation header"
             );
         }
