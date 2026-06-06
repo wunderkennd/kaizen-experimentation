@@ -13,6 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Find newly-ready dependents and comment
+        # SECURITY: `github.event.issue.number` is a server-validated integer
+        # and contains no shell metacharacters, so direct interpolation would
+        # be safe in isolation. We still route it through `env:` to follow
+        # the same hardening pattern as `.github/workflows/branch-naming.yml`
+        # (#579) and `.github/workflows/stub-markers.yml` (#591). Untrusted
+        # `github.event.*` values must never be interpolated directly into a
+        # `run:` block — they belong in `env:` so the shell receives them as
+        # argv strings, not as code. See
+        # https://securitylab.github.com/research/github-actions-untrusted-input/
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
