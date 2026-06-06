@@ -413,8 +413,9 @@ async fn empty_metricql_expression_returns_invalid_argument_without_m3_call() {
 #[tokio::test]
 async fn whitespace_only_experiment_id_is_forwarded_to_m3_as_global_scope() {
     // #597: whitespace-only experiment_id is treated identically to empty
-    // — trim().is_empty() is the global-scope signal. M5 forwards the
-    // string verbatim; M3 trims on its side when building the catalog.
+    // — trim().is_empty() is the global-scope signal on M5's side. M5
+    // forwards the string verbatim; M3 decides how to interpret
+    // whitespace-only when building the catalog (Task 2).
     let (addr, captured, _resp) = spawn_mock_m3(PresetResponse::Ok(
         CompileMetricqlPreviewResponse {
             compiled_sql: "SELECT avg(v) FROM t".into(),
