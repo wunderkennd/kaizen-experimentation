@@ -378,6 +378,56 @@ describe('MetricqlPreview', () => {
     );
   });
 
+  // ── Global-scope normalisation (Issue #597) ────────────────────────────────
+  //
+  // The metric-creation form renders MetricqlPreview with experimentId={null}
+  // because a metric is not yet bound to an experiment at creation time. The
+  // component accepts `string | null | undefined`, normalises to `''` once at
+  // the previewFn call site (mirrors PR #595's diagnostics.ts pattern), and
+  // forwards the empty wire signal that M5/M3 treat as global scope.
+
+  test('experimentId={null} normalizes to \'\' on the wire', async () => {
+    const previewFn = makePreviewFn({ compiledSql: 'SELECT 1', diagnostics: [] });
+
+    render(
+      <MetricqlPreview
+        experimentId={null}
+        metricqlExpression="count(play.start)"
+        previewFn={previewFn}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('metricql-preview-toggle'));
+
+    await waitFor(() => expect(previewFn).toHaveBeenCalledTimes(1));
+
+    expect(previewFn).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: 'count(play.start)' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  test('experimentId={undefined} normalizes to \'\' on the wire', async () => {
+    const previewFn = makePreviewFn({ compiledSql: 'SELECT 1', diagnostics: [] });
+
+    render(
+      <MetricqlPreview
+        experimentId={undefined}
+        metricqlExpression="count(play.start)"
+        previewFn={previewFn}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('metricql-preview-toggle'));
+
+    await waitFor(() => expect(previewFn).toHaveBeenCalledTimes(1));
+
+    expect(previewFn).toHaveBeenCalledWith(
+      { experimentId: '', metricqlExpression: 'count(play.start)' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   // ── className passthrough ───────────────────────────────────────────────────
 
   test('applies className to the outer wrapper', () => {

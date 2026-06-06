@@ -30,7 +30,19 @@ import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { previewMetricDefinition } from '@/lib/api';
 
 export interface MetricqlPreviewProps {
-  experimentId: string;
+  /**
+   * Experiment ID forwarded to M5's PreviewMetricDefinition RPC (via the C2 proxy).
+   *
+   * Empty / null / undefined all mean "global scope" — Issue #597 taught the M5
+   * and M3 preview handlers to accept an empty experiment_id and build the
+   * known-metric set from the global metric catalog. This lets the metric
+   * creation form (which has no experiment binding yet) preview compiled SQL.
+   *
+   * Normalised to `''` at the RPC call site so the wire format stays a plain
+   * string (matches `PreviewMetricDefinitionRequest.experiment_id: string` in
+   * proto3). Mirrors the diagnostics.ts pattern (PR #595).
+   */
+  experimentId: string | null | undefined;
   metricqlExpression: string;
   /**
    * Whether the expression currently has parse/semantic errors (from B4 linter).
@@ -103,8 +115,11 @@ export function MetricqlPreview({
 
     setState({ status: 'loading' });
 
+    // Normalise null / undefined → '' at the RPC boundary so the wire format
+    // stays a plain string (matches proto3). M5/M3 treat '' as global scope
+    // (Issue #597). Mirrors diagnostics.ts pattern (PR #595).
     previewFn(
-      { experimentId, metricqlExpression },
+      { experimentId: experimentId ?? '', metricqlExpression },
       { signal: ctl.signal },
     )
       .then((resp) => {

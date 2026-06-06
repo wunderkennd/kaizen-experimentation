@@ -76,9 +76,10 @@ export function MetricqlSection({
       </div>
 
       <MetricqlPreview
-        // Normalise null/undefined → '' so the preview RPC matches the wire
-        // format (M5 treats empty experiment_id as global scope, Issue #571).
-        experimentId={experimentId ?? ''}
+        // Pass null/undefined through directly — MetricqlPreview normalises
+        // to '' once at the RPC call site (Issue #597). Mirrors the
+        // translation-at-boundaries pattern PR #595 established for the linter.
+        experimentId={experimentId}
         metricqlExpression={value}
         hasErrors={hasObviousErrors}
         className="mt-2"
