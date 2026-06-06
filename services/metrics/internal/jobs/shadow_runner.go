@@ -24,10 +24,11 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
+	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/shadow"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 // runShadows executes all PENDING shadow runs that have not yet been computed
@@ -183,7 +184,7 @@ func (j *StandardJob) computeOneShadow(
 				"err", cfgErr,
 			)
 		} else {
-			if differErr := j.differ.Run(ctx, &run, experimentID, computationDate, origMetric.Type); differErr != nil {
+			if differErr := j.differ.Run(ctx, &run, experimentID, computationDate, config.TypeShortName(origMetric.Type)); differErr != nil {
 				slog.Error("shadow: differ failed (non-fatal)",
 					"shadow_id", shadowIDStr,
 					"original_metric_id", run.OriginalMetricID,

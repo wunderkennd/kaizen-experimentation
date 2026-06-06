@@ -1,8 +1,8 @@
 package jobs
 
 import (
-	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	"github.com/org/experimentation-platform/services/metrics/internal/status"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 // statusMap tracks the per-metric outcome for one scheduling pass (one experiment
@@ -53,11 +53,11 @@ func (s *statusMap) markSkippedCycle(id string) {
 // COMPOSITE) are treated as blockers — the caller has iterated in topo order so
 // every operand within the pass will already have a recorded status by the time
 // the dependent COMPOSITE is evaluated.
-func (s *statusMap) blockerFor(operands []config.OperandConfig) (string, bool) {
+func (s *statusMap) blockerFor(operands []*commonv1.CompositeOperand) (string, bool) {
 	for _, op := range operands {
-		st, ok := s.entries[op.MetricID]
+		st, ok := s.entries[op.GetMetricId()]
 		if !ok || st != status.Completed {
-			return op.MetricID, true
+			return op.GetMetricId(), true
 		}
 	}
 	return "", false

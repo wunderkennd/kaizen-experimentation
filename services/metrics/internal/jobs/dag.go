@@ -2,16 +2,16 @@ package jobs
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	"github.com/org/experimentation-platform/services/metrics/internal/metricql"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 // operandIDs returns the metric IDs that the given metric depends on, used by
 // both the DAG builder and the upstream-failure gate in standard.go::Run.
 //
-//   - COMPOSITE: m.Operands (config-time slice).
+//   - COMPOSITE: m.GetComposite().GetOperands() (proto-direct slice).
 //   - METRICQL:  parsed @metric_refs from m.MetricqlExpression. Parse error
 //     here is propagated to the caller (TopologicalOrder records it in
 //     failedParse so the scheduler can write status.Failed upfront -- avoids
@@ -24,20 +24,21 @@ import (
 // reason that's actually a parse error. Propagating yields a single, clearer
 // Failed row with reason "metricql: parse: <msg>".
 func operandIDs(m *config.MetricConfig) ([]string, error) {
-	switch strings.ToUpper(m.Type) {
-	case "COMPOSITE":
-		ids := make([]string, len(m.Operands))
-		for i, op := range m.Operands {
-			ids[i] = op.MetricID
+	switch m.Type {
+	case commonv1.MetricType_METRIC_TYPE_COMPOSITE:
+		operands := m.GetComposite().GetOperands()
+		ids := make([]string, len(operands))
+		for i, op := range operands {
+			ids[i] = op.GetMetricId()
 		}
 		return ids, nil
-	case "METRICQL":
+	case commonv1.MetricType_METRIC_TYPE_METRICQL:
 		if m.MetricqlExpression == "" {
-			return nil, fmt.Errorf("metricql parse for %s: empty metricql_expression", m.MetricID)
+			return nil, fmt.Errorf("metricql parse for %s: empty metricql_expression", m.MetricId)
 		}
 		root, err := metricql.Parse(m.MetricqlExpression)
 		if err != nil {
-			return nil, fmt.Errorf("metricql parse for %s: %w", m.MetricID, err)
+			return nil, fmt.Errorf("metricql parse for %s: %w", m.MetricId, err)
 		}
 		return metricql.ExtractMetricRefs(root), nil
 	}
@@ -75,7 +76,7 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 ) {
 	byID := make(map[string]*config.MetricConfig, len(metrics))
 	for _, m := range metrics {
-		byID[m.MetricID] = m
+		byID[m.MetricId] = m
 	}
 
 	failedParse := make(map[string]error)
@@ -85,8 +86,8 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 	inDeg := make(map[string]int, len(metrics))
 	children := make(map[string][]string, len(metrics))
 	for _, m := range metrics {
-		if _, ok := inDeg[m.MetricID]; !ok {
-			inDeg[m.MetricID] = 0
+		if _, ok := inDeg[m.MetricId]; !ok {
+			inDeg[m.MetricId] = 0
 		}
 		ids, err := operandIDs(m)
 		if err != nil {
@@ -94,7 +95,7 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 			// The metric itself has no edges (we can't extract refs), so it
 			// stays in-degree 0 and lands in the topo output. The scheduler's
 			// pre-loop pre-mark + the renderer arm both surface the failure.
-			failedParse[m.MetricID] = err
+			failedParse[m.MetricId] = err
 			continue
 		}
 		for _, opID := range ids {
@@ -103,8 +104,8 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 				// and let the runtime status check skip it.
 				continue
 			}
-			inDeg[m.MetricID]++
-			children[opID] = append(children[opID], m.MetricID)
+			inDeg[m.MetricId]++
+			children[opID] = append(children[opID], m.MetricId)
 		}
 	}
 
@@ -113,8 +114,8 @@ func TopologicalOrder(metrics []*config.MetricConfig) (
 	// is stable across runs (Go map iteration is randomized).
 	queue := make([]string, 0, len(metrics))
 	for _, m := range metrics {
-		if inDeg[m.MetricID] == 0 {
-			queue = append(queue, m.MetricID)
+		if inDeg[m.MetricId] == 0 {
+			queue = append(queue, m.MetricId)
 		}
 	}
 

@@ -200,26 +200,26 @@
     {
       "metric_id": "stream_start_rate",
       "name": "Stream Start Rate",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "stream_start"
     },
     {
       "metric_id": "watch_time_minutes",
       "name": "Watch Time (minutes)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "heartbeat",
       "cuped_covariate_metric_id": "watch_time_minutes"
     },
     {
       "metric_id": "completion_rate",
       "name": "Content Completion Rate",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "stream_end"
     },
     {
       "metric_id": "rebuffer_rate",
       "name": "Rebuffer Rate",
-      "type": "RATIO",
+      "type": "METRIC_TYPE_RATIO",
       "source_event_type": "qoe_rebuffer",
       "numerator_event_type": "rebuffer_event",
       "denominator_event_type": "playback_minute",
@@ -228,32 +228,32 @@
     {
       "metric_id": "search_success_rate",
       "name": "Search Success Rate",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "search"
     },
     {
       "metric_id": "ctr_recommendation",
       "name": "Recommendation CTR",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "impression",
       "cuped_covariate_metric_id": "ctr_recommendation"
     },
     {
       "metric_id": "revenue_per_user",
       "name": "Revenue per User",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "revenue"
     },
     {
       "metric_id": "churn_7d",
       "name": "Churn (7-day)",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "session"
     },
     {
       "metric_id": "latency_p50_ms",
       "name": "Playback Start Latency p50",
-      "type": "PERCENTILE",
+      "type": "METRIC_TYPE_PERCENTILE",
       "source_event_type": "playback_start",
       "percentile": 0.50,
       "lower_is_better": true
@@ -261,20 +261,20 @@
     {
       "metric_id": "error_rate",
       "name": "Error Rate",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "playback_error",
       "lower_is_better": true
     },
     {
       "metric_id": "power_users_watch_time",
       "name": "Power Users Watch Time",
-      "type": "CUSTOM",
+      "type": "METRIC_TYPE_CUSTOM",
       "custom_sql": "SELECT user_id, AVG(value) AS metric_value FROM delta.metric_events WHERE event_type = 'heartbeat' GROUP BY user_id HAVING COUNT(*) >= 10"
     },
     {
       "metric_id": "watch_time_minutes_mlrate",
       "name": "Watch Time (MLRATE)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "heartbeat",
       "mlrate_feature_event_types": ["heartbeat", "stream_start"],
       "mlrate_model_uri": "models:/mlrate-watch-time",
@@ -283,7 +283,7 @@
     {
       "metric_id": "ttff_mean",
       "name": "Time to First Frame (mean)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "qoe_playback",
       "is_qoe_metric": true,
       "qoe_field": "time_to_first_frame_ms",
@@ -292,7 +292,7 @@
     {
       "metric_id": "rebuffer_ratio_mean",
       "name": "Rebuffer Ratio (mean)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "qoe_playback",
       "is_qoe_metric": true,
       "qoe_field": "rebuffer_ratio",

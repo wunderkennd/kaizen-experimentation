@@ -20,35 +20,41 @@
     {
       "metric_id": "mobile_avg_watch_time",
       "name": "Mobile avg watch time",
-      "type": "FILTERED_MEAN",
+      "type": "METRIC_TYPE_FILTERED_MEAN",
       "source_event_type": "heartbeat",
-      "filter_sql": "platform = 'mobile'",
-      "value_column": "duration_ms",
+      "filteredMean": {
+        "filter_sql": "platform = 'mobile'",
+        "value_column": "duration_ms"
+      },
       "cuped_covariate_metric_id": "legacy_watch_time"
     },
     {
       "metric_id": "composite_engagement",
       "name": "Composite engagement",
-      "type": "COMPOSITE",
+      "type": "METRIC_TYPE_COMPOSITE",
       "source_event_type": "n/a",
-      "operator": "WEIGHTED_SUM",
-      "operands": [
-        {"metric_id": "watch_time_minutes", "weight": 0.7},
-        {"metric_id": "stream_start_rate", "weight": 0.3}
-      ]
+      "composite": {
+        "operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+        "operands": [
+          {"metric_id": "watch_time_minutes", "weight": 0.7},
+          {"metric_id": "stream_start_rate", "weight": 0.3}
+        ]
+      }
     },
     {
       "metric_id": "stream_starts_24h",
       "name": "Stream starts within 24h of exposure",
-      "type": "WINDOWED_COUNT",
+      "type": "METRIC_TYPE_WINDOWED_COUNT",
       "source_event_type": "n/a",
-      "event_type": "stream_start",
-      "window_hours": 24
+      "windowedCount": {
+        "event_type": "stream_start",
+        "window_hours": 24
+      }
     },
     {
       "metric_id": "legacy_watch_time",
       "name": "Legacy watch time (MEAN)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "heartbeat"
     }
   ]
