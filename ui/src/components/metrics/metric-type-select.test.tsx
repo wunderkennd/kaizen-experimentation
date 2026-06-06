@@ -92,6 +92,19 @@ describe('MetricTypeSelect', () => {
         screen.getByRole('option', { name: 'MetricQL expression' }),
       ).toBeInTheDocument();
     });
+
+    // Devin PR #603 📝 future-caller defensive-gate regression. The current
+    // `/metrics/new` caller can't reach `value='CUSTOM'` when the flag is on
+    // (CUSTOM is filtered out, so the <select> can't be set to it), but a
+    // future edit-context caller mounting on an existing CUSTOM metric
+    // would. Without the `&& !isCustomHidden()` gate, the deprecation icon
+    // would render next to a <select> value with no matching <option>.
+    test('does NOT render the deprecation icon when value=CUSTOM and flag is on (future-caller guard)', () => {
+      render(<MetricTypeSelect value="CUSTOM" onChange={() => {}} />);
+      expect(
+        screen.queryByTestId('metric-type-deprecated-icon'),
+      ).not.toBeInTheDocument();
+    });
   });
 
   /**

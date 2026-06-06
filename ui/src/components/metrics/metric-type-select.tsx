@@ -51,7 +51,14 @@ export function MetricTypeSelect({ value, onChange, disabled }: MetricTypeSelect
     ? ALL_TYPE_OPTIONS.filter((o) => o.value !== 'CUSTOM')
     : ALL_TYPE_OPTIONS;
   const description = options.find((o) => o.value === value)?.description ?? '';
-  const isDeprecated = value === 'CUSTOM';
+  // `isDeprecated` only renders the deprecation icon for CUSTOM when CUSTOM is
+  // still in `options`. The current caller (`/metrics/new`) cannot reach the
+  // `value='CUSTOM' && isCustomHidden()` state — the option is filtered out so
+  // the select can't be set to it — but a future edit-context caller that
+  // re-mounts this component on an existing CUSTOM metric would: without the
+  // gate, the icon would render next to a `<select>` value that has no
+  // matching `<option>`. (Devin PR #603 📝 future-caller defensive gate.)
+  const isDeprecated = value === 'CUSTOM' && !isCustomHidden();
 
   return (
     <div>
