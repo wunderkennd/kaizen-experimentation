@@ -56,6 +56,26 @@ pub(crate) fn welch_standard_error(
     Ok(WelchSe { se, df })
 }
 
+/// Shared Welch primitive — arithmetic mean of a sample slice.
+///
+/// This is the canonical mean helper for the `experimentation-stats` crate,
+/// consolidating identical inline arithmetic from `ttest`, `tost`, and `cate`.
+/// See issue #598.
+pub(crate) fn mean(xs: &[f64]) -> f64 {
+    xs.iter().sum::<f64>() / xs.len() as f64
+}
+
+/// Shared Welch primitive — Bessel-corrected sample variance given a pre-computed mean.
+///
+/// This is the canonical sample-variance helper for the `experimentation-stats` crate,
+/// consolidating identical inline arithmetic from `ttest`, `tost`, and `cate`.
+/// See issue #598.
+pub(crate) fn sample_variance(xs: &[f64], mean: f64) -> f64 {
+    let n = xs.len() as f64;
+    let ss: f64 = xs.iter().map(|&x| (x - mean).powi(2)).sum();
+    ss / (n - 1.0)
+}
+
 /// Result of a two-sample Welch's t-test.
 #[derive(Debug, Clone)]
 pub struct TTestResult {
@@ -101,13 +121,13 @@ pub fn welch_ttest(control: &[f64], treatment: &[f64], alpha: f64) -> Result<TTe
     let n_c = control.len() as f64;
     let n_t = treatment.len() as f64;
 
-    let mean_c = control.iter().sum::<f64>() / n_c;
-    let mean_t = treatment.iter().sum::<f64>() / n_t;
+    let mean_c = mean(control);
+    let mean_t = mean(treatment);
     assert_finite(mean_c, "control mean");
     assert_finite(mean_t, "treatment mean");
 
-    let var_c = control.iter().map(|x| (x - mean_c).powi(2)).sum::<f64>() / (n_c - 1.0);
-    let var_t = treatment.iter().map(|x| (x - mean_t).powi(2)).sum::<f64>() / (n_t - 1.0);
+    let var_c = sample_variance(control, mean_c);
+    let var_t = sample_variance(treatment, mean_t);
     assert_finite(var_c, "control variance");
     assert_finite(var_t, "treatment variance");
 

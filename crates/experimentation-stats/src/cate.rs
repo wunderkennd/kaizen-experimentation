@@ -11,7 +11,7 @@ use experimentation_core::error::{assert_finite, Error, Result};
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 
 use crate::multiple_comparison::benjamini_hochberg;
-use crate::ttest::{welch_standard_error, welch_ttest, WelchSe};
+use crate::ttest::{mean, sample_variance, welch_standard_error, welch_ttest, WelchSe};
 
 /// Input data for a single subgroup (lifecycle segment).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -304,11 +304,11 @@ pub(crate) fn compute_welch_se(control: &[f64], treatment: &[f64]) -> f64 {
     let n_c = control.len() as f64;
     let n_t = treatment.len() as f64;
 
-    let mean_c = control.iter().sum::<f64>() / n_c;
-    let mean_t = treatment.iter().sum::<f64>() / n_t;
+    let mean_c = mean(control);
+    let mean_t = mean(treatment);
 
-    let var_c = control.iter().map(|x| (x - mean_c).powi(2)).sum::<f64>() / (n_c - 1.0);
-    let var_t = treatment.iter().map(|x| (x - mean_t).powi(2)).sum::<f64>() / (n_t - 1.0);
+    let var_c = sample_variance(control, mean_c);
+    let var_t = sample_variance(treatment, mean_t);
 
     let WelchSe { se, df: _ } = welch_standard_error(n_c, n_t, var_c, var_t)
         .expect("welch SE computation failed: zero variance in pooled samples");
