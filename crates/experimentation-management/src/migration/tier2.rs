@@ -37,7 +37,7 @@ use crate::validators::{
 };
 
 use super::classifier::ShapeHint;
-use super::tier1::{
+use super::sql_ast::{
     collect_and_predicates, extract_select, find_join_on_expr,
     from_is_events_with_optional_exposures_join, from_is_exposures_with_metric_events_join,
     strip_table_alias, unwrap_nested,

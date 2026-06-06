@@ -18,6 +18,7 @@
 pub mod classifier;
 pub mod cli;
 pub mod report;
+pub mod sql_ast;
 pub mod tier1;
 pub mod tier2;
 
