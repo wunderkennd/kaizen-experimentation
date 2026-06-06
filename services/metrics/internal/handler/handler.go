@@ -11,6 +11,7 @@ import (
 	metricsv1 "github.com/org/experimentation/gen/go/experimentation/metrics/v1"
 	"github.com/org/experimentation/gen/go/experimentation/metrics/v1/metricsv1connect"
 
+	"github.com/org/experimentation-platform/services/metrics/internal/catalog"
 	"github.com/org/experimentation-platform/services/metrics/internal/export"
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
 	m3metrics "github.com/org/experimentation-platform/services/metrics/internal/metrics"
@@ -31,6 +32,13 @@ type MetricsHandler struct {
 	// shadowStore is optional (ADR-026 Phase 3 #437). When nil the three
 	// shadow-run RPCs return CodeUnavailable so existing callers are unaffected.
 	shadowStore shadow.Store
+	// catalogReader is optional (Issue #597). When wired, the
+	// CompileMetricqlPreview RPC populates KnownMetricIDs from M5's global
+	// metric_definitions catalog when the request omits experiment_id, so
+	// unknown @metric_refs surface as SEVERITY_ERROR diagnostics. When nil
+	// (legacy callers / older tests) the empty-experiment_id path falls back
+	// to KnownMetricIDs=nil (existence check skipped) for backward compat.
+	catalogReader catalog.CatalogReader
 }
 
 // MetricsHandlerOption configures optional MetricsHandler behavior.
@@ -43,6 +51,16 @@ type MetricsHandlerOption func(*MetricsHandler)
 // CodeUnavailable — no production behavior changes.
 func WithShadowStore(s shadow.Store) MetricsHandlerOption {
 	return func(h *MetricsHandler) { h.shadowStore = s }
+}
+
+// WithCatalogReader wires a catalog.CatalogReader so that
+// CompileMetricqlPreview can populate KnownMetricIDs from M5's global
+// `metric_definitions` table when the request omits experiment_id (Issue
+// #597). When unset, the empty-experiment_id path falls back to skipping
+// the existence check (KnownMetricIDs=nil) — preserves backward compat for
+// legacy callers / tests with no Postgres dependency.
+func WithCatalogReader(r catalog.CatalogReader) MetricsHandlerOption {
+	return func(h *MetricsHandler) { h.catalogReader = r }
 }
 
 func NewMetricsHandler(job *jobs.StandardJob, gj *jobs.GuardrailJob, ccj *jobs.ContentConsumptionJob, sj *jobs.SurrogateJob, ilj *jobs.InterleavingJob, rj *jobs.RecalibrationJob, ql querylog.Writer, opts ...MetricsHandlerOption) *MetricsHandler {

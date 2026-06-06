@@ -19,6 +19,23 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 )
 
+// stubCatalogReader is a test-local catalog.CatalogReader that returns a
+// canned slice of metric IDs. Test-local on purpose — we don't want a mock
+// living in the production `catalog` package, and the real PgPoolCatalog is
+// covered by integration tests rather than unit tests against a real
+// Postgres.
+type stubCatalogReader struct {
+	ids []string
+	err error
+}
+
+func (s *stubCatalogReader) ListMetricIDs(context.Context) ([]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.ids, nil
+}
+
 // setupPreviewClient constructs a minimal MetricsHandler — only
 // CompileMetricqlPreview is exercised here, so all job dependencies are nil.
 func setupPreviewClient(t *testing.T) metricsv1connect.MetricComputationServiceClient {
@@ -33,14 +50,105 @@ func setupPreviewClient(t *testing.T) metricsv1connect.MetricComputationServiceC
 	return metricsv1connect.NewMetricComputationServiceClient(http.DefaultClient, srv.URL)
 }
 
+// setupPreviewClientWithCatalog constructs a handler with a stub
+// catalog.CatalogReader wired via WithCatalogReader, returning the canned
+// list of known metric IDs. Used by the Issue #597 global-scope tests.
+func setupPreviewClientWithCatalog(t *testing.T, knownIDs []string) metricsv1connect.MetricComputationServiceClient {
+	t.Helper()
+	ql := querylog.NewMemWriter()
+	h := NewMetricsHandler(nil, nil, nil, nil, nil, nil, ql, WithCatalogReader(&stubCatalogReader{ids: knownIDs}))
+	mux := http.NewServeMux()
+	path, hnd := metricsv1connect.NewMetricComputationServiceHandler(h)
+	mux.Handle(path, hnd)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return metricsv1connect.NewMetricComputationServiceClient(http.DefaultClient, srv.URL)
+}
+
+// TestCompileMetricqlPreview_EmptyExperimentId verifies the Issue #597
+// relaxation: an empty experiment_id is now treated as GLOBAL scope. With a
+// catalogReader wired and "watch_time" in the catalog, a plain aggregation
+// expression with no @metric_refs should succeed with empty diagnostics.
 func TestCompileMetricqlPreview_EmptyExperimentId(t *testing.T) {
-	client := setupPreviewClient(t)
-	_, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
+	client := setupPreviewClientWithCatalog(t, []string{"watch_time"})
+	resp, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
 		ExperimentId:       "",
 		MetricqlExpression: "mean(heartbeat.value)",
 	}))
-	require.Error(t, err)
-	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	require.NoError(t, err)
+	assert.Empty(t, resp.Msg.GetDiagnostics())
+	assert.NotEmpty(t, resp.Msg.GetCompiledSql())
+}
+
+// TestCompileMetricqlPreview_EmptyExperimentId_UnknownRefReturnsDiagnostic
+// verifies that with the catalog populated to {known_metric}, an expression
+// referencing @unknown_metric returns 200 OK with one SEVERITY_ERROR
+// diagnostic whose message mentions "unknown_metric".
+func TestCompileMetricqlPreview_EmptyExperimentId_UnknownRefReturnsDiagnostic(t *testing.T) {
+	client := setupPreviewClientWithCatalog(t, []string{"known_metric"})
+	resp, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
+		ExperimentId:       "",
+		MetricqlExpression: "@unknown_metric + 0",
+	}))
+	require.NoError(t, err) // handler returns 200 with diagnostics, not a gRPC error
+	assert.Empty(t, resp.Msg.GetCompiledSql())
+	require.Len(t, resp.Msg.GetDiagnostics(), 1)
+	d := resp.Msg.GetDiagnostics()[0]
+	assert.Equal(t, commonv1.MetricqlDiagnostic_SEVERITY_ERROR, d.GetSeverity())
+	assert.Contains(t, d.GetMessage(), "unknown_metric")
+}
+
+// TestCompileMetricqlPreview_EmptyExperimentId_KnownRefReturnsSql verifies
+// that with the catalog containing the referenced metric, the expression
+// compiles to SQL with no diagnostics.
+func TestCompileMetricqlPreview_EmptyExperimentId_KnownRefReturnsSql(t *testing.T) {
+	client := setupPreviewClientWithCatalog(t, []string{"watch_time"})
+	resp, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
+		ExperimentId:       "",
+		MetricqlExpression: "@watch_time + 0",
+	}))
+	require.NoError(t, err)
+	assert.Empty(t, resp.Msg.GetDiagnostics())
+	assert.NotEmpty(t, resp.Msg.GetCompiledSql())
+}
+
+// TestCompileMetricqlPreview_EmptyExperimentId_NoCatalogReader verifies
+// the legacy backward-compat path: when no WithCatalogReader option is
+// passed, an empty experiment_id still succeeds — but with KnownMetricIDs
+// effectively nil, so even unknown @metric_refs are accepted (existence
+// check skipped per the analyzer's nil-means-skip contract).
+func TestCompileMetricqlPreview_EmptyExperimentId_NoCatalogReader(t *testing.T) {
+	client := setupPreviewClient(t) // no WithCatalogReader option
+	resp, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
+		ExperimentId:       "",
+		MetricqlExpression: "@unknown_metric + 0",
+	}))
+	require.NoError(t, err)
+	// Skip-existence-check path: no unknown-reference diagnostic, and the
+	// expression compiles (the analyzer accepts the @metric_ref because
+	// KnownMetricIDs is nil).
+	assert.Empty(t, resp.Msg.GetDiagnostics())
+	assert.NotEmpty(t, resp.Msg.GetCompiledSql())
+}
+
+// TestCompileMetricqlPreview_WhitespaceOnlyExperimentId_TreatedAsGlobal
+// verifies symmetry with PR #595 / Task 1's M5 normalization: an
+// experiment_id consisting only of whitespace is treated identically to
+// the empty string (i.e. as GLOBAL scope).
+func TestCompileMetricqlPreview_WhitespaceOnlyExperimentId_TreatedAsGlobal(t *testing.T) {
+	client := setupPreviewClientWithCatalog(t, []string{"known_metric"})
+	resp, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
+		ExperimentId:       "   \t  ",
+		MetricqlExpression: "@unknown_metric + 0",
+	}))
+	require.NoError(t, err)
+	// Whitespace-only experiment_id is normalized to global scope, so the
+	// stub catalog applies and @unknown_metric is flagged.
+	assert.Empty(t, resp.Msg.GetCompiledSql())
+	require.Len(t, resp.Msg.GetDiagnostics(), 1)
+	d := resp.Msg.GetDiagnostics()[0]
+	assert.Equal(t, commonv1.MetricqlDiagnostic_SEVERITY_ERROR, d.GetSeverity())
+	assert.Contains(t, d.GetMessage(), "unknown_metric")
 }
 
 func TestCompileMetricqlPreview_EmptyExpression(t *testing.T) {

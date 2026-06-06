@@ -20,6 +20,7 @@ import (
 	_ "github.com/org/experimentation-platform/services/metrics/internal/metrics"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/alerts"
+	"github.com/org/experimentation-platform/services/metrics/internal/catalog"
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	"github.com/org/experimentation-platform/services/metrics/internal/handler"
 	"github.com/org/experimentation-platform/services/metrics/internal/jobs"
@@ -45,6 +46,7 @@ func main() {
 	executor := spark.NewRetryExecutor(baseExecutor, spark.DefaultRetryConfig())
 	var qlWriter querylog.Writer
 	var statusWriter status.Writer
+	var catalogReader catalog.CatalogReader
 	pgURL := os.Getenv("POSTGRES_URL")
 	if pgURL != "" {
 		pool, err := pgxpool.New(context.Background(), pgURL)
@@ -53,10 +55,18 @@ func main() {
 		qlWriter = querylog.NewPgWriter(pool)
 		// ADR-026 #475: same pool feeds the metric_computation_status writer.
 		statusWriter = status.NewPgWriter(pool)
+		// Issue #597: global-scope MetricQL preview reads from M5's
+		// metric_definitions table (shared Postgres DB) to flag unknown
+		// @metric_refs as SEVERITY_ERROR diagnostics. Lean SELECT metric_id
+		// query — see catalog.PgPoolCatalog for rationale.
+		catalogReader = catalog.NewPgPoolCatalog(pool)
 	} else {
 		qlWriter = querylog.NewMemWriter()
 		statusWriter = status.NewMockWriter()
 		slog.Warn("POSTGRES_URL not set, using in-memory query log + status writer")
+		// catalogReader stays nil — CompileMetricqlPreview falls back to the
+		// legacy KnownMetricIDs=nil behavior in global scope, preserving
+		// dev/test ergonomics without a Postgres dependency.
 	}
 	stdJob := jobs.NewStandardJob(cfgStore, renderer, executor, qlWriter, jobs.WithStatusWriter(statusWriter))
 	kafkaBrokers := os.Getenv("KAFKA_BROKERS")
@@ -77,7 +87,11 @@ func main() {
 	ilJob := jobs.NewInterleavingJob(cfgStore, renderer, executor, qlWriter)
 	calibUpdater := surrogate.NewMemCalibrationUpdater()
 	recalJob := jobs.NewRecalibrationJob(cfgStore, renderer, mockInputProvider, qlWriter, projWriter, calibUpdater)
-	metricsHandler := handler.NewMetricsHandler(stdJob, gJob, ccJob, surrJob, ilJob, recalJob, qlWriter)
+	var handlerOpts []handler.MetricsHandlerOption
+	if catalogReader != nil {
+		handlerOpts = append(handlerOpts, handler.WithCatalogReader(catalogReader))
+	}
+	metricsHandler := handler.NewMetricsHandler(stdJob, gJob, ccJob, surrJob, ilJob, recalJob, qlWriter, handlerOpts...)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200); fmt.Fprint(w, "ok") })
 	path, h := metricsv1connect.NewMetricComputationServiceHandler(metricsHandler)
