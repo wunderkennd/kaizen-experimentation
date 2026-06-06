@@ -233,4 +233,56 @@ mod tests {
             .expect("tost_equivalence_test should not fail on valid data");
         assert_eq!(se_canonical, tost_result.std_error, "tost path");
     }
+
+    /// Verify that `mean` and `sample_variance` produce bit-identical results to
+    /// the inline arithmetic that existed at each of the three former call sites
+    /// (`ttest`, `tost`, `cate`) before the helpers were introduced.
+    ///
+    /// Bit-identity (not float tolerance) is required here because the refactor is
+    /// only semantically valid if the helper is mathematically and floating-point
+    /// equivalent to the old inline arithmetic — even a single ULP of difference
+    /// would indicate that the consolidation changed numerical behaviour. See #598.
+    #[test]
+    fn mean_variance_parity_across_call_paths() {
+        let control = vec![1.0f64, 2.0, 3.0, 4.0, 5.0];
+        let treatment = vec![2.0f64, 3.0, 4.0, 5.0, 6.0];
+
+        // ---- Inline arithmetic (verbatim from the three former call sites) ----
+
+        // ttest.rs / cate.rs shared inline form
+        let n_c = control.len() as f64;
+        let n_t = treatment.len() as f64;
+        let mean_c_inline = control.iter().sum::<f64>() / n_c;
+        let mean_t_inline = treatment.iter().sum::<f64>() / n_t;
+        let var_c_inline =
+            control.iter().map(|x| (x - mean_c_inline).powi(2)).sum::<f64>() / (n_c - 1.0);
+        let var_t_inline =
+            treatment.iter().map(|x| (x - mean_t_inline).powi(2)).sum::<f64>() / (n_t - 1.0);
+
+        // ---- Helper calls (introduced by #598) ----
+
+        let mean_c_helper = mean(&control);
+        let mean_t_helper = mean(&treatment);
+        let var_c_helper = sample_variance(&control, mean(&control));
+        let var_t_helper = sample_variance(&treatment, mean(&treatment));
+
+        // ---- Bit-identical assertions ----
+
+        assert_eq!(
+            mean_c_inline, mean_c_helper,
+            "mean(control) must be bit-identical to inline arithmetic (issue #598)"
+        );
+        assert_eq!(
+            mean_t_inline, mean_t_helper,
+            "mean(treatment) must be bit-identical to inline arithmetic (issue #598)"
+        );
+        assert_eq!(
+            var_c_inline, var_c_helper,
+            "sample_variance(control) must be bit-identical to inline arithmetic (issue #598)"
+        );
+        assert_eq!(
+            var_t_inline, var_t_helper,
+            "sample_variance(treatment) must be bit-identical to inline arithmetic (issue #598)"
+        );
+    }
 }
