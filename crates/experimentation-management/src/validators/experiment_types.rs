@@ -9,7 +9,7 @@
 use tonic::Status;
 
 use experimentation_proto::experimentation::common::v1::{
-    EquivalenceTestConfig, MetaExperimentConfig, MetricType, QuasiExperimentConfig,
+    EquivalenceTestConfig, Experiment, MetaExperimentConfig, MetricType, QuasiExperimentConfig,
     SwitchbackConfig,
 };
 
@@ -17,9 +17,7 @@ use experimentation_proto::experimentation::common::v1::{
 // META validator (ADR-013)
 // ---------------------------------------------------------------------------
 
-pub(super) fn validate_meta(
-    exp: &experimentation_proto::experimentation::common::v1::Experiment,
-) -> Result<(), Box<Status>> {
+pub(super) fn validate_meta(exp: &Experiment) -> Result<(), Box<Status>> {
     let cfg = exp.meta_experiment_config.as_ref().ok_or_else(|| {
         Box::new(Status::failed_precondition(
             "META experiment requires meta_experiment_config",
@@ -91,9 +89,7 @@ fn validate_meta_config(
 // SWITCHBACK validator (ADR-022)
 // ---------------------------------------------------------------------------
 
-pub(super) fn validate_switchback(
-    exp: &experimentation_proto::experimentation::common::v1::Experiment,
-) -> Result<(), Box<Status>> {
+pub(super) fn validate_switchback(exp: &Experiment) -> Result<(), Box<Status>> {
     let cfg = exp.switchback_config.as_ref().ok_or_else(|| {
         Box::new(Status::failed_precondition(
             "SWITCHBACK experiment requires switchback_config",
@@ -131,9 +127,7 @@ fn validate_switchback_config(cfg: &SwitchbackConfig) -> Result<(), Box<Status>>
 // QUASI validator (ADR-023)
 // ---------------------------------------------------------------------------
 
-pub(super) fn validate_quasi(
-    exp: &experimentation_proto::experimentation::common::v1::Experiment,
-) -> Result<(), Box<Status>> {
+pub(super) fn validate_quasi(exp: &Experiment) -> Result<(), Box<Status>> {
     let cfg = exp.quasi_experiment_config.as_ref().ok_or_else(|| {
         Box::new(Status::failed_precondition(
             "QUASI experiment requires quasi_experiment_config",

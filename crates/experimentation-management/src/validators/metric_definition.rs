@@ -25,7 +25,7 @@ use super::{cycle, filter_sql, metricql};
 // Shared identifier regex (used by B2 WINDOWED_COUNT.event_type and, when B3
 // lands, FILTERED_MEAN.value_column). Compiled once via OnceLock.
 // ---------------------------------------------------------------------------
-pub(super) fn identifier_re() -> &'static Regex {
+fn identifier_re() -> &'static Regex {
     static IDENT_RE: OnceLock<Regex> = OnceLock::new();
     IDENT_RE.get_or_init(|| {
         Regex::new(r"^[a-z_][a-z0-9_]*$").expect("identifier regex is a compile-time constant")
@@ -451,7 +451,7 @@ async fn validate_metricql_arm<L: MetricLookup + ?Sized>(
 /// TODO(#436.x): serialize the full MetricqlDiagnosticBag into Status details
 /// for tooling that parses tonic Any payloads (CLI, language servers).
 #[allow(clippy::result_large_err)]
-pub(super) fn diagnostics_to_status(diags: Vec<metricql::Diagnostic>) -> Box<Status> {
+fn diagnostics_to_status(diags: Vec<metricql::Diagnostic>) -> Box<Status> {
     let summary = if diags.is_empty() {
         "MetricQL validation failed".to_string()
     } else if diags.len() == 1 {
@@ -467,7 +467,7 @@ pub(super) fn diagnostics_to_status(diags: Vec<metricql::Diagnostic>) -> Box<Sta
 }
 
 #[allow(clippy::result_large_err)]
-pub(super) fn store_err_to_status(e: StoreError) -> Box<Status> {
+fn store_err_to_status(e: StoreError) -> Box<Status> {
     Box::new(Status::internal(format!(
         "metric lookup failed: {}",
         e
