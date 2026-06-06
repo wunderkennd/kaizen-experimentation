@@ -1698,9 +1698,12 @@ impl ExperimentManagementService for ManagementServiceHandler {
 
         let req = request.into_inner();
 
-        if req.experiment_id.trim().is_empty() {
-            return Err(Status::invalid_argument("experiment_id is required"));
-        }
+        // ADR-026 Phase 2 follow-up (#597): empty `experiment_id` is the global
+        // scope used by the metric-creation form (which has no experiment
+        // context). Symmetric to the validate_metricql relaxation in #571 /
+        // PR #595 — empty no longer short-circuits with INVALID_ARGUMENT;
+        // M5 proxies the empty string through to M3, which builds its own
+        // known-metric-id set from the full metric_definitions catalog.
         if req.metricql_expression.trim().is_empty() {
             return Err(Status::invalid_argument("metricql_expression is required"));
         }
@@ -2126,5 +2129,93 @@ mod tests {
                 assert_eq!(line, 2);
             }
         }
+    }
+
+    // ── preview_metric_definition global-scope contract (#597) ───────────────
+    // Symmetric to PR #595's validate_metricql relaxation. The M5 handler must
+    // accept empty experiment_id and proxy the empty string through to M3
+    // (where Task 2 of this PR builds the global metric catalog). The pure-Rust
+    // safety net here proves the early-return guard is gone in CI environments
+    // without a mock M3 — the live wire-format test lives in
+    // `tests/contract_preview_test.rs`.
+
+    #[tokio::test]
+    async fn preview_metric_definition_empty_experiment_id_does_not_short_circuit() {
+        use sqlx::postgres::PgPoolOptions;
+        use tonic::Code;
+
+        // Build a no-IO production handler: connect_lazy on both store and
+        // metrics_client. preview_metric_definition never touches the store,
+        // and the metrics_client points at port 1 (nothing listens) so the
+        // proxy call surfaces as Code::Unavailable once the early-return guard
+        // is gone. If the guard were still present, we'd see InvalidArgument
+        // instead — that's the contract this test pins.
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_lazy("postgresql://postgres:postgres@127.0.0.1:1/nonexistent")
+            .expect("connect_lazy should not dial");
+        let store = ManagementStore::from_pool(pool);
+        let endpoint = tonic::transport::Endpoint::from_static("http://127.0.0.1:1");
+        let channel = endpoint.connect_lazy();
+        let client = MetricComputationServiceClient::new(channel);
+        let state = SharedState::new_with_channel(store, client);
+        let handler = ManagementServiceHandler::new(state);
+
+        let err = handler
+            .preview_metric_definition(Request::new(PreviewMetricDefinitionRequest {
+                experiment_id: String::new(),
+                metricql_expression: "@watch_time + 0".to_string(),
+            }))
+            .await
+            .expect_err("M3 is unreachable so the proxy call must fail");
+
+        assert_ne!(
+            err.code(),
+            Code::InvalidArgument,
+            "empty experiment_id must NOT short-circuit with InvalidArgument; \
+             got code={:?} message={:?}",
+            err.code(),
+            err.message(),
+        );
+        assert!(
+            !err.message().contains("experiment_id is required"),
+            "error must not reference the removed experiment_id guard; got: {}",
+            err.message(),
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_metric_definition_empty_expression_still_rejected() {
+        // Sanity check: the relaxation only removed the experiment_id guard.
+        // Empty `metricql_expression` must still return INVALID_ARGUMENT
+        // before any M3 round-trip.
+        use sqlx::postgres::PgPoolOptions;
+        use tonic::Code;
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_lazy("postgresql://postgres:postgres@127.0.0.1:1/nonexistent")
+            .expect("connect_lazy should not dial");
+        let store = ManagementStore::from_pool(pool);
+        let endpoint = tonic::transport::Endpoint::from_static("http://127.0.0.1:1");
+        let channel = endpoint.connect_lazy();
+        let client = MetricComputationServiceClient::new(channel);
+        let state = SharedState::new_with_channel(store, client);
+        let handler = ManagementServiceHandler::new(state);
+
+        let err = handler
+            .preview_metric_definition(Request::new(PreviewMetricDefinitionRequest {
+                experiment_id: String::new(),
+                metricql_expression: String::new(),
+            }))
+            .await
+            .expect_err("empty expression must be rejected");
+
+        assert_eq!(err.code(), Code::InvalidArgument);
+        assert!(
+            err.message().contains("metricql_expression"),
+            "error message should mention metricql_expression; got: {}",
+            err.message(),
+        );
     }
 }

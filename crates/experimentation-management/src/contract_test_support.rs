@@ -765,9 +765,9 @@ impl ExperimentManagementService for ManagementServiceHandler {
         let req = request.into_inner();
         // Mirror the production handler's input validation so wire-format
         // contract tests can exercise the INVALID_ARGUMENT paths without M3.
-        if req.experiment_id.trim().is_empty() {
-            return Err(Status::invalid_argument("experiment_id is required"));
-        }
+        // Empty `experiment_id` is accepted as the global scope — symmetric
+        // to grpc.rs::preview_metric_definition (#597) and the validate-side
+        // relaxation in #571.
         if req.metricql_expression.trim().is_empty() {
             return Err(Status::invalid_argument("metricql_expression is required"));
         }
