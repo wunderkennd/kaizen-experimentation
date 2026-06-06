@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -129,6 +130,31 @@ func TestCompileMetricqlPreview_EmptyExperimentId_NoCatalogReader(t *testing.T) 
 	// KnownMetricIDs is nil).
 	assert.Empty(t, resp.Msg.GetDiagnostics())
 	assert.NotEmpty(t, resp.Msg.GetCompiledSql())
+}
+
+// TestCompileMetricqlPreview_EmptyExperimentId_CatalogError_ReturnsInternal
+// verifies that when the catalog reader fails (e.g. DB unavailable), the
+// handler surfaces CodeInternal rather than silently falling through to
+// the skip-existence-check path. The fallthrough would mask unknown
+// @metric_refs from the operator, so a hard error is the correct signal.
+func TestCompileMetricqlPreview_EmptyExperimentId_CatalogError_ReturnsInternal(t *testing.T) {
+	t.Helper()
+	ql := querylog.NewMemWriter()
+	h := NewMetricsHandler(nil, nil, nil, nil, nil, nil, ql,
+		WithCatalogReader(&stubCatalogReader{err: errors.New("db down")}))
+	mux := http.NewServeMux()
+	path, hnd := metricsv1connect.NewMetricComputationServiceHandler(h)
+	mux.Handle(path, hnd)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	client := metricsv1connect.NewMetricComputationServiceClient(http.DefaultClient, srv.URL)
+
+	_, err := client.CompileMetricqlPreview(context.Background(), connect.NewRequest(&metricsv1.CompileMetricqlPreviewRequest{
+		ExperimentId:       "",
+		MetricqlExpression: "mean(heartbeat.value)",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInternal, connect.CodeOf(err))
 }
 
 // TestCompileMetricqlPreview_WhitespaceOnlyExperimentId_TreatedAsGlobal
