@@ -30,13 +30,16 @@ jobs:
           set -euo pipefail
           # Find open sprint-I.3 issues whose body lists the just-closed issue
           # as a blocker (under the "## Blocked by" section).
-          gh issue list --label "sprint-I.3" --state open --limit 200 \
-            --json number,body \
-          | jq -c --arg closed "#$CLOSED_ISSUE" '
-              .[]
-              | select(.body | test("(?ms)^## Blocked by.*?" + $closed + "\\b"))
-            ' \
-          | while IFS= read -r dep; do
+          #
+          # `while … < <(jq …)` (process substitution) instead of
+          # `jq … | while …`: under `set -euo pipefail`, a failure inside the
+          # body of a `while` that's the last command of a pipeline does NOT
+          # abort — `set -e` is suspended in pipeline-loop bodies in many
+          # shells (bash included). Putting the producer on the right of `<`
+          # leaves `set -e` active inside the loop, so a failed
+          # `gh issue comment` (or any other command) propagates up. (Devin
+          # PR #605 🚩 robustness fix.)
+          while IFS= read -r dep; do
               num=$(echo "$dep" | jq -r '.number')
               body=$(echo "$dep" | jq -r '.body')
               # Re-check ALL of this dependent's blockers — only comment when
@@ -55,4 +58,9 @@ jobs:
               if [ "$all_closed" = "true" ]; then
                 gh issue comment "$num" --body "🟢 All blockers closed. This issue is now ready for dispatch — run \`just autonomous-sprint I.3\` (or wait for the next scheduled run)."
               fi
-            done
+            done < <(gh issue list --label "sprint-I.3" --state open --limit 200 \
+              --json number,body \
+            | jq -c --arg closed "#$CLOSED_ISSUE" '
+                .[]
+                | select(.body | test("(?ms)^## Blocked by.*?" + $closed + "\\b"))
+              ')
