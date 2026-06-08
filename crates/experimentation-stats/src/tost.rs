@@ -37,7 +37,7 @@
 use experimentation_core::error::{assert_finite, Error, Result};
 use statrs::distribution::{ContinuousCDF, Normal, StudentsT};
 
-use crate::ttest::welch_standard_error;
+use crate::ttest::{mean, sample_variance, welch_standard_error};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -491,16 +491,6 @@ fn cuped_adjusted_samples(
     };
 
     Ok((adjust(control_y, control_x), adjust(treatment_y, treatment_x)))
-}
-
-fn mean(data: &[f64]) -> f64 {
-    data.iter().sum::<f64>() / data.len() as f64
-}
-
-fn sample_variance(data: &[f64], mean: f64) -> f64 {
-    let n = data.len() as f64;
-    let ss: f64 = data.iter().map(|&x| (x - mean).powi(2)).sum();
-    ss / (n - 1.0)
 }
 
 fn sample_covariance(y: &[f64], x: &[f64], mean_y: f64, mean_x: f64) -> f64 {
