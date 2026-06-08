@@ -63,7 +63,17 @@ func main() {
 	} else {
 		qlWriter = querylog.NewMemWriter()
 		statusWriter = status.NewMockWriter()
-		slog.Warn("POSTGRES_URL not set, using in-memory query log + status writer")
+		// Surface the dev-mode degradation at boot so operators see ONE
+		// warning rather than only a per-request slog.Debug from preview.go.
+		// (Devin PR #609 📝 silent-degradation finding — the original message
+		// only named the query log + status writer; the catalog/preview
+		// implication was buried in the source comment.)
+		slog.Warn(
+			"POSTGRES_URL not set — running in dev-mode degradation: in-memory query log + status writer, " +
+				"AND CompileMetricqlPreview global-scope existence checks are DISABLED (KnownMetricIDs=nil, " +
+				"@metric_refs in preview will not flag unknown-id diagnostics). " +
+				"Set POSTGRES_URL to enable the full path.",
+		)
 		// catalogReader stays nil — CompileMetricqlPreview falls back to the
 		// legacy KnownMetricIDs=nil behavior in global scope, preserving
 		// dev/test ergonomics without a Postgres dependency.
