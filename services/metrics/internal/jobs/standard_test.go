@@ -707,8 +707,7 @@ func TestStandardJob_Run_MetricqlRunsAfterRefs(t *testing.T) {
 				"metric_id": "watch_time",
 				"name": "Watch time (MEAN)",
 				"type": "METRIC_TYPE_MEAN",
-				"source_event_type": "heartbeat",
-				"value_column": "value"
+				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "ctr",
@@ -904,15 +903,13 @@ func TestStandardJob_Run_MetricqlSkippedOnFailingRef(t *testing.T) {
 				"metric_id": "ok_metric",
 				"name": "OK operand",
 				"type": "METRIC_TYPE_MEAN",
-				"source_event_type": "heartbeat",
-				"value_column": "value"
+				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "failing_metric",
 				"name": "Operand that fails at exec",
 				"type": "METRIC_TYPE_MEAN",
-				"source_event_type": "click",
-				"value_column": "value"
+				"source_event_type": "click"
 			},
 			{
 				"metric_id": "weighted",
@@ -1006,15 +1003,13 @@ func TestStandardJob_Run_MetricqlChainSkipPropagation(t *testing.T) {
 				"metric_id": "ok_metric",
 				"name": "OK operand",
 				"type": "METRIC_TYPE_MEAN",
-				"source_event_type": "heartbeat",
-				"value_column": "value"
+				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "failing_metric",
 				"name": "Operand that fails at exec",
 				"type": "METRIC_TYPE_MEAN",
-				"source_event_type": "click",
-				"value_column": "value"
+				"source_event_type": "click"
 			},
 			{
 				"metric_id": "weighted",

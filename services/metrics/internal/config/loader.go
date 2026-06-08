@@ -182,6 +182,20 @@ func (c *ConfigStore) GetMetric(id string) (*MetricConfig, error) {
 	return m, nil
 }
 
+// GetMetricsForExperiment returns the MetricConfigs for an experiment.
+//
+// IMPORTANT — shallow-copy semantics: `MetricConfig` embeds
+// `*commonv1.MetricDefinition` (a pointer), so the value-copy at the
+// `append` below shares the underlying proto message with the
+// ConfigStore's map. The same applies to `standard.go` callers
+// (`m := *mPtr`).
+//
+// Current callers are read-only — they invoke proto getters, never
+// setters or `proto.Reset` — which keeps this safe in practice. A
+// future caller that needs to MUTATE a returned MetricConfig must
+// `proto.Clone(m.MetricDefinition)` first, otherwise the mutation
+// will corrupt the store. (Devin PR #610 📝 shallow-pointer-copy
+// caveat.)
 func (c *ConfigStore) GetMetricsForExperiment(id string) ([]MetricConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
