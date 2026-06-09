@@ -13,10 +13,21 @@ jobs:
   chaos:
     runs-on: ubuntu-latest
     environment: staging
+    # Mapped from secrets so the Docker Hub login can guard on presence via the
+    # env context (secrets are not directly referenceable in step `if:`).
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
+      # `continue-on-error` keeps an expired/invalid token from hard-failing the
+      # job — the staging deploy degrades to anonymous pulls and a later step
+      # surfaces any real pull failure. The `if:` guard skips cleanly when no
+      # secrets are present.
       - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
