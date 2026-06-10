@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
@@ -14,6 +13,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/shadow"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 	"github.com/org/experimentation-platform/services/metrics/internal/status"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 // JobResult summarizes the outcome of a computation run.
@@ -178,12 +178,12 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 	for _, mPtr := range sortedMetrics {
 		// COMPOSITE: gate on operand status BEFORE attempting execution.
-		if strings.ToUpper(mPtr.Type) == "COMPOSITE" {
-			if blocker, blocked := sm.blockerFor(mPtr.Operands); blocked {
-				sm.markSkippedUpstream(mPtr.MetricID, blocker)
+		if mPtr.Type == commonv1.MetricType_METRIC_TYPE_COMPOSITE {
+			if blocker, blocked := sm.blockerFor(mPtr.GetComposite().GetOperands()); blocked {
+				sm.markSkippedUpstream(mPtr.MetricId, blocker)
 				slog.Warn("composite skipped (operand failed or missing)",
 					"experiment_id", experimentID,
-					"metric_id", mPtr.MetricID,
+					"metric_id", mPtr.MetricId,
 					"blocker", blocker,
 					"computation_date", computationDate,
 				)
@@ -199,26 +199,26 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		// silently wrong numbers, not an error. Round-4 BUG-0002 fix.
 		// blockerForRefs is shared with markUnvisitedDependentsAsSkipped
 		// so "blocked" means the same thing in both places.
-		if strings.ToUpper(mPtr.Type) == "METRICQL" {
+		if mPtr.Type == commonv1.MetricType_METRIC_TYPE_METRICQL {
 			refs, parseErr := operandIDs(mPtr)
 			if parseErr != nil {
 				// Parse failure -- already recorded as Failed via the
 				// failedParse pre-mark; defensive re-mark in case the
 				// expression text changed between DAG build and gate.
-				sm.markFailed(mPtr.MetricID, "metricql: parse: "+parseErr.Error())
+				sm.markFailed(mPtr.MetricId, "metricql: parse: "+parseErr.Error())
 				slog.Warn("metricql skipped (parse failure)",
 					"experiment_id", experimentID,
-					"metric_id", mPtr.MetricID,
+					"metric_id", mPtr.MetricId,
 					"err", parseErr,
 					"computation_date", computationDate,
 				)
 				continue
 			}
 			if blocker := sm.blockerForRefs(refs); blocker != "" {
-				sm.markSkippedUpstream(mPtr.MetricID, blocker)
+				sm.markSkippedUpstream(mPtr.MetricId, blocker)
 				slog.Warn("metricql skipped (ref failed or missing)",
 					"experiment_id", experimentID,
-					"metric_id", mPtr.MetricID,
+					"metric_id", mPtr.MetricId,
 					"blocker", blocker,
 					"computation_date", computationDate,
 				)
@@ -232,45 +232,51 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 		params := spark.TemplateParams{
 			ExperimentID:         exp.ExperimentID,
-			MetricID:             m.MetricID,
+			MetricID:             m.MetricId,
 			SourceEventType:      m.SourceEventType,
 			ComputationDate:      computationDate,
 			NumeratorEventType:   m.NumeratorEventType,
 			DenominatorEventType: m.DenominatorEventType,
-			CustomSQL:            m.CustomSQL,
+			CustomSQL:            m.CustomSql,
 			Percentile:           m.Percentile,
 			// ADR-026 Phase 1
-			FilterSQL:   m.FilterSQL,
-			ValueColumn: m.ValueColumn,
-			Operator:    m.Operator,
-			EventType:   m.EventType,
-			WindowHours: m.WindowHours,
-			Operands:    toSparkOperands(m.Operands),
+			FilterSQL:   m.GetFilteredMean().GetFilterSql(),
+			ValueColumn: m.GetFilteredMean().GetValueColumn(),
+			Operator:    config.CompositeOperatorShortName(m.GetComposite().GetOperator()),
+			EventType:   m.GetWindowedCount().GetEventType(),
+			WindowHours: m.GetWindowedCount().GetWindowHours(),
+			Operands:    toSparkOperands(m.GetComposite().GetOperands()),
 			// ADR-026 Phase 2 (#435)
 			MetricqlExpression: m.MetricqlExpression,
+		}
+		// WINDOWED_COUNT's optional filter_sql lives in WindowedCountConfig and
+		// shares M3's params.FilterSQL field; only override if the FILTERED_MEAN
+		// arm did not already populate it.
+		if params.FilterSQL == "" {
+			params.FilterSQL = m.GetWindowedCount().GetFilterSql()
 		}
 
 		// QoE metrics use a separate template reading from delta.qoe_events.
 		var sql string
 		var jobType string
-		if m.IsQoEMetric {
+		if m.IsQoeMetric {
 			params.QoEField = m.QoEField
 			rendered, err := j.renderer.RenderQoEMetric(params)
 			if err != nil {
-				return nil, fmt.Errorf("jobs: render QoE metric %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: render QoE metric %s: %w", m.MetricId, err)
 			}
 			sql = rendered
 			jobType = "qoe_metric"
 		} else {
-			rendered, err := j.renderer.RenderForType(m.Type, params)
+			rendered, err := j.renderer.RenderForType(config.TypeShortName(m.Type), params)
 			if err != nil {
 				// Record the render failure in the status table so M4a can
 				// distinguish it from "metric was never scheduled". Mirrors the
 				// markFailed call on the execute-error path below. Devin
 				// observability finding on #556.
-				sm.markFailed(m.MetricID, fmt.Sprintf("render: %v", err))
+				sm.markFailed(m.MetricId, fmt.Sprintf("render: %v", err))
 				slog.Warn("skipping metric: render error",
-					"metric_id", m.MetricID, "type", m.Type, "error", err)
+					"metric_id", m.MetricId, "type", config.TypeShortName(m.Type), "error", err)
 				continue
 			}
 			sql = rendered
@@ -279,72 +285,72 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 		result, err := j.executor.ExecuteAndWrite(ctx, sql, "delta.metric_summaries")
 		if err != nil {
-			sm.markFailed(m.MetricID, fmt.Sprintf("execute: %v", err))
-			return nil, fmt.Errorf("jobs: execute metric %s: %w", m.MetricID, err)
+			sm.markFailed(m.MetricId, fmt.Sprintf("execute: %v", err))
+			return nil, fmt.Errorf("jobs: execute metric %s: %w", m.MetricId, err)
 		}
 		m3metrics.SparkQueryDuration.WithLabelValues(jobType).Observe(result.Duration.Seconds())
 		m3metrics.SparkQueryRows.WithLabelValues(jobType).Observe(float64(result.RowCount))
 
 		if err := j.queryLog.Log(ctx, querylog.Entry{
 			ExperimentID: experimentID,
-			MetricID:     m.MetricID,
+			MetricID:     m.MetricId,
 			SQLText:      sql,
 			RowCount:     result.RowCount,
 			DurationMs:   result.Duration.Milliseconds(),
 			JobType:      jobType,
 		}); err != nil {
-			sm.markFailed(m.MetricID, fmt.Sprintf("query_log: %v", err))
-			return nil, fmt.Errorf("jobs: log query for metric %s: %w", m.MetricID, err)
+			sm.markFailed(m.MetricId, fmt.Sprintf("query_log: %v", err))
+			return nil, fmt.Errorf("jobs: log query for metric %s: %w", m.MetricId, err)
 		}
 
 		totalRows += result.RowCount
 		metricsComputed++
 
 		// For RATIO metrics, also compute delta method variance components.
-		if strings.ToUpper(m.Type) == "RATIO" {
+		if m.Type == commonv1.MetricType_METRIC_TYPE_RATIO {
 			deltaSQL, err := j.renderer.RenderRatioDeltaMethod(params)
 			if err != nil {
-				return nil, fmt.Errorf("jobs: render delta method for %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: render delta method for %s: %w", m.MetricId, err)
 			}
 
 			deltaResult, err := j.executor.ExecuteAndWrite(ctx, deltaSQL, "delta.daily_treatment_effects")
 			if err != nil {
-				return nil, fmt.Errorf("jobs: execute delta method for %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: execute delta method for %s: %w", m.MetricId, err)
 			}
 			m3metrics.SparkQueryDuration.WithLabelValues("delta_method").Observe(deltaResult.Duration.Seconds())
 			m3metrics.SparkQueryRows.WithLabelValues("delta_method").Observe(float64(deltaResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
-				MetricID:     m.MetricID,
+				MetricID:     m.MetricId,
 				SQLText:      deltaSQL,
 				RowCount:     deltaResult.RowCount,
 				DurationMs:   deltaResult.Duration.Milliseconds(),
 				JobType:      "delta_method",
 			}); err != nil {
-				return nil, fmt.Errorf("jobs: log delta method query for %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: log delta method query for %s: %w", m.MetricId, err)
 			}
 
 			slog.Info("computed delta method inputs",
 				"experiment_id", experimentID,
-				"metric_id", m.MetricID,
+				"metric_id", m.MetricId,
 				"rows", deltaResult.RowCount,
 			)
 		}
 
 		// If metric has a CUPED covariate configured and experiment has a start date,
 		// compute the pre-experiment covariate value for variance reduction.
-		if m.CupedCovariateMetricID != "" && exp.StartedAt != "" {
+		if m.CupedCovariateMetricId != "" && exp.StartedAt != "" {
 			if !isLegacyStyle(m.Type) {
 				slog.Info("skipping CUPED covariate: legacy column convention not supported for this metric type",
-					"metric_id", m.MetricID,
-					"type", m.Type,
+					"metric_id", m.MetricId,
+					"type", config.TypeShortName(m.Type),
 				)
 			} else {
-				covMetric, err := j.config.GetMetric(m.CupedCovariateMetricID)
+				covMetric, err := j.config.GetMetric(m.CupedCovariateMetricId)
 				if err != nil {
 					return nil, fmt.Errorf("jobs: resolve CUPED covariate metric %s for %s: %w",
-						m.CupedCovariateMetricID, m.MetricID, err)
+						m.CupedCovariateMetricId, m.MetricId, err)
 				}
 
 				cupedParams := params
@@ -355,31 +361,31 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 				cupedSQL, err := j.renderer.RenderCupedCovariate(cupedParams)
 				if err != nil {
-					return nil, fmt.Errorf("jobs: render CUPED covariate for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: render CUPED covariate for %s: %w", m.MetricId, err)
 				}
 
 				cupedResult, err := j.executor.ExecuteAndWrite(ctx, cupedSQL, "delta.metric_summaries")
 				if err != nil {
-					return nil, fmt.Errorf("jobs: execute CUPED covariate for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: execute CUPED covariate for %s: %w", m.MetricId, err)
 				}
 				m3metrics.SparkQueryDuration.WithLabelValues("cuped_covariate").Observe(cupedResult.Duration.Seconds())
 				m3metrics.SparkQueryRows.WithLabelValues("cuped_covariate").Observe(float64(cupedResult.RowCount))
 
 				if err := j.queryLog.Log(ctx, querylog.Entry{
 					ExperimentID: experimentID,
-					MetricID:     m.MetricID,
+					MetricID:     m.MetricId,
 					SQLText:      cupedSQL,
 					RowCount:     cupedResult.RowCount,
 					DurationMs:   cupedResult.Duration.Milliseconds(),
 					JobType:      "cuped_covariate",
 				}); err != nil {
-					return nil, fmt.Errorf("jobs: log CUPED covariate query for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: log CUPED covariate query for %s: %w", m.MetricId, err)
 				}
 
 				slog.Info("computed CUPED covariate",
 					"experiment_id", experimentID,
-					"metric_id", m.MetricID,
-					"covariate_metric_id", m.CupedCovariateMetricID,
+					"metric_id", m.MetricId,
+					"covariate_metric_id", m.CupedCovariateMetricId,
 					"rows", cupedResult.RowCount,
 				)
 			}
@@ -390,19 +396,19 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		if exp.MLRATEEnabled && len(m.MLRATEFeatureEventTypes) > 0 && m.MLRATEModelURI != "" && exp.StartedAt != "" {
 			if !isLegacyStyle(m.Type) {
 				slog.Info("skipping MLRATE cross-fit: legacy column convention not supported for this metric type",
-					"metric_id", m.MetricID,
-					"type", m.Type,
+					"metric_id", m.MetricId,
+					"type", config.TypeShortName(m.Type),
 				)
 			} else {
 				mlrateJob := NewMLRATEJob(j.renderer, j.executor, j.queryLog)
 				mlrateResult, err := mlrateJob.Run(ctx, exp, &m, computationDate)
 				if err != nil {
-					return nil, fmt.Errorf("jobs: MLRATE cross-fit for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: MLRATE cross-fit for %s: %w", m.MetricId, err)
 				}
 
 				slog.Info("computed MLRATE cross-fitted predictions",
 					"experiment_id", experimentID,
-					"metric_id", m.MetricID,
+					"metric_id", m.MetricId,
 					"folds", mlrateResult.Folds,
 					"users_scored", mlrateResult.UsersScored,
 				)
@@ -410,11 +416,11 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		}
 
 		// Session-level aggregation: if enabled, also compute per-session metrics.
-		if exp.SessionLevel && !m.IsQoEMetric {
+		if exp.SessionLevel && !m.IsQoeMetric {
 			if !isLegacyStyle(m.Type) {
 				slog.Info("skipping session-level metric: legacy column convention not supported for this metric type",
-					"metric_id", m.MetricID,
-					"type", m.Type,
+					"metric_id", m.MetricId,
+					"type", config.TypeShortName(m.Type),
 				)
 			} else {
 				slParams := params
@@ -422,41 +428,41 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 				slSQL, err := j.renderer.RenderSessionLevelMean(slParams)
 				if err != nil {
-					return nil, fmt.Errorf("jobs: render session-level metric for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: render session-level metric for %s: %w", m.MetricId, err)
 				}
 
 				slResult, err := j.executor.ExecuteAndWrite(ctx, slSQL, "delta.metric_summaries")
 				if err != nil {
-					return nil, fmt.Errorf("jobs: execute session-level metric for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: execute session-level metric for %s: %w", m.MetricId, err)
 				}
 				m3metrics.SparkQueryDuration.WithLabelValues("session_level_metric").Observe(slResult.Duration.Seconds())
 				m3metrics.SparkQueryRows.WithLabelValues("session_level_metric").Observe(float64(slResult.RowCount))
 
 				if err := j.queryLog.Log(ctx, querylog.Entry{
 					ExperimentID: experimentID,
-					MetricID:     m.MetricID,
+					MetricID:     m.MetricId,
 					SQLText:      slSQL,
 					RowCount:     slResult.RowCount,
 					DurationMs:   slResult.Duration.Milliseconds(),
 					JobType:      "session_level_metric",
 				}); err != nil {
-					return nil, fmt.Errorf("jobs: log session-level metric query for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: log session-level metric query for %s: %w", m.MetricId, err)
 				}
 
 				slog.Info("computed session-level metric",
 					"experiment_id", experimentID,
-					"metric_id", m.MetricID,
+					"metric_id", m.MetricId,
 					"rows", slResult.RowCount,
 				)
 			}
 		}
 
 		// Lifecycle segmentation: if enabled, also compute per-lifecycle-segment metrics.
-		if exp.LifecycleStratificationEnabled && !m.IsQoEMetric {
+		if exp.LifecycleStratificationEnabled && !m.IsQoeMetric {
 			if !isLegacyStyle(m.Type) {
 				slog.Info("skipping lifecycle metric: legacy column convention not supported for this metric type",
-					"metric_id", m.MetricID,
-					"type", m.Type,
+					"metric_id", m.MetricId,
+					"type", config.TypeShortName(m.Type),
 				)
 			} else {
 				lcParams := params
@@ -464,40 +470,40 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 				lcSQL, err := j.renderer.RenderLifecycleMean(lcParams)
 				if err != nil {
-					return nil, fmt.Errorf("jobs: render lifecycle metric for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: render lifecycle metric for %s: %w", m.MetricId, err)
 				}
 
 				lcResult, err := j.executor.ExecuteAndWrite(ctx, lcSQL, "delta.metric_summaries")
 				if err != nil {
-					return nil, fmt.Errorf("jobs: execute lifecycle metric for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: execute lifecycle metric for %s: %w", m.MetricId, err)
 				}
 				m3metrics.SparkQueryDuration.WithLabelValues("lifecycle_metric").Observe(lcResult.Duration.Seconds())
 				m3metrics.SparkQueryRows.WithLabelValues("lifecycle_metric").Observe(float64(lcResult.RowCount))
 
 				if err := j.queryLog.Log(ctx, querylog.Entry{
 					ExperimentID: experimentID,
-					MetricID:     m.MetricID,
+					MetricID:     m.MetricId,
 					SQLText:      lcSQL,
 					RowCount:     lcResult.RowCount,
 					DurationMs:   lcResult.Duration.Milliseconds(),
 					JobType:      "lifecycle_metric",
 				}); err != nil {
-					return nil, fmt.Errorf("jobs: log lifecycle metric query for %s: %w", m.MetricID, err)
+					return nil, fmt.Errorf("jobs: log lifecycle metric query for %s: %w", m.MetricId, err)
 				}
 
 				slog.Info("computed lifecycle metric",
 					"experiment_id", experimentID,
-					"metric_id", m.MetricID,
+					"metric_id", m.MetricId,
 					"rows", lcResult.RowCount,
 				)
 			}
 		}
 
-		sm.markCompleted(m.MetricID)
+		sm.markCompleted(m.MetricId)
 		slog.Info("computed metric",
 			"experiment_id", experimentID,
-			"metric_id", m.MetricID,
-			"type", m.Type,
+			"metric_id", m.MetricId,
+			"type", config.TypeShortName(m.Type),
 			"rows", result.RowCount,
 			"duration_ms", result.Duration.Milliseconds(),
 		)
@@ -512,7 +518,7 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 	// Devin BUG-0002 on #556.
 	completedMetrics := make([]config.MetricConfig, 0, len(metrics))
 	for _, m := range metrics {
-		if sm.entries[m.MetricID] == status.Completed {
+		if sm.entries[m.MetricId] == status.Completed {
 			completedMetrics = append(completedMetrics, m)
 		}
 	}
@@ -522,37 +528,37 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 		for _, m := range completedMetrics {
 			teParams := spark.TemplateParams{
 				ExperimentID:     exp.ExperimentID,
-				MetricID:         m.MetricID,
+				MetricID:         m.MetricId,
 				ComputationDate:  computationDate,
 				ControlVariantID: controlVariantID,
 			}
 
 			teSQL, err := j.renderer.RenderDailyTreatmentEffect(teParams)
 			if err != nil {
-				return nil, fmt.Errorf("jobs: render daily treatment effect for %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: render daily treatment effect for %s: %w", m.MetricId, err)
 			}
 
 			teResult, err := j.executor.ExecuteAndWrite(ctx, teSQL, "delta.daily_treatment_effects")
 			if err != nil {
-				return nil, fmt.Errorf("jobs: execute daily treatment effect for %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: execute daily treatment effect for %s: %w", m.MetricId, err)
 			}
 			m3metrics.SparkQueryDuration.WithLabelValues("daily_treatment_effect").Observe(teResult.Duration.Seconds())
 			m3metrics.SparkQueryRows.WithLabelValues("daily_treatment_effect").Observe(float64(teResult.RowCount))
 
 			if err := j.queryLog.Log(ctx, querylog.Entry{
 				ExperimentID: experimentID,
-				MetricID:     m.MetricID,
+				MetricID:     m.MetricId,
 				SQLText:      teSQL,
 				RowCount:     teResult.RowCount,
 				DurationMs:   teResult.Duration.Milliseconds(),
 				JobType:      "daily_treatment_effect",
 			}); err != nil {
-				return nil, fmt.Errorf("jobs: log daily treatment effect query for %s: %w", m.MetricID, err)
+				return nil, fmt.Errorf("jobs: log daily treatment effect query for %s: %w", m.MetricId, err)
 			}
 
 			slog.Info("computed daily treatment effect",
 				"experiment_id", experimentID,
-				"metric_id", m.MetricID,
+				"metric_id", m.MetricId,
 				"rows", teResult.RowCount,
 			)
 		}
@@ -564,9 +570,9 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 	var qoeMetrics []config.MetricConfig
 	var engagementMetrics []config.MetricConfig
 	for _, m := range completedMetrics {
-		if m.IsQoEMetric {
+		if m.IsQoeMetric {
 			qoeMetrics = append(qoeMetrics, m)
-		} else if !m.IsQoEMetric && m.Type != "RATIO" {
+		} else if !m.IsQoeMetric && m.Type != commonv1.MetricType_METRIC_TYPE_RATIO {
 			engagementMetrics = append(engagementMetrics, m)
 		}
 	}
@@ -582,19 +588,19 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 				corrSQL, err := j.renderer.RenderQoEEngagementCorrelation(corrParams)
 				if err != nil {
-					return nil, fmt.Errorf("jobs: render QoE-engagement correlation (%s × %s): %w", qm.MetricID, em.MetricID, err)
+					return nil, fmt.Errorf("jobs: render QoE-engagement correlation (%s × %s): %w", qm.MetricId, em.MetricId, err)
 				}
 
 				corrResult, err := j.executor.ExecuteAndWrite(ctx, corrSQL, "delta.daily_treatment_effects")
 				if err != nil {
-					return nil, fmt.Errorf("jobs: execute QoE-engagement correlation (%s × %s): %w", qm.MetricID, em.MetricID, err)
+					return nil, fmt.Errorf("jobs: execute QoE-engagement correlation (%s × %s): %w", qm.MetricId, em.MetricId, err)
 				}
 				m3metrics.SparkQueryDuration.WithLabelValues("qoe_engagement_correlation").Observe(corrResult.Duration.Seconds())
 				m3metrics.SparkQueryRows.WithLabelValues("qoe_engagement_correlation").Observe(float64(corrResult.RowCount))
 
 				if err := j.queryLog.Log(ctx, querylog.Entry{
 					ExperimentID: experimentID,
-					MetricID:     qm.MetricID + "×" + em.MetricID,
+					MetricID:     qm.MetricId + "×" + em.MetricId,
 					SQLText:      corrSQL,
 					RowCount:     corrResult.RowCount,
 					DurationMs:   corrResult.Duration.Milliseconds(),
@@ -605,8 +611,8 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 
 				slog.Info("computed QoE-engagement correlation",
 					"experiment_id", experimentID,
-					"qoe_metric", qm.MetricID,
-					"engagement_metric", em.MetricID,
+					"qoe_metric", qm.MetricId,
+					"engagement_metric", em.MetricId,
 					"rows", corrResult.RowCount,
 				)
 			}
@@ -635,9 +641,14 @@ func (j *StandardJob) Run(ctx context.Context, experimentID string) (*JobResult,
 // ADR-026 Phase 1 types (FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT) use
 // different column conventions and must skip post-processing until those
 // templates grow per-type variants (issue #511 option b).
-func isLegacyStyle(metricType string) bool {
-	switch strings.ToUpper(metricType) {
-	case "MEAN", "PROPORTION", "COUNT", "RATIO", "PERCENTILE", "CUSTOM":
+func isLegacyStyle(t commonv1.MetricType) bool {
+	switch t {
+	case commonv1.MetricType_METRIC_TYPE_MEAN,
+		commonv1.MetricType_METRIC_TYPE_PROPORTION,
+		commonv1.MetricType_METRIC_TYPE_COUNT,
+		commonv1.MetricType_METRIC_TYPE_RATIO,
+		commonv1.MetricType_METRIC_TYPE_PERCENTILE,
+		commonv1.MetricType_METRIC_TYPE_CUSTOM:
 		return true
 	}
 	return false
@@ -692,7 +703,7 @@ func (j *StandardJob) flushStatus(
 // not "skipped".
 func markUnvisitedDependentsAsSkipped(sortedMetrics []*config.MetricConfig, sm *statusMap) {
 	for _, mPtr := range sortedMetrics {
-		if _, recorded := sm.entries[mPtr.MetricID]; recorded {
+		if _, recorded := sm.entries[mPtr.MetricId]; recorded {
 			// Already Completed / Failed / SkippedUpstreamFailure / SkippedCycle.
 			continue
 		}
@@ -701,7 +712,7 @@ func markUnvisitedDependentsAsSkipped(sortedMetrics []*config.MetricConfig, sm *
 			// METRICQL parse failure encountered here would normally already
 			// be recorded via the pre-loop pre-mark from failedParse; if not,
 			// surface it as Failed (defense-in-depth).
-			sm.markFailed(mPtr.MetricID, "metricql: parse: "+err.Error())
+			sm.markFailed(mPtr.MetricId, "metricql: parse: "+err.Error())
 			continue
 		}
 		if len(refs) == 0 {
@@ -709,23 +720,23 @@ func markUnvisitedDependentsAsSkipped(sortedMetrics []*config.MetricConfig, sm *
 			continue
 		}
 		if blocker := sm.blockerForRefs(refs); blocker != "" {
-			sm.markSkippedUpstream(mPtr.MetricID, blocker)
+			sm.markSkippedUpstream(mPtr.MetricId, blocker)
 		}
 	}
 }
 
-// toSparkOperands converts config-layer OperandConfig values to the
+// toSparkOperands converts proto-direct CompositeOperand values to the
 // spark.OperandParam shape consumed by the renderer's composite template.
 // Returns nil for an empty/nil input (matches Go's zero-value convention).
-func toSparkOperands(in []config.OperandConfig) []spark.OperandParam {
+func toSparkOperands(in []*commonv1.CompositeOperand) []spark.OperandParam {
 	if len(in) == 0 {
 		return nil
 	}
 	out := make([]spark.OperandParam, len(in))
 	for i, op := range in {
 		out[i] = spark.OperandParam{
-			MetricID: op.MetricID,
-			Weight:   op.Weight,
+			MetricID: op.GetMetricId(),
+			Weight:   op.GetWeight(),
 		}
 	}
 	return out

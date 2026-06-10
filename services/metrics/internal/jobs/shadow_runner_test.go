@@ -66,7 +66,7 @@ func minimalExperimentFixture(t *testing.T) string {
 			{
 				"metric_id":        "watch_time",
 				"name":             "Watch time (MEAN)",
-				"type":             "MEAN",
+				"type":             "METRIC_TYPE_MEAN",
 				"source_event_type": "heartbeat"
 			}
 		]
@@ -467,7 +467,7 @@ func TestStandardJob_ShadowRun_RegularPassUnaffected(t *testing.T) {
 // TestStandardJob_ShadowRun_PropagatesExperimentID: regression test for Fix 2 —
 // the SQL sent to the executor must contain the real experiment_id, not an empty
 // string.  An empty ExperimentID in TemplateParams would render
-// `WHERE experiment_id = ''` in delta.exposures joins, producing zero-row output.
+// `WHERE experiment_id = ”` in delta.exposures joins, producing zero-row output.
 func TestStandardJob_ShadowRun_PropagatesExperimentID(t *testing.T) {
 	p := minimalExperimentFixture(t)
 	ms := shadow.NewMockStore()

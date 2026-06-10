@@ -11,6 +11,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 func setupMLRATEJob(t *testing.T) (*MLRATEJob, *spark.MockExecutor, *querylog.MemWriter) {
@@ -25,11 +26,11 @@ func setupMLRATEJob(t *testing.T) (*MLRATEJob, *spark.MockExecutor, *querylog.Me
 
 func mlrateTestExperiment() *config.ExperimentConfig {
 	return &config.ExperimentConfig{
-		ExperimentID: "e0000000-0000-0000-0000-000000000008",
-		Name:         "mlrate_crossfit_test",
-		Type:         "AB",
-		State:        "RUNNING",
-		StartedAt:    "2024-02-01",
+		ExperimentID:  "e0000000-0000-0000-0000-000000000008",
+		Name:          "mlrate_crossfit_test",
+		Type:          "AB",
+		State:         "RUNNING",
+		StartedAt:     "2024-02-01",
 		MLRATEEnabled: true,
 		MLRATEFolds:   3,
 		Variants: []config.VariantConfig{
@@ -41,10 +42,12 @@ func mlrateTestExperiment() *config.ExperimentConfig {
 
 func mlrateTestMetric() *config.MetricConfig {
 	return &config.MetricConfig{
-		MetricID:                "watch_time_minutes_mlrate",
-		Name:                    "Watch Time (MLRATE)",
-		Type:                    "MEAN",
-		SourceEventType:         "heartbeat",
+		MetricDefinition: &commonv1.MetricDefinition{
+			MetricId:        "watch_time_minutes_mlrate",
+			Name:            "Watch Time (MLRATE)",
+			Type:            commonv1.MetricType_METRIC_TYPE_MEAN,
+			SourceEventType: "heartbeat",
+		},
 		MLRATEFeatureEventTypes: []string{"heartbeat", "stream_start"},
 		MLRATEModelURI:          "models:/mlrate-watch-time",
 		MLRATELookbackDays:      14,
@@ -61,7 +64,7 @@ func TestMLRATEJob_Run(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, exp.ExperimentID, result.ExperimentID)
-	assert.Equal(t, metric.MetricID, result.MetricID)
+	assert.Equal(t, metric.MetricId, result.MetricID)
 	assert.Equal(t, 3, result.Folds)
 	assert.False(t, result.CompletedAt.IsZero())
 
@@ -94,7 +97,7 @@ func TestMLRATEJob_Run(t *testing.T) {
 	crossfitCount := 0
 	for _, e := range entries {
 		assert.Equal(t, exp.ExperimentID, e.ExperimentID)
-		assert.Equal(t, metric.MetricID, e.MetricID)
+		assert.Equal(t, metric.MetricId, e.MetricID)
 		switch e.JobType {
 		case "mlrate_features":
 			featCount++

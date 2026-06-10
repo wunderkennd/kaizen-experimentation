@@ -76,19 +76,19 @@
     {
       "metric_id": "watch_time_minutes",
       "name": "Watch Time (minutes)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "heartbeat"
     },
     {
       "metric_id": "stream_start_rate",
       "name": "Stream Start Rate",
-      "type": "PROPORTION",
+      "type": "METRIC_TYPE_PROPORTION",
       "source_event_type": "stream_start"
     },
     {
       "metric_id": "ttff_mean",
       "name": "Time to First Frame (mean)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "qoe_playback",
       "is_qoe_metric": true,
       "qoe_field": "time_to_first_frame_ms",
@@ -97,7 +97,7 @@
     {
       "metric_id": "rebuffer_ratio_mean",
       "name": "Rebuffer Ratio (mean)",
-      "type": "MEAN",
+      "type": "METRIC_TYPE_MEAN",
       "source_event_type": "qoe_playback",
       "is_qoe_metric": true,
       "qoe_field": "rebuffer_ratio",

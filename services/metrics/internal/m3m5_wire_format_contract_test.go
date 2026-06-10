@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/org/experimentation-platform/services/metrics/internal/config"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 // ---------------------------------------------------------------------------
@@ -225,32 +226,41 @@ func TestM3M5_ExperimentConfig_FieldCompleteness(t *testing.T) {
 
 // TestM3M5_MetricConfig_FieldCompleteness verifies that every field M3's
 // MetricConfig uses has a corresponding field in M5's MetricDefinition wire format.
+//
+// Since #506 M3 embeds *commonv1.MetricDefinition, so the proto-generated JSON
+// tags (snake_case, including the oneof TypeConfig arms) appear in extractJSONTags
+// alongside the four M3-only sibling fields (qoe_field, mlrate_*).
 func TestM3M5_MetricConfig_FieldCompleteness(t *testing.T) {
 	m3ToM5 := map[string]string{
+		// Proto fields (auto-mirrored via embed):
 		"metric_id":                  "metricId",
 		"name":                       "name",
+		"description":                "description",
 		"type":                       "type",
 		"source_event_type":          "sourceEventType",
 		"numerator_event_type":       "numeratorEventType",
 		"denominator_event_type":     "denominatorEventType",
-		"cuped_covariate_metric_id":  "cupedCovariateMetricId",
 		"percentile":                 "percentile",
-		"lower_is_better":            "lowerIsBetter",
-		"is_qoe_metric":              "isQoeMetric",
-		"qoe_field":                  "", // M3-only; not in M5 proto (derived from source_event_type)
 		"custom_sql":                 "customSql",
+		"lower_is_better":            "lowerIsBetter",
+		"surrogate_target_metric_id": "surrogateTargetMetricId",
+		"is_qoe_metric":              "isQoeMetric",
+		"cuped_covariate_metric_id":  "cupedCovariateMetricId",
+		"minimum_detectable_effect":  "minimumDetectableEffect",
+		"stakeholder":                "stakeholder",
+		"aggregation_level":          "aggregationLevel",
+		// ADR-026 Phase 1 — oneof type_config arms (protojson snake_case tags).
+		"filtered_mean":  "filteredMean",
+		"composite":      "composite",
+		"windowed_count": "windowedCount",
+		// ADR-026 Phase 2 — METRICQL expression source text.
+		"metricql_expression": "metricqlExpression",
+
+		// M3-only sibling fields (not in proto):
+		"qoe_field":                  "", // M3-only; not in M5 proto (derived from source_event_type)
 		"mlrate_feature_event_types": "mlrateConfig.featureEventTypes",
 		"mlrate_model_uri":           "mlrateConfig.modelUri",
 		"mlrate_lookback_days":       "mlrateConfig.lookbackDays",
-		// ADR-026 Phase 1 — new-type fields map to protojson oneof type_config branches.
-		"filter_sql":   "filteredMean.filterSql",    // FilteredMeanConfig.filter_sql
-		"value_column": "filteredMean.valueColumn",  // FilteredMeanConfig.value_column
-		"operands":     "composite.operands",        // CompositeConfig.operands
-		"operator":     "composite.operator",        // CompositeConfig.operator
-		"event_type":   "windowedCount.eventType",   // WindowedCountConfig.event_type
-		"window_hours": "windowedCount.windowHours", // WindowedCountConfig.window_hours
-		// ADR-026 Phase 2 (#435) — METRICQL expression source text.
-		"metricql_expression": "metricqlExpression", // MetricDefinition.metricql_expression (field 20)
 	}
 
 	m3Tags := extractJSONTags(reflect.TypeOf(config.MetricConfig{}))
@@ -523,7 +533,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 	cases := []struct {
 		name     string
 		wire     m5WireMetricDefinition
-		wantType string
+		wantType commonv1.MetricType
 	}{
 		{
 			name: "MEAN",
@@ -531,7 +541,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 				MetricID: "watch_time", Name: "Watch Time", Type: "METRIC_TYPE_MEAN",
 				SourceEventType: "heartbeat", CupedCovariateMetricID: "watch_time",
 			},
-			wantType: "MEAN",
+			wantType: commonv1.MetricType_METRIC_TYPE_MEAN,
 		},
 		{
 			name: "PROPORTION",
@@ -539,7 +549,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 				MetricID: "ctr", Name: "CTR", Type: "METRIC_TYPE_PROPORTION",
 				SourceEventType: "impression",
 			},
-			wantType: "PROPORTION",
+			wantType: commonv1.MetricType_METRIC_TYPE_PROPORTION,
 		},
 		{
 			name: "RATIO",
@@ -548,7 +558,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 				NumeratorEventType: "rebuffer_event", DenominatorEventType: "playback_minute",
 				LowerIsBetter: true,
 			},
-			wantType: "RATIO",
+			wantType: commonv1.MetricType_METRIC_TYPE_RATIO,
 		},
 		{
 			name: "COUNT",
@@ -556,7 +566,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 				MetricID: "sessions", Name: "Sessions", Type: "METRIC_TYPE_COUNT",
 				SourceEventType: "session_start",
 			},
-			wantType: "COUNT",
+			wantType: commonv1.MetricType_METRIC_TYPE_COUNT,
 		},
 		{
 			name: "PERCENTILE",
@@ -564,7 +574,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 				MetricID: "latency_p50", Name: "Latency p50", Type: "METRIC_TYPE_PERCENTILE",
 				SourceEventType: "playback_start", Percentile: 0.50, LowerIsBetter: true,
 			},
-			wantType: "PERCENTILE",
+			wantType: commonv1.MetricType_METRIC_TYPE_PERCENTILE,
 		},
 		{
 			name: "CUSTOM",
@@ -572,7 +582,7 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 				MetricID: "power_users", Name: "Power Users", Type: "METRIC_TYPE_CUSTOM",
 				CustomSQL: "SELECT user_id, AVG(value) FROM events GROUP BY user_id HAVING COUNT(*) >= 10",
 			},
-			wantType: "CUSTOM",
+			wantType: commonv1.MetricType_METRIC_TYPE_CUSTOM,
 		},
 	}
 
@@ -580,8 +590,8 @@ func TestM3M5_MetricWireToConfig_AllTypes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m3 := m5MetricToConfig(tc.wire)
 			assert.Equal(t, tc.wantType, m3.Type,
-				"metric type must be stripped of METRIC_TYPE_ prefix")
-			assert.Equal(t, tc.wire.MetricID, m3.MetricID)
+				"metric type must round-trip into the proto enum")
+			assert.Equal(t, tc.wire.MetricID, m3.MetricId)
 			assert.Equal(t, tc.wire.Name, m3.Name)
 			assert.Equal(t, tc.wire.LowerIsBetter, m3.LowerIsBetter)
 		})
@@ -630,15 +640,14 @@ func TestM3M5_WireFormat_FilteredMean(t *testing.T) {
 	assert.Nil(t, decoded.Composite, "non-active oneof arms must remain nil")
 	assert.Nil(t, decoded.WindowedCount, "non-active oneof arms must remain nil")
 
-	// Flatten into M3's config view and assert the conversion picked up
-	// both new fields under their snake_case M3 names.
+	// Build M3's proto-direct view and assert the oneof FilteredMean payload survives.
 	m3 := m5MetricToConfig(decoded)
-	assert.Equal(t, "FILTERED_MEAN", m3.Type,
-		"M3 strips METRIC_TYPE_ prefix from FILTERED_MEAN as for legacy types")
-	assert.Equal(t, "platform = 'mobile' AND duration_ms > 5000", m3.FilterSQL,
-		"M3 MetricConfig.filter_sql must be populated from the oneof arm")
-	assert.Equal(t, "duration_ms", m3.ValueColumn,
-		"M3 MetricConfig.value_column must be populated from the oneof arm")
+	assert.Equal(t, commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN, m3.Type,
+		"M3 MetricConfig.Type retains the proto enum (no string stripping)")
+	assert.Equal(t, "platform = 'mobile' AND duration_ms > 5000", m3.GetFilteredMean().GetFilterSql(),
+		"FilteredMean.filter_sql must be populated from the oneof arm")
+	assert.Equal(t, "duration_ms", m3.GetFilteredMean().GetValueColumn(),
+		"FilteredMean.value_column must be populated from the oneof arm")
 	assert.Equal(t, "playback_heartbeat", m3.SourceEventType,
 		"FILTERED_MEAN still needs source_event_type to identify the scan table")
 }
@@ -681,17 +690,18 @@ func TestM3M5_WireFormat_Composite(t *testing.T) {
 	assert.Nil(t, decoded.FilteredMean, "non-active oneof arms must remain nil")
 	assert.Nil(t, decoded.WindowedCount, "non-active oneof arms must remain nil")
 
-	// Flatten into M3's config view.
+	// Build M3's proto-direct view.
 	m3 := m5MetricToConfig(decoded)
-	assert.Equal(t, "COMPOSITE", m3.Type)
-	assert.Equal(t, "WEIGHTED_SUM", m3.Operator,
-		"M3 strips COMPOSITE_OPERATOR_ prefix to match the renderer's switch arms")
-	require.Len(t, m3.Operands, 2,
-		"M3 MetricConfig.operands must mirror the wire-format array length")
-	assert.Equal(t, "watch_time_minutes", m3.Operands[0].MetricID)
-	assert.InDelta(t, 0.7, m3.Operands[0].Weight, 1e-9)
-	assert.Equal(t, "completion_rate", m3.Operands[1].MetricID)
-	assert.InDelta(t, 0.3, m3.Operands[1].Weight, 1e-9)
+	assert.Equal(t, commonv1.MetricType_METRIC_TYPE_COMPOSITE, m3.Type)
+	assert.Equal(t, commonv1.CompositeOperator_COMPOSITE_OPERATOR_WEIGHTED_SUM, m3.GetComposite().GetOperator(),
+		"Composite.operator round-trips as proto enum")
+	operands := m3.GetComposite().GetOperands()
+	require.Len(t, operands, 2,
+		"M3 MetricConfig.composite.operands must mirror the wire-format array length")
+	assert.Equal(t, "watch_time_minutes", operands[0].GetMetricId())
+	assert.InDelta(t, 0.7, operands[0].GetWeight(), 1e-9)
+	assert.Equal(t, "completion_rate", operands[1].GetMetricId())
+	assert.InDelta(t, 0.3, operands[1].GetWeight(), 1e-9)
 }
 
 // TestM3M5_WireFormat_WindowedCount verifies a WINDOWED_COUNT metric
@@ -727,15 +737,15 @@ func TestM3M5_WireFormat_WindowedCount(t *testing.T) {
 	assert.Nil(t, decoded.FilteredMean, "non-active oneof arms must remain nil")
 	assert.Nil(t, decoded.Composite, "non-active oneof arms must remain nil")
 
-	// Flatten into M3's config view.
+	// Build M3's proto-direct view.
 	m3 := m5MetricToConfig(decoded)
-	assert.Equal(t, "WINDOWED_COUNT", m3.Type)
-	assert.Equal(t, "trial_signup", m3.EventType,
-		"M3 MetricConfig.event_type (distinct from source_event_type)")
-	assert.Equal(t, "country = 'US'", m3.FilterSQL,
-		"M3 MetricConfig.filter_sql is shared between FILTERED_MEAN and WINDOWED_COUNT")
-	assert.Equal(t, int32(168), m3.WindowHours,
-		"M3 MetricConfig.window_hours must preserve the int32 from the wire")
+	assert.Equal(t, commonv1.MetricType_METRIC_TYPE_WINDOWED_COUNT, m3.Type)
+	assert.Equal(t, "trial_signup", m3.GetWindowedCount().GetEventType(),
+		"WindowedCount.event_type (distinct from source_event_type)")
+	assert.Equal(t, "country = 'US'", m3.GetWindowedCount().GetFilterSql(),
+		"WindowedCount.filter_sql lives on its own oneof arm")
+	assert.Equal(t, int32(168), m3.GetWindowedCount().GetWindowHours(),
+		"WindowedCount.window_hours must preserve the int32 from the wire")
 }
 
 // TestM3M5_MetricWireToConfig_RatioFields verifies RATIO-specific fields map correctly.
@@ -767,7 +777,7 @@ func TestM3M5_MetricWireToConfig_QoEFields(t *testing.T) {
 	}
 
 	m3 := m5MetricToConfig(wire)
-	assert.Equal(t, true, m3.IsQoEMetric)
+	assert.Equal(t, true, m3.IsQoeMetric)
 	assert.Equal(t, true, m3.LowerIsBetter)
 	assert.Equal(t, "qoe_playback", m3.SourceEventType)
 }
@@ -783,7 +793,7 @@ func TestM3M5_MetricWireToConfig_CupedCovariate(t *testing.T) {
 	}
 
 	m3 := m5MetricToConfig(wire)
-	assert.Equal(t, "watch_time", m3.CupedCovariateMetricID,
+	assert.Equal(t, "watch_time", m3.CupedCovariateMetricId,
 		"CUPED covariate metric ID must be preserved")
 }
 
@@ -966,7 +976,10 @@ func TestM3M5_TimestampFormat_RFC3339(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestM3M5_SeedConfig_EnumsAreShort verifies that M3's current seed config
-// uses short enum strings (not prefixed), documenting the conversion requirement.
+// uses short enum strings for experiment-side fields (Experiment.Type, State,
+// GuardrailAction) and the proto-direct METRIC_TYPE_* enum for MetricConfig
+// (since #506 — MetricConfig embeds *commonv1.MetricDefinition, so seed JSON
+// carries the prefixed protojson form).
 func TestM3M5_SeedConfig_EnumsAreShort(t *testing.T) {
 	cs, err := config.LoadFromFile("config/testdata/seed_config.json")
 	require.NoError(t, err)
@@ -983,8 +996,8 @@ func TestM3M5_SeedConfig_EnumsAreShort(t *testing.T) {
 
 	metric, err := cs.GetMetric("rebuffer_rate")
 	require.NoError(t, err)
-	assert.Equal(t, "RATIO", metric.Type,
-		"M3 config uses short 'RATIO', not M5's 'METRIC_TYPE_RATIO'")
+	assert.Equal(t, commonv1.MetricType_METRIC_TYPE_RATIO, metric.Type,
+		"M3 MetricConfig.Type is the proto-direct typed enum")
 }
 
 // TestM3M5_SeedConfig_RunningFilter verifies M3's RunningExperimentIDs filter
@@ -1119,44 +1132,53 @@ func m5ExperimentToConfig(m5 m5WireExperiment) config.ExperimentConfig {
 }
 
 func m5MetricToConfig(m5 m5WireMetricDefinition) config.MetricConfig {
-	cfg := config.MetricConfig{
-		MetricID:               m5.MetricID,
+	// Since #506 the proto fields live on the embedded MetricDefinition.
+	// Map enum strings back to typed enums; sibling fields keep their slots.
+	md := &commonv1.MetricDefinition{
+		MetricId:               m5.MetricID,
 		Name:                   m5.Name,
-		Type:                   stripEnumPrefix(m5.Type, m5MetricTypePrefix),
+		Type:                   commonv1.MetricType(commonv1.MetricType_value[m5.Type]),
 		SourceEventType:        m5.SourceEventType,
 		NumeratorEventType:     m5.NumeratorEventType,
 		DenominatorEventType:   m5.DenominatorEventType,
-		CupedCovariateMetricID: m5.CupedCovariateMetricID,
+		CupedCovariateMetricId: m5.CupedCovariateMetricID,
 		Percentile:             m5.Percentile,
 		LowerIsBetter:          m5.LowerIsBetter,
-		IsQoEMetric:            m5.IsQoEMetric,
-		CustomSQL:              m5.CustomSQL,
+		IsQoeMetric:            m5.IsQoEMetric,
+		CustomSql:              m5.CustomSQL,
 	}
 
-	// ADR-026 Phase 1 — flatten the oneof type_config into M3's flat fields.
+	// ADR-026 Phase 1 — preserve oneof type_config arms directly on the proto.
 	if m5.FilteredMean != nil {
-		cfg.FilterSQL = m5.FilteredMean.FilterSQL
-		cfg.ValueColumn = m5.FilteredMean.ValueColumn
+		md.TypeConfig = &commonv1.MetricDefinition_FilteredMean{
+			FilteredMean: &commonv1.FilteredMeanConfig{
+				FilterSql:   m5.FilteredMean.FilterSQL,
+				ValueColumn: m5.FilteredMean.ValueColumn,
+			},
+		}
 	}
 	if m5.Composite != nil {
-		cfg.Operator = stripEnumPrefix(m5.Composite.Operator, m5CompositeOperatorPrefix)
-		for _, op := range m5.Composite.Operands {
-			cfg.Operands = append(cfg.Operands, config.OperandConfig{
-				MetricID: op.MetricID,
-				Weight:   op.Weight,
-			})
+		operands := make([]*commonv1.CompositeOperand, len(m5.Composite.Operands))
+		for i, op := range m5.Composite.Operands {
+			operands[i] = &commonv1.CompositeOperand{MetricId: op.MetricID, Weight: op.Weight}
+		}
+		md.TypeConfig = &commonv1.MetricDefinition_Composite{
+			Composite: &commonv1.CompositeConfig{
+				Operands: operands,
+				Operator: commonv1.CompositeOperator(commonv1.CompositeOperator_value[m5.Composite.Operator]),
+			},
 		}
 	}
 	if m5.WindowedCount != nil {
-		cfg.EventType = m5.WindowedCount.EventType
-		cfg.WindowHours = m5.WindowedCount.WindowHours
-		// WindowedCountConfig.filter_sql shares M3's flat filter_sql column.
-		if m5.WindowedCount.FilterSQL != "" {
-			cfg.FilterSQL = m5.WindowedCount.FilterSQL
+		md.TypeConfig = &commonv1.MetricDefinition_WindowedCount{
+			WindowedCount: &commonv1.WindowedCountConfig{
+				EventType:   m5.WindowedCount.EventType,
+				FilterSql:   m5.WindowedCount.FilterSQL,
+				WindowHours: m5.WindowedCount.WindowHours,
+			},
 		}
 	}
-
-	return cfg
+	return config.MetricConfig{MetricDefinition: md}
 }
 
 func m5SurrogateToConfig(m5 m5WireSurrogateModel) config.SurrogateModelConfig {
@@ -1172,11 +1194,25 @@ func m5SurrogateToConfig(m5 m5WireSurrogateModel) config.SurrogateModelConfig {
 	}
 }
 
-// extractJSONTags returns all JSON field names (without options like omitempty) from a struct type.
+// extractJSONTags returns all JSON field names (without options like omitempty)
+// from a struct type. Walks anonymous-embedded structs (and pointers to them)
+// so that MetricConfig — which now embeds *commonv1.MetricDefinition — exposes
+// the proto-generated JSON tags alongside its own M3-only tags (issue #506).
 func extractJSONTags(t reflect.Type) []string {
 	var tags []string
 	for i := 0; i < t.NumField(); i++ {
-		tag := t.Field(i).Tag.Get("json")
+		f := t.Field(i)
+		if f.Anonymous {
+			ft := f.Type
+			if ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
+			}
+			if ft.Kind() == reflect.Struct {
+				tags = append(tags, extractJSONTags(ft)...)
+				continue
+			}
+		}
+		tag := f.Tag.Get("json")
 		if tag == "" || tag == "-" {
 			continue
 		}

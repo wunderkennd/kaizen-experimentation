@@ -1,10 +1,12 @@
 package config
 
 import (
-	"encoding/json"
 	"testing"
+
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestLoadFromFile(t *testing.T) {
@@ -22,7 +24,7 @@ func TestLoadFromFile(t *testing.T) {
 	t.Run("metrics loaded", func(t *testing.T) {
 		m, err := cs.GetMetric("watch_time_minutes")
 		require.NoError(t, err)
-		assert.Equal(t, "MEAN", m.Type)
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_MEAN, m.Type)
 	})
 
 	t.Run("metrics for experiment", func(t *testing.T) {
@@ -34,7 +36,7 @@ func TestLoadFromFile(t *testing.T) {
 	t.Run("ratio metric", func(t *testing.T) {
 		m, err := cs.GetMetric("rebuffer_rate")
 		require.NoError(t, err)
-		assert.Equal(t, "RATIO", m.Type)
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_RATIO, m.Type)
 		assert.Equal(t, "rebuffer_event", m.NumeratorEventType)
 		assert.Equal(t, "playback_minute", m.DenominatorEventType)
 	})
@@ -42,7 +44,7 @@ func TestLoadFromFile(t *testing.T) {
 	t.Run("cuped covariate", func(t *testing.T) {
 		m, err := cs.GetMetric("watch_time_minutes")
 		require.NoError(t, err)
-		assert.Equal(t, "watch_time_minutes", m.CupedCovariateMetricID)
+		assert.Equal(t, "watch_time_minutes", m.CupedCovariateMetricId)
 	})
 
 	t.Run("guardrail configs", func(t *testing.T) {
@@ -81,7 +83,7 @@ func TestLoadFromFile(t *testing.T) {
 	t.Run("percentile metric", func(t *testing.T) {
 		m, err := cs.GetMetric("latency_p50_ms")
 		require.NoError(t, err)
-		assert.Equal(t, "PERCENTILE", m.Type)
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_PERCENTILE, m.Type)
 		assert.Equal(t, 0.50, m.Percentile)
 		assert.True(t, m.LowerIsBetter)
 	})
@@ -89,7 +91,7 @@ func TestLoadFromFile(t *testing.T) {
 	t.Run("qoe metric", func(t *testing.T) {
 		m, err := cs.GetMetric("ttff_mean")
 		require.NoError(t, err)
-		assert.True(t, m.IsQoEMetric)
+		assert.True(t, m.IsQoeMetric)
 		assert.Equal(t, "time_to_first_frame_ms", m.QoEField)
 		assert.True(t, m.LowerIsBetter)
 	})
@@ -133,75 +135,89 @@ func TestLoadFromFile_InvalidJSON(t *testing.T) {
 }
 
 func TestMetricConfig_ADR026Phase1_RoundTrip(t *testing.T) {
+	// Now that MetricConfig embeds *commonv1.MetricDefinition, raw protojson
+	// drives the proto half; the four M3-only sibling fields are no longer
+	// exercised here.  Tier-1 (FILTERED_MEAN / COMPOSITE / WINDOWED_COUNT)
+	// round-trip via protojson's oneof handling.
+	protoOpts := protojson.UnmarshalOptions{DiscardUnknown: true}
+
 	t.Run("filtered_mean", func(t *testing.T) {
-		raw := `{
+		raw := []byte(`{
             "metric_id": "mobile_avg_watch_time",
             "name": "Mobile avg watch time",
-            "type": "FILTERED_MEAN",
+            "type": "METRIC_TYPE_FILTERED_MEAN",
             "source_event_type": "heartbeat",
-            "filter_sql": "platform = 'mobile'",
-            "value_column": "duration_ms"
-        }`
-		var m MetricConfig
-		require.NoError(t, json.Unmarshal([]byte(raw), &m))
-		assert.Equal(t, "FILTERED_MEAN", m.Type)
-		assert.Equal(t, "platform = 'mobile'", m.FilterSQL)
-		assert.Equal(t, "duration_ms", m.ValueColumn)
+            "filteredMean": {
+                "filter_sql": "platform = 'mobile'",
+                "value_column": "duration_ms"
+            }
+        }`)
+		md := &commonv1.MetricDefinition{}
+		require.NoError(t, protoOpts.Unmarshal(raw, md))
+		m := MetricConfig{MetricDefinition: md}
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN, m.Type)
+		assert.Equal(t, "platform = 'mobile'", m.GetFilteredMean().GetFilterSql())
+		assert.Equal(t, "duration_ms", m.GetFilteredMean().GetValueColumn())
 	})
 
 	t.Run("composite", func(t *testing.T) {
-		raw := `{
+		raw := []byte(`{
             "metric_id": "engagement_score",
             "name": "Composite engagement",
-            "type": "COMPOSITE",
-            "operator": "WEIGHTED_SUM",
-            "operands": [
-                {"metric_id": "watch_time_minutes", "weight": 0.7},
-                {"metric_id": "stream_start_rate", "weight": 0.3}
-            ]
-        }`
-		var m MetricConfig
-		require.NoError(t, json.Unmarshal([]byte(raw), &m))
-		assert.Equal(t, "COMPOSITE", m.Type)
-		assert.Equal(t, "WEIGHTED_SUM", m.Operator)
-		require.Len(t, m.Operands, 2)
-		assert.Equal(t, "watch_time_minutes", m.Operands[0].MetricID)
-		assert.InDelta(t, 0.7, m.Operands[0].Weight, 1e-9)
-		assert.Equal(t, "stream_start_rate", m.Operands[1].MetricID)
-		assert.InDelta(t, 0.3, m.Operands[1].Weight, 1e-9)
+            "type": "METRIC_TYPE_COMPOSITE",
+            "composite": {
+                "operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+                "operands": [
+                    {"metric_id": "watch_time_minutes", "weight": 0.7},
+                    {"metric_id": "stream_start_rate", "weight": 0.3}
+                ]
+            }
+        }`)
+		md := &commonv1.MetricDefinition{}
+		require.NoError(t, protoOpts.Unmarshal(raw, md))
+		m := MetricConfig{MetricDefinition: md}
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_COMPOSITE, m.Type)
+		assert.Equal(t, commonv1.CompositeOperator_COMPOSITE_OPERATOR_WEIGHTED_SUM, m.GetComposite().GetOperator())
+		operands := m.GetComposite().GetOperands()
+		require.Len(t, operands, 2)
+		assert.Equal(t, "watch_time_minutes", operands[0].GetMetricId())
+		assert.InDelta(t, 0.7, operands[0].GetWeight(), 1e-9)
+		assert.Equal(t, "stream_start_rate", operands[1].GetMetricId())
+		assert.InDelta(t, 0.3, operands[1].GetWeight(), 1e-9)
 	})
 
 	t.Run("windowed_count", func(t *testing.T) {
-		raw := `{
+		raw := []byte(`{
             "metric_id": "stream_starts_24h",
             "name": "Stream starts within 24h",
-            "type": "WINDOWED_COUNT",
-            "event_type": "stream_start",
-            "window_hours": 24
-        }`
-		var m MetricConfig
-		require.NoError(t, json.Unmarshal([]byte(raw), &m))
-		assert.Equal(t, "WINDOWED_COUNT", m.Type)
-		assert.Equal(t, "stream_start", m.EventType)
-		assert.Equal(t, int32(24), m.WindowHours)
+            "type": "METRIC_TYPE_WINDOWED_COUNT",
+            "windowedCount": {
+                "event_type": "stream_start",
+                "window_hours": 24
+            }
+        }`)
+		md := &commonv1.MetricDefinition{}
+		require.NoError(t, protoOpts.Unmarshal(raw, md))
+		m := MetricConfig{MetricDefinition: md}
+		assert.Equal(t, commonv1.MetricType_METRIC_TYPE_WINDOWED_COUNT, m.Type)
+		assert.Equal(t, "stream_start", m.GetWindowedCount().GetEventType())
+		assert.Equal(t, int32(24), m.GetWindowedCount().GetWindowHours())
 	})
 
 	t.Run("omitempty preserves backward compatibility", func(t *testing.T) {
 		// A pre-ADR-026 metric (e.g. MEAN) must still unmarshal cleanly with
 		// no JSON keys for the new fields.
-		raw := `{
+		raw := []byte(`{
             "metric_id": "watch_time_minutes",
             "name": "Watch time",
-            "type": "MEAN",
+            "type": "METRIC_TYPE_MEAN",
             "source_event_type": "heartbeat"
-        }`
-		var m MetricConfig
-		require.NoError(t, json.Unmarshal([]byte(raw), &m))
-		assert.Empty(t, m.FilterSQL)
-		assert.Empty(t, m.ValueColumn)
-		assert.Empty(t, m.Operands)
-		assert.Empty(t, m.Operator)
-		assert.Empty(t, m.EventType)
-		assert.Equal(t, int32(0), m.WindowHours)
+        }`)
+		md := &commonv1.MetricDefinition{}
+		require.NoError(t, protoOpts.Unmarshal(raw, md))
+		m := MetricConfig{MetricDefinition: md}
+		assert.Nil(t, m.GetFilteredMean())
+		assert.Nil(t, m.GetComposite())
+		assert.Nil(t, m.GetWindowedCount())
 	})
 }

@@ -153,14 +153,14 @@ func generateScaledConfig(t *testing.T, n int) *config.ConfigStore {
 		IsControl       bool    `json:"is_control"`
 	}
 	type experiment struct {
-		ExperimentID     string   `json:"experiment_id"`
-		Name             string   `json:"name"`
-		Type             string   `json:"type"`
-		State            string   `json:"state"`
-		StartedAt        string   `json:"started_at"`
-		PrimaryMetricID  string   `json:"primary_metric_id"`
-		SecondaryMetricIDs []string `json:"secondary_metric_ids"`
-		Variants         []variant `json:"variants"`
+		ExperimentID       string    `json:"experiment_id"`
+		Name               string    `json:"name"`
+		Type               string    `json:"type"`
+		State              string    `json:"state"`
+		StartedAt          string    `json:"started_at"`
+		PrimaryMetricID    string    `json:"primary_metric_id"`
+		SecondaryMetricIDs []string  `json:"secondary_metric_ids"`
+		Variants           []variant `json:"variants"`
 	}
 	type metric struct {
 		MetricID        string `json:"metric_id"`
@@ -182,17 +182,17 @@ func generateScaledConfig(t *testing.T, n int) *config.ConfigStore {
 		sf.Metrics = append(sf.Metrics, metric{
 			MetricID:        mid,
 			Name:            fmt.Sprintf("Metric %d", i),
-			Type:            "MEAN",
+			Type:            "METRIC_TYPE_MEAN",
 			SourceEventType: "heartbeat",
 		})
 
 		sf.Experiments = append(sf.Experiments, experiment{
-			ExperimentID:     eid,
-			Name:             fmt.Sprintf("experiment_%d", i),
-			Type:             "AB",
-			State:            "RUNNING",
-			StartedAt:        "2024-01-01",
-			PrimaryMetricID:  mid,
+			ExperimentID:       eid,
+			Name:               fmt.Sprintf("experiment_%d", i),
+			Type:               "AB",
+			State:              "RUNNING",
+			StartedAt:          "2024-01-01",
+			PrimaryMetricID:    mid,
 			SecondaryMetricIDs: nil,
 			Variants: []variant{
 				{VariantID: fmt.Sprintf("cv-%04d", i), Name: "control", TrafficFraction: 0.5, IsControl: true},
@@ -304,7 +304,7 @@ func TestSLA_DailyPipeline_PerExperimentBreakdown(t *testing.T) {
 			experimentID: "e0000000-0000-0000-0000-000000000004",
 			wantTotal:    4,
 			wantJobTypes: map[string]int{
-				"qoe_metric":            2, // ttff_mean + rebuffer_ratio_mean
+				"qoe_metric":             2, // ttff_mean + rebuffer_ratio_mean
 				"daily_treatment_effect": 2,
 			},
 		},
@@ -406,8 +406,8 @@ func TestSLA_GuardrailPipeline_WallClock(t *testing.T) {
 
 func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 	tests := []struct {
-		name       string
-		config     string // JSON config
+		name        string
+		config      string // JSON config
 		wantQueries int
 	}{
 		{
@@ -421,7 +421,7 @@ func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 						{"variant_id": "tv", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
 					]
 				}],
-				"metrics": [{"metric_id": "m1", "name": "m", "type": "MEAN", "source_event_type": "hb"}]
+				"metrics": [{"metric_id": "m1", "name": "m", "type": "METRIC_TYPE_MEAN", "source_event_type": "hb"}]
 			}`,
 			wantQueries: 2, // base + treatment_effect
 		},
@@ -436,7 +436,7 @@ func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 						{"variant_id": "tv", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
 					]
 				}],
-				"metrics": [{"metric_id": "m1", "name": "m", "type": "MEAN", "source_event_type": "hb"}]
+				"metrics": [{"metric_id": "m1", "name": "m", "type": "METRIC_TYPE_MEAN", "source_event_type": "hb"}]
 			}`,
 			wantQueries: 3, // base + session + treatment_effect
 		},
@@ -452,7 +452,7 @@ func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 						{"variant_id": "tv", "name": "treatment", "traffic_fraction": 0.5, "is_control": false}
 					]
 				}],
-				"metrics": [{"metric_id": "m1", "name": "m", "type": "MEAN", "source_event_type": "hb"}]
+				"metrics": [{"metric_id": "m1", "name": "m", "type": "METRIC_TYPE_MEAN", "source_event_type": "hb"}]
 			}`,
 			wantQueries: 3, // base + lifecycle + treatment_effect
 		},
@@ -470,7 +470,7 @@ func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 					]
 				}],
 				"metrics": [{
-					"metric_id": "m1", "name": "m", "type": "MEAN", "source_event_type": "hb",
+					"metric_id": "m1", "name": "m", "type": "METRIC_TYPE_MEAN", "source_event_type": "hb",
 					"cuped_covariate_metric_id": "m1"
 				}]
 			}`,
@@ -488,7 +488,7 @@ func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 					]
 				}],
 				"metrics": [{
-					"metric_id": "m1", "name": "m", "type": "RATIO", "source_event_type": "ev",
+					"metric_id": "m1", "name": "m", "type": "METRIC_TYPE_RATIO", "source_event_type": "ev",
 					"numerator_event_type": "num", "denominator_event_type": "den"
 				}]
 			}`,
@@ -508,7 +508,7 @@ func TestSLA_QueryCountFormula_PerMetricType(t *testing.T) {
 					]
 				}],
 				"metrics": [{
-					"metric_id": "m1", "name": "m", "type": "MEAN", "source_event_type": "qoe",
+					"metric_id": "m1", "name": "m", "type": "METRIC_TYPE_MEAN", "source_event_type": "qoe",
 					"is_qoe_metric": true, "qoe_field": "time_to_first_frame_ms"
 				}]
 			}`,

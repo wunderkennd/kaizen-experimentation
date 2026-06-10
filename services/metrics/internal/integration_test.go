@@ -296,7 +296,7 @@ func TestExportNotebook_FromPgQueryLog(t *testing.T) {
 
 	// Export notebook — backed by PgWriter reading from PostgreSQL.
 	nbResp, err := env.client.ExportNotebook(ctx, connect.NewRequest(&metricsv1.ExportNotebookRequest{
-		ExperimentId: seedExpID,
+		ExperimentId:   seedExpID,
 		NotebookFormat: "jupyter",
 	}))
 	require.NoError(t, err)
@@ -514,11 +514,13 @@ func TestSQLTemplateEventSchemaAlignment(t *testing.T) {
 		{
 			name: "interleaving score references exposures with provenance + metric_events",
 			params: spark.TemplateParams{
-				ExperimentID: "e0000000-0000-0000-0000-000000000003",
+				ExperimentID:     "e0000000-0000-0000-0000-000000000003",
 				CreditAssignment: "proportional", EngagementEventType: "click",
 				ComputationDate: compDate,
 			},
-			render:          func(r *spark.SQLRenderer, p spark.TemplateParams) (string, error) { return r.RenderInterleavingScore(p) },
+			render: func(r *spark.SQLRenderer, p spark.TemplateParams) (string, error) {
+				return r.RenderInterleavingScore(p)
+			},
 			expectedTables:  []string{"delta.exposures", "delta.metric_events"},
 			expectedColumns: []string{"user_id", "experiment_id", "interleaving_provenance", "content_id"},
 		},
@@ -528,7 +530,9 @@ func TestSQLTemplateEventSchemaAlignment(t *testing.T) {
 				ExperimentID: expID, ContentIDField: "content_id",
 				ComputationDate: compDate,
 			},
-			render:          func(r *spark.SQLRenderer, p spark.TemplateParams) (string, error) { return r.RenderContentConsumption(p) },
+			render: func(r *spark.SQLRenderer, p spark.TemplateParams) (string, error) {
+				return r.RenderContentConsumption(p)
+			},
 			expectedTables:  []string{"delta.exposures", "delta.metric_events"},
 			expectedColumns: []string{"user_id", "variant_id", "experiment_id", "content_id"},
 		},
@@ -537,9 +541,11 @@ func TestSQLTemplateEventSchemaAlignment(t *testing.T) {
 			params: spark.TemplateParams{
 				ExperimentID: expID, MetricID: "watch_time_minutes",
 				ControlVariantID: "f0000000-0000-0000-0000-000000000001",
-				ComputationDate: compDate,
+				ComputationDate:  compDate,
 			},
-			render:          func(r *spark.SQLRenderer, p spark.TemplateParams) (string, error) { return r.RenderDailyTreatmentEffect(p) },
+			render: func(r *spark.SQLRenderer, p spark.TemplateParams) (string, error) {
+				return r.RenderDailyTreatmentEffect(p)
+			},
 			expectedTables:  []string{"delta.exposures", "delta.metric_summaries"},
 			expectedColumns: []string{"user_id", "variant_id", "experiment_id", "metric_id", "metric_value"},
 		},
@@ -578,13 +584,13 @@ func TestSQLTemplateNoUnknownDeltaTables(t *testing.T) {
 	require.NoError(t, err)
 
 	knownTables := map[string]bool{
-		"delta.exposures":              true,
-		"delta.metric_events":          true,
-		"delta.qoe_events":             true,
-		"delta.reward_events":          true,
-		"delta.metric_summaries":       true,
-		"delta.interleaving_scores":    true,
-		"delta.content_consumption":    true,
+		"delta.exposures":               true,
+		"delta.metric_events":           true,
+		"delta.qoe_events":              true,
+		"delta.reward_events":           true,
+		"delta.metric_summaries":        true,
+		"delta.interleaving_scores":     true,
+		"delta.content_consumption":     true,
 		"delta.daily_treatment_effects": true,
 	}
 
@@ -976,26 +982,27 @@ func TestComputeMetrics_CompositeOrdering_MultiCycle(t *testing.T) {
 			{
 				"metric_id": "it_session_score",
 				"name": "IT session score (MEAN)",
-				"type": "MEAN",
-				"source_event_type": "session_end",
-				"value_column": "session_score"
+				"type": "METRIC_TYPE_MEAN",
+				"source_event_type": "session_end"
 			},
 			{
 				"metric_id": "it_click_rate",
 				"name": "IT click rate (PROPORTION)",
-				"type": "PROPORTION",
+				"type": "METRIC_TYPE_PROPORTION",
 				"source_event_type": "click"
 			},
 			{
 				"metric_id": "it_engagement_index",
 				"name": "IT engagement index (COMPOSITE)",
-				"type": "COMPOSITE",
+				"type": "METRIC_TYPE_COMPOSITE",
 				"source_event_type": "n/a",
-				"operator": "WEIGHTED_SUM",
-				"operands": [
-					{"metric_id": "it_session_score", "weight": 0.6},
-					{"metric_id": "it_click_rate", "weight": 0.4}
-				]
+				"composite": {
+					"operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+					"operands": [
+						{"metric_id": "it_session_score", "weight": 0.6},
+						{"metric_id": "it_click_rate", "weight": 0.4}
+					]
+				}
 			}
 		]
 	}`

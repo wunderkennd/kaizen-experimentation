@@ -61,10 +61,10 @@ func (j *MLRATEJob) Run(
 	lookbackDays := metric.MLRATELookbackDaysOrDefault()
 
 	if len(metric.MLRATEFeatureEventTypes) == 0 {
-		return nil, fmt.Errorf("mlrate: metric %q has no mlrate_feature_event_types configured", metric.MetricID)
+		return nil, fmt.Errorf("mlrate: metric %q has no mlrate_feature_event_types configured", metric.MetricId)
 	}
 	if metric.MLRATEModelURI == "" {
-		return nil, fmt.Errorf("mlrate: metric %q has no mlrate_model_uri configured", metric.MetricID)
+		return nil, fmt.Errorf("mlrate: metric %q has no mlrate_model_uri configured", metric.MetricId)
 	}
 	if exp.StartedAt == "" {
 		return nil, fmt.Errorf("mlrate: experiment %q has no started_at date", exp.ExperimentID)
@@ -82,30 +82,30 @@ func (j *MLRATEJob) Run(
 
 	featSQL, err := j.renderer.RenderMLRATEFeatures(featParams)
 	if err != nil {
-		return nil, fmt.Errorf("mlrate: render features for %s: %w", metric.MetricID, err)
+		return nil, fmt.Errorf("mlrate: render features for %s: %w", metric.MetricId, err)
 	}
 
 	featResult, err := j.executor.ExecuteAndWrite(ctx, featSQL, "delta.mlrate_features")
 	if err != nil {
-		return nil, fmt.Errorf("mlrate: execute features for %s: %w", metric.MetricID, err)
+		return nil, fmt.Errorf("mlrate: execute features for %s: %w", metric.MetricId, err)
 	}
 	m3metrics.SparkQueryDuration.WithLabelValues("mlrate_features").Observe(featResult.Duration.Seconds())
 	m3metrics.SparkQueryRows.WithLabelValues("mlrate_features").Observe(float64(featResult.RowCount))
 
 	if err := j.queryLog.Log(ctx, querylog.Entry{
 		ExperimentID: exp.ExperimentID,
-		MetricID:     metric.MetricID,
+		MetricID:     metric.MetricId,
 		SQLText:      featSQL,
 		RowCount:     featResult.RowCount,
 		DurationMs:   featResult.Duration.Milliseconds(),
 		JobType:      "mlrate_features",
 	}); err != nil {
-		return nil, fmt.Errorf("mlrate: log features query for %s: %w", metric.MetricID, err)
+		return nil, fmt.Errorf("mlrate: log features query for %s: %w", metric.MetricId, err)
 	}
 
 	slog.Info("computed MLRATE features",
 		"experiment_id", exp.ExperimentID,
-		"metric_id", metric.MetricID,
+		"metric_id", metric.MetricId,
 		"folds", folds,
 		"lookback_days", lookbackDays,
 		"rows", featResult.RowCount,
@@ -116,7 +116,7 @@ func (j *MLRATEJob) Run(
 	for foldID := 1; foldID <= folds; foldID++ {
 		predParams := spark.TemplateParams{
 			ExperimentID:            exp.ExperimentID,
-			MetricID:                metric.MetricID,
+			MetricID:                metric.MetricId,
 			ComputationDate:         computationDate,
 			MLRATEFolds:             folds,
 			MLRATEFeatureEventTypes: metric.MLRATEFeatureEventTypes,
@@ -126,32 +126,32 @@ func (j *MLRATEJob) Run(
 
 		predSQL, err := j.renderer.RenderMLRATECrossFitPredict(predParams)
 		if err != nil {
-			return nil, fmt.Errorf("mlrate: render prediction fold %d for %s: %w", foldID, metric.MetricID, err)
+			return nil, fmt.Errorf("mlrate: render prediction fold %d for %s: %w", foldID, metric.MetricId, err)
 		}
 
 		predResult, err := j.executor.ExecuteAndWrite(ctx, predSQL, "delta.metric_summaries")
 		if err != nil {
-			return nil, fmt.Errorf("mlrate: execute prediction fold %d for %s: %w", foldID, metric.MetricID, err)
+			return nil, fmt.Errorf("mlrate: execute prediction fold %d for %s: %w", foldID, metric.MetricId, err)
 		}
 		m3metrics.SparkQueryDuration.WithLabelValues("mlrate_crossfit").Observe(predResult.Duration.Seconds())
 		m3metrics.SparkQueryRows.WithLabelValues("mlrate_crossfit").Observe(float64(predResult.RowCount))
 
 		if err := j.queryLog.Log(ctx, querylog.Entry{
 			ExperimentID: exp.ExperimentID,
-			MetricID:     metric.MetricID,
+			MetricID:     metric.MetricId,
 			SQLText:      predSQL,
 			RowCount:     predResult.RowCount,
 			DurationMs:   predResult.Duration.Milliseconds(),
 			JobType:      "mlrate_crossfit",
 		}); err != nil {
-			return nil, fmt.Errorf("mlrate: log prediction fold %d query for %s: %w", foldID, metric.MetricID, err)
+			return nil, fmt.Errorf("mlrate: log prediction fold %d query for %s: %w", foldID, metric.MetricId, err)
 		}
 
 		totalPredictionRows += predResult.RowCount
 
 		slog.Info("computed MLRATE cross-fit prediction",
 			"experiment_id", exp.ExperimentID,
-			"metric_id", metric.MetricID,
+			"metric_id", metric.MetricId,
 			"fold", foldID,
 			"rows", predResult.RowCount,
 		)
@@ -159,7 +159,7 @@ func (j *MLRATEJob) Run(
 
 	return &MLRATEResult{
 		ExperimentID: exp.ExperimentID,
-		MetricID:     metric.MetricID,
+		MetricID:     metric.MetricId,
 		Folds:        folds,
 		UsersScored:  totalPredictionRows,
 		CompletedAt:  time.Now(),

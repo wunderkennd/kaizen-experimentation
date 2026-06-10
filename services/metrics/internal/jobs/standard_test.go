@@ -15,6 +15,7 @@ import (
 	"github.com/org/experimentation-platform/services/metrics/internal/querylog"
 	"github.com/org/experimentation-platform/services/metrics/internal/spark"
 	"github.com/org/experimentation-platform/services/metrics/internal/status"
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
 )
 
 func setupTestJob(t *testing.T) (*StandardJob, *spark.MockExecutor, *querylog.MemWriter, *status.MockWriter) {
@@ -438,31 +439,33 @@ func TestStandardJob_Run_AllExperimentsWithExposureJoin(t *testing.T) {
 
 func TestIsLegacyStyle(t *testing.T) {
 	t.Run("legacy types return true", func(t *testing.T) {
-		legacy := []string{
-			"MEAN", "PROPORTION", "COUNT", "RATIO", "PERCENTILE", "CUSTOM",
-			"mean", "proportion", "count", "ratio", "percentile", "custom",
-			"Custom", "Ratio",
+		legacy := []commonv1.MetricType{
+			commonv1.MetricType_METRIC_TYPE_MEAN,
+			commonv1.MetricType_METRIC_TYPE_PROPORTION,
+			commonv1.MetricType_METRIC_TYPE_COUNT,
+			commonv1.MetricType_METRIC_TYPE_RATIO,
+			commonv1.MetricType_METRIC_TYPE_PERCENTILE,
+			commonv1.MetricType_METRIC_TYPE_CUSTOM,
 		}
 		for _, mt := range legacy {
-			assert.True(t, isLegacyStyle(mt), "%q should be legacy", mt)
+			assert.True(t, isLegacyStyle(mt), "%v should be legacy", mt)
 		}
 	})
 
-	t.Run("ADR-026 Phase 1 types return false", func(t *testing.T) {
-		nonLegacy := []string{
-			"FILTERED_MEAN", "COMPOSITE", "WINDOWED_COUNT",
-			"filtered_mean", "composite", "windowed_count",
+	t.Run("ADR-026 Phase 1 + Phase 2 types return false", func(t *testing.T) {
+		nonLegacy := []commonv1.MetricType{
+			commonv1.MetricType_METRIC_TYPE_FILTERED_MEAN,
+			commonv1.MetricType_METRIC_TYPE_COMPOSITE,
+			commonv1.MetricType_METRIC_TYPE_WINDOWED_COUNT,
+			commonv1.MetricType_METRIC_TYPE_METRICQL,
 		}
 		for _, mt := range nonLegacy {
-			assert.False(t, isLegacyStyle(mt), "%q should not be legacy", mt)
+			assert.False(t, isLegacyStyle(mt), "%v should not be legacy", mt)
 		}
 	})
 
-	t.Run("unknown types return false", func(t *testing.T) {
-		unknown := []string{"", " ", "UNKNOWN_TYPE", "FOO_BAR"}
-		for _, mt := range unknown {
-			assert.False(t, isLegacyStyle(mt), "%q should not be legacy", mt)
-		}
+	t.Run("unspecified returns false", func(t *testing.T) {
+		assert.False(t, isLegacyStyle(commonv1.MetricType_METRIC_TYPE_UNSPECIFIED))
 	})
 }
 
@@ -608,18 +611,20 @@ func TestStandardJob_Run_FailFastStillMarksDownstreamComposite(t *testing.T) {
 			{
 				"metric_id": "op_a",
 				"name": "Operand A (MEAN)",
-				"type": "MEAN",
+				"type": "METRIC_TYPE_MEAN",
 				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "comp_b",
 				"name": "Downstream composite",
-				"type": "COMPOSITE",
+				"type": "METRIC_TYPE_COMPOSITE",
 				"source_event_type": "n/a",
-				"operator": "WEIGHTED_SUM",
-				"operands": [
-					{"metric_id": "op_a", "weight": 1.0}
-				]
+				"composite": {
+					"operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+					"operands": [
+						{"metric_id": "op_a", "weight": 1.0}
+					]
+				}
 			}
 		]
 	}`
@@ -701,20 +706,19 @@ func TestStandardJob_Run_MetricqlRunsAfterRefs(t *testing.T) {
 			{
 				"metric_id": "watch_time",
 				"name": "Watch time (MEAN)",
-				"type": "MEAN",
-				"source_event_type": "heartbeat",
-				"value_column": "value"
+				"type": "METRIC_TYPE_MEAN",
+				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "ctr",
 				"name": "Click-through rate (PROPORTION)",
-				"type": "PROPORTION",
+				"type": "METRIC_TYPE_PROPORTION",
 				"source_event_type": "click"
 			},
 			{
 				"metric_id": "engagement",
 				"name": "Engagement index (METRICQL)",
-				"type": "METRICQL",
+				"type": "METRIC_TYPE_METRICQL",
 				"source_event_type": "n/a",
 				"metricql_expression": "0.7 * @watch_time + 0.3 * @ctr"
 			}
@@ -800,7 +804,7 @@ func TestStandardJob_Run_MetricqlParseFailureMarksFailed(t *testing.T) {
 			{
 				"metric_id": "bad_metric",
 				"name": "Malformed expression",
-				"type": "METRICQL",
+				"type": "METRIC_TYPE_METRICQL",
 				"source_event_type": "n/a",
 				"metricql_expression": "mean(x"
 			}
@@ -898,21 +902,19 @@ func TestStandardJob_Run_MetricqlSkippedOnFailingRef(t *testing.T) {
 			{
 				"metric_id": "ok_metric",
 				"name": "OK operand",
-				"type": "MEAN",
-				"source_event_type": "heartbeat",
-				"value_column": "value"
+				"type": "METRIC_TYPE_MEAN",
+				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "failing_metric",
 				"name": "Operand that fails at exec",
-				"type": "MEAN",
-				"source_event_type": "click",
-				"value_column": "value"
+				"type": "METRIC_TYPE_MEAN",
+				"source_event_type": "click"
 			},
 			{
 				"metric_id": "weighted",
 				"name": "Weighted blend (METRICQL)",
-				"type": "METRICQL",
+				"type": "METRIC_TYPE_METRICQL",
 				"source_event_type": "n/a",
 				"metricql_expression": "0.7 * @failing_metric + 0.3 * @ok_metric"
 			}
@@ -1000,28 +1002,26 @@ func TestStandardJob_Run_MetricqlChainSkipPropagation(t *testing.T) {
 			{
 				"metric_id": "ok_metric",
 				"name": "OK operand",
-				"type": "MEAN",
-				"source_event_type": "heartbeat",
-				"value_column": "value"
+				"type": "METRIC_TYPE_MEAN",
+				"source_event_type": "heartbeat"
 			},
 			{
 				"metric_id": "failing_metric",
 				"name": "Operand that fails at exec",
-				"type": "MEAN",
-				"source_event_type": "click",
-				"value_column": "value"
+				"type": "METRIC_TYPE_MEAN",
+				"source_event_type": "click"
 			},
 			{
 				"metric_id": "weighted",
 				"name": "Weighted blend (METRICQL)",
-				"type": "METRICQL",
+				"type": "METRIC_TYPE_METRICQL",
 				"source_event_type": "n/a",
 				"metricql_expression": "0.7 * @failing_metric + 0.3 * @ok_metric"
 			},
 			{
 				"metric_id": "meta",
 				"name": "Meta METRICQL referencing weighted",
-				"type": "METRICQL",
+				"type": "METRIC_TYPE_METRICQL",
 				"source_event_type": "n/a",
 				"metricql_expression": "@weighted * 2"
 			}
@@ -1104,26 +1104,28 @@ func TestStandardJob_Run_CompositeRunsAfterOperands(t *testing.T) {
 			{
 				"metric_id": "session_score",
 				"name": "Session score (MEAN)",
-				"type": "MEAN",
+				"type": "METRIC_TYPE_MEAN",
 				"source_event_type": "session_end",
 				"value_column": "session_score"
 			},
 			{
 				"metric_id": "click_rate",
 				"name": "Click rate (PROPORTION)",
-				"type": "PROPORTION",
+				"type": "METRIC_TYPE_PROPORTION",
 				"source_event_type": "click"
 			},
 			{
 				"metric_id": "engagement_index",
 				"name": "Engagement index (COMPOSITE)",
-				"type": "COMPOSITE",
+				"type": "METRIC_TYPE_COMPOSITE",
 				"source_event_type": "n/a",
-				"operator": "WEIGHTED_SUM",
-				"operands": [
-					{"metric_id": "session_score", "weight": 0.6},
-					{"metric_id": "click_rate", "weight": 0.4}
-				]
+				"composite": {
+					"operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+					"operands": [
+						{"metric_id": "session_score", "weight": 0.6},
+						{"metric_id": "click_rate", "weight": 0.4}
+					]
+				}
 			}
 		]
 	}`
@@ -1225,20 +1227,22 @@ func TestStandardJob_Run_SkippedCompositeDoesNotPostProcess(t *testing.T) {
 			{
 				"metric_id": "session_score",
 				"name": "Session score (MEAN)",
-				"type": "MEAN",
+				"type": "METRIC_TYPE_MEAN",
 				"source_event_type": "session_end",
 				"value_column": "session_score"
 			},
 			{
 				"metric_id": "engagement_index",
 				"name": "Engagement (COMPOSITE, operands OUT of pass)",
-				"type": "COMPOSITE",
+				"type": "METRIC_TYPE_COMPOSITE",
 				"source_event_type": "n/a",
-				"operator": "WEIGHTED_SUM",
-				"operands": [
-					{"metric_id": "watch_time_minutes", "weight": 0.6},
-					{"metric_id": "stream_start_rate", "weight": 0.4}
-				]
+				"composite": {
+					"operator": "COMPOSITE_OPERATOR_WEIGHTED_SUM",
+					"operands": [
+						{"metric_id": "watch_time_minutes", "weight": 0.6},
+						{"metric_id": "stream_start_rate", "weight": 0.4}
+					]
+				}
 			}
 		]
 	}`

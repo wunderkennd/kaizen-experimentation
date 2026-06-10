@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
+
+	commonv1 "github.com/org/experimentation/gen/go/experimentation/common/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type VariantConfig struct {
@@ -57,58 +61,30 @@ type SurrogateModelConfig struct {
 	Intercept    float64            `json:"intercept,omitempty"`
 }
 
+// MetricConfig embeds the proto MetricDefinition so any field added to the proto
+// is automatically readable by M3 without code changes (issue #506). The four
+// trailing fields are M3-only and have no proto counterpart — they are loaded
+// from seed JSON in parallel with the protojson-parsed proto half.
 type MetricConfig struct {
-	MetricID               string  `json:"metric_id"`
-	Name                   string  `json:"name"`
-	Type                   string  `json:"type"`
-	SourceEventType        string  `json:"source_event_type"`
-	NumeratorEventType     string  `json:"numerator_event_type,omitempty"`
-	DenominatorEventType   string  `json:"denominator_event_type,omitempty"`
-	CupedCovariateMetricID string  `json:"cuped_covariate_metric_id,omitempty"`
-	Percentile             float64 `json:"percentile,omitempty"`
-	LowerIsBetter          bool    `json:"lower_is_better,omitempty"`
-	IsQoEMetric            bool    `json:"is_qoe_metric,omitempty"`
-	QoEField               string  `json:"qoe_field,omitempty"`
-	CustomSQL              string  `json:"custom_sql,omitempty"`
-	// MLRATE cross-fitting fields (ADR-015 Phase 2)
-	MLRATEFeatureEventTypes []string `json:"mlrate_feature_event_types,omitempty"` // pre-experiment event types as LightGBM features
-	MLRATEModelURI          string   `json:"mlrate_model_uri,omitempty"`           // MLflow model URI prefix (fold models at {uri}/fold_{k})
-	MLRATELookbackDays      int      `json:"mlrate_lookback_days,omitempty"`       // days of pre-experiment data for features (default 14)
+	*commonv1.MetricDefinition
 
-	// ADR-026 Phase 1 — FILTERED_MEAN
-	FilterSQL   string `json:"filter_sql,omitempty"`
-	ValueColumn string `json:"value_column,omitempty"`
-
-	// ADR-026 Phase 1 — COMPOSITE
-	Operands []OperandConfig `json:"operands,omitempty"`
-	Operator string          `json:"operator,omitempty"` // ADD, SUBTRACT, MULTIPLY, DIVIDE, WEIGHTED_SUM
-
-	// ADR-026 Phase 1 — WINDOWED_COUNT
-	EventType   string `json:"event_type,omitempty"` // distinct from SourceEventType
-	WindowHours int32  `json:"window_hours,omitempty"`
-
-	// ADR-026 Phase 2 — METRICQL. Raw source text of the MetricQL expression.
-	// Mutually exclusive with custom_sql and the Phase 1 oneof fields (M5 + M3
-	// enforce). Parsed + compiled to Spark SQL at scheduling time by M3.
-	MetricqlExpression string `json:"metricql_expression,omitempty"`
+	// M3-only fields (not in proto MetricDefinition):
+	QoEField                string   `json:"qoe_field,omitempty"`
+	MLRATEFeatureEventTypes []string `json:"mlrate_feature_event_types,omitempty"`
+	MLRATEModelURI          string   `json:"mlrate_model_uri,omitempty"`
+	MLRATELookbackDays      int      `json:"mlrate_lookback_days,omitempty"`
 }
 
-// OperandConfig is the config-layer representation of one operand of a
-// COMPOSITE metric. Mirrors the proto CompositeOperand fields (ADR-026 Phase 1).
-//
-// Weight is meaningful only for WEIGHTED_SUM operator; ignored otherwise.
-// Note: encoding/json deserialises a missing or null number to 0.0, so
-// WEIGHTED_SUM operands MUST set weight explicitly. The renderer's
-// RenderForType arm rejects weight <= 0 for WEIGHTED_SUM.
-type OperandConfig struct {
-	MetricID string  `json:"metric_id"`
-	Weight   float64 `json:"weight"`
+// TypeShortName returns the short form of a MetricType enum, stripping the
+// "METRIC_TYPE_" prefix. Use for string comparison in renderer/job switches
+// where the long form is awkward.
+func TypeShortName(t commonv1.MetricType) string {
+	return strings.TrimPrefix(t.String(), "METRIC_TYPE_")
 }
 
-type seedFile struct {
-	Experiments     []ExperimentConfig     `json:"experiments"`
-	Metrics         []MetricConfig         `json:"metrics"`
-	SurrogateModels []SurrogateModelConfig `json:"surrogate_models,omitempty"`
+// CompositeOperatorShortName strips the "COMPOSITE_OPERATOR_" prefix.
+func CompositeOperatorShortName(op commonv1.CompositeOperator) string {
+	return strings.TrimPrefix(op.String(), "COMPOSITE_OPERATOR_")
 }
 
 type ConfigStore struct {
@@ -124,26 +100,59 @@ func LoadFromFile(path string) (*ConfigStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: read file %s: %w", path, err)
 	}
-	var sf seedFile
-	if err := json.Unmarshal(data, &sf); err != nil {
+
+	// Top-level seed file shape (experiments + surrogate_models still use
+	// encoding/json into existing Go structs; only the metrics array gets the
+	// proto-direct treatment).
+	var top struct {
+		Experiments     []ExperimentConfig     `json:"experiments"`
+		Metrics         []json.RawMessage      `json:"metrics"`
+		SurrogateModels []SurrogateModelConfig `json:"surrogate_models,omitempty"`
+	}
+	if err := json.Unmarshal(data, &top); err != nil {
 		return nil, fmt.Errorf("config: parse JSON: %w", err)
 	}
+
 	cs := &ConfigStore{
-		experiments:     make(map[string]*ExperimentConfig, len(sf.Experiments)),
-		metrics:         make(map[string]*MetricConfig, len(sf.Metrics)),
-		expMetrics:      make(map[string][]string, len(sf.Experiments)),
-		surrogateModels: make(map[string]*SurrogateModelConfig, len(sf.SurrogateModels)),
+		experiments:     make(map[string]*ExperimentConfig, len(top.Experiments)),
+		metrics:         make(map[string]*MetricConfig, len(top.Metrics)),
+		expMetrics:      make(map[string][]string, len(top.Experiments)),
+		surrogateModels: make(map[string]*SurrogateModelConfig, len(top.SurrogateModels)),
 	}
-	for i := range sf.Metrics {
-		m := sf.Metrics[i]
-		cs.metrics[m.MetricID] = &m
+
+	// Use DiscardUnknown because seed entries carry the four M3-only fields
+	// (qoe_field, mlrate_*) that proto MetricDefinition does not know about.
+	protoOpts := protojson.UnmarshalOptions{DiscardUnknown: true}
+
+	for i, raw := range top.Metrics {
+		md := &commonv1.MetricDefinition{}
+		if err := protoOpts.Unmarshal(raw, md); err != nil {
+			return nil, fmt.Errorf("config: parse metric[%d] via protojson: %w", i, err)
+		}
+		var m3 struct {
+			QoEField                string   `json:"qoe_field"`
+			MLRATEFeatureEventTypes []string `json:"mlrate_feature_event_types"`
+			MLRATEModelURI          string   `json:"mlrate_model_uri"`
+			MLRATELookbackDays      int      `json:"mlrate_lookback_days"`
+		}
+		if err := json.Unmarshal(raw, &m3); err != nil {
+			return nil, fmt.Errorf("config: parse metric[%d] m3-only fields: %w", i, err)
+		}
+		cs.metrics[md.GetMetricId()] = &MetricConfig{
+			MetricDefinition:        md,
+			QoEField:                m3.QoEField,
+			MLRATEFeatureEventTypes: m3.MLRATEFeatureEventTypes,
+			MLRATEModelURI:          m3.MLRATEModelURI,
+			MLRATELookbackDays:      m3.MLRATELookbackDays,
+		}
 	}
-	for i := range sf.SurrogateModels {
-		sm := sf.SurrogateModels[i]
+
+	for i := range top.SurrogateModels {
+		sm := top.SurrogateModels[i]
 		cs.surrogateModels[sm.ModelID] = &sm
 	}
-	for i := range sf.Experiments {
-		e := sf.Experiments[i]
+	for i := range top.Experiments {
+		e := top.Experiments[i]
 		cs.experiments[e.ExperimentID] = &e
 		metricIDs := make([]string, 0, 1+len(e.SecondaryMetricIDs))
 		metricIDs = append(metricIDs, e.PrimaryMetricID)
@@ -173,6 +182,20 @@ func (c *ConfigStore) GetMetric(id string) (*MetricConfig, error) {
 	return m, nil
 }
 
+// GetMetricsForExperiment returns the MetricConfigs for an experiment.
+//
+// IMPORTANT — shallow-copy semantics: `MetricConfig` embeds
+// `*commonv1.MetricDefinition` (a pointer), so the value-copy at the
+// `append` below shares the underlying proto message with the
+// ConfigStore's map. The same applies to `standard.go` callers
+// (`m := *mPtr`).
+//
+// Current callers are read-only — they invoke proto getters, never
+// setters or `proto.Reset` — which keeps this safe in practice. A
+// future caller that needs to MUTATE a returned MetricConfig must
+// `proto.Clone(m.MetricDefinition)` first, otherwise the mutation
+// will corrupt the store. (Devin PR #610 📝 shallow-pointer-copy
+// caveat.)
 func (c *ConfigStore) GetMetricsForExperiment(id string) ([]MetricConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
