@@ -408,7 +408,7 @@ function MetricBrowserContent() {
         <>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[300px] max-w-md">
+        <div className="group relative flex-1 min-w-[300px] max-w-md">
           <svg
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
             fill="none"
@@ -428,10 +428,23 @@ function MetricBrowserContent() {
             data-testid="metric-search"
             aria-label="Search metrics"
           />
-          <div className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center">
-            <span className="flex h-5 w-5 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[10px] font-medium text-gray-500">
-              /
-            </span>
+          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center">
+            {search ? (
+              <button
+                onClick={() => setSearch('')}
+                className="flex h-5 w-5 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-label="Clear search"
+                data-testid="clear-search-button"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            ) : (
+              <span className="pointer-events-none flex h-5 w-5 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[10px] font-medium text-gray-500 transition-opacity group-focus-within:opacity-0">
+                /
+              </span>
+            )}
           </div>
         </div>
         <select
