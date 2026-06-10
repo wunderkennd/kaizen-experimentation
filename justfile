@@ -1201,6 +1201,28 @@ phase5-status:
     echo "--- Open PRs ---"
     gh pr list --limit 10 2>/dev/null || echo "  (gh not configured)"
 
+# List Actions secrets on the current origin repo (names + last-updated only)
+check-secrets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Resolves the repo from the origin remote (via gh) rather than hardcoding it.
+    # The GitHub API never returns secret VALUES — only names and last-updated
+    # timestamps — so this is safe to run and share. Handy for confirming a
+    # rotation took effect: check the "Updated" column (e.g. DOCKERHUB_TOKEN).
+    # Requires admin/maintain access to the repo.
+    if ! command -v gh >/dev/null 2>&1; then
+      echo "✗ gh CLI not found — install from https://cli.github.com/" >&2
+      exit 1
+    fi
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || {
+      echo "✗ Could not resolve the origin repository. Are you in a gh-authenticated clone?" >&2
+      exit 1
+    }
+    echo "=== Actions secrets on ${REPO} ==="
+    echo "(values are write-only; only names + last-updated are shown)"
+    echo ""
+    gh secret list --repo "$REPO"
+
 # --- PR Management ---
 
 stop-all:
