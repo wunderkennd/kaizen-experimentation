@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MetricqlSection } from './metricql-section';
 
 // ---------------------------------------------------------------------------
@@ -28,22 +28,46 @@ vi.mock('./metricql', async () => {
 // Stub the preview pane — its behaviour is fully tested in preview.test.tsx.
 // We expose data-testid="metricql-preview-toggle" so B6 section tests can
 // assert on its presence without coupling to preview internals.
-vi.mock('./metricql/preview', () => ({
-  MetricqlPreview: ({ experimentId, metricqlExpression, hasErrors, className }: {
-    experimentId: string;
+//
+// One test (the Issue #597 global-scope render) needs the REAL preview
+// component so it actually invokes previewFn and renders the compiled SQL.
+// We use a `useRealPreview` flag inside vi.hoisted so the mock factory can
+// branch — when the flag is true, we delegate to the actual preview module.
+const { useRealPreviewFlag } = vi.hoisted(() => ({
+  useRealPreviewFlag: { current: false },
+}));
+
+vi.mock('./metricql/preview', async () => {
+  const actual = await vi.importActual<typeof import('./metricql/preview')>(
+    './metricql/preview',
+  );
+  const StubPreview = ({ experimentId, metricqlExpression, hasErrors, className }: {
+    experimentId: string | null | undefined;
     metricqlExpression: string;
     hasErrors?: boolean;
     className?: string;
   }) => (
     <div
       data-testid="metricql-preview-toggle"
-      data-experiment-id={experimentId}
+      // data-experiment-id normalises null/undefined → '' for back-compat with
+      // existing assertions; data-experiment-id-raw exposes the raw value so
+      // the Issue #597 test can verify the section passes null through
+      // unchanged.
+      data-experiment-id={experimentId ?? ''}
+      data-experiment-id-raw={String(experimentId)}
       data-expression={metricqlExpression}
       data-has-errors={String(hasErrors ?? false)}
       className={className}
     />
-  ),
-}));
+  );
+
+  return {
+    MetricqlPreview: (props: Parameters<typeof actual.MetricqlPreview>[0]) =>
+      useRealPreviewFlag.current
+        ? actual.MetricqlPreview(props)
+        : StubPreview(props),
+  };
+});
 
 // Stub API calls so the linter (B4) and preview pane don't hit the network.
 vi.mock('@/lib/api', () => ({
@@ -273,11 +297,12 @@ describe('MetricqlSection', () => {
       { timeout: 3000 },
     );
 
-    // MetricqlSection normalises `experimentId ?? ''` for MetricqlPreview
-    // (which requires a non-nullable string). Verify the preview stub
-    // receives the empty wire signal, mirroring the linter's RPC wire shape.
+    // MetricqlSection now passes `experimentId` through to MetricqlPreview
+    // unchanged — the preview component itself normalises null/undefined → ''
+    // at the RPC call site (Issue #597, mirrors PR #595's diagnostics.ts
+    // pattern). Verify the stub records the raw null value the section passed.
     const previewToggle = screen.getByTestId('metricql-preview-toggle');
-    expect(previewToggle.getAttribute('data-experiment-id')).toBe('');
+    expect(previewToggle.getAttribute('data-experiment-id-raw')).toBe('null');
   });
 
   test('linter activates when experimentId prop is omitted entirely', async () => {
@@ -311,5 +336,60 @@ describe('MetricqlSection', () => {
       { experimentId: '', metricqlExpression: '@another' },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  // ─── Global-scope live-preview (Issue #597 Task 3) ─────────────────────────
+  //
+  // After Tasks 1+2, M5 + M3 both accept empty experiment_id on the preview
+  // RPC. The UI used to paper over the server-side rejection by normalising
+  // `experimentId ?? ''` at the section boundary. Task 3 removes that
+  // normalisation — the section passes null through to MetricqlPreview, which
+  // normalises once at the previewFn call site. This test renders the section
+  // with the REAL preview component (via the `useRealPreviewFlag` escape hatch
+  // on the top-level mock) and the module-level previewMetricDefinition mock
+  // that returns compiled SQL. Asserts the SQL renders and no error copy
+  // appears.
+  test('preview pane renders compiled SQL when experimentId is null', async () => {
+    useRealPreviewFlag.current = true;
+    try {
+      render(
+        <MetricqlSection
+          value="mean(heartbeat.value)"
+          onChange={() => {}}
+          experimentId={null}
+          knownMetricIds={[]}
+        />,
+      );
+
+      // Editor must mount first so the section's children resolve.
+      await screen.findByTestId('metricql-editor');
+
+      // Toggle the preview pane open. The real component's previewFn will fire.
+      fireEvent.click(screen.getByTestId('metricql-preview-toggle'));
+
+      // Wait for the compiled SQL to render (status='success', CodeMirror
+      // mounts into the data-testid="metricql-preview-sql" container).
+      await waitFor(
+        () => {
+          expect(screen.queryByTestId('metricql-preview-sql')).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      // Negative assertions — the bug Tasks 1+2 fixed produced these copy
+      // strings. They must NOT appear when experimentId is null.
+      expect(screen.queryByText(/preview failed/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/experiment_id is required/i)).not.toBeInTheDocument();
+
+      // Confirm the real preview component normalised null → '' at the RPC
+      // call site (proto3 wire format).
+      const { previewMetricDefinition } = await import('@/lib/api');
+      expect(vi.mocked(previewMetricDefinition)).toHaveBeenCalledWith(
+        { experimentId: '', metricqlExpression: 'mean(heartbeat.value)' },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    } finally {
+      useRealPreviewFlag.current = false;
+    }
   });
 });

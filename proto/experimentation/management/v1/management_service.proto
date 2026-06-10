@@ -197,7 +197,11 @@ message MigrateMetricDefinitionResponse {
 // scoping the KnownMetricIDs lookup to the experiment on M3's side.
 // No side effects; safe to call at the editor's preview cadence.
 message PreviewMetricDefinitionRequest {
-  // Scopes the KnownMetricIDs lookup on M3. Required.
+  // Scopes the KnownMetricIDs lookup on M3. Empty string = global scope:
+  // M3 builds its known set from the full metric_definitions catalog so the
+  // editor's preview surface can compile expressions before an experiment
+  // exists (mirrors ValidateMetricql). Set to a specific experiment id to
+  // scope to that experiment.
   string experiment_id = 1;
   // The MetricQL source text to compile. Required.
   string metricql_expression = 2;

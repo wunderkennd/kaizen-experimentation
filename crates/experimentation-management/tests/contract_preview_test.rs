@@ -1,14 +1,16 @@
 //! Contract test for M5 PreviewMetricDefinition → M3 CompileMetricqlPreview proxy.
 //!
-//! Verifies (ADR-026 Phase 2 / #436):
+//! Verifies (ADR-026 Phase 2 / #436, updated for #597 global-scope relaxation):
 //!  1. Request forwarding — M5 forwards experiment_id + metricql_expression to M3 unmodified.
 //!  2. Response passthrough — compiled_sql returned verbatim.
 //!  3. Diagnostics propagated unmodified (field values, span coords).
 //!  4. M3 returns a non-OK status → the status code propagates.
 //!  5. M3 unavailable → UNAVAILABLE (connect_lazy fails at first send).
-//!  6. Empty experiment_id → INVALID_ARGUMENT before any M3 round-trip.
+//!  6. Empty experiment_id → forwarded to M3 as global-scope (#597, symmetric
+//!     to PR #595's validate_metricql relaxation); no longer short-circuited.
 //!  7. Empty metricql_expression → INVALID_ARGUMENT before any M3 round-trip.
-//!  8. Whitespace-only experiment_id → INVALID_ARGUMENT.
+//!  8. Whitespace-only experiment_id → forwarded to M3 verbatim (#597 — the
+//!     trim().is_empty() check is treated as the global-scope signal).
 //!
 //! ## Design
 //!
@@ -354,25 +356,38 @@ async fn m3_unavailable_returns_unavailable() {
 }
 
 #[tokio::test]
-async fn empty_experiment_id_returns_invalid_argument_without_m3_call() {
-    // Port 1 — no server. If M5 were to call M3, it would time out.
-    // The validator must short-circuit before the proxy.
-    let handler = make_handler("http://127.0.0.1:1".into()).await;
+async fn empty_experiment_id_is_forwarded_to_m3_as_global_scope() {
+    // #597 (symmetric to PR #595): empty experiment_id is the global-scope
+    // signal used by the metric-creation form. M5 must NOT short-circuit
+    // with INVALID_ARGUMENT; instead it forwards the empty string verbatim
+    // and M3 resolves the catalog itself.
+    let (addr, captured, _resp) = spawn_mock_m3(PresetResponse::Ok(
+        CompileMetricqlPreviewResponse {
+            compiled_sql: "SELECT avg(v) FROM t".into(),
+            diagnostics: vec![],
+        },
+    ))
+    .await;
+    let handler = make_handler(format!("http://{}", addr)).await;
 
-    let err = handler
+    handler
         .preview_metric_definition(Request::new(PreviewMetricDefinitionRequest {
-            experiment_id: "".into(),
+            experiment_id: String::new(),
             metricql_expression: "mean(x.y)".into(),
         }))
         .await
-        .unwrap_err();
+        .expect("empty experiment_id must proxy through to M3, not short-circuit");
 
-    assert_eq!(err.code(), Code::InvalidArgument);
-    assert!(
-        err.message().contains("experiment_id"),
-        "error message should mention experiment_id, got: {}",
-        err.message()
+    let call = captured
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("M3 must have received the proxied call");
+    assert_eq!(
+        call.experiment_id, "",
+        "empty experiment_id must be forwarded verbatim, not rewritten"
     );
+    assert_eq!(call.metricql_expression, "mean(x.y)");
 }
 
 #[tokio::test]
@@ -396,16 +411,35 @@ async fn empty_metricql_expression_returns_invalid_argument_without_m3_call() {
 }
 
 #[tokio::test]
-async fn whitespace_only_experiment_id_returns_invalid_argument() {
-    let handler = make_handler("http://127.0.0.1:1".into()).await;
+async fn whitespace_only_experiment_id_is_forwarded_to_m3_as_global_scope() {
+    // #597: whitespace-only experiment_id is treated identically to empty
+    // — trim().is_empty() is the global-scope signal on M5's side. M5
+    // forwards the string verbatim; M3 decides how to interpret
+    // whitespace-only when building the catalog (Task 2).
+    let (addr, captured, _resp) = spawn_mock_m3(PresetResponse::Ok(
+        CompileMetricqlPreviewResponse {
+            compiled_sql: "SELECT avg(v) FROM t".into(),
+            diagnostics: vec![],
+        },
+    ))
+    .await;
+    let handler = make_handler(format!("http://{}", addr)).await;
 
-    let err = handler
+    handler
         .preview_metric_definition(Request::new(PreviewMetricDefinitionRequest {
             experiment_id: "   \t".into(),
             metricql_expression: "mean(x.y)".into(),
         }))
         .await
-        .unwrap_err();
+        .expect("whitespace-only experiment_id must proxy through to M3, not short-circuit");
 
-    assert_eq!(err.code(), Code::InvalidArgument);
+    let call = captured
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("M3 must have received the proxied call");
+    assert_eq!(
+        call.experiment_id, "   \t",
+        "whitespace-only experiment_id must be forwarded verbatim"
+    );
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -18,11 +19,19 @@ import (
 // persisting or executing. Used by the M6 editor's preview pane (ADR-026
 // Phase 2 / #436).
 //
-// KnownMetricIDs is intentionally not derived from the experiment in v1:
-// the preview is informational and the M5 Create/Update path is the source
-// of truth for existence checks. Passing nil to AnalyzeContext skips the
-// @metric_ref existence check (per the analyzer's documented nil-means-skip
-// contract).
+// Scope (Issue #597): the preview RPC operates in either experiment scope
+// or global scope, mirroring PR #595's `ValidateMetricql` change on the M5
+// side:
+//
+//   - Empty / whitespace-only experiment_id → GLOBAL scope. If a
+//     catalog.CatalogReader is wired via WithCatalogReader, KnownMetricIDs
+//     is populated from M5's `metric_definitions` table so unknown
+//     @metric_refs surface as SEVERITY_ERROR diagnostics. If no reader is
+//     wired (legacy callers / tests with no Postgres), KnownMetricIDs falls
+//     back to nil (existence check skipped) for backward compat.
+//   - Non-empty experiment_id → EXPERIMENT scope. KnownMetricIDs stays nil
+//     (current behavior). Experiment-scoped catalog lookup is a future task
+//     — Issue #597 only widens the global path.
 //
 // Honors the incoming gRPC/Connect deadline: ctx.Err() is checked before
 // parsing so an already-expired context fails fast with DeadlineExceeded.
@@ -30,9 +39,8 @@ func (h *MetricsHandler) CompileMetricqlPreview(
 	ctx context.Context,
 	req *connect.Request[metricsv1.CompileMetricqlPreviewRequest],
 ) (*connect.Response[metricsv1.CompileMetricqlPreviewResponse], error) {
-	if req.Msg.GetExperimentId() == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errorf("experiment_id is required"))
-	}
+	experimentID := req.Msg.GetExperimentId()
+	isGlobalScope := strings.TrimSpace(experimentID) == ""
 
 	expr := strings.TrimSpace(req.Msg.GetMetricqlExpression())
 	if expr == "" {
@@ -48,16 +56,41 @@ func (h *MetricsHandler) CompileMetricqlPreview(
 		return nil, connect.NewError(connect.CodeDeadlineExceeded, err)
 	}
 
-	// Phase 2 v1: skip KnownMetricIDs existence check in the preview path.
-	// The analyzer's nil-KnownMetricIDs contract explicitly allows this.
+	// Build the @metric_ref existence-check context.
+	//
+	//   - Global scope + catalog reader wired → query the catalog.
+	//   - Global scope, no catalog reader → nil (skip check; backward compat).
+	//   - Experiment scope → nil (current behavior; experiment-scoped
+	//     catalog lookup is intentionally out of scope for Issue #597).
+	var knownIDs map[string]bool
+	if isGlobalScope {
+		if h.catalogReader != nil {
+			ids, err := h.catalogReader.ListMetricIDs(ctx)
+			if err != nil {
+				// Treat catalog failure as Internal — the operator should
+				// see this rather than a silent fall-through to "no
+				// existence check" (which would hide unknown refs).
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			knownIDs = make(map[string]bool, len(ids))
+			for _, id := range ids {
+				knownIDs[id] = true
+			}
+		} else {
+			slog.DebugContext(ctx, "CompileMetricqlPreview: empty experiment_id with no catalogReader wired; skipping existence check (legacy backward-compat path)")
+		}
+	}
+
 	sql, _, err := metricql.Compile(expr, metricql.CompileContext{
 		// ExperimentID and MetricID are injected for template rendering.
 		// The preview uses a sentinel value — operators see realistic but
 		// non-binding SQL. The actual scheduling path injects real IDs.
-		ExperimentID:    req.Msg.GetExperimentId(),
+		// For global scope we pass an empty ExperimentID; the templates
+		// tolerate it because the rendered SQL is informational.
+		ExperimentID:    experimentID,
 		ComputationDate: "PREVIEW",
 		MetricID:        "preview",
-		KnownMetricIDs:  nil,
+		KnownMetricIDs:  knownIDs,
 	})
 	if err != nil {
 		return connect.NewResponse(diagnosticResponseFromError(expr, err)), nil
@@ -126,13 +159,3 @@ func lineColFromOffset(source string, offset int) (line, col int) {
 	}
 	return line, col
 }
-
-// errorf returns a plain error for use with connect.NewError. Using a
-// package-local helper avoids importing fmt in the hot path of the handler.
-func errorf(msg string) error {
-	return &plainError{msg}
-}
-
-type plainError struct{ msg string }
-
-func (e *plainError) Error() string { return e.msg }
