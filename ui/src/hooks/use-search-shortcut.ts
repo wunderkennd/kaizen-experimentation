@@ -9,13 +9,19 @@ import { useEffect, type RefObject } from 'react';
 export function useSearchShortcut(inputRef: RefObject<HTMLInputElement>) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.key === '/' &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '') &&
-        !(document.activeElement as HTMLElement)?.isContentEditable
-      ) {
+      const isSearchShortcut =
+        (e.key === '/' &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '') &&
+          !(document.activeElement as HTMLElement)?.isContentEditable) ||
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k');
+
+      if (isSearchShortcut) {
         e.preventDefault();
         inputRef.current?.focus();
+      }
+
+      if (e.key === 'Escape' && document.activeElement === inputRef.current) {
+        inputRef.current?.blur();
       }
     };
 
