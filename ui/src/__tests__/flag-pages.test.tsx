@@ -166,6 +166,21 @@ describe('Flag List Page', () => {
     expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
   });
 
+  it('clears search when "Clear search" button is clicked', async () => {
+    await renderAndWait();
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByTestId('flag-search');
+    await user.type(searchInput, 'dark_mode');
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('1');
+
+    const clearSearchBtn = screen.getByTestId('clear-search-button');
+    await user.click(clearSearchBtn);
+
+    expect(searchInput).toHaveValue('');
+    expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+  });
+
   it('filters flags by type', async () => {
     await renderAndWait();
     const user = userEvent.setup();
