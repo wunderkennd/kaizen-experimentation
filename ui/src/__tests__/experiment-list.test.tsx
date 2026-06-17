@@ -183,6 +183,26 @@ describe('Experiment List Page', () => {
     });
   });
 
+  it('clear search button resets query', async () => {
+    const user = userEvent.setup();
+    await renderAndWait();
+
+    const searchInput = screen.getByPlaceholderText('Search experiments...');
+    await user.type(searchInput, 'homepage');
+
+    await waitFor(() => {
+      expect(screen.queryByText('adaptive_bitrate_v3')).not.toBeInTheDocument();
+    });
+
+    const clearSearchBtn = screen.getByTestId('clear-search-button');
+    await user.click(clearSearchBtn);
+
+    await waitFor(() => {
+      expect(searchInput).toHaveValue('');
+      expect(screen.getByText('adaptive_bitrate_v3')).toBeInTheDocument();
+    });
+  });
+
   it('shows "Showing X of Y" count', async () => {
     await renderAndWait();
 
