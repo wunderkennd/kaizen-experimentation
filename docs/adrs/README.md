@@ -36,6 +36,7 @@ This directory contains the architectural decisions that shaped the experimentat
 | [028](028-m4b-shadow-inference.md) | M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation) | **Proposed** | M4b, M4a, M5, M6 |
 | [029](029-cross-modal-score-calibration.md) | Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce) | **Proposed** | M4a, M4b, M5, Personalization service |
 | [030](030-shadow-experiment-mode.md) | Shadow mode flag on experiments — run candidate variants on production traffic without user exposure | **Proposed** | M1, M4a, M4b, M5, M6 |
+| [031](031-connectrpc-rust-assignment-pilot.md) | ConnectRPC (Rust) pilot on M1 Assignment — scoped revisit of ADR-010's "tonic for Rust" | **Proposed** | M1, SDKs, proto codegen |
 
 ## Proposed ADR Clusters
 
