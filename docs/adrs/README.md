@@ -2,6 +2,25 @@
 
 This directory contains the architectural decisions that shaped the experimentation platform. Each ADR documents a significant technical choice, the alternatives considered, and the consequences. Settled decisions (Accepted) should not be relitigated without strong new evidence. Proposed decisions are open for review.
 
+## ADR Lifecycle
+
+```
+Proposed ──▶ Accepted ──▶ Accepted and Implemented
+   │             │
+   │             └──▶ Superseded by ADR-XXX  /  Deprecated
+   └──▶ Rejected
+```
+
+An ADR is merged to `main` while still **Proposed** — landing the document is *not* acceptance. Acceptance (or rejection) is a deliberate status change made after review, recorded by a small follow-up PR. ADRs are never deleted; a declined one is marked **Rejected** and kept on file for its context.
+
+**Acceptance-tracking issues (standard practice).** Every Proposed ADR gets a lightweight GitHub issue labelled [`rfc`](https://github.com/wunderkennd/kaizen-experimentation/labels/rfc), titled `Review & accept ADR-NNN: <title>` and assigned to the decider. This keeps the accept/reject decision on the active `gh issue list` queue instead of letting Proposed ADRs rot. The issue:
+
+- links to the ADR and its PR,
+- restates the accept / kill criteria from the ADR body,
+- is closed when the status moves to Accepted or Rejected.
+
+First instance: [#634](https://github.com/wunderkennd/kaizen-experimentation/issues/634) for ADR-031.
+
 ## Decision Index
 
 | ADR | Decision | Status | Impact |
@@ -36,6 +55,7 @@ This directory contains the architectural decisions that shaped the experimentat
 | [028](028-m4b-shadow-inference.md) | M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation) | **Proposed** | M4b, M4a, M5, M6 |
 | [029](029-cross-modal-score-calibration.md) | Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce) | **Proposed** | M4a, M4b, M5, Personalization service |
 | [030](030-shadow-experiment-mode.md) | Shadow mode flag on experiments — run candidate variants on production traffic without user exposure | **Proposed** | M1, M4a, M4b, M5, M6 |
+| [031](031-connectrpc-rust-assignment-pilot.md) | ConnectRPC (Rust) pilot on M1 Assignment — scoped revisit of ADR-010's "tonic for Rust" | **Proposed** | M1, SDKs, proto codegen |
 
 ## Proposed ADR Clusters
 
