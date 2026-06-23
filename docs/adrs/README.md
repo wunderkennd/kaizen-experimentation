@@ -2,6 +2,25 @@
 
 This directory contains the architectural decisions that shaped the experimentation platform. Each ADR documents a significant technical choice, the alternatives considered, and the consequences. Settled decisions (Accepted) should not be relitigated without strong new evidence. Proposed decisions are open for review.
 
+## ADR Lifecycle
+
+```
+Proposed ──▶ Accepted ──▶ Accepted and Implemented
+   │             │
+   │             └──▶ Superseded by ADR-XXX  /  Deprecated
+   └──▶ Rejected
+```
+
+An ADR is merged to `main` while still **Proposed** — landing the document is *not* acceptance. Acceptance (or rejection) is a deliberate status change made after review, recorded by a small follow-up PR. ADRs are never deleted; a declined one is marked **Rejected** and kept on file for its context.
+
+**Acceptance-tracking issues (standard practice).** Every Proposed ADR gets a lightweight GitHub issue labelled [`rfc`](https://github.com/wunderkennd/kaizen-experimentation/labels/rfc), titled `Review & accept ADR-NNN: <title>` and assigned to the decider. This keeps the accept/reject decision on the active `gh issue list` queue instead of letting Proposed ADRs rot. The issue:
+
+- links to the ADR and its PR,
+- restates the accept / kill criteria from the ADR body,
+- is closed when the status moves to Accepted or Rejected.
+
+First instance: [#634](https://github.com/wunderkennd/kaizen-experimentation/issues/634) for ADR-031.
+
 ## Decision Index
 
 | ADR | Decision | Status | Impact |

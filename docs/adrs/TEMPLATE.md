@@ -1,6 +1,6 @@
 # ADR-NNN: [Short Title]
 
-**Status**: Proposed <!-- Proposed | Accepted | Accepted (In Progress) | Accepted (Planned — Sprint X.Y) | Accepted and Implemented | Deprecated | Superseded -->
+**Status**: Proposed <!-- Proposed | Accepted | Accepted (In Progress) | Accepted (Planned — Sprint X.Y) | Accepted and Implemented | Rejected | Deprecated | Superseded -->
 **Date**: YYYY-MM-DD
 **Deciders**: Agent-N ([Module or role])
 **Cluster**: [A–F] — [Cluster name, if applicable]
