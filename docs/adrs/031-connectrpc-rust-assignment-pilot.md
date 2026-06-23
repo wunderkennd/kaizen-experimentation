@@ -1,7 +1,7 @@
 # ADR-031: ConnectRPC (Rust) Pilot on M1 Assignment Service
 
-**Status**: Proposed
-**Date**: 2026-06-22
+**Status**: Accepted
+**Date**: 2026-06-22 (proposed); 2026-06-23 (accepted via #634 — pilot approved; fleet-wide adoption remains gated on the success criteria below)
 **Deciders**: Agent-1 (M1 Assignment), Agent-0 (cross-cutting RPC / coordination), SDK maintainers
 **Cluster**: — (cross-cutting RPC infrastructure; scoped revisit of ADR-010)
 
