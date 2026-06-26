@@ -69,10 +69,22 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 role="button"
                 tabIndex={0}
                 aria-expanded={isExpanded}
+                aria-label={`Toggle details for ${entry.action} action on ${entry.experimentName}`}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
-                  {formatTimestamp(entry.timestamp)}
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    {formatTimestamp(entry.timestamp)}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm align-top">
                   <Link
@@ -91,9 +103,6 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
                   <div>{entry.details}</div>
-                  <span className="text-xs text-gray-400">
-                    {isExpanded ? '(click to collapse)' : '(click to expand details)'}
-                  </span>
                   {isExpanded && (
                     <div className="mt-2 rounded-md bg-gray-50 p-3 text-xs" data-testid={`audit-detail-${entry.entryId}`}>
                       <div className="mb-2">
