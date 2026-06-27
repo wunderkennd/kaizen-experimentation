@@ -129,11 +129,15 @@ those labels and move only the human/reporting sprint axis to the Iteration fiel
 
 ### Procedure
 
-> **UI steps the API can't do** (the bootstrap script prints these): GitHub seeds a
-> default **Status** field with `Todo|In Progress|Done` — reconcile it to
-> `Backlog, Ready, In Progress, In Review, Blocked, Done`. The **Iteration** field and
-> the three **Views** are also UI-only (single-select option editing, iteration fields,
-> and view creation are not exposed by the Projects-v2 API).
+> **The only genuinely UI-only step is Views** — the Projects-v2 API has no
+> view-creation mutation. Two things the bootstrap script leaves to you but that
+> *are* API-capable (it just doesn't automate them):
+> - **Status options**: GitHub seeds `Todo|In Progress|Done`; reconcile to
+>   `Backlog, Ready, In Progress, In Review, Blocked, Done` via `updateProjectV2Field`
+>   (or the UI). It replaces the whole option set, so only do it before items use the
+>   field. This is the same mutation used to add the `ADR-031 ConnectRPC` Goal option.
+> - **Iteration field**: creatable via `createProjectV2Field` (dataType `ITERATION`),
+>   but it needs a cadence/seed schedule — create it in the UI for now.
 
 ```bash
 # 1. Create the Project + fields (idempotent; dry-run by default). Single-select fields

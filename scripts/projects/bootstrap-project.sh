@@ -11,10 +11,16 @@
 #   - Create text field: ADR.
 #   - Create number field: Estimate.
 #
-# What it CANNOT do (GitHub API does not expose these — do them in the UI):
-#   - Create the ITERATION field (Projects v2 API cannot create iteration fields).
-#   - Create saved VIEWS (Board / Roadmap / By Agent) with grouping.
-# The script prints exact UI instructions for both at the end.
+# What this script LEAVES TO YOU:
+#   - ITERATION field: IS creatable via the API (createProjectV2Field, dataType
+#     ITERATION) but needs cadence + seed-iteration decisions, so this script leaves
+#     it to the UI / a follow-up rather than guessing a schedule.
+#   - Saved VIEWS (Board / Roadmap / By Agent): genuinely UI-only — the Projects-v2
+#     API has NO view-creation mutation. This is the only true UI-only step.
+# NOTE: single-select options ARE editable via the API (updateProjectV2Field — the
+# mutation used to add the ConnectRPC Goal option). But it REPLACES the whole option
+# set and can orphan in-use values, so on drift this script WARNs and lets you
+# reconcile deliberately rather than auto-replacing. It prints the steps at the end.
 #
 # Requirements: gh CLI authenticated with the `project` scope:
 #   gh auth refresh -s project,read:project
@@ -101,7 +107,8 @@ create_single_select() {
     if [ "$have" = "$want" ]; then
       echo "  field '$name' exists with correct options — skip"
     else
-      echo "  WARN: field '$name' exists but options differ — reconcile in the UI:"
+      echo "  WARN: field '$name' exists but options differ. Reconcile deliberately —"
+      echo "        updateProjectV2Field REPLACES the whole set & can orphan in-use values."
       echo "        have: ${have:-<none>}"
       echo "        want: $want"
     fi
@@ -132,30 +139,34 @@ echo "-- Text / number fields --"
 create_field "ADR"      TEXT
 create_field "Estimate" NUMBER
 
-# --- Manual steps the API cannot do ------------------------------------------
+# --- Remaining steps ----------------------------------------------------------
 cat <<EOF
 
 == DONE (API portion) ==
 Project: https://github.com/users/$OWNER/projects/$PROJECT_NUMBER
 
-== MANUAL UI STEPS (GitHub API cannot create these) ==
+== REMAINING STEPS ==
 
-0. STATUS OPTIONS  (Project → ⚙ Settings → Status field)
-   - GitHub seeds Status with Todo|In Progress|Done. Reconcile to:
+0. STATUS OPTIONS  — reconcile the default Todo|In Progress|Done to:
      Backlog, Ready, In Progress, In Review, Blocked, Done
-   - (Single-select options cannot be reliably set via the API; see WARN above.)
+   API-capable (updateProjectV2Field replaces the option set — safe on a fresh
+   project where nothing uses Status yet). One-liner once you have the field id
+   from \`gh project field-list $PROJECT_NUMBER --owner $OWNER --format json\`:
+     gh api graphql -f query='mutation{updateProjectV2Field(input:{fieldId:"<id>",
+       singleSelectOptions:[{name:"Backlog",color:GRAY,description:""},
+       {name:"Ready",color:GRAY,description:""},{name:"In Progress",color:GRAY,description:""},
+       {name:"In Review",color:GRAY,description:""},{name:"Blocked",color:GRAY,description:""},
+       {name:"Done",color:GRAY,description:""}]}){clientMutationId}}'
+   …or just edit it in the UI (Settings → Status field).
 
-1. ITERATION FIELD  (Project → ⚙ Settings → + New field → Iteration)
-   - Name:      Iteration
-   - Duration:  2 weeks
-   - Then add iterations named to match sprints: "Sprint 5.6", "Sprint I.2", ...
-   - (The migrate-milestones-to-iterations.sh script will tell you which to add,
-      derived from existing Milestone due dates.)
+1. ITERATION FIELD  — API-capable (createProjectV2Field, dataType ITERATION) but
+   needs a cadence/seed schedule, so create in the UI for now:
+     Settings → + New field → Iteration, Duration 2 weeks.
 
-2. VIEWS  (Project → + New view)
-   a. "Board"     — Layout: Board    — Group by: Status
-   b. "Roadmap"   — Layout: Roadmap  — Group by: Goal    — Date field: Iteration
-   c. "By Agent"  — Layout: Table    — Group by: Owner
+2. VIEWS  (the ONLY genuinely UI-only step — no view-creation API):
+   a. "Board"    — Board   — Group by: Status
+   b. "Roadmap"  — Roadmap — Group by: Goal — Date field: Iteration
+   c. "By Agent" — Table   — Group by: Owner
 
 After the Iteration field exists, run:
    ./scripts/projects/migrate-milestones-to-iterations.sh --owner $OWNER --project $PROJECT_NUMBER
