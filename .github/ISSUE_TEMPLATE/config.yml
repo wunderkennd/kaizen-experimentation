@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📋 Work-tracking conventions (Projects, Goals, Iterations)
+    url: https://github.com/wunderkennd/kaizen-experimentation/blob/main/docs/guides/projects-and-goals.md
+    about: How Goals, Iterations, and Project fields work. Read before filing a Goal.
+  - name: 📝 Issue body format & labels
+    url: https://github.com/wunderkennd/kaizen-experimentation/blob/main/docs/guides/github-issues-workflow.md
+    about: Standard Issue structure, labels, and the Closes #N convention.
