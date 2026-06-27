@@ -2022,12 +2022,15 @@ name = "experimentation-assignment"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "buffa",
+ "connectrpc",
  "criterion",
  "experimentation-bandit",
  "experimentation-core",
  "experimentation-hash",
  "experimentation-interleaving",
  "experimentation-proto",
+ "experimentation-proto-connect",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -2040,6 +2043,7 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tonic-web",
+ "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
 ]
