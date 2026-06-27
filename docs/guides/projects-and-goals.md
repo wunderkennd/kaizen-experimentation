@@ -59,13 +59,13 @@ Filed via `scripts/projects/seed-goals.sh` (active goals first, then the rest).
 | --- | --- | --- | --- |
 | Infrastructure GA (Pulumi/AWS) | [#647](https://github.com/wunderkennd/kaizen-experimentation/issues/647) | Sprints I.0–I.3 | All 9 Kaizen services deployed; mock suite green; observability wired |
 | ADR-031 ConnectRPC Pilot | [#648](https://github.com/wunderkennd/kaizen-experimentation/issues/648) | ADR-031 | M1 RPCs over Connect; JSON shim retired; pilot meets success/kill criteria |
-| ADR-026 Custom Metrics Layer → GA | _pending_ | ADR-026 | 3 Tier-1 metric types GA; operators self-serve; <5% definition-validation error rate |
-| ADR-027 TOST Equivalence Testing → GA | _pending_ | ADR-027 | TOST exposed in M4a/M5/M6; golden files match R `TOSTER` to 6 dp |
-| ADR-028 M4b Shadow Inference | _pending_ | ADR-028 | Shadow core promotes policies with zero prod-traffic exposure regressions |
-| ADR-029 Cross-Modal Score Calibration | _pending_ | ADR-029 | Unified NEV scale across ≥3 modalities; calibration error within target band |
-| ADR-030 Shadow Experiment Mode | _pending_ | ADR-030 | Candidate variants run on prod traffic with 0 user-facing exposure incidents |
-| QoE Observability GA | _pending_ | EBVS + HeartbeatSessionizer | Server-side QoE aggregation live; EBVS first-class on `PlaybackMetrics` |
-| Palette / M6 Design-System Standardization | _pending_ | Palette polish | Search, empty states, filter-clear, CopyButton standardized across M6; a11y pass |
+| ADR-026 Custom Metrics Layer → GA | [#649](https://github.com/wunderkennd/kaizen-experimentation/issues/649) | ADR-026 | 3 Tier-1 metric types GA; operators self-serve; <5% definition-validation error rate |
+| ADR-027 TOST Equivalence Testing → GA | [#650](https://github.com/wunderkennd/kaizen-experimentation/issues/650) | ADR-027 | TOST exposed in M4a/M5/M6; golden files match R `TOSTER` to 6 dp |
+| ADR-028 M4b Shadow Inference | [#651](https://github.com/wunderkennd/kaizen-experimentation/issues/651) | ADR-028 | Shadow core promotes policies with zero prod-traffic exposure regressions |
+| ADR-029 Cross-Modal Score Calibration | [#652](https://github.com/wunderkennd/kaizen-experimentation/issues/652) | ADR-029 | Unified NEV scale across ≥3 modalities; calibration error within target band |
+| ADR-030 Shadow Experiment Mode | [#653](https://github.com/wunderkennd/kaizen-experimentation/issues/653) | ADR-030 | Candidate variants run on prod traffic with 0 user-facing exposure incidents |
+| QoE Observability GA | [#654](https://github.com/wunderkennd/kaizen-experimentation/issues/654) | EBVS + HeartbeatSessionizer | Server-side QoE aggregation live; EBVS first-class on `PlaybackMetrics` |
+| Palette / M6 Design-System Standardization | [#655](https://github.com/wunderkennd/kaizen-experimentation/issues/655) | Palette polish | Search, empty states, filter-clear, CopyButton standardized across M6; a11y pass |
 
 > The two **active** goals (live open work) are filed first; the remaining seven are
 > filed in a second batch. ADR-031 is a ninth goal that spun up after the original
