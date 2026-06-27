@@ -42,8 +42,8 @@ fn unimplemented(msg: &'static str) -> connectrpc::ConnectError {
 
 #[allow(refining_impl_trait)]
 impl connect_pb::AssignmentService for ConnectAssignment {
-    async fn get_assignment<'a>(
-        &'a self,
+    async fn get_assignment(
+        &self,
         _ctx: connectrpc::RequestContext,
         request: connectrpc::ServiceRequest<'_, connect_pb::GetAssignmentRequest>,
     ) -> connectrpc::ServiceResult<connect_pb::GetAssignmentResponse> {
@@ -74,16 +74,16 @@ impl connect_pb::AssignmentService for ConnectAssignment {
         }))
     }
 
-    async fn get_assignments<'a>(
-        &'a self,
+    async fn get_assignments(
+        &self,
         _ctx: connectrpc::RequestContext,
         _request: connectrpc::ServiceRequest<'_, connect_pb::GetAssignmentsRequest>,
     ) -> connectrpc::ServiceResult<connect_pb::GetAssignmentsResponse> {
         Err(unimplemented("ADR-031 pilot: GetAssignments lands in #642"))
     }
 
-    async fn get_interleaved_list<'a>(
-        &'a self,
+    async fn get_interleaved_list(
+        &self,
         _ctx: connectrpc::RequestContext,
         _request: connectrpc::ServiceRequest<'_, connect_pb::GetInterleavedListRequest>,
     ) -> connectrpc::ServiceResult<connect_pb::GetInterleavedListResponse> {
@@ -100,8 +100,8 @@ impl connect_pb::AssignmentService for ConnectAssignment {
         Err(unimplemented("ADR-031 pilot: StreamConfigUpdates lands in #643"))
     }
 
-    async fn get_slate_assignment<'a>(
-        &'a self,
+    async fn get_slate_assignment(
+        &self,
         _ctx: connectrpc::RequestContext,
         _request: connectrpc::ServiceRequest<'_, connect_pb::GetSlateAssignmentRequest>,
     ) -> connectrpc::ServiceResult<connect_pb::GetSlateAssignmentResponse> {

@@ -136,6 +136,10 @@ jobs:
         run: cargo test --package experimentation-stats --features simd
         timeout-minutes: 15
 
+      - name: ADR-031 pilot — assignment connectrpc feature
+        run: cargo test --package experimentation-assignment --features connectrpc
+        timeout-minutes: 15
+
       - name: WASM build
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
