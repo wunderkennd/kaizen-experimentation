@@ -221,3 +221,23 @@ func TestMetricConfig_ADR026Phase1_RoundTrip(t *testing.T) {
 		assert.Nil(t, m.GetWindowedCount())
 	})
 }
+
+func TestCompositeOperatorShortName(t *testing.T) {
+	cases := []struct {
+		name string
+		op   commonv1.CompositeOperator
+		want string
+	}{
+		{"unspecified is empty", commonv1.CompositeOperator_COMPOSITE_OPERATOR_UNSPECIFIED, ""},
+		{"add", commonv1.CompositeOperator_COMPOSITE_OPERATOR_ADD, "ADD"},
+		{"subtract", commonv1.CompositeOperator_COMPOSITE_OPERATOR_SUBTRACT, "SUBTRACT"},
+		{"multiply", commonv1.CompositeOperator_COMPOSITE_OPERATOR_MULTIPLY, "MULTIPLY"},
+		{"divide", commonv1.CompositeOperator_COMPOSITE_OPERATOR_DIVIDE, "DIVIDE"},
+		{"weighted_sum", commonv1.CompositeOperator_COMPOSITE_OPERATOR_WEIGHTED_SUM, "WEIGHTED_SUM"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, CompositeOperatorShortName(tc.op))
+		})
+	}
+}
