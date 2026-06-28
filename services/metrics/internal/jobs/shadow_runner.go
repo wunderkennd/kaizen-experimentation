@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -262,7 +261,7 @@ func (j *StandardJob) renderShadowCandidate(
 				}
 			}
 			params.Operands = sparOps
-			params.Operator = compositeOperatorString(comp.GetOperator())
+			params.Operator = config.CompositeOperatorShortName(comp.GetOperator())
 		}
 
 	case commonv1.MetricType_METRIC_TYPE_WINDOWED_COUNT:
@@ -336,25 +335,5 @@ func protoMetricTypeToString(mt commonv1.MetricType) (string, error) {
 	// This default covers UNSPECIFIED and any future proto enum additions.
 	default:
 		return "", fmt.Errorf("protoMetricTypeToString: unexpected type %s", mt.String())
-	}
-}
-
-// compositeOperatorString maps a CompositeOperator proto enum to the uppercase
-// string that spark.SQLRenderer.RenderForType / RenderComposite expect.
-func compositeOperatorString(op commonv1.CompositeOperator) string {
-	switch op {
-	case commonv1.CompositeOperator_COMPOSITE_OPERATOR_ADD:
-		return "ADD"
-	case commonv1.CompositeOperator_COMPOSITE_OPERATOR_SUBTRACT:
-		return "SUBTRACT"
-	case commonv1.CompositeOperator_COMPOSITE_OPERATOR_MULTIPLY:
-		return "MULTIPLY"
-	case commonv1.CompositeOperator_COMPOSITE_OPERATOR_DIVIDE:
-		return "DIVIDE"
-	case commonv1.CompositeOperator_COMPOSITE_OPERATOR_WEIGHTED_SUM:
-		return "WEIGHTED_SUM"
-	default:
-		// UNSPECIFIED — leave blank; RenderForType will reject it.
-		return strings.ToUpper(op.String())
 	}
 }

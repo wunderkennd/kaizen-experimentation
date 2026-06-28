@@ -82,8 +82,13 @@ func TypeShortName(t commonv1.MetricType) string {
 	return strings.TrimPrefix(t.String(), "METRIC_TYPE_")
 }
 
-// CompositeOperatorShortName strips the "COMPOSITE_OPERATOR_" prefix.
+// CompositeOperatorShortName strips the "COMPOSITE_OPERATOR_" prefix. Returns
+// "" for the UNSPECIFIED zero value so callers don't leak a stale token into
+// Spark params or logs when the operator field is absent.
 func CompositeOperatorShortName(op commonv1.CompositeOperator) string {
+	if op == commonv1.CompositeOperator_COMPOSITE_OPERATOR_UNSPECIFIED {
+		return ""
+	}
 	return strings.TrimPrefix(op.String(), "COMPOSITE_OPERATOR_")
 }
 
