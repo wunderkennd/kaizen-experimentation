@@ -141,7 +141,7 @@ gh issue view <number>
 ### Labels
 - `agent-1` through `agent-7` — ownership
 - `P0` through `P4` — priority
-- `cluster-a` through `cluster-f` — capability cluster
+- `cluster-a` through `cluster-g` — capability cluster (cluster-g = ADR-029 Personalization Orchestration)
 - `blocked` — waiting on another issue/agent
 - `contract-test` — cross-module contract test
 
