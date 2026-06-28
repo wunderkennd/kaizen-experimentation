@@ -1,5 +1,11 @@
 # GitHub Issues Workflow
 
+> **⚠️ Sprint tracking is migrating off Milestones.** Going forward, **Sprints are the
+> Project's Iteration field** and a new **Goal** concept tracks outcomes — see
+> [projects-and-goals.md](./projects-and-goals.md). The Issue body format, labels, and
+> `Closes #N` convention below are **unchanged**. The "Milestones = Sprints" section
+> here is retained for the transition period only.
+
 Work tracking for Phase 5 uses GitHub Milestones, Issues, and Labels. This replaces the per-agent status markdown files used in Phases 0–4.
 
 ## Why Issues Instead of Status Files

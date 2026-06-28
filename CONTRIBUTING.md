@@ -51,7 +51,7 @@ gh issue view <number>
 | --- | --- |
 | `agent-1` through `agent-7` | Agent ownership |
 | `P0` through `P4` | Priority tier |
-| `cluster-a` through `cluster-f` | Capability cluster |
+| `cluster-a` through `cluster-g` | Capability cluster (cluster-g = ADR-029 Personalization Orchestration) |
 | `blocked` | Waiting on another issue or agent |
 | `contract-test` | Cross-module contract test |
 

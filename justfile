@@ -834,6 +834,29 @@ agent-work agent_label:
     gh issue list --label "{{agent_label}}" --state open --json number,title,milestone \
       --jq '.[] | "#\(.number)\t\(.milestone.title // "no milestone")\t\(.title)"'
 
+# --- GitHub Projects & Goals (see docs/guides/projects-and-goals.md) ---
+# These are ADDITIVE. The Milestone-based recipes above keep working until a
+# full transition sprint has run on both systems (per the migration plan).
+
+# Create the kaizen Project (v2) + fields. Dry-run unless `apply=1`.
+project-bootstrap apply="0":
+    #!/usr/bin/env bash
+    OWNER=$(gh repo view --json owner --jq '.owner.login')
+    FLAG=$([ "{{apply}}" = "1" ] && echo "--apply" || echo "")
+    ./scripts/projects/bootstrap-project.sh --owner "$OWNER" $FLAG
+
+# Migrate open Milestones → Iteration field + sprint-N labels. Dry-run unless `apply=1`.
+project-migrate project apply="0":
+    #!/usr/bin/env bash
+    OWNER=$(gh repo view --json owner --jq '.owner.login')
+    FLAG=$([ "{{apply}}" = "1" ] && echo "--apply" || echo "")
+    ./scripts/projects/migrate-milestones-to-iterations.sh --owner "$OWNER" --project "{{project}}" $FLAG
+
+# List open Goal issues (label:goal) with assignee.
+goals:
+    gh issue list --label "goal" --state open --json number,title,assignees \
+      --jq '.[] | "🎯 #\(.number)\t\(.assignees | map(.login) | join(",") // "unassigned")\t\(.title)"'
+
 # Idempotent: re-running rewrites the <!-- EXEC-BANNER:START/END --> block
 # in place without appending. Looks for a plan file under
 # docs/superpowers/plans/ that references this issue ("Refs #N", "Closes #N",
