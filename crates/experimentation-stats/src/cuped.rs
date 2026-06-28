@@ -8,6 +8,7 @@
 //!
 //! Validated against numpy/scipy with ddof=1 (equivalent to R's var()/cov()).
 
+use crate::ttest::{mean, sample_variance};
 use experimentation_core::error::{assert_finite, Error, Result};
 use statrs::distribution::{ContinuousCDF, Normal};
 
@@ -89,7 +90,7 @@ pub fn cuped_adjust(
     let mean_x = mean(&all_x);
     assert_finite(mean_x, "mean_pooled_x");
 
-    let var_x = variance(&all_x, mean_x);
+    let var_x = sample_variance(&all_x, mean_x);
     assert_finite(var_x, "var_x");
     if var_x == 0.0 {
         return Err(Error::Numerical(
@@ -131,16 +132,16 @@ pub fn cuped_adjust(
     let raw_effect = mean_ty - mean_cy;
     assert_finite(raw_effect, "raw_effect");
 
-    let raw_var_c = variance(control_y, mean_cy);
-    let raw_var_t = variance(treatment_y, mean_ty);
+    let raw_var_c = sample_variance(control_y, mean_cy);
+    let raw_var_t = sample_variance(treatment_y, mean_ty);
     let raw_se = (raw_var_c / n_c + raw_var_t / n_t).sqrt();
     assert_finite(raw_se, "raw_se");
 
     let adjusted_effect = treatment_adj_mean - control_adj_mean;
     assert_finite(adjusted_effect, "adjusted_effect");
 
-    let adj_var_c = variance(&control_adj, control_adj_mean);
-    let adj_var_t = variance(&treatment_adj, treatment_adj_mean);
+    let adj_var_c = sample_variance(&control_adj, control_adj_mean);
+    let adj_var_t = sample_variance(&treatment_adj, treatment_adj_mean);
     let adjusted_se = (adj_var_c / n_c + adj_var_t / n_t).sqrt();
     assert_finite(adjusted_se, "adjusted_se");
 
@@ -177,16 +178,6 @@ pub fn cuped_adjust(
     })
 }
 
-fn mean(data: &[f64]) -> f64 {
-    data.iter().sum::<f64>() / data.len() as f64
-}
-
-fn variance(data: &[f64], mean: f64) -> f64 {
-    let n = data.len() as f64;
-    let ss: f64 = data.iter().map(|&x| (x - mean).powi(2)).sum();
-    ss / (n - 1.0)
-}
-
 fn covariance(y: &[f64], x: &[f64], mean_y: f64, mean_x: f64) -> f64 {
     let n = y.len() as f64;
     let ss: f64 = y
@@ -210,7 +201,7 @@ mod tests {
     fn test_variance_basic() {
         let data = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0];
         let m = mean(&data);
-        let v = variance(&data, m);
+        let v = sample_variance(&data, m);
         assert!((v - 4.571429).abs() < 1e-4);
     }
 

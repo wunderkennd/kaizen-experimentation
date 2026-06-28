@@ -514,7 +514,8 @@ fn lag1_autocorr(x: &[f64]) -> f64 {
         return 0.0;
     }
     let nf = n as f64;
-    let mean = x.iter().sum::<f64>() / nf;
+    let mean = crate::ttest::mean(x);
+    // ponytail: population variance (divides by n) — switchback's lag-1 autocorr math; only callsite.
     let variance = x.iter().map(|&xi| (xi - mean).powi(2)).sum::<f64>() / nf;
     if variance < 1e-15 {
         return 0.0;

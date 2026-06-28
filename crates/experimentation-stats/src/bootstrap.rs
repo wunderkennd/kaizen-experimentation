@@ -9,6 +9,7 @@
 //! Both methods use seeded RNG for exact reproducibility.
 //! Validated against scipy.stats.bootstrap() with golden-file tests.
 
+use crate::ttest::mean;
 use experimentation_core::error::{assert_finite, Error, Result};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -232,10 +233,6 @@ fn generate_replicates(
 fn quantile_index(q: f64, len: usize) -> usize {
     let idx = (q * len as f64).floor() as usize;
     idx.min(len - 1)
-}
-
-fn mean(data: &[f64]) -> f64 {
-    data.iter().sum::<f64>() / data.len() as f64
 }
 
 fn validate_inputs(

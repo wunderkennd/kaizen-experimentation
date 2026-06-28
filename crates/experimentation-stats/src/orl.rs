@@ -34,6 +34,7 @@
 //! Netflix KDD 2024 Table 2 — bias/variance/RMSE across three confounding
 //! scenarios (ρ_UY ∈ {0.0, 0.3, 0.6}).  Golden files in `tests/golden/`.
 
+use crate::ttest::{mean, sample_variance};
 use experimentation_core::error::{assert_finite, Error, Result};
 
 // ---------------------------------------------------------------------------
@@ -242,7 +243,7 @@ pub fn kfold_iv_calibrate(
     };
     assert_finite(ols_resid_var, "ols_resid_var");
 
-    let var_s = sample_var(&s);
+    let var_s = sample_variance(&s, mean_s);
     assert_finite(var_s, "var_s");
 
     let ols_se = if var_s > 0.0 {
@@ -259,7 +260,7 @@ pub fn kfold_iv_calibrate(
     let (_, fs_slope) = ols_with_intercept(&z, &s)?;
     assert_finite(fs_slope, "fs_slope");
 
-    let var_z = sample_var(&z);
+    let var_z = sample_variance(&z, mean(&z));
     assert_finite(var_z, "var_z");
 
     let (first_stage_f_stat, first_stage_r_squared) = if var_z < 1e-14 {
@@ -388,16 +389,6 @@ fn ols_with_intercept(x: &[f64], y: &[f64]) -> Result<(f64, f64)> {
     assert_finite(intercept, "ols_intercept");
 
     Ok((intercept, slope))
-}
-
-fn mean(x: &[f64]) -> f64 {
-    x.iter().sum::<f64>() / x.len() as f64
-}
-
-fn sample_var(x: &[f64]) -> f64 {
-    let n = x.len();
-    let m = mean(x);
-    x.iter().map(|&xi| (xi - m).powi(2)).sum::<f64>() / (n - 1) as f64
 }
 
 fn sample_cov_with_means(x: &[f64], y: &[f64], mx: f64, my: f64) -> f64 {
