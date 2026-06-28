@@ -8,7 +8,7 @@ This guide defines how the kaizen-experimentation repo tracks work after adoptin
 > **TL;DR**
 > - **Sprint** moves from a Milestone to the Project's native **Iteration** field.
 > - **Goal** is a new top-level concept: a typed parent Issue with one success metric and a tree of native sub-issues.
-> - Reporting labels (`P0..P4`, `cluster-a..f`) become Project **fields**.
+> - Reporting labels (`P0..P4`, `cluster-a..g`) become Project **fields**.
 > - `agent-N` and `sprint-N` **labels stay** — orchestration tooling reads them over the REST API.
 
 ## The four axes
@@ -84,7 +84,7 @@ reporting labels to fields and keep only the labels orchestration tooling reads.
 | **Goal** | Single-select | (new) | Mirror of the parent-issue title, for table grouping when sub-issue view is not used |
 | **Owner** | Single-select | mirrors `agent-N` / `infra-N` label | Field is for humans/Roadmap; the **label stays** for automation (see caveat) |
 | **Priority** | Single-select | `P0..P4` labels | Drop the labels once migrated |
-| **Cluster** | Single-select | `cluster-a..f` labels | Drop the labels once migrated |
+| **Cluster** | Single-select | `cluster-a..g` labels | Drop the labels once migrated |
 | **ADR** | Text | (new) | e.g. `ADR-026`; filter "all work for an ADR" across iterations |
 | **Estimate** | Number | (new) | Optional; enables burn-up charts in Insights |
 

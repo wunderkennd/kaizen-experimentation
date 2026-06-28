@@ -172,14 +172,14 @@ create_single_select() {
   fi
   run gh project field-create "$PROJECT_NUMBER" --owner "$OWNER" \
     --name "$name" --data-type SINGLE_SELECT --single-select-options "$opts"
-  [ "$APPLY" -eq 1 ] && echo "  created single-select '$name'"
+  if [ "$APPLY" -eq 1 ]; then echo "  created single-select '$name'"; fi
 }
 create_field() {
   local name="$1" dtype="$2"
   if has_field "$name"; then echo "  field '$name' exists — skip"; return; fi
   run gh project field-create "$PROJECT_NUMBER" --owner "$OWNER" \
     --name "$name" --data-type "$dtype"
-  [ "$APPLY" -eq 1 ] && echo "  created $dtype '$name'"
+  if [ "$APPLY" -eq 1 ]; then echo "  created $dtype '$name'"; fi
 }
 create_iteration_field() {
   if has_field "Iteration"; then echo "  field 'Iteration' exists — skip"; return; fi
