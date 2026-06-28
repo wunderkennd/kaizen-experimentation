@@ -90,8 +90,19 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                   {entry.actorEmail}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
-                  <div>{entry.details}</div>
-                  <span className="text-xs text-gray-400">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <div>{entry.details}</div>
+                  </div>
+                  <span className="ml-6 text-xs text-gray-400">
                     {isExpanded ? '(click to collapse)' : '(click to expand details)'}
                   </span>
                   {isExpanded && (
