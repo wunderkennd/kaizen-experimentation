@@ -6,7 +6,7 @@
 # One per ADR or named initiative (see docs/guides/projects-and-goals.md).
 #
 # Dry-run by default — pass --apply to mutate. Idempotent: skips a goal whose
-# exact title already exists as an open issue.
+# exact title already exists as an issue (open or closed — query uses --state all).
 #
 # For each goal it: creates the issue (label:goal), adds it to the Project, and
 # links its child issues as NATIVE sub-issues (REST sub_issues API) so the
