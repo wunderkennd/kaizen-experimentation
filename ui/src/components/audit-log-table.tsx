@@ -69,6 +69,7 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 role="button"
                 tabIndex={0}
                 aria-expanded={isExpanded}
+                aria-label={`Toggle details for ${entry.action} action on ${entry.experimentName}`}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
@@ -87,7 +88,15 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                   <AuditActionBadge action={entry.action} />
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600 align-top">
-                  {entry.actorEmail}
+                  <div className="group flex items-center justify-between gap-2">
+                    <span>{entry.actorEmail}</span>
+                    <CopyButton
+                      value={entry.actorEmail}
+                      label="Copy actor email"
+                      successMessage="Actor email copied"
+                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
                   <div className="flex items-center gap-2">
