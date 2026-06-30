@@ -147,7 +147,7 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
   return (
     <>
       <tr
-        className="cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+        className="group cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
         onClick={() => setExpanded(!expanded)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
@@ -177,7 +177,7 @@ function MetricRow({ metric }: { metric: MetricDefinition }) {
               value={metric.metricId}
               label="Copy metric ID"
               successMessage="Metric ID copied"
-              className="h-4 w-4"
+              className="h-4 w-4 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
             />
           </div>
         </td>

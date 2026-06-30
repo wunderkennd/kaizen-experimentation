@@ -1,0 +1,17 @@
+
+> experimentation-ui@0.1.0 dev /app/ui
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1938ms
+ ○ Compiling /metrics ...
+ ✓ Compiled /metrics in 9.9s (1002 modules)
+ GET /metrics 200 in 10442ms
+ ○ Compiling /audit ...
+ ✓ Compiled /audit in 2.4s (1014 modules)
+ GET /audit 200 in 2581ms
+ GET /metrics 200 in 65ms
+ GET /audit 200 in 35ms
