@@ -1,6 +1,9 @@
 [package]
 name = "experimentation-proto-connect"
 version.workspace = true
+# NOTE (ADR-031): connectrpc/buffa 0.7 require edition 2024 / MSRV 1.88, so this
+# pilot crate intentionally diverges from the workspace defaults (edition 2021 /
+# rust 1.80). Scoped to this optional pilot crate; the workspace MSRV is unchanged.
 edition = "2024"
 rust-version = "1.88"
 license.workspace = true

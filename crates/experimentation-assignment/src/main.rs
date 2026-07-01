@@ -82,6 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ADR-031 pilot: optional ConnectRPC listener (Connect + gRPC + gRPC-Web on
     // one port). Runs alongside the tonic gRPC + http_json listeners during the
     // pilot; tonic stays the default build.
+    //
+    // NOTE: this listener is fire-and-forget and does NOT participate in graceful
+    // shutdown — on ctrl+c the runtime drops it without draining in-flight requests.
+    // Acceptable for the pilot; wiring it to `shutdown` (CancellationToken) is
+    // deferred to production hardening (post-pilot).
     #[cfg(feature = "connectrpc")]
     {
         use experimentation_proto_connect::experimentation::assignment::v1::AssignmentServiceExt;

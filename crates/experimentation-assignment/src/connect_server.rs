@@ -31,6 +31,9 @@ fn tonic_status_to_connect(status: tonic::Status) -> connectrpc::ConnectError {
         tonic::Code::ResourceExhausted => connectrpc::ErrorCode::ResourceExhausted,
         tonic::Code::FailedPrecondition => connectrpc::ErrorCode::FailedPrecondition,
         tonic::Code::Unavailable => connectrpc::ErrorCode::Unavailable,
+        // tonic spells it "Cancelled"; the Connect protocol spells it "Canceled".
+        tonic::Code::Cancelled => connectrpc::ErrorCode::Canceled,
+        tonic::Code::DeadlineExceeded => connectrpc::ErrorCode::DeadlineExceeded,
         _ => connectrpc::ErrorCode::Internal,
     };
     connectrpc::ConnectError::new(code, status.message().to_string())
@@ -70,6 +73,9 @@ impl connect_pb::AssignmentService for ConnectAssignment {
             payload_json: resp.payload_json,
             assignment_probability: resp.assignment_probability,
             is_active: resp.is_active,
+            // Switchback experiments compute a non-zero time-block index that M4a
+            // needs for within-block vs cross-block analysis; must not default to 0.
+            block_index: resp.block_index,
             ..Default::default()
         }))
     }
