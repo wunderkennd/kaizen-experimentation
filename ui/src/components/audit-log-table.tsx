@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import type { AuditLogEntry } from '@/lib/types';
-import { AuditActionBadge } from '@/components/audit-action-badge';
-import { CopyButton } from '@/components/copy-button';
+import { useState } from "react";
+import Link from "next/link";
+import type { AuditLogEntry } from "@/lib/types";
+import { AuditActionBadge } from "@/components/audit-action-badge";
+import { CopyButton } from "@/components/copy-button";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+  return d.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   });
 }
@@ -58,10 +58,10 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
             return (
               <tr
                 key={entry.entryId}
-                className="cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+                className="group cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
                 onClick={() => toggleExpand(entry.entryId)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     toggleExpand(entry.entryId);
                   }
@@ -69,6 +69,7 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 role="button"
                 tabIndex={0}
                 aria-expanded={isExpanded}
+                aria-label={`Toggle details for ${entry.action} action on ${entry.experimentName}`}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
@@ -87,29 +88,49 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                   <AuditActionBadge action={entry.action} />
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600 align-top">
-                  {entry.actorEmail}
+                  <div className="flex items-center justify-between gap-2">
+                    {entry.actorEmail}
+                    <CopyButton
+                      value={entry.actorEmail}
+                      label={`Copy email address for ${entry.actorEmail}`}
+                      successMessage="Email address copied"
+                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
                   <div className="flex items-center gap-2">
                     <svg
-                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
                       aria-hidden="true"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
                     </svg>
                     <div>{entry.details}</div>
                   </div>
                   <span className="ml-6 text-xs text-gray-400">
-                    {isExpanded ? '(click to collapse)' : '(click to expand details)'}
+                    {isExpanded
+                      ? "(click to collapse)"
+                      : "(click to expand details)"}
                   </span>
                   {isExpanded && (
-                    <div className="mt-2 rounded-md bg-gray-50 p-3 text-xs" data-testid={`audit-detail-${entry.entryId}`}>
+                    <div
+                      className="mt-2 rounded-md bg-gray-50 p-3 text-xs"
+                      data-testid={`audit-detail-${entry.entryId}`}
+                    >
                       <div className="mb-2">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-gray-500">Experiment ID: </span>
+                          <span className="font-semibold text-gray-500">
+                            Experiment ID:{" "}
+                          </span>
                           <CopyButton
                             value={entry.experimentId}
                             label="Copy experiment ID"
@@ -124,7 +145,9 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                       {entry.previousValue && (
                         <div className="mb-2">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-red-600">Previous: </span>
+                            <span className="font-semibold text-red-600">
+                              Previous:{" "}
+                            </span>
                             <CopyButton
                               value={entry.previousValue}
                               label="Copy previous value"
@@ -132,13 +155,17 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                               className="h-4 w-4"
                             />
                           </div>
-                          <code className="mt-1 block break-all rounded bg-red-50/50 p-1">{entry.previousValue}</code>
+                          <code className="mt-1 block break-all rounded bg-red-50/50 p-1">
+                            {entry.previousValue}
+                          </code>
                         </div>
                       )}
                       {entry.newValue && (
                         <div>
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-green-600">New: </span>
+                            <span className="font-semibold text-green-600">
+                              New:{" "}
+                            </span>
                             <CopyButton
                               value={entry.newValue}
                               label="Copy new value"
@@ -146,7 +173,9 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                               className="h-4 w-4"
                             />
                           </div>
-                          <code className="mt-1 block break-all rounded bg-green-50/50 p-1">{entry.newValue}</code>
+                          <code className="mt-1 block break-all rounded bg-green-50/50 p-1">
+                            {entry.newValue}
+                          </code>
                         </div>
                       )}
                     </div>

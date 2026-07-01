@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import type { AuditLogEntry, AuditAction } from '@/lib/types';
-import { listAuditLog } from '@/lib/api';
-import { AuditLogTable } from '@/components/audit-log-table';
-import { AuditFilters } from '@/components/audit-filters';
-import { RetryableError } from '@/components/retryable-error';
-import { Breadcrumb } from '@/components/breadcrumb';
+import { useEffect, useState, useCallback } from "react";
+import type { AuditLogEntry, AuditAction } from "@/lib/types";
+import { listAuditLog } from "@/lib/api";
+import { AuditLogTable } from "@/components/audit-log-table";
+import { AuditFilters } from "@/components/audit-filters";
+import { RetryableError } from "@/components/retryable-error";
+import { Breadcrumb } from "@/components/breadcrumb";
 
 export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nextPageToken, setNextPageToken] = useState('');
+  const [nextPageToken, setNextPageToken] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Filter state
-  const [experimentQuery, setExperimentQuery] = useState('');
-  const [actionFilter, setActionFilter] = useState<AuditAction | ''>('');
-  const [actorQuery, setActorQuery] = useState('');
+  const [experimentQuery, setExperimentQuery] = useState("");
+  const [actionFilter, setActionFilter] = useState<AuditAction | "">("");
+  const [actorQuery, setActorQuery] = useState("");
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -36,7 +36,9 @@ export default function AuditLogPage() {
       });
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const loadMore = useCallback(() => {
     if (!nextPageToken || loadingMore) return;
@@ -54,23 +56,32 @@ export default function AuditLogPage() {
       });
   }, [nextPageToken, loadingMore]);
 
-  const hasActiveFilters = experimentQuery !== '' || actionFilter !== '' || actorQuery !== '';
+  const hasActiveFilters =
+    experimentQuery !== "" || actionFilter !== "" || actorQuery !== "";
 
   const clearFilters = () => {
-    setExperimentQuery('');
-    setActionFilter('');
-    setActorQuery('');
+    setExperimentQuery("");
+    setActionFilter("");
+    setActorQuery("");
   };
 
   // Client-side filtering
   const filtered = entries.filter((entry) => {
-    if (experimentQuery && !entry.experimentName.toLowerCase().includes(experimentQuery.toLowerCase())) {
+    if (
+      experimentQuery &&
+      !entry.experimentName
+        .toLowerCase()
+        .includes(experimentQuery.toLowerCase())
+    ) {
       return false;
     }
     if (actionFilter && entry.action !== actionFilter) {
       return false;
     }
-    if (actorQuery && !entry.actorEmail.toLowerCase().includes(actorQuery.toLowerCase())) {
+    if (
+      actorQuery &&
+      !entry.actorEmail.toLowerCase().includes(actorQuery.toLowerCase())
+    ) {
       return false;
     }
     return true;
@@ -78,22 +89,29 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <Breadcrumb items={[
-        { label: 'Experiments', href: '/' },
-        { label: 'Audit Log' },
-      ]} />
+      <Breadcrumb
+        items={[{ label: "Experiments", href: "/" }, { label: "Audit Log" }]}
+      />
 
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Audit Log</h1>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
+        <div
+          className="flex items-center justify-center py-12"
+          role="status"
+          aria-label="Loading"
+        >
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600" />
           <span className="sr-only">Loading</span>
         </div>
       ) : error ? (
-        <RetryableError message={error} onRetry={fetchData} context="audit log" />
+        <RetryableError
+          message={error}
+          onRetry={fetchData}
+          context="audit log"
+        />
       ) : entries.length === 0 ? (
-        <div className="py-12 text-center">
+        <div className="py-12 text-center" data-testid="empty-state">
           <p className="text-sm text-gray-500">No audit log entries found.</p>
         </div>
       ) : (
@@ -113,7 +131,9 @@ export default function AuditLogPage() {
 
           {filtered.length === 0 ? (
             <div className="py-12 text-center" data-testid="no-filter-matches">
-              <p className="text-sm text-gray-500">No audit log entries match your filters.</p>
+              <p className="text-sm text-gray-500">
+                No audit log entries match your filters.
+              </p>
               <button
                 onClick={clearFilters}
                 className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
@@ -157,7 +177,7 @@ export default function AuditLogPage() {
                         />
                       </svg>
                     )}
-                    {loadingMore ? 'Loading...' : 'Load More'}
+                    {loadingMore ? "Loading..." : "Load More"}
                   </button>
                 </div>
               )}
