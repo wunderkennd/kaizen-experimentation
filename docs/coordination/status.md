@@ -1,9 +1,15 @@
 # Experimentation Platform — Coordination Status
 
+> **⏩ Post-Phase-5 work is tracked in GitHub Issues + Goals (#647–#655).**
+> For the current open-work snapshot (open issues, open PRs, prioritized next steps), see
+> [`status-2026-07-02.md`](status-2026-07-02.md). **This file below is Phase-5 history
+> (through 2026-04-06)** and is retained for provenance, not active state.
+
 > **Last updated**: 2026-04-06 — Phase 5 COMPLETE. All 6 sprints (5.0–5.5) finished. 41 PRs merged.
 >
-> This file is the single source of truth for multi-agent execution state.
-> Update it each time a milestone merges to `main` or a blocker is identified.
+> _Historical — superseded by the banner above._ During Phase 5 this was the single source of truth for
+> multi-agent execution state; current state now lives in GitHub Issues + Goals and
+> [`status-2026-07-02.md`](status-2026-07-02.md).
 
 ## Active Phase
 

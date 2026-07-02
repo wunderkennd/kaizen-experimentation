@@ -51,7 +51,7 @@ gh issue view <number>
 | --- | --- |
 | `agent-1` through `agent-7` | Agent ownership |
 | `P0` through `P4` | Priority tier |
-| `cluster-a` through `cluster-f` | Capability cluster |
+| `cluster-a` through `cluster-g` | Capability cluster (cluster-g = ADR-029 Personalization Orchestration) |
 | `blocked` | Waiting on another issue or agent |
 | `contract-test` | Cross-module contract test |
 
@@ -81,8 +81,14 @@ families — lives in [`.github/branch-naming.yml`](./.github/branch-naming.yml)
 and is enforced by `just check-branch-name` plus the advisory CI check at
 [`.github/workflows/branch-naming.yml`](./.github/workflows/branch-naming.yml).)
 
-**Never use auto-generated worker names** (e.g., `worker-swift-eagle`) as branch
-names. Always name branches by the feature or ADR being implemented.
+**Prefer naming branches by the feature or ADR** (`agent-N/<type>/<slug>`) when
+you control the name. Harness-generated names that can't be renamed after launch
+(Claude Code web/remote sessions → `claude/<slug>`, multiclaude workers →
+`work/<slug>`) are *tolerated* — recognized by the allowlist, advisory only —
+because agent ownership now rides on **PR metadata** (a Conventional-Commit PR
+title plus the `agent-N` label inherited from the linked issue), not the branch
+name. See the `pr-title` and `pr-label-inheritance` workflows in
+[`.github/workflows/`](./.github/workflows/).
 
 The `main` branch is protected. All changes land via pull request.
 

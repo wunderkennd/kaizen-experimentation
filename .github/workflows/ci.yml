@@ -50,7 +50,6 @@ jobs:
       - uses: bufbuild/buf-setup-action@v1
         with:
           version: "latest"
-          buf_user: ${{ secrets.BUF_USER }}
           buf_api_token: ${{ secrets.BUF_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -76,6 +75,19 @@ jobs:
           path: proto/gen/
 
   # ───────── Stage 2: Rust Build & Test ─────────
+  #
+  # Split into three parallel jobs along feature-set boundaries. Cargo does
+  # not share artifacts across feature resolutions, so one job used to
+  # accumulate five distinct builds (--all-features clippy, default tests,
+  # simd, connectrpc, wasm) in a single target/ and intermittently exhausted
+  # runner disk (os error 28). Separate runners give each build its own disk
+  # and cut wall-clock to the slowest job instead of the sum.
+  #
+  # Caching: only `rust` (core) persists target/ in the actions cache — three
+  # target/ caches would thrash the 10GB repo cache budget and evict each
+  # other into permanent cold starts. The feature/wasm jobs cache just the
+  # cargo registry and rely on sccache (GHA backend, shared across all three
+  # jobs) for compiled dependencies.
   rust:
     runs-on: ubuntu-latest
     needs: [changes, schema]
@@ -89,7 +101,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: wasm32-unknown-unknown
           components: clippy
       - uses: mozilla-actions/sccache-action@v0.0.4
 
@@ -133,9 +144,103 @@ jobs:
       - name: Hash determinism vectors
         run: cargo test --package experimentation-hash -- hash_vectors
 
+  # Opt-in feature trees (simd proptests, ADR-031 connectrpc pilot). These
+  # build feature resolutions the core job never produces, so they gain
+  # nothing from its target/ cache — sccache covers the shared dependencies.
+  rust-features:
+    runs-on: ubuntu-latest
+    needs: [changes, schema]
+    if: needs.changes.outputs.rust == 'true'
+    timeout-minutes: 30
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler libcurl4-openssl-dev libssl-dev pkg-config
+
+      - name: Ensure sccache is working
+        run: |
+          if ! sccache --start-server 2>/dev/null; then
+            echo "::warning::sccache server failed to start; disabling RUSTC_WRAPPER"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          elif ! echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
+            echo "::warning::sccache cannot wrap rustc; disabling RUSTC_WRAPPER"
+            sccache --stop-server 2>/dev/null || true
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          fi
+
       - name: Property tests (stats)
         run: cargo test --package experimentation-stats --features simd
         timeout-minutes: 15
+
+      - name: ADR-031 pilot — assignment connectrpc feature
+        run: cargo test --package experimentation-assignment --features connectrpc
+        timeout-minutes: 15
+
+  # wasm32 is a different compilation target entirely — nothing in target/
+  # from the host jobs applies. ~/.cargo/bin/wasm-pack is cached so the
+  # install below is a fast no-op instead of a multi-minute compile per run.
+  rust-wasm:
+    runs-on: ubuntu-latest
+    needs: [changes, schema]
+    if: needs.changes.outputs.rust == 'true'
+    timeout-minutes: 30
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Cache cargo registry and wasm-pack
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/bin/wasm-pack
+          key: cargo-wasm-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-wasm-${{ runner.os }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler libcurl4-openssl-dev libssl-dev pkg-config
+
+      - name: Ensure sccache is working
+        run: |
+          if ! sccache --start-server 2>/dev/null; then
+            echo "::warning::sccache server failed to start; disabling RUSTC_WRAPPER"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          elif ! echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
+            echo "::warning::sccache cannot wrap rustc; disabling RUSTC_WRAPPER"
+            sccache --stop-server 2>/dev/null || true
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          fi
 
       - name: WASM build
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
@@ -144,7 +249,7 @@ jobs:
         timeout-minutes: 20
         working-directory: crates/experimentation-hash
         run: |
-          cargo install wasm-pack --locked
+          command -v wasm-pack >/dev/null || cargo install wasm-pack --locked
           wasm-pack test --node --features wasm
 
   # ───────── Stage 3: Go Build & Test ─────────
@@ -302,6 +407,14 @@ jobs:
   hash-parity:
     runs-on: ubuntu-latest
     needs: [rust, go]
+    # The script is self-contained (no build artifacts needed), so run it even
+    # when the path filter skipped rust/go — a skipped dependency must not
+    # cascade into skipping parity verification (and, transitively, docker).
+    # Only an upstream FAILURE blocks it.
+    if: |
+      always() &&
+      (needs.rust.result == 'success' || needs.rust.result == 'skipped') &&
+      (needs.go.result == 'success' || needs.go.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -328,9 +441,22 @@ jobs:
   # outright. This lets the pipeline keep working during phased rollout (e.g.
   # before the GCP WIP is provisioned in a fork).
   docker:
-    if: github.ref == 'refs/heads/main'
+    # Build images for EVERY main merge, including ones where the path filter
+    # skipped the rust/go jobs (ui-only, crates-only, services-only merges) —
+    # otherwise those SHAs have no image set. Skipped upstream jobs are fine;
+    # a failed or cancelled one still blocks the push. typescript and infra
+    # have no path filter, so they must be strict successes.
+    if: |
+      always() && github.ref == 'refs/heads/main' &&
+      (needs.rust.result == 'success'          || needs.rust.result == 'skipped') &&
+      (needs.rust-features.result == 'success' || needs.rust-features.result == 'skipped') &&
+      (needs.rust-wasm.result == 'success'     || needs.rust-wasm.result == 'skipped') &&
+      (needs.go.result == 'success'            || needs.go.result == 'skipped') &&
+      needs.typescript.result == 'success' &&
+      needs.infra.result == 'success' &&
+      (needs.hash-parity.result == 'success'   || needs.hash-parity.result == 'skipped')
     runs-on: ubuntu-latest
-    needs: [rust, go, typescript, hash-parity, infra]
+    needs: [rust, rust-features, rust-wasm, go, typescript, hash-parity, infra]
     permissions:
       id-token: write    # required for OIDC to AWS + GCP
       contents: read

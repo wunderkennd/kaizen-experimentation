@@ -7,9 +7,6 @@
 //! (`validators::cycle`) and by this module to perform operand-existence and
 //! cycle checks without leaking storage details into the validator.
 
-use std::sync::OnceLock;
-
-use regex::Regex;
 use tonic::Status;
 
 use experimentation_proto::experimentation::common::v1::{
@@ -20,17 +17,6 @@ use experimentation_proto::experimentation::common::v1::{
 use crate::store::{ManagementStore, StoreError};
 
 use super::{cycle, filter_sql, metricql};
-
-// ---------------------------------------------------------------------------
-// Shared identifier regex (used by B2 WINDOWED_COUNT.event_type and, when B3
-// lands, FILTERED_MEAN.value_column). Compiled once via OnceLock.
-// ---------------------------------------------------------------------------
-fn identifier_re() -> &'static Regex {
-    static IDENT_RE: OnceLock<Regex> = OnceLock::new();
-    IDENT_RE.get_or_init(|| {
-        Regex::new(r"^[a-z_][a-z0-9_]*$").expect("identifier regex is a compile-time constant")
-    })
-}
 
 // ---------------------------------------------------------------------------
 // MetricLookup — the minimal surface the cycle-detection validator needs.
@@ -249,7 +235,7 @@ fn validate_windowed_count(cfg: Option<&WindowedCountConfig>) -> Result<(), Box<
             "windowed_count.event_type must not be empty",
         )));
     }
-    if !identifier_re().is_match(&cfg.event_type) {
+    if !filter_sql::is_identifier(&cfg.event_type) {
         return Err(Box::new(Status::invalid_argument(format!(
             "windowed_count.event_type must match identifier regex ^[a-z_][a-z0-9_]*$, got {}",
             cfg.event_type

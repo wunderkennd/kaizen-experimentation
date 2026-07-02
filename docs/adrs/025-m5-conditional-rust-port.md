@@ -1,9 +1,26 @@
 # ADR-025: Conditional Port of M5 Experiment Management Service from Go to Rust
 
-- **Status**: Proposed (conditional — see Decision Trigger below)
+- **Status**: Partially implemented — conditional trigger MET (3/5); port stopped at **Phase 2 of 4**. See per-phase status below and tracking issue #590.
 - **Date**: 2026-03-20
 - **Author**: Agent-5 (Management) / Platform Architecture
 - **Supersedes**: Partially supersedes ADR-001 language selection (for M5 only, if triggered)
+
+### Implementation status (per phase)
+
+The Decision Trigger below is **MET** (ADRs 018, 019, 020 shipped ⇒ ≥ 3 of 5). The port began but is
+currently stopped at **Phase 2 of 4** — the Rust binary's own startup log reads
+`"starting experimentation-management service (ADR-025 Phase 2)"`. **Go M5 (`services/management/`)
+remains the production service**; both ship in CI. Tracked by #590.
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 1 | Core service scaffold (CRUD, state machine, sqlx) | Implemented **except the RBAC interceptor** — Rust M5 has no auth module (deferred; tracked by #590) |
+| 2 | Lifecycle + orchestration (type validators, guardrail Kafka consumer, bucket reuse, StreamConfigUpdates) | Implemented |
+| 3 | Phase 5 statistical integration (OnlineFdrController, portfolio, adaptive-N, feedback-loop correlation) | Not started — orchestration still lives in Go M5 |
+| 4 | Validation + cutover (contract tests, 48 h shadow, decommission Go M5) | Blocked on Phase 3 |
+
+> ⚠️ Until Phase 1's RBAC interceptor lands, Rust M5's mutation surface is **unauthenticated**. Harmless
+> while Go M5 is production, but it blocks any cutover or shadow comparison of Rust M5. See #590.
 
 ## Context
 

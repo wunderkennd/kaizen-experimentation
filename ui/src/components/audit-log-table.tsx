@@ -69,6 +69,7 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 role="button"
                 tabIndex={0}
                 aria-expanded={isExpanded}
+                aria-label={`Toggle details for ${entry.action} action on ${entry.experimentName}`}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
@@ -79,6 +80,7 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                     href={`/experiments/${entry.experimentId}`}
                     className="text-indigo-600 hover:text-indigo-800 hover:underline"
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                   >
                     {entry.experimentName}
                   </Link>
@@ -87,11 +89,30 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                   <AuditActionBadge action={entry.action} />
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600 align-top">
-                  {entry.actorEmail}
+                  <div className="group flex items-center justify-between gap-2">
+                    <span>{entry.actorEmail}</span>
+                    <CopyButton
+                      value={entry.actorEmail}
+                      label="Copy actor email"
+                      successMessage="Actor email copied"
+                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
-                  <div>{entry.details}</div>
-                  <span className="text-xs text-gray-400">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <div>{entry.details}</div>
+                  </div>
+                  <span className="ml-6 text-xs text-gray-400">
                     {isExpanded ? '(click to collapse)' : '(click to expand details)'}
                   </span>
                   {isExpanded && (

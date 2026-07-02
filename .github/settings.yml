@@ -1,0 +1,17 @@
+# Repository settings as code.
+#
+# Recognized by the Probot "Settings" GitHub App (https://github.com/apps/settings)
+# and by github/safe-settings. Install one of those on this repo/org to have GitHub
+# apply this file automatically on every push to the default branch.
+#
+# Status: `delete_branch_on_merge` is ALSO enabled live via the REST API
+# (PATCH /repos/{owner}/{repo}). This file is the version-controlled source of truth,
+# so the setting is auditable and survives manual UI edits once an app is syncing it.
+#
+# Keep this file minimal: the Settings app fully manages any *section* it finds
+# (e.g. adding a `branches:` block would take over branch-protection rules). List
+# only what you intend to control from code.
+repository:
+  # Automatically delete head branches after their PRs are merged, so merged
+  # branches stop accumulating on the remote (this repo had 132 such leftovers).
+  delete_branch_on_merge: true
