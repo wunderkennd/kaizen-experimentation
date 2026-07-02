@@ -33,7 +33,10 @@ export function VariantTable({ variants }: VariantTableProps) {
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
           {variants.map((v) => (
-            <tr key={v.variantId}>
+            <tr
+              key={v.variantId}
+              className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+            >
               <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                 {v.name}
               </td>
@@ -46,6 +49,7 @@ export function VariantTable({ variants }: VariantTableProps) {
                     value={v.variantId}
                     label="Copy variant ID"
                     successMessage="Variant ID copied"
+                    className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                   />
                 </div>
               </td>

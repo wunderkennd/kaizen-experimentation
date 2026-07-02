@@ -272,7 +272,10 @@ export default function ExperimentDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {experiment.guardrailConfigs.map((g) => (
-                  <tr key={g.metricId}>
+                  <tr
+                    key={g.metricId}
+                    className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+                  >
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-2">
                         <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
@@ -282,6 +285,7 @@ export default function ExperimentDetailPage() {
                           value={g.metricId}
                           label="Copy metric ID"
                           successMessage="Metric ID copied"
+                          className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                         />
                       </div>
                     </td>
