@@ -48,6 +48,10 @@ export function CopyButton({
     <button
       type="button"
       onClick={handleCopy}
+      // Keydown must not bubble to clickable ancestors (e.g. expandable table
+      // rows), whose Enter/Space handlers call preventDefault and would both
+      // toggle the row and suppress this button's click activation.
+      onKeyDown={(e) => e.stopPropagation()}
       className={`group relative flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 ${className}`}
       aria-label={copied ? successMessage : label}
       title={copied ? 'Copied!' : label}
