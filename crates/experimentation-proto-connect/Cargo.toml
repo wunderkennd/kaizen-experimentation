@@ -1,0 +1,28 @@
+[package]
+name = "experimentation-proto-connect"
+version.workspace = true
+# NOTE (ADR-031): connectrpc/buffa 0.7 require edition 2024 / MSRV 1.88, so this
+# pilot crate intentionally diverges from the workspace defaults (edition 2021 /
+# rust 1.80). Scoped to this optional pilot crate; the workspace MSRV is unchanged.
+edition = "2024"
+rust-version = "1.88"
+license.workspace = true
+repository.workspace = true
+description = "ADR-031 pilot: buffa + Connect codegen for the assignment/v1 package. Kept separate from the prost/tonic experimentation-proto crate."
+
+[dependencies]
+buffa = { version = "0.7", features = ["json"] }
+buffa-types = { version = "0.7", features = ["json"] }
+connectrpc = { version = "0.7", default-features = false, features = ["server"] }
+http-body = "1"
+serde = { workspace = true }
+
+[build-dependencies]
+connectrpc-build = "0.7"
+walkdir = "2"
+
+[features]
+default = []
+# Generate client bindings alongside the server trait. Off by default — only
+# the in-process round-trip test and SDK migration need clients during the pilot.
+client = ["connectrpc/client"]

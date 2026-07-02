@@ -136,6 +136,21 @@ jobs:
         run: cargo test --package experimentation-stats --features simd
         timeout-minutes: 15
 
+      - name: Free disk space before the connectrpc build (ADR-031)
+        run: |
+          # The connectrpc feature pulls the buffa + connectrpc dep tree on top of
+          # the workspace target/ from earlier steps, which can exhaust the runner
+          # disk (os error 28, intermittently). Reclaim preinstalled SDKs this job
+          # never uses — non-destructive to the Rust build cache. Do NOT remove
+          # $AGENT_TOOLSDIRECTORY: the WASM steps below rely on it.
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          df -h /
+
+      - name: ADR-031 pilot — assignment connectrpc feature
+        run: cargo test --package experimentation-assignment --features connectrpc
+        timeout-minutes: 15
+
       - name: WASM build
         run: cargo build --package experimentation-hash --target wasm32-unknown-unknown --features wasm
 
