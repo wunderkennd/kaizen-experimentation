@@ -69,7 +69,7 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 role="button"
                 tabIndex={0}
                 aria-expanded={isExpanded}
-                aria-label={`Toggle details for ${entry.action} on ${entry.experimentName}`}
+                aria-label={`Toggle details for ${entry.action} action on ${entry.experimentName}`}
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">

@@ -3,6 +3,5 @@ go 1.26.1
 use (
 	./gen/go
 	./infra
-	./sdks/server-go
 	./services
 )

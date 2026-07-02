@@ -20,9 +20,6 @@ experimentation-core = { path = "../experimentation-core" }
 experimentation-proto = { path = "../experimentation-proto" }
 experimentation-hash = { path = "../experimentation-hash" }
 experimentation-interleaving = { path = "../experimentation-interleaving" }
-# ADR-031 pilot — buffa+Connect codegen for assignment/v1. Optional, gated by the
-# `connectrpc` feature. Default build is unchanged (tonic gRPC + http_json).
-experimentation-proto-connect = { path = "../experimentation-proto-connect", optional = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
@@ -37,21 +34,6 @@ anyhow = { workspace = true }
 hyper = { version = "1.0", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
-connectrpc = { version = "0.7", default-features = false, features = ["server"], optional = true }
-buffa = { version = "0.7", features = ["json"], optional = true }
-tower = { version = "0.5", optional = true }
-
-[features]
-default = []
-# ADR-031 pilot: enable the parallel ConnectRPC server path. With this feature
-# active, the binary additionally serves Connect/gRPC/gRPC-Web from one listener
-# alongside the default tonic gRPC + http_json stack. Tonic stays the default.
-connectrpc = [
-    "dep:experimentation-proto-connect",
-    "dep:connectrpc",
-    "dep:buffa",
-    "dep:tower",
-]
 
 [dev-dependencies]
 criterion = { workspace = true }
