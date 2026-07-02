@@ -37,3 +37,16 @@ allowed_patterns:
   # `chore/<slug>` for justfile / docs / CI / tooling changes that don't fit
   # an agent-N owner. Use sparingly; prefer agent-N/chore/... when possible.
   - "^chore/[a-z0-9-]+$"
+
+  # ── Automation / ephemeral branches (harness-generated) ───────────────────
+  # Autonomous harnesses hard-code these ref names at launch and cannot rename
+  # them after the fact — e.g. Claude Code web/remote sessions → `claude/<slug>`
+  # (slug may carry a mixed-case random suffix), and multiclaude workers →
+  # `work/<name>`. They are RECOGNIZED here — still advisory only — so the check
+  # stops flagging branches that are legitimately unfixable. These are tolerated,
+  # not encouraged: attribution now rides on PR metadata (the conventional-commit
+  # PR title + the `agent-N` label inherited from the linked issue), not the ref
+  # name. See CLAUDE.md → Branch-naming and the pr-title / pr-label-inheritance
+  # workflows.
+  - "^claude/[A-Za-z0-9._-]+$"
+  - "^work/[A-Za-z0-9._-]+$"

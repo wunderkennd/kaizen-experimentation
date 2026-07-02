@@ -1,0 +1,87 @@
+name: PR label inheritance
+
+# Copies attribution / routing labels (agent-N, infra-N, sprint-*, cluster-*)
+# from the issue(s) a PR closes onto the PR itself. This makes agent ownership a
+# first-class PR label — the signal dispatch / triage / merge-queue tooling can
+# key off, instead of parsing the branch name.
+#
+# Attribution originates on the ISSUE (labels applied at creation by the
+# scripts/create-*-issues.sh seeders). Every PR already includes "Closes #N",
+# so the PR simply inherits the linked issue's labels — no new taxonomy, and no
+# reliance on the (crate-scoped) PR title for ownership.
+#
+# Uses the default GITHUB_TOKEN. Same-repo PRs get a write token; fork PRs get a
+# read-only token and labeling is skipped with a warning (all work in this repo
+# is on same-repo branches, so this is a non-issue in practice).
+
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  inherit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inherit attribution labels from linked issue(s)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+
+            // GitHub closing keywords: close/closes/closed, fix/fixes/fixed,
+            // resolve/resolves/resolved — optional ':' — same-repo "#N" refs.
+            const re = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*#(\d+)/gi;
+            const issueNums = new Set();
+            let m;
+            while ((m = re.exec(body)) !== null) issueNums.add(Number(m[1]));
+
+            if (issueNums.size === 0) {
+              core.info('No "Closes #N" issue references in the PR body — nothing to inherit.');
+              return;
+            }
+
+            // Labels worth mirroring onto the PR (ownership / sprint / cluster routing).
+            const isAttribution = (name) => /^(agent-\d+|infra-\d+|sprint-|cluster-)/.test(name);
+
+            const wanted = new Set();
+            for (const num of issueNums) {
+              try {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: num,
+                });
+                for (const label of issue.labels || []) {
+                  const name = typeof label === 'string' ? label : label.name;
+                  if (name && isAttribution(name)) wanted.add(name);
+                }
+              } catch (e) {
+                core.warning(`Could not read issue #${num}: ${e.message}`);
+              }
+            }
+
+            const current = new Set((pr.labels || []).map((l) => l.name));
+            const toAdd = [...wanted].filter((n) => !current.has(n));
+
+            if (toAdd.length === 0) {
+              core.info('Linked issue(s) carried no new attribution labels to inherit.');
+              return;
+            }
+
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: toAdd,
+              });
+              core.info(`Inherited from linked issue(s): ${toAdd.join(', ')}`);
+            } catch (e) {
+              core.warning(`Could not add labels (fork PRs receive a read-only token): ${e.message}`);
+            }
