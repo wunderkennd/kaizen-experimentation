@@ -94,7 +94,7 @@ export default function AuditLogPage() {
         <RetryableError message={error} onRetry={fetchData} context="audit log" />
       ) : entries.length === 0 ? (
         <div className="py-12 text-center" data-testid="empty-state">
-          <p className="text-sm text-gray-500">No audit log entries found.</p>
+          <p className="text-sm text-gray-500">No audit log entries yet.</p>
         </div>
       ) : (
         <>

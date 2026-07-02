@@ -6,8 +6,6 @@ use tokio_util::sync::CancellationToken;
 use experimentation_assignment::bandit_client::GrpcBanditClient;
 use experimentation_assignment::config::Config;
 use experimentation_assignment::config_cache::ConfigCache;
-#[cfg(feature = "connectrpc")]
-use experimentation_assignment::connect_server::ConnectAssignment;
 use experimentation_assignment::http_json;
 use experimentation_assignment::service::AssignmentServiceImpl;
 use experimentation_assignment::stream_client::StreamClient;
@@ -78,31 +76,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tracing::error!(error = %e, "JSON HTTP server failed");
         }
     });
-
-    // ADR-031 pilot: optional ConnectRPC listener (Connect + gRPC + gRPC-Web on
-    // one port). Runs alongside the tonic gRPC + http_json listeners during the
-    // pilot; tonic stays the default build.
-    //
-    // NOTE: this listener is fire-and-forget and does NOT participate in graceful
-    // shutdown — on ctrl+c the runtime drops it without draining in-flight requests.
-    // Acceptable for the pilot; wiring it to `shutdown` (CancellationToken) is
-    // deferred to production hardening (post-pilot).
-    #[cfg(feature = "connectrpc")]
-    {
-        use experimentation_proto_connect::experimentation::assignment::v1::AssignmentServiceExt;
-
-        let connect_addr: std::net::SocketAddr = std::env::var("CONNECTRPC_ADDR")
-            .unwrap_or_else(|_| "0.0.0.0:50061".to_string())
-            .parse()?;
-        let connect_svc = Arc::new(ConnectAssignment::new(svc.clone()));
-        let router = connect_svc.register(connectrpc::Router::new());
-        tokio::spawn(async move {
-            tracing::info!(%connect_addr, "starting ConnectRPC pilot listener (ADR-031)");
-            if let Err(e) = connectrpc::Server::new(router).serve(connect_addr).await {
-                tracing::error!(error = %e, "ConnectRPC pilot server failed");
-            }
-        });
-    }
 
     tracing::info!(%grpc_addr, "starting gRPC server");
     tonic::transport::Server::builder()

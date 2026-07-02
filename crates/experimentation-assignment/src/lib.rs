@@ -1,8 +1,6 @@
 pub mod bandit_client;
 pub mod config;
 pub mod config_cache;
-#[cfg(feature = "connectrpc")]
-pub mod connect_server;
 pub mod http_json;
 pub mod service;
 pub mod stream_client;

@@ -14,7 +14,6 @@ members = [
     "crates/experimentation-policy",
     "crates/experimentation-flags",
     "crates/experimentation-management",
-    "crates/experimentation-proto-connect",
 ]
 
 [workspace.package]
