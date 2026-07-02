@@ -285,6 +285,7 @@ Build artifacts and agent runtime state — never commit:
 - `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/teams/`, `.claude/tasks/`
 - `.multiclaude/state/`, `.multiclaude/messages/`, `.multiclaude/worktrees/`, `*.pid`, `*.log`
 - `.agents/`, `.claude/skills/` — restored from `skills-lock.json` via `just install-skills`
+- `.claude/agents/` third-party library (The Agency) — restored via `just install-agents`; only repo-authored agents (e.g. `pr-triage.md`) are tracked
 
 See `.gitignore` and `docs/guides/git-hygiene.md`.
 

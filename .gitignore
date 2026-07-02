@@ -48,7 +48,12 @@ Thumbs.db
 
 # Commit these (do NOT gitignore):
 #   .claude/settings.json          — project-level settings (Agent Teams flag, permissions)
-#   .claude/agents/                — project-scoped custom subagent definitions
+#   .claude/agents/pr-triage.md    — the repo's own subagent definitions (allowlisted below)
+
+# Third-party agent library (The Agency) is NOT committed — restore on demand
+# via `just install-agents`. Repo-authored agents are allowlisted individually.
+.claude/agents/*
+!.claude/agents/pr-triage.md
 
 # Ignore user-local and runtime:
 .claude/settings.local.json

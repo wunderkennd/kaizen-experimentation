@@ -9,7 +9,10 @@ permissions:
 
 jobs:
   promote:
-    if: contains(github.event.issue.labels.*.name, 'sprint-I.3')
+    # Any sprint-* label qualifies — the closed issue's own sprint label scopes
+    # the dependent scan below. (Was hardcoded to sprint-I.3; generalized so new
+    # sprints don't silently lose auto-promotion.)
+    if: contains(join(github.event.issue.labels.*.name, ','), 'sprint-')
     runs-on: ubuntu-latest
     steps:
       - name: Find newly-ready dependents and comment
@@ -26,9 +29,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           CLOSED_ISSUE: ${{ github.event.issue.number }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ' ') }}
         run: |
           set -euo pipefail
-          # Find open sprint-I.3 issues whose body lists the just-closed issue
+          # Scope the dependent scan to the closed issue's own sprint label
+          # (first sprint-* label wins; issues carry at most one by convention).
+          SPRINT_LABEL=$(tr ' ' '\n' <<< "$ISSUE_LABELS" | grep -m1 '^sprint-' || true)
+          if [ -z "$SPRINT_LABEL" ]; then
+            echo "No sprint-* label on closed issue #$CLOSED_ISSUE; nothing to promote."
+            exit 0
+          fi
+          SPRINT_NUM="${SPRINT_LABEL#sprint-}"
+          # Find open same-sprint issues whose body lists the just-closed issue
           # as a blocker (under the "## Blocked by" section).
           #
           # `while … < <(jq …)` (process substitution) instead of
@@ -56,9 +68,9 @@ jobs:
                 fi
               done
               if [ "$all_closed" = "true" ]; then
-                gh issue comment "$num" --body "🟢 All blockers closed. This issue is now ready for dispatch — run \`just autonomous-sprint I.3\` (or wait for the next scheduled run)."
+                gh issue comment "$num" --body "🟢 All blockers closed. This issue is now ready for dispatch — run \`just autonomous-sprint $SPRINT_NUM\` (or wait for the next scheduled run)."
               fi
-            done < <(gh issue list --label "sprint-I.3" --state open --limit 200 \
+            done < <(gh issue list --label "$SPRINT_LABEL" --state open --limit 200 \
               --json number,body \
             | jq -c --arg closed "#$CLOSED_ISSUE" '
                 .[]

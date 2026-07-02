@@ -164,6 +164,17 @@ agent's tool-listing, none of it is referenced by the harness, and it's exactly 
 
 ### H0 — Quick wins (hours; no design debate needed)
 
+> **Execution status (2026-07-02, this session):** done — #632 title fixed +
+> branch updated for merge, `settings.json` model → `claude-opus-4-8`,
+> `justfile` Jules placeholder fixed, `auto-promote.yml` generalized to any
+> `sprint-*` label, `playbook.md` archived with a historical banner, Agency
+> library unvendored (restore via `just install-agents`), Goal #649 sub-issues
+> backfilled. Deferred: the sccache pin bump (verify the current release via
+> Jules/dependabot rather than guessing) and the
+> `--dangerously-skip-permissions` flip — removing it would stall unattended
+> workers on `git push` approval, so it needs the H1 worker-permission profile,
+> not a blind config edit.
+
 - **Decide #632.** Recommended: merge. It deletes the stale `claude-3-7-sonnet-latest` pin
   (falling back to the action's current default model) and adds `claude-code-review.yml` for
   automated PR review — which directly addresses the duplicate/attribution review burden.
