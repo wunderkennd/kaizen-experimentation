@@ -931,7 +931,7 @@ work-on issue:
     echo "=== Launching worker for Issue #{{issue}} ==="
     echo "$TASK" | head -3
     echo "..."
-    multiclaude worker create "$TASK. Branch: use the agent-N/feat/adr-XXX naming convention. PR must include 'Closes #{{issue}}'."
+    multiclaude worker create "$TASK. Branch: use the agent-N/feat/adr-XXX naming convention. PR must include 'Closes #{{issue}}'. Mark the PR ready for review (not draft) when the work is complete — or, if you opened a draft, add the 'ready' label as your final step."
 
 # --- Beads (GitHub Issues ↔ Gas Town projection) ---
 # GitHub Issues remain the source of truth. Beads are a read-side projection
@@ -1194,7 +1194,7 @@ autonomous-sprint sprint_num:
       else
         BRANCH_HINT="Branch: use agent-N/feat/adr-XXX naming."
       fi
-      multiclaude worker create "$title. $body. $BRANCH_HINT PR must include 'Closes #$num'."
+      multiclaude worker create "$title. $body. $BRANCH_HINT PR must include 'Closes #$num'. Mark the PR ready for review (not draft) when done — or add the 'ready' label as your final step."
       COUNT=$((COUNT + 1))
     done <<< "$ISSUES"
     echo "✓ Workers launched for $MS ($COUNT ready issues)"
