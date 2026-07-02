@@ -276,24 +276,21 @@ jobs:
           name: generated-code
           path: gen/
 
-      - name: Create gen/go module files
-        run: |
-          cat > gen/go/go.mod << 'GOMOD'
-          module github.com/org/experimentation/gen/go
+      # gen/go/go.mod and go.sum are TRACKED files; the artifact contains only
+      # generated .go sources and overlays them without touching the module
+      # files. (A heredoc used to overwrite go.mod here with drifted contents —
+      # a `go 1.26` directive that broke module-mode docker builds against
+      # services' `go 1.25.0`. See #676.)
 
-          go 1.26
-
-          require (
-          	connectrpc.com/connect v1.17.0
-          	google.golang.org/protobuf v1.35.0
-          )
-
-          require (
-          	github.com/google/go-cmp v0.6.0 // indirect
-          	golang.org/x/net v0.29.0 // indirect
-          )
-          GOMOD
-          cd gen/go && go mod download
+      # Docker image builds copy services/ + gen/go/ without go.work, so they
+      # resolve in MODULE mode. Workspace mode (go.work) can satisfy imports
+      # the module graph can't, silently masking image-build breakage — this
+      # check fails the job instead. See #676.
+      - name: Module-mode tidy check (docker builds run without go.work)
+        working-directory: services
+        env:
+          GOWORK: "off"
+        run: go mod tidy -diff
 
       - name: Vet
         working-directory: services
@@ -485,23 +482,10 @@ jobs:
           name: generated-code
           path: gen/
 
-      - name: Create gen/go module file
-        run: |
-          cat > gen/go/go.mod << 'GOMOD'
-          module github.com/org/experimentation/gen/go
-
-          go 1.26
-
-          require (
-          	connectrpc.com/connect v1.17.0
-          	google.golang.org/protobuf v1.35.0
-          )
-
-          require (
-          	github.com/google/go-cmp v0.6.0 // indirect
-          	golang.org/x/net v0.29.0 // indirect
-          )
-          GOMOD
+      # gen/go/go.mod + go.sum are tracked in git; the artifact overlays only
+      # generated .go sources. No synthesized module file needed (the old
+      # heredoc here injected a drifted go.mod that broke module-mode builds —
+      # see #676).
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
