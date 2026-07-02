@@ -18,7 +18,7 @@ Full-stack SVOD experimentation platform. 7 modules, 3 languages (Rust/Go/TypeSc
 | M3 Metrics | Go | Agent-3 | 50056 | Spark SQL orchestration, metric computation, Delta Lake |
 | M4a Analysis | Rust | Agent-4 | 50053 | All statistical computation (experimentation-stats crate) |
 | M4b Bandit | Rust | Agent-4 | 50054 | Thompson, LinUCB, Neural (Candle), LMAX single-thread core |
-| M5 Management | Rust (ADR-025 executed) + Go variant retained | Agent-5 | 50055 | CRUD, lifecycle, RBAC, guardrails, bucket reuse, portfolio, adaptive-N scheduler |
+| M5 Management | Go (production); Rust port at ADR-025 Phase 2/4 (RBAC + Phase-3 stats pending, #590) | Agent-5 | 50055 | CRUD, lifecycle, RBAC, guardrails, bucket reuse, portfolio, adaptive-N scheduler |
 | M6 UI | TypeScript | Agent-6 | 3000 | Next.js 14, React 18, Recharts, D3, shadcn/ui |
 | M7 Flags | Rust (ADR-024 shipped) | Agent-7 | 50057 | Feature flags, percentage rollout, reconciler |
 
@@ -83,7 +83,7 @@ All 15 Phase 5 ADRs (011–025) shipped across sprints 5.0–5.5 (41 PRs merged,
 | C: Bandit & RL | 016, 017 | Shipped — slate bandits, offline RL with TC/JIVE surrogate fix, doubly-robust OPE |
 | D: Quasi-Experimental | 022, 023 | Shipped — switchback, synthetic control |
 | E: Platform Operations | 019, 021 | Shipped — portfolio optimization, feedback loop interference |
-| F: Language Migration | 024, 025 | 024 shipped (`experimentation-ffi` deleted); 025 executed (`experimentation-management` crate landed) |
+| F: Language Migration | 024, 025 | 024 shipped (`experimentation-ffi` deleted); 025 Phase 2/4 implemented (`experimentation-management` crate landed) — Phase 1 RBAC interceptor + Phase 3 statistical integration pending (#590) |
 
 See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHANGELOG-phase5.md` for per-sprint detail.
 
