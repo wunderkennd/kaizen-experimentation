@@ -5,6 +5,8 @@
 >
 > **Branch convention:** `agent-N/feat/adr-XXX-<slug>` per CLAUDE.md. PR body must include `Closes #${ISSUE_NUM}`. Never use auto-generated worker names as branches.
 >
+> **Ready for review:** mark the PR ready (not draft) once the work is complete — or, if you opened a draft, add the `ready` label as your final step (the auto-ready workflow flips it).
+>
 > **Read the plan's Locks section first** — they are normative. If a Lock seems wrong, BLOCK and surface it via an issue comment rather than drifting. Recent precedent (PR #567): off-plan PRs that override merged Locks get rejected and waste the review investment.
 >
 > **Workflow:** invoke `superpowers:subagent-driven-development` — implementer → spec-reviewer → code-quality-reviewer per task; no parallel implementers within a single plan.

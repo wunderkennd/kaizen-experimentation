@@ -1,0 +1,81 @@
+name: Auto ready-for-review
+
+# Flips a draft PR to "ready for review" once the author signals the work is
+# done. Two EXPLICIT signals (deliberately not CI-green — a green draft is not
+# necessarily finished, and draft means "author says not ready"):
+#   • the `ready` label is added to the PR, or
+#   • a maintainer comments `/ready` on the PR.
+#
+# Draft→ready is a GraphQL-only mutation (markPullRequestReadyForReview) — there
+# is no REST endpoint or branch-ruleset toggle for it — so this small Action is
+# the mechanism.
+#
+# One-time setup for the label path (the `/ready` comment works without it):
+#   gh label create ready -c 0e8a16 -d "Work complete — flip draft PR to ready"
+#
+# Note: `issue_comment` workflows always run from the DEFAULT branch, so the
+# `/ready` path only works once this file is on `main`. The `labeled` path runs
+# from the PR head branch and works immediately.
+
+on:
+  pull_request:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  ready:
+    runs-on: ubuntu-latest
+    # Cheap pre-filter: only spin up for the `ready` label or a comment on a PR.
+    if: >-
+      (github.event_name == 'pull_request' && github.event.label.name == 'ready') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null)
+    steps:
+      - name: Mark ready for review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            let prNumber, isDraft, nodeId;
+
+            if (context.eventName === 'pull_request') {
+              // `labeled` event — already filtered to label == "ready".
+              const pr = context.payload.pull_request;
+              prNumber = pr.number;
+              isDraft = pr.draft;
+              nodeId = pr.node_id;
+            } else {
+              // `issue_comment` on a PR.
+              const body = (context.payload.comment.body || '').trim();
+              if (!/^\/ready\b/.test(body)) {
+                core.info('Comment is not the "/ready" command — skipping.');
+                return;
+              }
+              const assoc = context.payload.comment.author_association;
+              if (!['OWNER', 'MEMBER', 'COLLABORATOR'].includes(assoc)) {
+                core.info(`Commenter association "${assoc}" lacks write access — skipping.`);
+                return;
+              }
+              prNumber = context.payload.issue.number;
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+              isDraft = pr.draft;
+              nodeId = pr.node_id;
+            }
+
+            if (!isDraft) {
+              core.info(`PR #${prNumber} is already ready for review — nothing to do.`);
+              return;
+            }
+
+            await github.graphql(
+              `mutation($id: ID!) {
+                 markPullRequestReadyForReview(input: { pullRequestId: $id }) {
+                   pullRequest { number isDraft }
+                 }
+               }`,
+              { id: nodeId },
+            );
+            core.info(`Marked PR #${prNumber} ready for review.`);
