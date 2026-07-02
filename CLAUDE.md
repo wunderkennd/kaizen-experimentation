@@ -147,7 +147,7 @@ gh issue view <number>
 
 ## Branch-naming
 
-Branch names are validated against the allowlist in [`.github/branch-naming.yml`](.github/branch-naming.yml). Four pattern families are recognized; everything else is flagged by the CI advisory check.
+Branch names are validated against the allowlist in [`.github/branch-naming.yml`](.github/branch-naming.yml). Six pattern families are recognized (four canonical + two tolerated automation families); everything else is flagged by the CI advisory check. Branch naming is **advisory hygiene** — agent ownership is now carried by **PR metadata** (see below), not the ref name.
 
 | Pattern | When to use | Examples |
 | --- | --- | --- |
@@ -155,10 +155,11 @@ Branch names are validated against the allowlist in [`.github/branch-naming.yml`
 | `infra-N/<verb>/<slug>` | Pulumi / GCP / AWS infra work owned by `infra-N` agents | `infra-2/feat/gcp-sql-private-access`, `infra-5/fix/cloud-armor-policy` |
 | `palette[/-]<slug>[-<digits>]` | Design-system / M6 polish dispatched by the palette tooling | `palette/refine-breadcrumb-18322858338088205282`, `palette-standardize-sort-headers-16091075850831504436` |
 | `chore/<slug>` | Repo-wide hygiene without a single agent owner (justfile, docs, CI, tooling) | `chore/prime-issue-recipe`, `chore/branch-name-enforcement` |
+| `claude/<slug>`, `work/<slug>` | **Tolerated, not encouraged** — harness-generated ref names that can't be renamed after launch (Claude Code web/remote sessions, multiclaude workers). Recognized so the advisory check doesn't flag the unfixable. | `claude/repo-status-next-steps-mze2fh`, `work/swift-eagle` |
 
 **Allowed verbs** (for `agent-N/<verb>/...`): `feat`, `fix`, `port`, `design`, `chore`, `refactor`, `docs`, `test`. Verb choice mirrors the conventional-commit prefix used in the eventual PR title.
 
-**Never use auto-generated worker names as branch names** (e.g., `claude/kaizen-streaming-video-diagram-3VZzS`, `plan-development-strategy`). These bypass the agent-N ownership model and confuse the dispatch / merge-queue tooling.
+**Prefer a canonical family when you control the branch name** — a legible `agent-N/...` name is still the ideal. But agent ownership no longer *depends* on the branch: it rides on **PR metadata** — the Conventional-Commit PR title enforced by [`.github/workflows/pr-title.yml`](.github/workflows/pr-title.yml), plus the `agent-N` label copied from the linked issue by [`.github/workflows/pr-label-inheritance.yml`](.github/workflows/pr-label-inheritance.yml). Harness-generated names (`claude/...`, `work/...`) that can't be renamed are therefore *tolerated* (recognized above), not flagged — they no longer bypass attribution. A name that matches no family at all (e.g., `plan-development-strategy`) is still flagged by the advisory check.
 
 ### How to validate
 
@@ -166,7 +167,7 @@ Branch names are validated against the allowlist in [`.github/branch-naming.yml`
 just check-branch-name          # exits 0 on match, 1 with suggestions on no match
 ```
 
-The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. Flip `continue-on-error: false` in the workflow to upgrade to a required check once the violation rate hits ~zero.
+The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. With attribution now carried by PR metadata, the intent is to **keep this check advisory** and enforce on the PR side instead — add **"PR title check"** (`.github/workflows/pr-title.yml`) as the required status check rather than this one.
 
 ### Adding a new pattern family
 
