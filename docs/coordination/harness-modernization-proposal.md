@@ -228,14 +228,27 @@ This also relocates `_ready` and friends out of justfile heredocs into testable 
 
 ### H2 — GitHub-native work graph (~1–2 days, then delete code)
 
-Adopt **native issue dependencies** (blocked-by/blocking) and **sub-issues** as the only DAG:
+Adopt **native issue dependencies** (blocked-by/blocking) and **sub-issues** as the only DAG.
 
-- Goals already use native sub-issues (`ISSUE_TEMPLATE/goal.md`); finish the linkage
-  housekeeping flagged in the 2026-07-02 status (§P0.3) so progress bars work.
+This finishes what #656 started. That PR migrated the *reporting* plane (Project #5,
+Iteration field, Goal issues, three views) but deliberately left the *automation* plane on
+labels/milestones — `projects-and-goals.md` says so explicitly: "the Owner/Iteration fields
+are for humans and the Roadmap; the labels are for machines, **until the orchestration layer
+speaks GraphQL**." H2 is that "until." Live state as of 2026-07-02: Goals #647 and #648 have
+proper sub-issue trees (5 children each; #648 shows 1/5 done), but **#649, #650, #654, #655
+have zero children linked** despite child issues existing (#599–#602, #554, #558 for #649
+alone), and `just morning` still reads Milestones over REST (`justfile:758`) — the
+"transition sprint with both systems live" was never exited.
+
+- Backfill the Goal↔sub-issue linkage for #649/#650/#654/#655 (scripted, minutes — the
+  same `sub_issue` API `seed-goals.sh` already uses).
 - Migrate `## Blocked by` sections to real dependency edges (one-time script; keep the body
   section as human-readable narrative if desired, but tooling stops parsing it).
 - `_ready` becomes a single GraphQL query: open, unclaimed, no open closing PR, zero open
   blocking issues. Delete the awk parser and the `IN_FLIGHT` grep.
+- Swap `just morning`'s milestone read for the Project Iteration (GraphQL) with the
+  `sprint-N`-label fallback the migration guide already specifies, then close the remaining
+  Milestones — exiting the dual-system transition state.
 - Delete `auto-promote.yml` — GitHub surfaces "unblocked" natively in issue timelines and
   Project views; if the dispatch-nudge comment is still wanted, one generic workflow on
   `issues:closed` can query dependents of *any* label.
