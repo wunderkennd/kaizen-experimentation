@@ -332,11 +332,90 @@ parameterized by `label`.
 | H2 | native dependencies · GraphQL `_ready` · delete parsers/auto-promote · slim beads-sync | H1 (claims) | 1 issue (absorbs the Goal-linkage P0 from status 2026-07-02) |
 | H3 | ruleset + merge queue · shepherd role · graduated human review | H0 (#632 for review signal) | 1 issue, `chore` + settings change |
 | H4 | Claude-executor pilot + agent registry | H1, H3 | 1 Goal (it has a metric: duplicate rate 0, acceptance ≥ multiclaude baseline, cost ≤ current) |
+| H5 | Least-privilege worker credentials + dispatch instrumentation (see §7 R4) | H1 | 1 issue, `chore` — replaces the deferred `--dangerously-skip-permissions` item |
 
 Each phase is independently shippable and independently revertible; H1+H2 delete more code
 than they add.
 
-## 7. Open questions (HITL)
+## 7. Prior art & revisions (2026-07-02)
+
+Survey of [best-of-Agent-Harnesses](https://github.com/RyanAlberts/best-of-Agent-Harnesses)
+and its highest-signal links — Anthropic's ["Effective harnesses for long-running
+agents"](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents),
+OpenAI's ["Harness engineering"](https://openai.com/index/harness-engineering/) (7 engineers,
+~1M LOC, ~1,500 agent PRs in 5 months), the [agents.md](https://agents.md) format,
+[obra/superpowers](https://github.com/obra/superpowers), and
+[deepagents](https://github.com/langchain-ai/deepagents). Five lessons change this proposal;
+the rest confirm it.
+
+**R1 — Promote rules from prompts into checks whose error messages carry the fix** (OpenAI).
+Their operating rule: when an agent fails, never "try harder" — ask "what capability is
+missing, and how do we make it both legible and enforceable," then commit the fix to the
+repo. Custom lints inject remediation instructions into agent context via the error message;
+"when documentation falls short, we promote the rule into code." *Amends H3:* required
+checks are the enforcement substrate for every promotable rule currently living in the ×12
+agent prompt files (our `assert_finite!`, golden-file, and title lints are embryonic
+versions). This is the general cure for prompt-as-infrastructure.
+
+**R2 — Stop double-work, not just double-dispatch** (Anthropic). Their long-running harness
+splits a one-time *initializer* dispatch (environment, feature list, progress file, first
+commit) from repeatable *coding* dispatches, each with a mandatory startup ritual: read git
+log + progress artifacts → verify baseline green with a smoke test → take exactly one unit
+of work → leave a merge-ready clean state with descriptive commits. Task state is structured
+JSON that workers may only flip status on ("it is unacceptable to remove or edit tests"),
+never rewrite. *Amends H1/H2:* the claim protocol stops duplicate dispatch, but only
+externalized, restricted-mutation progress state gives a re-dispatched worker resume
+semantics — the actual root fix for our #661/#663-style duplicates. Dispatch adapters gain
+an init/resume distinction and a standard startup preamble.
+
+**R3 — Registry as a small table of contents, mechanically kept fresh** (OpenAI +
+agents.md + superpowers). OpenAI's "one big AGENTS.md" failed for stated reasons (context
+scarcity, everything-important-is-nothing, instant rot, unverifiable blob); the fix is a
+~100-line entry point with progressive disclosure into `docs/`, **doc-lints in CI** that
+validate freshness/cross-links/structure, and a **recurring doc-gardening agent** that opens
+fix-up PRs. *Amends H4:* the agent registry = per-agent frontmatter files (machine identity:
+id, module, `owned_paths`, label, port, obligations) + prose charter; `just gen-agents`
+renders generated views — module-scoped `AGENTS.md` in each owned directory (nearest-file-wins;
+honored natively by Jules, Devin, Codex, Cursor, Copilot), `.multiclaude/agents/*`, onboarding,
+prompts, and the CLAUDE.md architecture table — with a CI drift-check that re-runs the
+generator and fails on dirty diff. Registry = proto, views = generated stubs: our own
+schema-first discipline applied to agent config. (agents.md itself is a *view* format, not a
+registry — no identity fields; superpowers proves the one-canonical-source + thin-adapter
+portability architecture across 10 harnesses.)
+
+**R4 — Least-privilege progressive disclosure, not `--dangerously-skip-permissions`**
+(consensus across sources; "least privilege by default… expand as tasks require"). None of
+H1–H4 owned the permission model — our scariest standing risk. *New phase H5 (proposed):*
+scoped worker credentials (branch-limited push tokens, per-executor allowlists mirroring
+`.claude/settings.json`'s allow/deny/ask tiers), approval gates only at irreversible
+boundaries, and instrumentation of every dispatch (tool calls, errors, interventions,
+timeouts). Replaces the deferred H0 worker-permissions item with a real design. Tracking
+issue to be filed if accepted.
+
+**R5 — Size the merge path for agent throughput; add self-auditing GC** (OpenAI). Their
+merge philosophy: minimal blocking gates, short-lived PRs, flakes get follow-up runs rather
+than blocking — "corrections are cheap, waiting is expensive." And their entropy control:
+golden principles encoded in-repo, background agents that scan for deviations, update a
+graded `QUALITY_SCORE.md`, and open under-a-minute automergeable refactor PRs. *Amends H3:*
+keep the required-check set small and fast with an explicit flake policy, or the queue
+becomes the bottleneck agents route around. *Amends H4/Jules lane:* schedule doc-gardening +
+quality-grading agents — our Palette stream is the manual precursor; this also finally gives
+the harness the self-auditing loop P6 asked for.
+
+Confirmations worth noting: externalized state in git/GitHub artifacts over session memory
+("anything the agent can't access in-context effectively doesn't exist" — validates
+Issues-as-spec and requires Gas Town verbal steering be written back to the issue);
+executor-agnostic adapters (Manus rewrote its harness 5× in 6 months — don't couple the
+queue to any executor); one-issue-one-claim-one-PR granularity; piloting one reference
+executor before multiplying roles; tool *subtraction* (Vercel cut 80% of tools, results
+improved) as an H4 pilot variable; and the deepagents 10-primitive checklist (planning,
+isolated-context subagents, filesystem, context offload, shell sandbox, memory, HITL,
+skills, tools, checkpointing) as the rubric for auditing multiclaude's worker loop — which
+currently lacks planning, context offload, and HITL. Skipped deliberately: claude-mem-style
+local session-memory services (stateful per-machine infra doesn't fit an ephemeral
+multi-executor fleet; Issues/PRs/ADRs are our memory) and adopting any framework wholesale.
+
+## 8. Open questions (HITL)
 
 1. **#632** — merge as-is, or gate `claude-code-review.yml` to `ready_for_review` events
    first? (Recommended: merge, then tune triggers.)
