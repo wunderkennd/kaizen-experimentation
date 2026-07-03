@@ -12,6 +12,11 @@ on:
 
 jobs:
   claude-review:
+    # Skip drafts: agent PRs open as drafts and synchronize heavily before
+    # `auto-ready.yml` flips them — reviewing every draft push would burn
+    # review runs on unfinished work. The ready_for_review trigger (plus
+    # synchronize on non-draft PRs) covers everything a reviewer acts on.
+    if: '!github.event.pull_request.draft'
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
