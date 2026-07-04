@@ -1,0 +1,22 @@
+name: Orchestration dispatch tests
+
+# Offline behavior tests for the H1 dispatch layer (claim protocol, resume
+# semantics, executor adapters) — scripts/orchestration/test_dispatch.sh runs
+# against a stubbed gh, so this needs no tokens and no network beyond checkout.
+
+on:
+  pull_request:
+    paths:
+      - "scripts/orchestration/**"
+      - ".github/workflows/orchestration-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run dispatch behavior tests
+        run: bash scripts/orchestration/test_dispatch.sh
