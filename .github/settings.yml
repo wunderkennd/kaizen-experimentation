@@ -15,3 +15,48 @@ repository:
   # Automatically delete head branches after their PRs are merged, so merged
   # branches stop accumulating on the remote (this repo had 132 such leftovers).
   delete_branch_on_merge: true
+  # Required by the graduated-review model (#681, owner decision 2026-07-04):
+  # routine green PRs merge automatically once required checks + Review gate
+  # clear (.github/workflows/automerge.yml enables it per-PR).
+  allow_auto_merge: true
+
+# Branch protection for main (PR lifecycle standard, #681). Per the note above,
+# listing `branches:` means this file now OWNS branch protection — extend this
+# block (required status checks, merge queue) when #681's HITL decisions land;
+# don't configure protection in the UI.
+#
+# `required_conversation_resolution` is the native half of the review gate:
+# every review thread must be resolved before merge. The reviewer-agnostic
+# check half (blocks on standing changes-requested too, with remediation in
+# the failure log) is .github/workflows/review-gate.yml.
+branches:
+  - name: main
+    protection:
+      required_conversation_resolution: true
+      # Required checks — deliberately small and fast (proposal §7 R5): the
+      # correctness suites (path-skipped jobs still satisfy the requirement on
+      # unrelated PRs), the attribution lint, and the review gate. Contexts are
+      # CHECK-RUN (job) names.
+      required_status_checks:
+        strict: false
+        contexts:
+          - "PR title check"
+          - "Review gate"
+          - "schema"
+          - "rust"
+          - "go"
+          - "typescript"
+          - "hash-parity"
+      # Owner decision 2026-07-04 (#681): NO blanket human-approval requirement —
+      # gate + queue suffices for routine green PRs. Human review is routed by
+      # risk labels (breaking / contract-test / proto-touching) via
+      # .github/workflows/automerge.yml, which refuses to auto-merge those.
+      required_pull_request_reviews: null
+      required_linear_history: true
+      # enforce_admins stays false as a DELIBERATE solo-maintainer trade-off
+      # (Devin review on #684, finding 3): the only admin is the owner, and an
+      # attacker with admin could edit this very protection anyway — so `true`
+      # here mostly blocks the owner's own emergency hotfixes, not adversaries.
+      # Revisit if collaborators with admin are ever added.
+      enforce_admins: false
+      restrictions: null

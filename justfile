@@ -804,6 +804,9 @@ morning:
       just beads-close-sync 2>/dev/null || true
       echo ""
     fi
+    echo "--- Sweeping stale worker claims (H1 lease expiry, #679) ---"
+    bash scripts/orchestration/claims.sh sweep 2>/dev/null || true
+    echo ""
     echo "Next steps:"
     echo "  just autonomous-stop     # stop overnight workers"
     echo "  just interactive         # start Gas Town for the day"
@@ -946,14 +949,31 @@ check-branch-name:
     python3 scripts/check_branch_name.py
 
 # Launch a Multiclaude worker from a GitHub Issue number
-work-on issue:
+work-on issue executor="multiclaude":
+    @bash scripts/orchestration/dispatch.sh "{{issue}}" "{{executor}}"
+
+# Dispatch every ready issue for a raw sprint label via a chosen executor
+# (H1 generic façade; `autonomous-sprint` stays the sprint-number front door).
+sprint label executor="multiclaude":
     #!/usr/bin/env bash
     set -euo pipefail
-    TASK=$(gh issue view {{issue}} --json title,body -q '"\(.title)\n\n\(.body)"')
-    echo "=== Launching worker for Issue #{{issue}} ==="
-    echo "$TASK" | head -3
-    echo "..."
-    multiclaude worker create "$TASK. Branch: use the agent-N/feat/adr-XXX naming convention. PR must include 'Closes #{{issue}}'. Mark the PR ready for review (not draft) when the work is complete — or, if you opened a draft, add the 'ready' label as your final step."
+    COUNT=0; SKIPPED=0
+    while IFS= read -r line; do
+      num=$(echo "$line" | jq -r '.number')
+      echo "  → Issue #$num: $(echo "$line" | jq -r '.title')"
+      rc=0
+      bash scripts/orchestration/dispatch.sh "$num" "{{executor}}" || rc=$?
+      case "$rc" in
+        0) COUNT=$((COUNT + 1)) ;;
+        3) SKIPPED=$((SKIPPED + 1)); echo "    (already claimed — skipped)" ;;
+        *) echo "    ✗ dispatch failed for #$num (rc=$rc)" ;;
+      esac
+    done < <(bash scripts/orchestration/ready.sh "{{label}}")
+    echo "✓ {{label}} via {{executor}}: $COUNT dispatched, $SKIPPED already claimed"
+
+# Offline tests for the dispatch layer (stubbed gh; no network)
+test-orchestration:
+    @bash scripts/orchestration/test_dispatch.sh
 
 # --- Beads (GitHub Issues ↔ Gas Town projection) ---
 # GitHub Issues remain the source of truth. Beads are a read-side projection
@@ -1103,50 +1123,7 @@ autonomous-shutdown:
 # listed under "## Blocked by" in its body refers to a CLOSED issue (or no
 # blockers exist). Prefers beads ('bd ready') when initialized.
 _ready label:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    LABEL="{{label}}"
-    # In-flight PRs (open PRs that close any issue) — both code paths exclude these.
-    IN_FLIGHT=$(gh pr list --state open --limit 200 \
-      --json closingIssuesReferences \
-      --jq '[.[].closingIssuesReferences[].number] | unique | join(" ")' 2>/dev/null || echo "")
-    # Prefer beads when initialized: true DAG semantics with cycle detection.
-    if command -v bd >/dev/null 2>&1 && bd list --all --json >/dev/null 2>&1; then
-      bd ready --label "$LABEL" --json --limit 200 2>/dev/null \
-        | jq -c '.[] | select(.external_ref != null) | select(.external_ref | startswith("gh-")) | {number: (.external_ref | sub("^gh-"; "") | tonumber), title}' \
-        | while IFS= read -r issue; do
-            num=$(echo "$issue" | jq -r '.number')
-            if [ -n "$IN_FLIGHT" ] && echo " $IN_FLIGHT " | grep -q " $num "; then
-              continue
-            fi
-            echo "$issue"
-          done
-      exit 0
-    fi
-    # Fallback: parse "## Blocked by" from issue bodies.
-    gh issue list --label "$LABEL" --state open --limit 200 --json number,title,body \
-      | jq -c '.[]' \
-      | while IFS= read -r issue; do
-          num=$(echo "$issue" | jq -r '.number')
-          if [ -n "$IN_FLIGHT" ] && echo " $IN_FLIGHT " | grep -q " $num "; then
-            continue
-          fi
-          body=$(echo "$issue" | jq -r '.body // ""')
-          blockers=$(echo "$body" \
-            | awk '/^## Blocked by/{flag=1; next} /^## /{flag=0} flag' \
-            | grep -oE '#[0-9]+' | tr -d '#' | sort -u || true)
-          ready=true
-          for b in $blockers; do
-            state=$(gh issue view "$b" --json state -q '.state' 2>/dev/null || echo "MISSING")
-            if [ "$state" != "CLOSED" ]; then
-              ready=false
-              break
-            fi
-          done
-          if [ "$ready" = "true" ]; then
-            echo "$issue" | jq -c '{number, title}'
-          fi
-        done
+    @bash scripts/orchestration/ready.sh "{{label}}"
 
 # Sprint launchers read Issues by label (primary) with milestone fallback
 autonomous-sprint sprint_num:
@@ -1199,27 +1176,28 @@ autonomous-sprint sprint_num:
       exit 0
     fi
     COUNT=0
+    SKIPPED=0
     while IFS= read -r line; do
       num=$(echo "$line" | jq -r '.number')
       title=$(echo "$line" | jq -r '.title')
-      # Fetch full issue body separately to avoid newline parsing issues
-      body=$(gh issue view "$num" --json body -q '.body' 2>/dev/null | head -50)
       echo "  → Issue #$num: $title"
-      # Branch convention varies by sprint type:
-      #   IaC sprints  → infra-N/feat/description
-      #   Test cov     → agent-N/test/tc-NNN-slug
-      #   Phase 5/etc. → agent-N/feat/adr-XXX-description
+      # Branch convention varies by sprint type; carried into the dispatch prompt.
       if [[ "$LABEL" == sprint-I.* ]]; then
-        BRANCH_HINT="Branch: use infra-N/feat/description naming."
+        HINT="use infra-N/feat/description naming"
       elif [[ "$LABEL" == sprint-tc-* ]]; then
-        BRANCH_HINT="Branch: use agent-N/test/tc-NNN-slug naming (see test-coverage-improvement-plan.md spec for the exact slug)."
+        HINT="use agent-N/test/tc-NNN-slug naming (see test-coverage-improvement-plan.md for the exact slug)"
       else
-        BRANCH_HINT="Branch: use agent-N/feat/adr-XXX naming."
+        HINT="use agent-N/feat/adr-XXX-description naming"
       fi
-      multiclaude worker create "$title. $body. $BRANCH_HINT PR must include 'Closes #$num'. Mark the PR ready for review (not draft) when done — or add the 'ready' label as your final step."
-      COUNT=$((COUNT + 1))
+      rc=0
+      ORCH_BRANCH_HINT="$HINT" bash scripts/orchestration/dispatch.sh "$num" multiclaude || rc=$?
+      case "$rc" in
+        0) COUNT=$((COUNT + 1)) ;;
+        3) SKIPPED=$((SKIPPED + 1)); echo "    (already claimed — skipped)" ;;
+        *) echo "    ✗ dispatch failed for #$num (rc=$rc)" ;;
+      esac
     done <<< "$ISSUES"
-    echo "✓ Workers launched for $MS ($COUNT ready issues)"
+    echo "✓ Workers launched for $MS ($COUNT dispatched, $SKIPPED already claimed)"
     echo "Monitor: just autonomous-status"
 
 # --- Solo Mode ---

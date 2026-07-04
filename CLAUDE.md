@@ -167,7 +167,7 @@ Branch names are validated against the allowlist in [`.github/branch-naming.yml`
 just check-branch-name          # exits 0 on match, 1 with suggestions on no match
 ```
 
-The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. With attribution now carried by PR metadata, the intent is to **keep this check advisory** and enforce on the PR side instead — add **"PR title check"** (`.github/workflows/pr-title.yml`) as the required status check rather than this one.
+The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. With attribution now carried by PR metadata, this check stays **advisory** and enforcement lives on the PR side: **"PR title check"** (`.github/workflows/pr-title.yml`) and the **Review gate** are required status checks via `.github/settings.yml` (H3/#681); routine green PRs then auto-merge (`automerge.yml`), with human review reserved for `breaking`/`contract-test`/proto-touching PRs.
 
 ### Adding a new pattern family
 

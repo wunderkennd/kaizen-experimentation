@@ -116,15 +116,40 @@ Breaking changes use a `!` suffix: `feat(m1)!: change bucket() return type to u3
 
 ## Pull Request Process
 
+The lifecycle is **draft while working → ready = "work complete" → address
+reviewer feedback → merge**, and the review-feedback step is enforced by the
+`Review gate` check, not left to memory.
+
 1. **Create your branch** from `main` using the naming convention above.
-2. **Keep PRs focused.** One logical change per PR.
-3. **Reference the Issue**: include `Closes #<number>` in the PR description.
-   The issue auto-closes when the PR merges.
-4. **Fill in the PR template** (auto-populated when you open a PR).
-5. **All CI checks must pass** before merge.
-6. **One approving review** required. Cross-module PRs require review from the
-   affected module's agent.
-7. **Squash merge** to `main`.
+2. **Open the PR as a draft** while work is in progress. Keep PRs focused —
+   one logical change per PR — and include `Closes #<number>` so the Issue
+   auto-closes on merge.
+3. **Fill in the PR template** (auto-populated when you open a PR).
+4. **Mark the PR ready for review the moment the work is complete.** Ready
+   means "I claim this is done": tests green, merge-ready state. Harness
+   workers do this as their final step (or add the `ready` label —
+   `auto-ready.yml` flips the draft). Automated review runs on this
+   transition.
+5. **Address every piece of reviewer feedback before merge — whoever the
+   reviewer is** (Devin, Claude review, or a human). For each review thread,
+   push the fix (or reply with why not), then click **Resolve conversation**.
+   A standing changes-requested review blocks until re-reviewed or dismissed
+   with a written rationale. Enforced by `.github/workflows/review-gate.yml`
+   (red while any thread is unresolved or changes-requested stands; the
+   failure log lists exactly what to address) and natively by
+   `required_conversation_resolution` in `.github/settings.yml`.
+6. **All required checks must pass**: `PR title check`, `Review gate`,
+   `schema`, `rust`, `go`, `typescript`, `hash-parity` (path-skipped jobs
+   satisfy the requirement on unrelated PRs). Set in `.github/settings.yml`.
+7. **Review is graduated** (owner decision, 2026-07-04 — #681). Routine green
+   PRs merge automatically: `automerge.yml` arms auto-merge when the PR is
+   ready and carries no risk signal, and the platform merges once the required
+   checks (including the Review gate) clear — no blanket human approval.
+   **Human review is required** for `breaking`, `contract-test`,
+   `needs-human-input`, and proto-touching PRs — auto-merge refuses these and
+   requests a reviewer; cross-module PRs should get review from the affected
+   module's agent.
+8. **Squash merge** to `main` (auto-merge squashes; history stays linear).
 
 ### PR Template
 
