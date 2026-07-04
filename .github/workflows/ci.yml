@@ -350,11 +350,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
-          cache-dependency-path: infra/go.sum
+          cache-dependency-path: |
+            infra/go.sum
+            infra/github-governance/go.sum
 
       - name: Unit tests
         working-directory: infra
         run: go test -race -count=1 -timeout=3m ./pkg/... ./test/...
+
+      # Nested module — excluded from the parent's ./... patterns above.
+      - name: GitHub governance stack tests (H6)
+        working-directory: infra/github-governance
+        run: go test -race -count=1 -timeout=3m ./...
 
   # ───────── Stage 4: TypeScript Build & Test ─────────
   typescript:

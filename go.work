@@ -3,6 +3,7 @@ go 1.26.1
 use (
 	./gen/go
 	./infra
+	./infra/github-governance
 	./sdks/server-go
 	./services
 )

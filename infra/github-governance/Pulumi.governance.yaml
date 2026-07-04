@@ -1,0 +1,56 @@
+# Stack: governance — the Kaizen repo fleet (owner listing 2026-07-04).
+#
+# ONLY kaizen-experimentation is verified to exist on GitHub from this session;
+# the siblings were reported by the owner from the local ecosystem directory
+# (worktree checkouts deduped: kaizen-recsys-worktree, alchemy-clean-worktrees).
+# Before flipping a sibling's enforcement:
+#   1. confirm the repo exists under the listed owner (`pulumi preview` 404s
+#      name typos),
+#   2. onboard the caller workflows (docs/runbooks/ecosystem-governance.md) —
+#      a required check that never reports blocks every merge,
+#   3. add that repo's own CI contexts to requiredChecks.
+#
+# Org migration (wunderkind-ventures): move a repo's `owner:` here as it
+# transfers; when the whole fleet has moved AND the org plan supports org
+# rulesets, flip orgMode: true — universal rules then ride one org ruleset
+# (enforcement starts at "evaluate") and these entries keep only repo CI.
+#
+# NOTE on governanceChecks names: reusable-workflow check runs are named
+# "<caller job name> / <callee job name>". Verified live on the H6 PR.
+config:
+  kaizen-github-governance:spec:
+    governanceChecks:
+      - "PR title check / check"
+      - "Review gate / gate"
+    orgMode: false
+    orgName: wunderkind-ventures
+    orgEnforcement: evaluate
+    orgRepoPatterns:
+      - "kaizen-*"
+      - "kensho-*"
+    repos:
+      - owner: wunderkennd
+        name: kaizen-experimentation
+        enforcement: active
+        requiredChecks: ["schema", "rust", "go", "typescript", "hash-parity"]
+      - owner: wunderkennd
+        name: kaizen-recsys # Personalization service (ADR-029 / RFC-001 #543)
+        enforcement: disabled
+      - owner: wunderkennd
+        name: kaizen-pipelines
+        enforcement: disabled
+      - owner: wunderkennd
+        name: kaizen-rosetta
+        enforcement: disabled
+      - owner: wunderkennd
+        name: kaizen-os
+        enforcement: disabled
+      - owner: wunderkennd
+        name: kaizen-alchemy
+        enforcement: disabled
+      - owner: wunderkennd
+        name: kaizen-accelerator
+        enforcement: disabled
+      - owner: wunderkennd
+        name: kensho-repl
+        enforcement: disabled

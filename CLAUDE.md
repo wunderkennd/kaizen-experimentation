@@ -167,7 +167,7 @@ Branch names are validated against the allowlist in [`.github/branch-naming.yml`
 just check-branch-name          # exits 0 on match, 1 with suggestions on no match
 ```
 
-The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. With attribution now carried by PR metadata, this check stays **advisory** and enforcement lives on the PR side: **"PR title check"** (`.github/workflows/pr-title.yml`) and the **Review gate** are required status checks via `.github/settings.yml` (H3/#681); routine green PRs then auto-merge (`automerge.yml`), with human review reserved for `breaking`/`contract-test`/proto-touching PRs.
+The CI workflow [`.github/workflows/branch-naming.yml`](.github/workflows/branch-naming.yml) runs the same check on PR open / branch rename and posts an advisory comment if no pattern matches. **Currently advisory only** — does not block merge. With attribution now carried by PR metadata, this check stays **advisory** and enforcement lives on the PR side: **"PR title check / check"** (`.github/workflows/pr-title.yml`) and the **Review gate** (`Review gate / gate`) are required status checks via the native ruleset `.github/rulesets/main.json` (H3/#681; fleet-wide stamping via `infra/github-governance/` — H6); routine green PRs then auto-merge (`automerge.yml`), with human review reserved for `breaking`/`contract-test`/proto-touching PRs. The governance workflows are `workflow_call` reusables (`_review-gate.yml`, `_pr-title.yml`, `_automerge.yml`) so sibling Kaizen repos run identical callers — see `docs/runbooks/ecosystem-governance.md`.
 
 ### Adding a new pattern family
 
@@ -212,6 +212,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Agent onboarding | `docs/onboarding/agent-N-*.md` (incl. `agent-0-coordination.md`) |
 | Module runbooks | `docs/runbooks/m4a-analysis.md`, `docs/runbooks/m4b-policy.md` |
 | Infra runbook (adding a Cloud Run service) | `docs/runbooks/gcp-compute-services.md` (registry pattern at `infra/pkg/gcp/services/`, established by #542 / PR #546) |
+| Ecosystem governance runbook (H6) | `docs/runbooks/ecosystem-governance.md` (fleet onboarding, ruleset apply, wunderkind-ventures org migration) |
 | Operator runbook (creating M5 custom metrics) | `docs/runbooks/m5-metric-definitions.md` (Tier 1 types FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #434) |
 | Operator runbook (ADR-026 Phase 3 migration) | `docs/runbooks/adr-026-phase-3-migration.md` (scan + translate + shadow + apply workflow for legacy CUSTOM metrics; #437) |
 | Work tracking | GitHub Issues (Milestones = Sprints, Issues = Tasks) |
@@ -226,6 +227,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Developer guides | `docs/guides/` (git-hygiene, github-issues-workflow, orchestration-workflow, pr-triage-and-cleanup, merge-conflict-resolution, gastown-setup, palette) |
 | Issue specs (QoE etc.) | `docs/issues/` |
 | Infrastructure (Pulumi) | `infra/` (`main.go`, `Pulumi.{dev,staging,prod}.yaml`, `fullstack_test.go`) |
+| GitHub governance (rulesets, H6) | `.github/rulesets/main.json` (this repo) · `infra/github-governance/` (fleet stamping, org-ready) |
 | SDKs | `sdks/{android,ios,server-go,server-python,web}/` |
 | CI workflows | `.github/workflows/` (ci, nightly, nightly-loadtest, weekly-chaos, mobile-sdk, jules-*, claude-*) |
 | Justfile (dev commands) | `justfile` (1000+ lines; `just --list` to discover) |

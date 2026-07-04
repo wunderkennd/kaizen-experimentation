@@ -134,13 +134,17 @@ reviewer feedback → merge**, and the review-feedback step is enforced by the
    reviewer is** (Devin, Claude review, or a human). For each review thread,
    push the fix (or reply with why not), then click **Resolve conversation**.
    A standing changes-requested review blocks until re-reviewed or dismissed
-   with a written rationale. Enforced by `.github/workflows/review-gate.yml`
-   (red while any thread is unresolved or changes-requested stands; the
-   failure log lists exactly what to address) and natively by
-   `required_conversation_resolution` in `.github/settings.yml`.
-6. **All required checks must pass**: `PR title check`, `Review gate`,
-   `schema`, `rust`, `go`, `typescript`, `hash-parity` (path-skipped jobs
-   satisfy the requirement on unrelated PRs). Set in `.github/settings.yml`.
+   with a written rationale. Enforced by the Review gate
+   (`.github/workflows/review-gate.yml` calling `_review-gate.yml` — red while
+   any thread is unresolved or changes-requested stands; the failure log lists
+   exactly what to address) and natively by the ruleset's
+   `required_review_thread_resolution`.
+6. **All required checks must pass**: `PR title check / check`,
+   `Review gate / gate`, `schema`, `rust`, `go`, `typescript`, `hash-parity`
+   (path-skipped jobs satisfy the requirement on unrelated PRs; the two-segment
+   names are the reusable-workflow check contexts — H6). Set as a native
+   ruleset: `.github/rulesets/main.json`, stamped fleet-wide by
+   `infra/github-governance/` (see `docs/runbooks/ecosystem-governance.md`).
 7. **Review is graduated** (owner decision, 2026-07-04 — #681). Routine green
    PRs merge automatically: `automerge.yml` arms auto-merge when the PR is
    ready and carries no risk signal, and the platform merges once the required

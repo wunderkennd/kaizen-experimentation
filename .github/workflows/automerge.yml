@@ -1,21 +1,14 @@
 name: Auto-merge routine PRs
 
-# Operationalizes the graduated-review decision (#681, owner 2026-07-04):
-# "gate + queue suffices for routine green PRs." For a ready, non-risk PR this
-# enables GitHub auto-merge (squash); the platform then merges the moment the
-# required checks — including the Review gate — are green. No human ratchet.
+# Fleet CALLER (H6) for the graduated-review merge path (#681, owner
+# 2026-07-04: "gate + queue suffices for routine green PRs") — the logic
+# lives in _automerge.yml so sibling repos arm the identical machinery. See
+# that file for the risk model (labels + protected paths, disarm-on-late-risk).
 #
-# NOT routine (never auto-merged; a human is requested instead):
-#   - risk labels: breaking, contract-test, needs-human-input
-#   - PRs touching proto/ (wire contracts — CLAUDE.md schema-first rule)
-#
-# Requires `allow_auto_merge: true` and the required-check set from
-# .github/settings.yml to be live; until the Settings app syncs those, the
-# enable call below fails soft with a log line, changing nothing.
-
-# `synchronize` matters: a later push can introduce proto/ files, and a later
-# `labeled` event can add risk — both must re-evaluate AND disarm an
+# `synchronize` matters: a later push can introduce protected paths, and a
+# later `labeled` event can add risk — both must re-evaluate AND disarm an
 # auto-merge that was enabled while the PR was still routine.
+
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
@@ -32,74 +25,10 @@ jobs:
   automerge:
     name: auto-merge
     if: '!github.event.pull_request.draft'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Enable auto-merge unless risk-labeled or proto-touching
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const pr = context.payload.pull_request;
-            const RISK_LABELS = ['breaking', 'contract-test', 'needs-human-input'];
-
-            const labels = pr.labels.map(l => l.name);
-            const risky = labels.filter(l => RISK_LABELS.includes(l));
-
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr.number,
-              per_page: 100,
-            });
-            const protoTouching = files.some(f => f.filename.startsWith('proto/'));
-
-            if (risky.length || protoTouching) {
-              const why = [
-                ...risky.map(l => `label '${l}'`),
-                ...(protoTouching ? ['touches proto/ (wire contracts)'] : []),
-              ].join(', ');
-              core.notice(`Not routine (${why}) — auto-merge NOT enabled; human review required.`);
-              // DISARM any auto-merge enabled while the PR was still routine —
-              // risk can arrive after arming (late label, later push adding
-              // proto/). Without this, an armed PR would merge past the
-              // graduated-review model. (Devin review on #684, finding 1.)
-              try {
-                await github.graphql(`
-                  mutation($id: ID!) {
-                    disablePullRequestAutoMerge(input: { pullRequestId: $id }) {
-                      pullRequest { number }
-                    }
-                  }`, { id: pr.node_id });
-                core.notice(`Auto-merge DISARMED for #${pr.number} (risk arrived after arming).`);
-              } catch (e) {
-                // Not armed (or auto-merge unavailable) — nothing to disarm.
-              }
-              // Route to a human: request the repo owner if no reviewer is assigned yet.
-              if (pr.requested_reviewers.length === 0) {
-                try {
-                  await github.rest.pulls.requestReviewers({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    pull_number: pr.number,
-                    reviewers: [context.repo.owner],
-                  });
-                } catch (e) {
-                  core.notice(`Could not request reviewer (${e.message}) — label routing stands.`);
-                }
-              }
-              return;
-            }
-
-            try {
-              await github.graphql(`
-                mutation($id: ID!) {
-                  enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
-                    pullRequest { number autoMergeRequest { enabledAt } }
-                  }
-                }`, { id: pr.node_id });
-              core.info(`Auto-merge (squash) enabled for #${pr.number} — merges when required checks incl. the Review gate are green.`);
-            } catch (e) {
-              core.notice(
-                `Auto-merge not enabled: ${e.message}. ` +
-                `Usually means 'Allow auto-merge' or the required-check ruleset from ` +
-                `.github/settings.yml isn't live yet (Settings app not synced?).`);
-            }
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/_automerge.yml
+    with:
+      risk-labels: "breaking,contract-test,needs-human-input"
+      risky-path-prefixes: "proto/"

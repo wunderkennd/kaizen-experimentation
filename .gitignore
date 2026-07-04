@@ -122,3 +122,6 @@ docs/coordination/status/*
 graphify-out/.graphify_*
 graphify-out/.vocab.txt
 graphify-out/cache/
+
+# Go module build binaries (nested Pulumi programs)
+infra/github-governance/github-governance

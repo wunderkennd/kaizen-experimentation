@@ -1,0 +1,125 @@
+name: Review gate (reusable)
+
+# Reusable body of the Review gate — the PR-lifecycle check that blocks merge
+# while reviewer feedback is unaddressed (unresolved threads / standing
+# changes-requested). Logic lives HERE once; every fleet repo calls it:
+#
+#   this repo:      uses: ./.github/workflows/_review-gate.yml
+#   sibling repos:  uses: wunderkennd/kaizen-experimentation/.github/workflows/_review-gate.yml@main
+#                   (owner-qualified — update after any org transfer)
+#
+# The CALLER owns the triggers (pull_request / pull_request_review /
+# pull_request_review_comment — NOT pull_request_review_thread, which this
+# GitHub's validator rejects; see .github/workflows/review-gate.yml) and the
+# per-PR concurrency group. This workflow inherits the caller's event payload.
+#
+# Check-run name is "<caller job name> / <callee job name>" — with the
+# standard caller that's "Review gate / gate", which is the context listed in
+# rulesets (.github/rulesets/main.json, infra/github-governance).
+
+on:
+  workflow_call:
+    inputs:
+      grace-minutes:
+        description: >-
+          How long a blocked run keeps re-checking before failing. Covers the
+          resolve click, which cannot re-trigger a workflow on this platform.
+        type: number
+        required: false
+        default: 10
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gate:
+    # Callee half of the "Review gate / gate" check context.
+    name: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Evaluate reviewer feedback state
+        uses: actions/github-script@v7
+        env:
+          GRACE_MINUTES: ${{ inputs.grace-minutes }}
+        with:
+          script: |
+            const num = context.payload.pull_request.number;
+
+            async function evaluate() {
+              const { repository } = await github.graphql(`
+                query($owner: String!, $repo: String!, $num: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $num) {
+                      reviewThreads(first: 100) {
+                        totalCount
+                        nodes { isResolved isOutdated path line }
+                      }
+                      reviews(last: 100) {
+                        nodes { state author { login } }
+                      }
+                    }
+                  }
+                }`, { owner: context.repo.owner, repo: context.repo.repo, num });
+
+              const pr = repository.pullRequest;
+              const unresolved = pr.reviewThreads.nodes.filter(t => !t.isResolved);
+
+              // Latest STANDING verdict per reviewer: APPROVED and DISMISSED
+              // supersede an earlier CHANGES_REQUESTED; plain COMMENTED does not.
+              const standing = new Map();
+              for (const r of pr.reviews.nodes) {
+                if (!r.author) continue;
+                if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) {
+                  standing.set(r.author.login, r.state);
+                }
+              }
+              const blocking = [...standing.entries()]
+                .filter(([, s]) => s === 'CHANGES_REQUESTED')
+                .map(([login]) => login);
+
+              return { total: pr.reviewThreads.totalCount, unresolved, blocking };
+            }
+
+            // Grace window: the resolve click can't re-trigger this workflow
+            // (platform limitation — see caller header), so a blocked run
+            // keeps watching; the standard push/reply-then-resolve sequence
+            // lands minutes after the event that started this run.
+            const DEADLINE = Date.now() + Number(process.env.GRACE_MINUTES) * 60 * 1000;
+            const INTERVAL = 30 * 1000;
+
+            let state = await evaluate();
+            while ((state.unresolved.length || state.blocking.length) && Date.now() < DEADLINE) {
+              core.info(
+                `Blocked: ${state.unresolved.length} unresolved thread(s)` +
+                (state.blocking.length ? `; changes requested by ${state.blocking.join(', ')}` : '') +
+                ` — re-checking every ${INTERVAL / 1000}s (grace window until ${new Date(DEADLINE).toISOString()}).`);
+              await new Promise(resolve => setTimeout(resolve, INTERVAL));
+              state = await evaluate();
+            }
+
+            if (!state.unresolved.length && !state.blocking.length) {
+              core.info(`Review gate clear — ${state.total} thread(s), all resolved; no standing changes-requested.`);
+              return;
+            }
+
+            // Final verdict: name exactly what to fix (proposal §7 R1).
+            if (state.unresolved.length) {
+              core.error(
+                `${state.unresolved.length} unresolved review thread(s). For each: push the fix ` +
+                `(or reply with why not), then click "Resolve conversation" on the thread:`);
+              for (const t of state.unresolved) {
+                const where = t.path ? `${t.path}${t.line ? ':' + t.line : ''}` : '(top-level discussion)';
+                core.error(`  - ${where}${t.isOutdated ? ' [outdated — re-check, then resolve]' : ''}`);
+              }
+            }
+            if (state.blocking.length) {
+              core.error(
+                `Changes requested by: ${state.blocking.join(', ')}. Push fixes and request their ` +
+                `re-review, or dismiss the review with a written rationale.`);
+            }
+            core.setFailed(
+              'Review gate: address reviewer feedback. The gate re-runs on a push, a thread reply, or a ' +
+              'review — resolving a thread alone cannot re-trigger it (platform limitation). Already ' +
+              'resolved everything? Re-run this check from the Actions tab (or push an empty commit).');

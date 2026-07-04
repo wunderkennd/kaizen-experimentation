@@ -1,0 +1,123 @@
+name: Auto-merge (reusable)
+
+# Reusable body of the graduated-review merge path (#681, owner 2026-07-04:
+# "gate + queue suffices for routine green PRs"). For a ready, non-risk PR
+# this arms GitHub auto-merge (squash); the platform merges when the required
+# checks — including the Review gate — are green. Risk routes to a human and
+# DISARMS anything armed earlier.
+#
+#   this repo:      uses: ./.github/workflows/_automerge.yml
+#   sibling repos:  uses: wunderkennd/kaizen-experimentation/.github/workflows/_automerge.yml@main
+#
+# The caller owns the triggers; `synchronize`/`labeled`/`unlabeled` matter —
+# risk can arrive after arming (late label, later push adding protected
+# paths) and must disarm (Devin review on #684, finding 1+2).
+
+on:
+  workflow_call:
+    inputs:
+      risk-labels:
+        description: Comma-separated labels that route a PR to human review.
+        type: string
+        required: false
+        default: "breaking,contract-test,needs-human-input"
+      risky-path-prefixes:
+        description: >-
+          Comma-separated path prefixes that make a PR non-routine (wire
+          contracts etc.). Kaizen default: proto/ (CLAUDE.md schema-first rule).
+        type: string
+        required: false
+        default: "proto/"
+      fallback-reviewer:
+        description: >-
+          Username to request when a risky PR has no reviewer yet. Empty =
+          repo owner (works for user-owned repos; orgs can't be reviewers —
+          set this after any org transfer).
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    name: automerge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Enable auto-merge unless risk-labeled or path-protected
+        uses: actions/github-script@v7
+        env:
+          RISK_LABELS: ${{ inputs.risk-labels }}
+          RISKY_PATH_PREFIXES: ${{ inputs.risky-path-prefixes }}
+          FALLBACK_REVIEWER: ${{ inputs.fallback-reviewer }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const riskLabels = process.env.RISK_LABELS.split(',').map(s => s.trim()).filter(Boolean);
+            const riskyPrefixes = process.env.RISKY_PATH_PREFIXES.split(',').map(s => s.trim()).filter(Boolean);
+
+            const labels = pr.labels.map(l => l.name);
+            const risky = labels.filter(l => riskLabels.includes(l));
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+            const pathProtected = files.some(f => riskyPrefixes.some(p => f.filename.startsWith(p)));
+
+            if (risky.length || pathProtected) {
+              const why = [
+                ...risky.map(l => `label '${l}'`),
+                ...(pathProtected ? [`touches a protected path (${riskyPrefixes.join(', ')})`] : []),
+              ].join(', ');
+              core.notice(`Not routine (${why}) — auto-merge NOT enabled; human review required.`);
+              // DISARM any auto-merge enabled while the PR was still routine —
+              // risk can arrive after arming. Without this, an armed PR would
+              // merge past the graduated-review model.
+              try {
+                await github.graphql(`
+                  mutation($id: ID!) {
+                    disablePullRequestAutoMerge(input: { pullRequestId: $id }) {
+                      pullRequest { number }
+                    }
+                  }`, { id: pr.node_id });
+                core.notice(`Auto-merge DISARMED for #${pr.number} (risk arrived after arming).`);
+              } catch (e) {
+                // Not armed (or auto-merge unavailable) — nothing to disarm.
+              }
+              // Route to a human: request a reviewer if none is assigned yet.
+              if (pr.requested_reviewers.length === 0) {
+                const reviewer = process.env.FALLBACK_REVIEWER || context.repo.owner;
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    reviewers: [reviewer],
+                  });
+                } catch (e) {
+                  core.notice(`Could not request reviewer '${reviewer}' (${e.message}) — label routing stands.`);
+                }
+              }
+              return;
+            }
+
+            try {
+              await github.graphql(`
+                mutation($id: ID!) {
+                  enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+                    pullRequest { number autoMergeRequest { enabledAt } }
+                  }
+                }`, { id: pr.node_id });
+              core.info(`Auto-merge (squash) enabled for #${pr.number} — merges when required checks incl. the Review gate are green.`);
+            } catch (e) {
+              core.notice(
+                `Auto-merge not enabled: ${e.message}. ` +
+                `Usually means 'Allow auto-merge' is off or the required-check ruleset ` +
+                `(.github/rulesets/main.json / infra/github-governance) isn't applied yet.`);
+            }

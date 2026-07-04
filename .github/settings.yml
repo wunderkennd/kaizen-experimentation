@@ -20,43 +20,18 @@ repository:
   # clear (.github/workflows/automerge.yml enables it per-PR).
   allow_auto_merge: true
 
-# Branch protection for main (PR lifecycle standard, #681). Per the note above,
-# listing `branches:` means this file now OWNS branch protection — extend this
-# block (required status checks, merge queue) when #681's HITL decisions land;
-# don't configure protection in the UI.
+# BRANCH PROTECTION MOVED (H6, 2026-07-04). The `branches:` block that lived
+# here never took effect — the Settings app was never installed and main was
+# still unprotected when checked live. Protection intent now lives as a native
+# repository RULESET, which needs no third-party app and survives an org
+# transfer with the repo:
 #
-# `required_conversation_resolution` is the native half of the review gate:
-# every review thread must be resolved before merge. The reviewer-agnostic
-# check half (blocks on standing changes-requested too, with remediation in
-# the failure log) is .github/workflows/review-gate.yml.
-branches:
-  - name: main
-    protection:
-      required_conversation_resolution: true
-      # Required checks — deliberately small and fast (proposal §7 R5): the
-      # correctness suites (path-skipped jobs still satisfy the requirement on
-      # unrelated PRs), the attribution lint, and the review gate. Contexts are
-      # CHECK-RUN (job) names.
-      required_status_checks:
-        strict: false
-        contexts:
-          - "PR title check"
-          - "Review gate"
-          - "schema"
-          - "rust"
-          - "go"
-          - "typescript"
-          - "hash-parity"
-      # Owner decision 2026-07-04 (#681): NO blanket human-approval requirement —
-      # gate + queue suffices for routine green PRs. Human review is routed by
-      # risk labels (breaking / contract-test / proto-touching) via
-      # .github/workflows/automerge.yml, which refuses to auto-merge those.
-      required_pull_request_reviews: null
-      required_linear_history: true
-      # enforce_admins stays false as a DELIBERATE solo-maintainer trade-off
-      # (Devin review on #684, finding 3): the only admin is the owner, and an
-      # attacker with admin could edit this very protection anyway — so `true`
-      # here mostly blocks the owner's own emergency hotfixes, not adversaries.
-      # Revisit if collaborators with admin are ever added.
-      enforce_admins: false
-      restrictions: null
+#   .github/rulesets/main.json     — this repo (import via UI or one gh api call)
+#   infra/github-governance/       — the same intent stamped across the whole
+#                                    Kaizen fleet via Pulumi (H6), org-ready
+#                                    for wunderkind-ventures
+#
+# The PR-lifecycle rationale (required checks, no blanket approvals, thread
+# resolution, enforce-admins trade-off) is documented in those two places and
+# docs/runbooks/ecosystem-governance.md. Do NOT re-add a `branches:` block —
+# two write paths to the same protection would fight.
