@@ -154,11 +154,18 @@ Sequencing that keeps automation alive through the move:
 4. **kaizen-experimentation last** — it has the most automation wired to its
    identity (this session included).
 5. **After the whole fleet is over** and the org plan supports org rulesets
-   (Team+): flip `orgMode: true` — the universal rules collapse into ONE org
-   ruleset (`enforcement: evaluate` first — dry-run insights, then active);
-   per-repo entries keep only repo-specific CI contexts. Also set the
+   (**Team suffices** — verified 2026-07-04 against the github/docs source):
+   flip `orgMode: true` — the universal rules collapse into ONE org ruleset;
+   per-repo entries keep only repo-specific CI contexts. Start it `disabled`,
+   flip `active` once callers are fleet-wide — the `evaluate` dry-run status
+   (Rule Insights) is **Enterprise-only** and a Team org rejects it, which is
+   why the stack defaults `orgEnforcement` to `disabled`. Also set the
    `fallback-reviewer` input on automerge callers (an org can't be requested
    as a reviewer the way a user-owner can).
+
+   Plan gating summary (2026-07-04): repo rulesets — free on public repos,
+   Pro/Team for private; org rulesets — Team+; `evaluate` mode and the
+   audit-log API — Enterprise. Everything this harness *requires* fits Team.
 
 ## Troubleshooting
 
