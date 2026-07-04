@@ -402,6 +402,29 @@ becomes the bottleneck agents route around. *Amends H4/Jules lane:* schedule doc
 quality-grading agents — our Palette stream is the manual precursor; this also finally gives
 the harness the self-auditing loop P6 asked for.
 
+**R6 — Adopt Google's Open Knowledge Format (OKF v0.1) as the registry's source
+conventions** ([announcement](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing),
+[spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf), published
+2026-06-12). OKF standardizes exactly the shape R3 converged on independently: knowledge as
+a directory of markdown files with YAML frontmatter, file path = concept identity, markdown
+links form the graph, reserved `index.md` (progressive-disclosure table of contents — R3's
+"~100-line entry point", now a standard) and `log.md` (ISO-dated newest-first history —
+a standard format for R2's progress artifacts). Only `type` is required; consumers "SHOULD
+NOT reject documents with unrecognized fields", so our machine-identity keys (`owned_paths`,
+`label`, `port`, `crates`, obligations) ride as conformant extensions. Conformance is three
+lintable rules — the `gen-agents` CI drift-check doubles as an OKF conformance check for
+free. Bonus: Google ships a self-contained static HTML visualizer (registry → interactive
+ownership graph) and their enrichment-agent reference implementation is R3's doc-gardening
+agent by another name. Risk: v0.1, weeks old, no third-party adoption yet — acceptable
+because the format degrades to plain markdown we would have written anyway; lock-in ≈ 0.
+*Amends H4 (registry = an OKF bundle) and R2 (task progress files use `log.md` semantics).*
+**Separate product-scale opportunity (HITL, new-ADR-sized, not part of this harness work):**
+OKF's headline use case is "your business' meaning of a metric" — ADR-026's
+MetricDefinitions plus the M3 `@metric_ref` dependency edges are already a knowledge graph;
+an M5 export job rendering each metric as an OKF concept (type, M6 `resource` link, MetricQL
+body, lineage links) would make the Kaizen metric catalog consumable by customers' agents
+and catalogs (incl. BigQuery Knowledge Catalog, which ingests OKF). Impact M5/M3/M6.
+
 Confirmations worth noting: externalized state in git/GitHub artifacts over session memory
 ("anything the agent can't access in-context effectively doesn't exist" — validates
 Issues-as-spec and requires Gas Town verbal steering be written back to the issue);
