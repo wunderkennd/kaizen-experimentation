@@ -365,15 +365,16 @@ function MetricBrowserContent() {
           canAtLeast('experimenter') ? (
             <Link
               href="/metrics/new"
-              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               data-testid="new-metric-button"
             >
               New Metric
             </Link>
           ) : (
             <span
-              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
-              title={`Requires Experimenter role (you are ${ROLE_LABELS[user.role]})`}
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              tabIndex={0}
+              title={`Requires Experimenter role (you are ${user ? ROLE_LABELS[user.role] : 'Unknown'})`}
               data-testid="new-metric-disabled"
             >
               New Metric
@@ -396,7 +397,7 @@ function MetricBrowserContent() {
             <div className="mt-6">
               <Link
                 href="/metrics/new"
-                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                 data-testid="create-first-metric"
               >
                 Create your first metric
@@ -476,7 +477,7 @@ function MetricBrowserContent() {
             <p className="text-sm text-gray-500">No metrics match your filters.</p>
             <button
               onClick={clearFilters}
-              className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+              className="mt-2 rounded-sm text-sm text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               data-testid="clear-filters-empty"
             >
               Clear filters
