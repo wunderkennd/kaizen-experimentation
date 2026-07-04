@@ -975,6 +975,23 @@ sprint label executor="multiclaude":
 test-orchestration:
     @bash scripts/orchestration/test_dispatch.sh
 
+# --- Ecosystem governance (H6) ---
+# Sibling-repo onboarding files (caller workflows + ruleset JSON) generated
+# from the fleet source of truth: infra/github-governance/Pulumi.governance.yaml.
+# Runbook: docs/runbooks/ecosystem-governance.md.
+
+# Generate onboarding files for every fleet repo into dist/governance-onboarding/
+governance-onboard outdir="dist/governance-onboarding":
+    @python3 scripts/generate_governance_onboarding.py --out {{outdir}}
+
+# Generate AND copy into sibling checkouts living next to this repo (../<repo>)
+governance-onboard-apply parent="..":
+    @python3 scripts/generate_governance_onboarding.py --out dist/governance-onboarding --apply {{parent}}
+
+# Offline tests for the onboarding generator
+test-governance-gen:
+    @bash scripts/test_generate_governance_onboarding.sh
+
 # --- Beads (GitHub Issues ↔ Gas Town projection) ---
 # GitHub Issues remain the source of truth. Beads are a read-side projection
 # into Gas Town so `gt sling`, `gt convoy`, and `gt ready` have work to see.

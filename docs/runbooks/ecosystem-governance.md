@@ -41,8 +41,19 @@ Check-run contexts from reusable workflows are two-segment —
 
 ## Onboard a sibling repo
 
+> **Generate instead of hand-copying:** `just governance-onboard` renders every
+> sibling's files (the three callers below + that repo's ruleset JSON + apply
+> README) from the fleet config into `dist/governance-onboarding/<repo>/`, and
+> `just governance-onboard-apply` copies them straight into `../<repo>`
+> checkouts (the ecosystem keeps all repos side by side). Generator:
+> `scripts/generate_governance_onboarding.py`; offline tests:
+> `just test-governance-gen`. After an org transfer, re-run it — the callers'
+> `uses:` refs re-point from the fleet config (or set
+> `GOVERNANCE_WORKFLOWS_REF=owner/repo@ref`).
+
 1. **Confirm the repo exists on GitHub** under the expected owner.
-2. **Add the caller workflows** in that repo (`.github/workflows/`):
+2. **Add the caller workflows** in that repo (`.github/workflows/`) — generated
+   as above, or hand-written from these templates:
 
    ```yaml
    # review-gate.yml

@@ -1,13 +1,21 @@
 name: Orchestration dispatch tests
 
-# Offline behavior tests for the H1 dispatch layer (claim protocol, resume
-# semantics, executor adapters) — scripts/orchestration/test_dispatch.sh runs
-# against a stubbed gh, so this needs no tokens and no network beyond checkout.
+# Offline behavior tests for the harness scripts — everything runs against
+# stubs (no tokens, no network beyond checkout):
+#   - H1 dispatch layer (claim protocol, resume semantics, executor adapters)
+#   - H6 governance onboarding generator (fleet config → sibling caller
+#     workflows + ruleset JSON)
 
 on:
   pull_request:
     paths:
       - "scripts/orchestration/**"
+      - "scripts/generate_governance_onboarding.py"
+      - "scripts/test_generate_governance_onboarding.sh"
+      - "infra/github-governance/Pulumi.governance.yaml"
+      - ".github/workflows/_review-gate.yml"
+      - ".github/workflows/_pr-title.yml"
+      - ".github/workflows/_automerge.yml"
       - ".github/workflows/orchestration-tests.yml"
 
 permissions:
@@ -20,3 +28,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run dispatch behavior tests
         run: bash scripts/orchestration/test_dispatch.sh
+      - name: Run governance onboarding generator tests
+        run: bash scripts/test_generate_governance_onboarding.sh
