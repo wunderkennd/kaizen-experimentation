@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/infra-4.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Infra-4: Compute & Services
 
 You own the ECS compute layer and all 9 service definitions for the Kaizen Experimentation Platform IaC.

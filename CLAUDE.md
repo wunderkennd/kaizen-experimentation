@@ -206,8 +206,9 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Design document | `docs/design/design_doc_v7.0.md` |
 | ADRs (001–030) | `docs/adrs/` |
 | ADR index | `docs/adrs/README.md` |
-| Agent definitions (modules) | `.multiclaude/agents/agent-N-*.md` |
-| Agent definitions (infra) | `.multiclaude/agents/infra-{1..5}-*.md` |
+| **Agent registry (canonical identity)** | `docs/agents/registry/` — OKF v0.1 bundle; validate with `just check-registry` |
+| Agent definitions (modules) | `.multiclaude/agents/agent-N-*.md` (view of the registry; generated under #682) |
+| Agent definitions (infra) | `.multiclaude/agents/infra-{1..5}-*.md` (view of the registry; generated under #682) |
 | Agent onboarding | `docs/onboarding/agent-N-*.md` (incl. `agent-0-coordination.md`) |
 | Module runbooks | `docs/runbooks/m4a-analysis.md`, `docs/runbooks/m4b-policy.md` |
 | Infra runbook (adding a Cloud Run service) | `docs/runbooks/gcp-compute-services.md` (registry pattern at `infra/pkg/gcp/services/`, established by #542 / PR #546) |
@@ -285,6 +286,7 @@ Build artifacts and agent runtime state — never commit:
 - `.claude/settings.local.json`, `.claude/worktrees/`, `.claude/teams/`, `.claude/tasks/`
 - `.multiclaude/state/`, `.multiclaude/messages/`, `.multiclaude/worktrees/`, `*.pid`, `*.log`
 - `.agents/`, `.claude/skills/` — restored from `skills-lock.json` via `just install-skills`
+- `.claude/agents/` third-party library (The Agency) — restored via `just install-agents`; only repo-authored agents (e.g. `pr-triage.md`) are tracked
 
 See `.gitignore` and `docs/guides/git-hygiene.md`.
 

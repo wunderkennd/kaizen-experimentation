@@ -158,6 +158,25 @@ update-skills-check:
 update-skills:
     npx --yes skills update -p -y
 
+# Validate the canonical agent registry (docs/agents/registry/) against the
+# OKF v0.1 conformance rules. The registry is the single source of truth for
+# agent identity — see docs/coordination/harness-modernization-proposal.md §7.
+check-registry:
+    python3 scripts/check_okf.py docs/agents/registry
+
+# Restore the optional third-party agent library (msitarzewski/agency-agents)
+# into .claude/agents/. Not committed (gitignored except repo-authored agents
+# like pr-triage.md) — same pattern as skills. Safe to skip; nothing in the
+# harness depends on these personas.
+install-agents:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TMP=$(mktemp -d)
+    trap 'rm -rf "$TMP"' EXIT
+    git clone --depth 1 https://github.com/msitarzewski/agency-agents "$TMP"
+    rsync -a --exclude '.git' "$TMP"/ .claude/agents/
+    echo "✓ Agency agents restored into .claude/agents/ (gitignored)"
+
 # ==============================================================================
 # Testing
 # ==============================================================================
@@ -704,7 +723,10 @@ smoke-test: infra seed
 
 # Dispatch a test coverage task to Jules
 jules-tests crate:
-    jules remote new --repo your-org/kaizen \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+    jules remote new --repo "$REPO" \
       --session "Write unit tests for crates/{{crate}}/. Target 80% coverage. Tests only."
 
 # Dispatch a golden-file task to Devin

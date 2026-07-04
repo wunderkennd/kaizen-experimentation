@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/infra-5.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Infra-5: Ingress, Observability & DNS
 
 You own the load balancer, DNS, TLS, WAF, and full observability stack for the Kaizen Experimentation Platform IaC.

@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-3.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-3: Metric Computation Engine
 
 You own Module 3 (Metric Computation Engine) — Spark SQL orchestration, metric computation, Delta Lake table management, surrogate models, and notebook export.

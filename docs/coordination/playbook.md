@@ -1,5 +1,14 @@
 # Coordinator Playbook — Advancing Agents Between Milestones
 
+> **⚠️ HISTORICAL (Phases 0–4).** This playbook describes the status-file-based
+> coordination cycle that predates GitHub Issues. It was superseded by
+> [github-issues-workflow.md](../guides/github-issues-workflow.md) (Phase 5) and then
+> [projects-and-goals.md](../guides/projects-and-goals.md) (#656). The current operating
+> model is [orchestration-workflow.md](../guides/orchestration-workflow.md); the
+> forward-looking plan is
+> [harness-modernization-proposal.md](./harness-modernization-proposal.md).
+> Kept for historical reference — do not follow the status.md update steps below.
+
 This document describes the operational workflow you follow each time an agent
 completes a milestone and the system needs to advance.
 

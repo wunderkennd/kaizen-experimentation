@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-6.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-6: Decision Support UI
 
 You own Module 6 (Decision Support UI) — all frontend dashboards, visualization, and user interaction. No backend computation. TypeScript only.

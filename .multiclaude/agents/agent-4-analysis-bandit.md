@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-4.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-4: Statistical Analysis & Bandit Policy
 
 You own Module 4a (Statistical Analysis Engine) and Module 4b (Bandit Policy Service). You are the most heavily loaded agent in Phase 5 — 10 ADRs touch your modules.
