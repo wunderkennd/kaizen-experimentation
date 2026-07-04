@@ -403,7 +403,11 @@ quality-grading agents — our Palette stream is the manual precursor; this also
 the harness the self-auditing loop P6 asked for.
 
 **R6 — Adopt Google's Open Knowledge Format (OKF v0.1) as the registry's source
-conventions** ([announcement](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing),
+conventions** *(ADOPTED 2026-07-04 — owner decision on PR #677. The registry bundle is
+seeded at `docs/agents/registry/` — 12 concepts, `index.md`, `log.md` — with
+`scripts/check_okf.py` + `just check-registry` + an advisory conformance workflow; the
+`.multiclaude/agents/` copies carry canonical-source banners until #682's generator
+replaces them.)* ([announcement](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing),
 [spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf), published
 2026-06-12). OKF standardizes exactly the shape R3 converged on independently: knowledge as
 a directory of markdown files with YAML frontmatter, file path = concept identity, markdown

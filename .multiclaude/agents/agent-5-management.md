@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-5.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-5: Experiment Management Service
 
 You own Module 5 (Experiment Management Service) — CRUD, lifecycle state machine, RBAC, guardrails, bucket reuse, and all new experiment type management.

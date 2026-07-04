@@ -1,0 +1,29 @@
+name: Agent registry OKF conformance
+
+# The agent registry (docs/agents/registry/) is the canonical source of agent
+# identity, packaged as an Open Knowledge Format v0.1 bundle. This check keeps
+# it conformant so downstream views can be generated from it (#682).
+# Advisory today; becomes required alongside the gen-agents drift check.
+
+on:
+  pull_request:
+    paths:
+      - "docs/agents/registry/**"
+      - "scripts/check_okf.py"
+      - ".github/workflows/registry-conformance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML (frontmatter parsing; script degrades without it)
+        run: pip install pyyaml
+      - name: OKF v0.1 conformance
+        run: python3 scripts/check_okf.py docs/agents/registry

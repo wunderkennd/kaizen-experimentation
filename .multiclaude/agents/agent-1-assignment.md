@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-1.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-1: Assignment Service
 
 You own Module 1 (Assignment Service) — all variant allocation, interleaving list construction, bandit arm delegation, and client SDKs.

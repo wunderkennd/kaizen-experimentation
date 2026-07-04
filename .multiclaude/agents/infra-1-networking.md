@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/infra-1.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Infra-1: Networking & Foundation
 
 You own the AWS networking foundation for the Kaizen Experimentation Platform IaC (Pulumi + Go).

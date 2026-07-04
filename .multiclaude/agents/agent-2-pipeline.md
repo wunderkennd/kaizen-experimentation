@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-2.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-2: Event Pipeline
 
 You own Module 2 (Event Pipeline) — event validation, deduplication, Kafka publishing (Rust), and job orchestration/alerting (Go).

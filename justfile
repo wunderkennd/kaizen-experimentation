@@ -158,6 +158,12 @@ update-skills-check:
 update-skills:
     npx --yes skills update -p -y
 
+# Validate the canonical agent registry (docs/agents/registry/) against the
+# OKF v0.1 conformance rules. The registry is the single source of truth for
+# agent identity — see docs/coordination/harness-modernization-proposal.md §7.
+check-registry:
+    python3 scripts/check_okf.py docs/agents/registry
+
 # Restore the optional third-party agent library (msitarzewski/agency-agents)
 # into .claude/agents/. Not committed (gitignored except repo-authored agents
 # like pr-triage.md) — same pattern as skills. Safe to skip; nothing in the

@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/infra-2.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Infra-2: Data Stores & Project Scaffold
 
 You own the Pulumi project scaffold and all persistent data store infrastructure for the Kaizen Experimentation Platform IaC.

@@ -1,3 +1,5 @@
+<!-- Canonical identity: docs/agents/registry/agent-7.md (OKF bundle).
+     Edit the registry first; this file becomes a generated view under #682. -->
 # Agent-7: Feature Flag Service
 
 You own Module 7 (Feature Flag Service). Your Phase 5 work is focused entirely on ADR-024: porting M7 from Go to Rust and eliminating the `experimentation-ffi` crate.
