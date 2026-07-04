@@ -1,0 +1,67 @@
+{
+  "//": [
+    "Branch protection for main as a native GitHub REPOSITORY RULESET (H6).",
+    "This file IS the in-repo record of protection intent — the Probot",
+    "settings.yml `branches:` block it replaces never synced (app not",
+    "installed; main was still unprotected on 2026-07-04).",
+    "",
+    "Apply it one of two ways:",
+    "  UI:  Settings → Rules → Rulesets → New … → Import a ruleset → this file",
+    "  API: gh api repos/{owner}/{repo}/rulesets -X POST --input .github/rulesets/main.json",
+    "       (needs repo Administration: write — fine-grained PAT, not GITHUB_TOKEN)",
+    "Fleet-wide application is automated by infra/github-governance (Pulumi);",
+    "keep this file and that stack's config in sync — they encode the same intent.",
+    "",
+    "Required-check contexts: reusable-workflow check runs are named",
+    "'<caller job name> / <callee job name>' — hence 'Review gate / gate' and",
+    "'PR title check / check'. The ci.yml jobs keep single-segment names.",
+    "Path-skipped ci.yml jobs still satisfy required checks (skipped counts).",
+    "No required_approving_review_count rule: graduated review (owner decision",
+    "2026-07-04, #681) — automerge.yml routes risk-labeled / proto-touching",
+    "PRs to humans instead of a blanket approval gate.",
+    "",
+    "The repo-level toggles that used to live in settings.yml (allow",
+    "auto-merge, delete branch on merge) are NOT ruleset material — flip them",
+    "once under Settings → General; see docs/runbooks/ecosystem-governance.md."
+  ],
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "required_linear_history" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": true,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          { "context": "PR title check / check" },
+          { "context": "Review gate / gate" },
+          { "context": "schema" },
+          { "context": "rust" },
+          { "context": "go" },
+          { "context": "typescript" },
+          { "context": "hash-parity" }
+        ]
+      }
+    }
+  ],
+  "bypass_actors": []
+}

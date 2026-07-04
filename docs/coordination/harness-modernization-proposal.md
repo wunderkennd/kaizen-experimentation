@@ -327,6 +327,47 @@ Either way, agent identity consolidates now (it's executor-independent): **one r
 instead of restating. The near-verbatim Work Tracking block ×12 collapses to a template
 parameterized by `label`.
 
+### H6 — Ecosystem governance: one harness, many repos (added 2026-07-04)
+
+Context that arrived after H3 shipped: this repo is one of a **fleet** (owner listing,
+2026-07-04 — kaizen-experimentation, kaizen-recsys ≈ the ADR-029/RFC-001 personalization
+service, kaizen-pipelines, kaizen-rosetta, kaizen-os, kaizen-alchemy, kaizen-accelerator,
+kensho-repl), and the owner holds a GitHub **organization** (`wunderkind-ventures`) the
+fleet could transfer to. Two structural facts drive the design:
+
+- **Under a user account** (today): no org rulesets, no safe-settings layering, no org-level
+  app installs — every native multi-repo governance mechanism is org-gated. What DOES work:
+  reusable workflows (public repo → callable fleet-wide) and per-repo rulesets stamped by
+  automation.
+- **The Probot settings.yml `branches:` block never synced** (app never installed; main was
+  live-verified unprotected). Retire it for protection rather than install more third-party
+  machinery: native rulesets need no app, are import/exportable JSON, and transfer with a
+  repo.
+
+The move, three layers (all landed with this section):
+
+1. **Workflow logic defined once** — `_review-gate.yml`, `_pr-title.yml`, `_automerge.yml`
+   are `workflow_call` reusables; this repo and every sibling run ~20-line callers. The
+   review-thread-trigger bug (§7 note) gets fixed once, not N times. Check contexts become
+   two-segment (`Review gate / gate`, `PR title check / check`).
+2. **Protection as data** — `.github/rulesets/main.json` (this repo, one import/API call)
+   and `infra/github-governance/` (Pulumi + Go, same stack family as `infra/`): config-driven
+   repo list, owner-keyed so a repo migrates user→org by config edit; siblings default
+   `enforcement: disabled` until their callers exist (a required check that never reports
+   blocks every merge). Auth = fine-grained PAT, Administration:write only — H5's first
+   concrete credential.
+3. **Org mode encoded, not aspirational** — `orgMode: true` collapses the universal rules
+   into ONE organization ruleset (`evaluate` first) targeting `kaizen-*`/`kensho-*`;
+   per-repo rulesets keep only repo-specific CI contexts (rulesets aggregate). Migration
+   sequencing, per-repo re-pointing checklist (app installs, per-owner PATs, owner-qualified
+   `uses:` refs), and the org-plan gate (org rulesets are Team+) live in
+   `docs/runbooks/ecosystem-governance.md`.
+
+**Decision needed (owner)**: transfer timing. Recommended order: land governance-as-code
+(done) → transfer one low-traffic repo (kensho-repl) as the canary → rest of the fleet →
+kaizen-experimentation last (most automation pinned to its identity) → flip `orgMode` once
+the org plan supports it.
+
 ---
 
 ## 5. What NOT to change
@@ -353,6 +394,7 @@ parameterized by `label`.
 | H3 | ruleset + merge queue · shepherd role · graduated human review | H0 (#632 for review signal) | 1 issue, `chore` + settings change |
 | H4 | Claude-executor pilot + agent registry | H1, H3 | 1 Goal (it has a metric: duplicate rate 0, acceptance ≥ multiclaude baseline, cost ≤ current) |
 | H5 | Least-privilege worker credentials + dispatch instrumentation (see §7 R4) | H1 | 1 issue, `chore` — replaces the deferred `--dangerously-skip-permissions` item |
+| H6 | Ecosystem governance: reusable workflows · ruleset JSON · Pulumi fleet stamping · org-migration path | H3 (gate + graduated review are what gets fleet-ified) | 1 issue, `chore` + owner decision on wunderkind-ventures transfer timing |
 
 Each phase is independently shippable and independently revertible; H1+H2 delete more code
 than they add.

@@ -1,0 +1,54 @@
+name: PR title check (reusable)
+
+# Reusable body of the Conventional-Commit PR-title lint — the attribution /
+# changelog signal that replaces reliance on branch names (CLAUDE.md →
+# Branch-naming).
+#
+#   this repo:      uses: ./.github/workflows/_pr-title.yml
+#   sibling repos:  uses: wunderkennd/kaizen-experimentation/.github/workflows/_pr-title.yml@main
+#
+# Check-run context with the standard caller: "PR title check / check".
+# The title is read from the event payload (no checkout) and passed via
+# `env:` so untrusted input is never interpolated into the shell.
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate PR title (Conventional Commits)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -uo pipefail
+          # Verb set mirrors .github/branch-naming.yml + CONTRIBUTING.md, plus the
+          # standard conventional types the repo uses in practice (ci, build, …).
+          types='feat|fix|port|design|chore|refactor|docs|test|perf|ci|build|style|revert'
+
+          # Strip a leading emoji / symbol prefix (e.g. the "🎨 " the palette
+          # tooling emits) so recognized automation prefixes match without
+          # embedding a literal emoji in the regex below.
+          normalized="$(printf '%s' "$PR_TITLE" | sed -E 's/^[^[:alnum:]]+//')"
+
+          if printf '%s' "$normalized" | grep -qE "^(${types})(\([^)]+\))?!?: .+"; then
+            echo "✓ Conventional Commit title: ${PR_TITLE}"
+          elif printf '%s' "$normalized" | grep -qiE "^palette: .+"; then
+            echo "✓ Recognized automation prefix (palette): ${PR_TITLE}"
+          else
+            echo "::error title=Non-conforming PR title::PR title must be a Conventional Commit — '<type>(<scope>): <subject>'."
+            {
+              echo "Title was: \"${PR_TITLE}\""
+              echo "Allowed types: ${types//|/, }"
+              echo "Optional scope in parens; optional '!' before ':' for breaking changes."
+              echo "Recognized automation prefix: '🎨 Palette: …'."
+              echo "Examples: 'fix(ci): bump Go base image' · 'feat(stats): add TOST' · 'docs: update ADR-025'."
+            } >&2
+            exit 1
+          fi

@@ -1,16 +1,9 @@
 name: PR title check
 
-# Enforces Conventional Commit PR titles. This is the attribution / changelog
-# signal that replaces reliance on the branch name (see .github/branch-naming.yml,
-# which is advisory only, and CLAUDE.md → Branch-naming).
-#
-# ENFORCED: this check FAILS on a non-conforming title (no continue-on-error),
-# and "PR title check" is listed as a required status check in
-# .github/settings.yml (H3, #681) — it blocks merge once the Settings app syncs.
-#
-# The title is read straight from the event payload (no checkout needed) and
-# passed via `env:` so untrusted input is never interpolated into the shell —
-# same hardening rationale as .github/workflows/branch-naming.yml.
+# Fleet CALLER (H6) — the lint body lives in _pr-title.yml so sibling repos
+# enforce the identical Conventional-Commit standard. ENFORCED: the check
+# FAILS on a non-conforming title, and its context ("PR title check / check")
+# is a required status check in .github/rulesets/main.json (H3, #681).
 
 on:
   pull_request:
@@ -21,37 +14,6 @@ permissions:
 
 jobs:
   check:
-    # Distinct check-run name: required status checks match by this name, and
-    # several sibling workflows also use a job id of `check`.
+    # Caller half of the "PR title check / check" context.
     name: PR title check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validate PR title (Conventional Commits)
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          set -uo pipefail
-          # Verb set mirrors .github/branch-naming.yml + CONTRIBUTING.md, plus the
-          # standard conventional types the repo uses in practice (ci, build, …).
-          types='feat|fix|port|design|chore|refactor|docs|test|perf|ci|build|style|revert'
-
-          # Strip a leading emoji / symbol prefix (e.g. the "🎨 " the palette
-          # tooling emits) so recognized automation prefixes match without
-          # embedding a literal emoji in the regex below.
-          normalized="$(printf '%s' "$PR_TITLE" | sed -E 's/^[^[:alnum:]]+//')"
-
-          if printf '%s' "$normalized" | grep -qE "^(${types})(\([^)]+\))?!?: .+"; then
-            echo "✓ Conventional Commit title: ${PR_TITLE}"
-          elif printf '%s' "$normalized" | grep -qiE "^palette: .+"; then
-            echo "✓ Recognized automation prefix (palette): ${PR_TITLE}"
-          else
-            echo "::error title=Non-conforming PR title::PR title must be a Conventional Commit — '<type>(<scope>): <subject>'."
-            {
-              echo "Title was: \"${PR_TITLE}\""
-              echo "Allowed types: ${types//|/, }"
-              echo "Optional scope in parens; optional '!' before ':' for breaking changes."
-              echo "Recognized automation prefix: '🎨 Palette: …'."
-              echo "Examples: 'fix(ci): bump Go base image' · 'feat(stats): add TOST' · 'docs: update ADR-025'."
-            } >&2
-            exit 1
-          fi
+    uses: ./.github/workflows/_pr-title.yml

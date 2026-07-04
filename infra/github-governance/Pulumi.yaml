@@ -1,0 +1,8 @@
+name: kaizen-github-governance
+runtime: go
+description: >-
+  Ecosystem GitHub governance: stamps branch-protection rulesets across the
+  Kaizen repo fleet (H6). Repo list and enforcement per repo live in stack
+  config; org mode collapses the universal rules into one organization ruleset
+  once the fleet moves to the wunderkind-ventures org. See
+  docs/runbooks/ecosystem-governance.md.
