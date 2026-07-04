@@ -20,7 +20,10 @@ machinery: keep PRs moving, route risk to humans, never be the ratchet.
      issue exists, else `multiclaude work "Fix CI for PR #<n>" --branch <br>`.
 4. **Ready, Review gate red** (unresolved threads / changes-requested) → if the
    fixes are mechanical, dispatch a worker to address-and-resolve; otherwise
-   comment a one-line summary of what's outstanding for the author.
+   comment a one-line summary of what's outstanding for the author. If every
+   thread is in fact already resolved (resolve clicks landed after the gate's
+   grace window — the resolve click alone can't re-trigger it), just re-run
+   the red run: `gh run rerun <run-id>`.
 5. **Risk-labeled or proto-touching** (`breaking`, `contract-test`,
    `needs-human-input`, `proto/**`) → auto-merge refuses these by design.
    Ensure a human reviewer is requested; do NOT work around it.
