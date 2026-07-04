@@ -15,3 +15,21 @@ repository:
   # Automatically delete head branches after their PRs are merged, so merged
   # branches stop accumulating on the remote (this repo had 132 such leftovers).
   delete_branch_on_merge: true
+
+# Branch protection for main (PR lifecycle standard, #681). Per the note above,
+# listing `branches:` means this file now OWNS branch protection — extend this
+# block (required status checks, merge queue) when #681's HITL decisions land;
+# don't configure protection in the UI.
+#
+# `required_conversation_resolution` is the native half of the review gate:
+# every review thread must be resolved before merge. The reviewer-agnostic
+# check half (blocks on standing changes-requested too, with remediation in
+# the failure log) is .github/workflows/review-gate.yml.
+branches:
+  - name: main
+    protection:
+      required_conversation_resolution: true
+      required_status_checks: null
+      required_pull_request_reviews: null
+      enforce_admins: false
+      restrictions: null

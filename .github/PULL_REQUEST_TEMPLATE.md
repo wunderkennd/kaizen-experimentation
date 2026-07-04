@@ -27,6 +27,7 @@ N/A
 
 ## Checklist
 - [ ] Code follows project conventions (see CONTRIBUTING.md)
+- [ ] All review threads resolved; no standing changes-requested (Review gate green)
 - [ ] Proto changes are backward-compatible (or ADR documents the break)
 - [ ] Documentation updated (if user-facing)
 - [ ] No new warnings from linters

@@ -94,6 +94,9 @@ $BODY
 - Your PR description must include 'Closes #$ISSUE'. Mark the PR ready for
   review (not draft) when the work is complete — or, if you opened a draft,
   add the 'ready' label as your final step.
+- If reviewers leave feedback after that, address every thread — push the fix
+  or reply with why not, then resolve the conversation. Merge is gated on zero
+  unresolved threads and no standing changes-requested (Review gate check).
 EOF
 )
 

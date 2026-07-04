@@ -269,6 +269,18 @@ alone), and `just morning` still reads Milestones over REST (`justfile:758`) —
 
 ### H3 — Platform merge path (~1 day + repo settings)
 
+> **Partial execution (2026-07-04, PR #684):** the review-half of the merge path
+> landed, generalized per the owner's direction — **reviewer-agnostic**, gating on
+> "feedback addressed" rather than on any particular reviewer. Pieces:
+> `.github/workflows/review-gate.yml` (red while any review thread is unresolved or a
+> standing changes-requested exists; remediation in the failure log per §7 R1),
+> `required_conversation_resolution` seeded as the `branches:` block in
+> `.github/settings.yml` (that block now owns branch protection — extend it, don't use
+> the UI), the PR lifecycle codified in CONTRIBUTING.md §Pull Request Process + a PR
+> template checkbox, and post-review conduct added to the H1 dispatch prompts.
+> Remaining for #681: required-status-check selection, merge queue, and the graduated
+> human-review decision (§8 Q2).
+
 - Extend `.github/settings.yml` (settings-as-code is already established by #670) with the
   ruleset: required status checks = `PR title check`, `rust`, `go`, `ts`, `schema`,
   `hash-parity` (branch-naming stays advisory, per CLAUDE.md's stated intent), linear

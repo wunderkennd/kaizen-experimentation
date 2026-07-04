@@ -116,15 +116,32 @@ Breaking changes use a `!` suffix: `feat(m1)!: change bucket() return type to u3
 
 ## Pull Request Process
 
+The lifecycle is **draft while working → ready = "work complete" → address
+reviewer feedback → merge**, and the review-feedback step is enforced by the
+`Review gate` check, not left to memory.
+
 1. **Create your branch** from `main` using the naming convention above.
-2. **Keep PRs focused.** One logical change per PR.
-3. **Reference the Issue**: include `Closes #<number>` in the PR description.
-   The issue auto-closes when the PR merges.
-4. **Fill in the PR template** (auto-populated when you open a PR).
-5. **All CI checks must pass** before merge.
-6. **One approving review** required. Cross-module PRs require review from the
+2. **Open the PR as a draft** while work is in progress. Keep PRs focused —
+   one logical change per PR — and include `Closes #<number>` so the Issue
+   auto-closes on merge.
+3. **Fill in the PR template** (auto-populated when you open a PR).
+4. **Mark the PR ready for review the moment the work is complete.** Ready
+   means "I claim this is done": tests green, merge-ready state. Harness
+   workers do this as their final step (or add the `ready` label —
+   `auto-ready.yml` flips the draft). Automated review runs on this
+   transition.
+5. **Address every piece of reviewer feedback before merge — whoever the
+   reviewer is** (Devin, Claude review, or a human). For each review thread,
+   push the fix (or reply with why not), then click **Resolve conversation**.
+   A standing changes-requested review blocks until re-reviewed or dismissed
+   with a written rationale. Enforced by `.github/workflows/review-gate.yml`
+   (red while any thread is unresolved or changes-requested stands; the
+   failure log lists exactly what to address) and natively by
+   `required_conversation_resolution` in `.github/settings.yml`.
+6. **All CI checks must pass** before merge.
+7. **One approving review** required. Cross-module PRs require review from the
    affected module's agent.
-7. **Squash merge** to `main`.
+8. **Squash merge** to `main`.
 
 ### PR Template
 
