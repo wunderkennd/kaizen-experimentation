@@ -29,10 +29,13 @@ import (
 type RepoSpec struct {
 	Owner string `json:"owner"`
 	Name  string `json:"name"`
-	// Enforcement: "active", "evaluate" (Enterprise-gated — see OrgEnforcement),
-	// or "disabled". Siblings default to
-	// "disabled" until their caller workflows exist — a required check that
-	// never reports would otherwise block every merge.
+	// Enforcement: "active", "evaluate", or "disabled". "evaluate" (dry-run
+	// + Rule Insights) is Enterprise-only for BOTH repo- and org-level
+	// rulesets: github/docs gates the entire Evaluate status behind the
+	// repo-rules-enterprise flag (ghec/ghes versions only — no fpt entry),
+	// verified 2026-07-04. Siblings default to "disabled" until their
+	// caller workflows exist — a required check that never reports would
+	// otherwise block every merge.
 	Enforcement string `json:"enforcement"`
 	// RequiredChecks: repo-specific CI contexts (e.g. kaizen-experimentation's
 	// schema/rust/go/typescript/hash-parity). Universal governance checks are
