@@ -13,9 +13,12 @@ name: Auto-merge routine PRs
 # .github/settings.yml to be live; until the Settings app syncs those, the
 # enable call below fails soft with a log line, changing nothing.
 
+# `synchronize` matters: a later push can introduce proto/ files, and a later
+# `labeled` event can add risk — both must re-evaluate AND disarm an
+# auto-merge that was enabled while the PR was still routine.
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, labeled, unlabeled]
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
 
 permissions:
   contents: write
@@ -55,6 +58,21 @@ jobs:
                 ...(protoTouching ? ['touches proto/ (wire contracts)'] : []),
               ].join(', ');
               core.notice(`Not routine (${why}) — auto-merge NOT enabled; human review required.`);
+              // DISARM any auto-merge enabled while the PR was still routine —
+              // risk can arrive after arming (late label, later push adding
+              // proto/). Without this, an armed PR would merge past the
+              // graduated-review model. (Devin review on #684, finding 1.)
+              try {
+                await github.graphql(`
+                  mutation($id: ID!) {
+                    disablePullRequestAutoMerge(input: { pullRequestId: $id }) {
+                      pullRequest { number }
+                    }
+                  }`, { id: pr.node_id });
+                core.notice(`Auto-merge DISARMED for #${pr.number} (risk arrived after arming).`);
+              } catch (e) {
+                // Not armed (or auto-merge unavailable) — nothing to disarm.
+              }
               // Route to a human: request the repo owner if no reviewer is assigned yet.
               if (pr.requested_reviewers.length === 0) {
                 try {

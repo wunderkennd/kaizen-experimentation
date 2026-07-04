@@ -53,5 +53,10 @@ branches:
       # .github/workflows/automerge.yml, which refuses to auto-merge those.
       required_pull_request_reviews: null
       required_linear_history: true
+      # enforce_admins stays false as a DELIBERATE solo-maintainer trade-off
+      # (Devin review on #684, finding 3): the only admin is the owner, and an
+      # attacker with admin could edit this very protection anyway — so `true`
+      # here mostly blocks the owner's own emergency hotfixes, not adversaries.
+      # Revisit if collaborators with admin are ever added.
       enforce_admins: false
       restrictions: null
