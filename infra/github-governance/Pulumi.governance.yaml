@@ -12,8 +12,10 @@
 #
 # Org migration (wunderkind-ventures): move a repo's `owner:` here as it
 # transfers; when the whole fleet has moved AND the org plan supports org
-# rulesets, flip orgMode: true — universal rules then ride one org ruleset
-# (enforcement starts at "evaluate") and these entries keep only repo CI.
+# rulesets (Team plan suffices), flip orgMode: true — universal rules then
+# ride one org ruleset and these entries keep only repo CI. orgEnforcement
+# starts "disabled"; flip to "active" once callers are fleet-wide. "evaluate"
+# (dry-run + Rule Insights) is an Enterprise-plan feature — only set it on GHEC.
 #
 # NOTE on governanceChecks names: reusable-workflow check runs are named
 # "<caller job name> / <callee job name>". Verified live on the H6 PR.
@@ -24,7 +26,7 @@ config:
       - "Review gate / gate"
     orgMode: false
     orgName: wunderkind-ventures
-    orgEnforcement: evaluate
+    orgEnforcement: disabled
     orgRepoPatterns:
       - "kaizen-*"
       - "kensho-*"

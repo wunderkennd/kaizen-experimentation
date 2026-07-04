@@ -29,9 +29,13 @@ import (
 type RepoSpec struct {
 	Owner string `json:"owner"`
 	Name  string `json:"name"`
-	// Enforcement: "active", "evaluate", or "disabled". Siblings default to
-	// "disabled" until their caller workflows exist — a required check that
-	// never reports would otherwise block every merge.
+	// Enforcement: "active", "evaluate", or "disabled". "evaluate" (dry-run
+	// + Rule Insights) is Enterprise-only for BOTH repo- and org-level
+	// rulesets: github/docs gates the entire Evaluate status behind the
+	// repo-rules-enterprise flag (ghec/ghes versions only — no fpt entry),
+	// verified 2026-07-04. Siblings default to "disabled" until their
+	// caller workflows exist — a required check that never reports would
+	// otherwise block every merge.
 	Enforcement string `json:"enforcement"`
 	// RequiredChecks: repo-specific CI contexts (e.g. kaizen-experimentation's
 	// schema/rust/go/typescript/hash-parity). Universal governance checks are
@@ -55,8 +59,10 @@ type Spec struct {
 	// OrgRepoPatterns select which org repos the org ruleset targets,
 	// fnmatch-style (e.g. "kaizen-*", "kensho-*").
 	OrgRepoPatterns []string `json:"orgRepoPatterns"`
-	// OrgEnforcement: enforcement for the org ruleset ("evaluate" is a
-	// useful dry-run while the fleet onboards).
+	// OrgEnforcement: enforcement for the org ruleset. Defaults to
+	// "disabled" — NOT "evaluate": the evaluate (dry-run) status is an
+	// Enterprise-plan feature (docs: ifversion repo-rules-enterprise); a
+	// Team-plan org rejects it. Set it explicitly only on GHEC.
 	OrgEnforcement string `json:"orgEnforcement"`
 }
 
@@ -187,7 +193,9 @@ func Deploy(ctx *pulumi.Context, spec Spec) error {
 		}
 		orgEnforcement := spec.OrgEnforcement
 		if orgEnforcement == "" {
-			orgEnforcement = "evaluate"
+			// "disabled", not "evaluate": evaluate is Enterprise-gated and a
+			// Team-plan org would reject the ruleset outright.
+			orgEnforcement = "disabled"
 		}
 		patterns := pulumi.StringArray{}
 		for _, p := range spec.OrgRepoPatterns {

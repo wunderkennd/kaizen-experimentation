@@ -357,11 +357,13 @@ The move, three layers (all landed with this section):
    blocks every merge). Auth = fine-grained PAT, Administration:write only — H5's first
    concrete credential.
 3. **Org mode encoded, not aspirational** — `orgMode: true` collapses the universal rules
-   into ONE organization ruleset (`evaluate` first) targeting `kaizen-*`/`kensho-*`;
-   per-repo rulesets keep only repo-specific CI contexts (rulesets aggregate). Migration
-   sequencing, per-repo re-pointing checklist (app installs, per-owner PATs, owner-qualified
-   `uses:` refs), and the org-plan gate (org rulesets are Team+) live in
-   `docs/runbooks/ecosystem-governance.md`.
+   into ONE organization ruleset targeting `kaizen-*`/`kensho-*` (default enforcement
+   `disabled` → `active`; the `evaluate` dry-run status is **Enterprise-only**, so the stack
+   never defaults to it — verified 2026-07-04 against github/docs); per-repo rulesets keep
+   only repo-specific CI contexts (rulesets aggregate). Migration sequencing, per-repo
+   re-pointing checklist (app installs, per-owner PATs, owner-qualified `uses:` refs), and
+   the plan gate (org rulesets need **Team+**; everything the harness requires fits Team)
+   live in `docs/runbooks/ecosystem-governance.md`.
 
 **Decision needed (owner)**: transfer timing. Recommended order: land governance-as-code
 (done) → transfer one low-traffic repo (kensho-repl) as the canary → rest of the fleet →

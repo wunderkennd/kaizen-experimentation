@@ -170,8 +170,8 @@ func TestOrgModeEmitsOrgRulesetAndSlimsRepoRulesets(t *testing.T) {
 		t.Fatalf("want exactly 1 org ruleset, got %d", len(orgs))
 	}
 	org := orgs[0]
-	if got := org.Inputs["enforcement"].StringValue(); got != "evaluate" {
-		t.Fatalf("org enforcement default = %q, want evaluate (dry-run while onboarding)", got)
+	if got := org.Inputs["enforcement"].StringValue(); got != "disabled" {
+		t.Fatalf("org enforcement default = %q, want disabled (evaluate is Enterprise-gated)", got)
 	}
 	patterns := org.Inputs["conditions"].ObjectValue()["repositoryName"].
 		ObjectValue()["includes"].ArrayValue()
