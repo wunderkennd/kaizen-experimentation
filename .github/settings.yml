@@ -15,6 +15,10 @@ repository:
   # Automatically delete head branches after their PRs are merged, so merged
   # branches stop accumulating on the remote (this repo had 132 such leftovers).
   delete_branch_on_merge: true
+  # Required by the graduated-review model (#681, owner decision 2026-07-04):
+  # routine green PRs merge automatically once required checks + Review gate
+  # clear (.github/workflows/automerge.yml enables it per-PR).
+  allow_auto_merge: true
 
 # Branch protection for main (PR lifecycle standard, #681). Per the note above,
 # listing `branches:` means this file now OWNS branch protection — extend this
@@ -29,7 +33,25 @@ branches:
   - name: main
     protection:
       required_conversation_resolution: true
-      required_status_checks: null
+      # Required checks — deliberately small and fast (proposal §7 R5): the
+      # correctness suites (path-skipped jobs still satisfy the requirement on
+      # unrelated PRs), the attribution lint, and the review gate. Contexts are
+      # CHECK-RUN (job) names.
+      required_status_checks:
+        strict: false
+        contexts:
+          - "PR title check"
+          - "Review gate"
+          - "schema"
+          - "rust"
+          - "go"
+          - "typescript"
+          - "hash-parity"
+      # Owner decision 2026-07-04 (#681): NO blanket human-approval requirement —
+      # gate + queue suffices for routine green PRs. Human review is routed by
+      # risk labels (breaking / contract-test / proto-touching) via
+      # .github/workflows/automerge.yml, which refuses to auto-merge those.
       required_pull_request_reviews: null
+      required_linear_history: true
       enforce_admins: false
       restrictions: null

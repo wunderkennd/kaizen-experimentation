@@ -4,9 +4,9 @@ name: PR title check
 # signal that replaces reliance on the branch name (see .github/branch-naming.yml,
 # which is advisory only, and CLAUDE.md → Branch-naming).
 #
-# ENFORCED: this check FAILS on a non-conforming title (no continue-on-error).
-# To make it *block merge*, add "PR title check" as a required status check in
-# the repository's branch protection / ruleset for `main`.
+# ENFORCED: this check FAILS on a non-conforming title (no continue-on-error),
+# and "PR title check" is listed as a required status check in
+# .github/settings.yml (H3, #681) — it blocks merge once the Settings app syncs.
 #
 # The title is read straight from the event payload (no checkout needed) and
 # passed via `env:` so untrusted input is never interpolated into the shell —
@@ -21,6 +21,9 @@ permissions:
 
 jobs:
   check:
+    # Distinct check-run name: required status checks match by this name, and
+    # several sibling workflows also use a job id of `check`.
+    name: PR title check
     runs-on: ubuntu-latest
     steps:
       - name: Validate PR title (Conventional Commits)

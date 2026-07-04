@@ -138,10 +138,18 @@ reviewer feedback → merge**, and the review-feedback step is enforced by the
    (red while any thread is unresolved or changes-requested stands; the
    failure log lists exactly what to address) and natively by
    `required_conversation_resolution` in `.github/settings.yml`.
-6. **All CI checks must pass** before merge.
-7. **One approving review** required. Cross-module PRs require review from the
-   affected module's agent.
-8. **Squash merge** to `main`.
+6. **All required checks must pass**: `PR title check`, `Review gate`,
+   `schema`, `rust`, `go`, `typescript`, `hash-parity` (path-skipped jobs
+   satisfy the requirement on unrelated PRs). Set in `.github/settings.yml`.
+7. **Review is graduated** (owner decision, 2026-07-04 — #681). Routine green
+   PRs merge automatically: `automerge.yml` arms auto-merge when the PR is
+   ready and carries no risk signal, and the platform merges once the required
+   checks (including the Review gate) clear — no blanket human approval.
+   **Human review is required** for `breaking`, `contract-test`,
+   `needs-human-input`, and proto-touching PRs — auto-merge refuses these and
+   requests a reviewer; cross-module PRs should get review from the affected
+   module's agent.
+8. **Squash merge** to `main` (auto-merge squashes; history stays linear).
 
 ### PR Template
 

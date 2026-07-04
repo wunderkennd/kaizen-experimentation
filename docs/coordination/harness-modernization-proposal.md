@@ -278,8 +278,16 @@ alone), and `just morning` still reads Milestones over REST (`justfile:758`) —
 > `.github/settings.yml` (that block now owns branch protection — extend it, don't use
 > the UI), the PR lifecycle codified in CONTRIBUTING.md §Pull Request Process + a PR
 > template checkbox, and post-review conduct added to the H1 dispatch prompts.
-> Remaining for #681: required-status-check selection, merge queue, and the graduated
-> human-review decision (§8 Q2).
+> **Second tranche (2026-07-04, same PR): §8 Q2 DECIDED by owner — "gate + queue
+> suffices for routine green PRs."** Landed: required-check set in `settings.yml`
+> (PR title check, Review gate, schema, rust, go, typescript, hash-parity; linear
+> history; `allow_auto_merge`), `automerge.yml` (arms squash auto-merge on ready
+> non-risk PRs; refuses `breaking`/`contract-test`/`needs-human-input`/proto-touching
+> and requests a human instead), `agents/merge-queue.md` rewritten as the PR-shepherd
+> role (never merges directly), CONTRIBUTING §7 graduated review. Remaining for #681:
+> confirm the Settings app is installed so the ruleset syncs, and evaluate a native
+> merge queue (merge-group testing) once ruleset management is confirmed — auto-merge
+> delivers merge-when-green today.
 
 - Extend `.github/settings.yml` (settings-as-code is already established by #670) with the
   ruleset: required status checks = `PR title check`, `rust`, `go`, `ts`, `schema`,

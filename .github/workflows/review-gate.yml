@@ -12,8 +12,9 @@ name: Review gate
 #     a separate, risk-label-scoped rule per H3's graduated-review model)
 #
 # Failure output names exactly what to fix (proposal §7 R1: remediation in
-# the error). Advisory until the H3 ruleset lists it as required; pairs with
-# `required_conversation_resolution` in .github/settings.yml.
+# the error). Listed as a REQUIRED status check in .github/settings.yml
+# (owner decision 2026-07-04: gate + queue suffices for routine green PRs);
+# pairs with `required_conversation_resolution` there.
 
 on:
   pull_request:
@@ -33,6 +34,8 @@ concurrency:
 
 jobs:
   gate:
+    # Distinct check-run name — this is the context listed in settings.yml.
+    name: Review gate
     if: '!github.event.pull_request.draft'
     runs-on: ubuntu-latest
     steps:
