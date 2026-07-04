@@ -12,6 +12,8 @@ out/
 
 # Generated code
 gen/
+# Generated onboarding/output trees (just governance-onboard; CLAUDE.md never-commit list)
+dist/
 
 # IDE
 .idea/
