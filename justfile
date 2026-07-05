@@ -786,25 +786,34 @@ morning:
     echo "--- Open PRs ---"
     gh pr list --limit 20 2>/dev/null || echo "(gh not configured)"
     echo ""
-    echo "--- Sprint Status (GitHub Issues) ---"
-    MILESTONE=$(gh api repos/:owner/:repo/milestones --jq '[.[] | select(.state=="open")] | sort_by(.due_on) | .[0].title' 2>/dev/null || echo "")
-    if [ -n "$MILESTONE" ]; then
-      echo "Active milestone: $MILESTONE"
-      echo ""
-      echo "  Open:"
-      gh issue list --milestone "$MILESTONE" --state open --json number,title,assignees,labels \
-        --jq '.[] | "    #\(.number) [\(.assignees | map(.login) | join(",") // "unassigned")] \(.title)"' 2>/dev/null
-      echo ""
-      echo "  Closed (recently):"
-      gh issue list --milestone "$MILESTONE" --state closed --limit 5 --json number,title \
-        --jq '.[] | "    #\(.number) ✓ \(.title)"' 2>/dev/null
-      echo ""
-      echo "  Blocked:"
-      gh issue list --label "blocked" --state open --json number,title \
-        --jq '.[] | "    #\(.number) ⚠ \(.title)"' 2>/dev/null
+    echo "--- Sprint Status (Project Iteration → sprint labels; H2 #693) ---"
+    PROJECT="${KAIZEN_PROJECT_NUMBER:-5}"
+    OWNER=$(gh repo view --json owner -q .owner.login 2>/dev/null || echo "")
+    ITER=$(gh api graphql -f query='query($login:String!,$number:Int!){
+        user(login:$login){projectV2(number:$number){
+          field(name:"Iteration"){... on ProjectV2IterationField{
+            configuration{iterations{title startDate duration}}}}}}}' \
+      -f login="$OWNER" -F number="$PROJECT" --jq '
+        [.data.user.projectV2.field.configuration.iterations[]
+         | select(((.startDate+"T00:00:00Z") | fromdateiso8601) <= now
+                  and now < (((.startDate+"T00:00:00Z") | fromdateiso8601) + .duration*86400))]
+        | (.[0].title // empty)' 2>/dev/null || echo "")
+    if [ -n "$ITER" ]; then
+      echo "Current iteration: $ITER (Project #$PROJECT)"
     else
-      echo "(No active milestone found)"
+      echo "(Iteration read unavailable — sprint-* labels below are authoritative)"
     fi
+    echo ""
+    for L in $(gh issue list --state open --limit 200 --json labels \
+        --jq '[.[].labels[].name | select(startswith("sprint-"))] | unique | .[]' 2>/dev/null); do
+      OPEN=$(gh issue list --label "$L" --state open --json number --jq length 2>/dev/null || echo "?")
+      READY=$(bash scripts/orchestration/ready.sh "$L" 2>/dev/null | grep -c '"number"' || true)
+      echo "  $L: $OPEN open, $READY ready"
+    done
+    echo ""
+    echo "  Blocked:"
+    gh issue list --label "blocked" --state open --json number,title \
+      --jq '.[] | "    #\(.number) ⚠ \(.title)"' 2>/dev/null
     echo ""
     echo "--- Pulling latest main ---"
     git checkout main 2>/dev/null && git pull origin main 2>/dev/null
@@ -1146,9 +1155,9 @@ autonomous-shutdown:
     echo "✓ Multiclaude fully stopped."
 
 # Internal: emit one JSON object per line for "ready" issues with the given label.
-# An issue is ready when (1) it has no open PR closing it, AND (2) every "#N"
-# listed under "## Blocked by" in its body refers to a CLOSED issue (or no
-# blockers exist). Prefers beads ('bd ready') when initialized.
+# Ready = open ∧ unclaimed ∧ no closing PR ∧ no OPEN native dependency edges
+# (H2 #692 — one GraphQL query; falls back to beads, then the deprecated
+# body-parse, until P3 deletes the fallbacks).
 _ready label:
     @bash scripts/orchestration/ready.sh "{{label}}"
 
@@ -1181,25 +1190,16 @@ autonomous-sprint sprint_num:
     # Use _ready to filter blocked or in-flight issues.
     ISSUES=$(just _ready "$LABEL")
     if [ -z "$ISSUES" ]; then
-      # Distinguish "no work ready" (all blocked or in-flight) from "no Blocked-by
-      # structure exists" (legacy sprint). If at least one labeled issue has a
-      # "## Blocked by" section, _ready is authoritative — empty means "wait."
-      # If NO labeled issue has the structure, fall back to legacy label/milestone.
-      HAS_STRUCTURE=$(gh issue list --label "$LABEL" --state open --limit 50 --json body \
-        --jq '[.[] | select(.body | contains("## Blocked by"))] | length' 2>/dev/null || echo "0")
-      if [ "$HAS_STRUCTURE" = "0" ]; then
-        ISSUES=$(gh issue list --label "$LABEL" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
-        if [ -z "$ISSUES" ]; then
-          echo "  No issues found with label '$LABEL', trying milestone..."
-          ISSUES=$(gh issue list --milestone "$MS" --state open --json number,title --jq '.[] | @json' 2>/dev/null)
-        fi
+      # Post-#692, _ready is authoritative: the native graph marks edge-less
+      # issues ready, so an empty set means blocked / in-flight / claimed — or
+      # nothing open at all. (HAS_STRUCTURE heuristic + milestone fallback
+      # removed by H2 P2, #693 — Milestones are closed.)
+      OPEN=$(gh issue list --label "$LABEL" --state open --json number --jq length 2>/dev/null || echo 0)
+      if [ "$OPEN" = "0" ]; then
+        echo "  No open issues labeled '$LABEL'. Nothing to launch."
       else
-        echo "  ⚠ No ready issues for sprint {{sprint_num}}: every labeled issue is either blocked by an open dependency or has an in-flight PR. Wait for review/merge, then re-run."
-        exit 0
+        echo "  ⚠ $OPEN open issue(s) for '$LABEL', none ready (blocked, in-flight, or claimed). Wait for merges/releases, then re-run."
       fi
-    fi
-    if [ -z "$ISSUES" ]; then
-      echo "  ⚠ No issues found for sprint {{sprint_num}} via label or milestone. Nothing to launch."
       exit 0
     fi
     COUNT=0

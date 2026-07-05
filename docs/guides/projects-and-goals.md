@@ -109,6 +109,12 @@ Three saved views are "same data, three lenses" — no duplication:
 
 ## Migration from Milestones
 
+> **Transition exited 2026-07-05 (H2 #693):** the orchestration layer speaks
+> GraphQL — `_ready` reads native dependency edges (#692), `just morning`
+> reads the Iteration field with `sprint-*` labels as the machine fallback,
+> and all Milestones are closed. The sections below are the historical
+> migration record.
+
 The repo already runs a parallel `sprint-N` **label** system (`beads-sync`,
 `sprint-status`, `evening` all key off labels). So automation keeps working if we keep
 those labels and move only the human/reporting sprint axis to the Iteration field.
