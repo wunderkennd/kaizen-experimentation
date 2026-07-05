@@ -145,6 +145,28 @@ GITHUB_TOKEN=<admin-PAT> pulumi up
 - `pulumi preview` against a repo that doesn't exist 404s — that's the
   existence check for unverified siblings.
 
+### One-off apply without Pulumi (create vs UPDATE)
+
+`POST /rulesets` and the UI's "Import a ruleset" only **create** — ruleset
+names are unique per repo, so re-applying an edited JSON 422s with
+`Name must be unique` (hit live 2026-07-05). Create-or-update by hand:
+
+```bash
+REPO=owner/name
+ID=$(gh api "repos/$REPO/rulesets" --jq '.[] | select(.name=="main") | .id')
+if [ -n "$ID" ]; then
+  gh api -X PUT  "repos/$REPO/rulesets/$ID" --input .github/rulesets/main.json
+else
+  gh api -X POST "repos/$REPO/rulesets"     --input .github/rulesets/main.json
+fi
+# verify the live rules on the default branch:
+gh api "repos/$REPO/rules/branches/main" \
+  --jq '[.[] | select(.type=="required_status_checks")][0].parameters.required_status_checks[].context'
+```
+
+This is exactly the drift-prone toil the Pulumi stack exists to replace —
+prefer `pulumi up` once its PAT story (H5) is set up.
+
 ## Org migration (wunderkind-ventures)
 
 Sequencing that keeps automation alive through the move:
