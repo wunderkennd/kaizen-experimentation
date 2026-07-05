@@ -24,6 +24,7 @@ config:
     governanceChecks:
       - "PR title check / check"
       - "Review gate / gate"
+      - "PR size / check"
     orgMode: false
     orgName: wunderkind-ventures
     orgEnforcement: disabled

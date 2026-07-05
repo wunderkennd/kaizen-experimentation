@@ -41,7 +41,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FLEET_CONFIG = REPO_ROOT / "infra" / "github-governance" / "Pulumi.governance.yaml"
 HOST_REPO = "kaizen-experimentation"  # its callers are the local-path ones
-REUSABLES = ["_review-gate.yml", "_pr-title.yml", "_automerge.yml"]
+REUSABLES = ["_review-gate.yml", "_pr-title.yml", "_automerge.yml", "_pr-size.yml"]
 
 try:
     import yaml
@@ -175,6 +175,36 @@ jobs:
 """
 
 
+def pr_size_caller(ref_repo: str, ref: str) -> str:
+    return f"""{GENERATED_BANNER}name: PR size
+
+# Right-sized-PR gate (origin: kaizen-experimentation #684 — omnibus PRs
+# review worse). Soft limit warns, hard limit fails; 'oversize-approved'
+# label + justifying comment overrides for genuinely atomic diffs.
+# Context: "PR size / check". Thresholds/exemptions tunable via `with:`.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-size-${{{{ github.event.pull_request.number }}}}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: PR size
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: {ref_repo}/.github/workflows/_pr-size.yml@{ref}
+"""
+
+
 def ruleset_json(repo: dict, spec: dict) -> str:
     contexts, seen = [], set()
     for c in list(spec.get("governanceChecks", [])) + list(repo.get("requiredChecks", []) or []):
@@ -272,6 +302,7 @@ def emit(spec: dict, out: Path) -> dict[str, dict[str, str]]:
             ".github/workflows/review-gate.yml": review_gate_caller(ref_repo, ref),
             ".github/workflows/pr-title.yml": pr_title_caller(ref_repo, ref),
             ".github/workflows/automerge.yml": automerge_caller(ref_repo, ref),
+            ".github/workflows/pr-size.yml": pr_size_caller(ref_repo, ref),
             ".github/rulesets/main.json": ruleset_json(repo, spec),
             "README.md": repo_readme(repo, ref_repo, ref),
         }

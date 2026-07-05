@@ -30,13 +30,13 @@ onboarded (a required check that never reports would block every merge).
 
 | Layer | Lives at | Applied by |
 | --- | --- | --- |
-| **Workflow logic** (Review gate, PR-title lint, auto-merge) | `.github/workflows/_review-gate.yml`, `_pr-title.yml`, `_automerge.yml` (reusable, `workflow_call`) | Each repo adds ~20-line **caller** workflows |
+| **Workflow logic** (Review gate, PR-title lint, auto-merge, PR-size gate) | `.github/workflows/_review-gate.yml`, `_pr-title.yml`, `_automerge.yml`, `_pr-size.yml` (reusable, `workflow_call`) | Each repo adds ~20-line **caller** workflows |
 | **Branch protection** (required checks, thread resolution, linear history) | `.github/rulesets/main.json` (this repo's copy) + `infra/github-governance/` (fleet) | `pulumi up` with an admin PAT, or one-time import/`gh api` per repo |
 | **Repo toggles** (allow auto-merge, delete branch on merge) | Documented here; `settings.yml` keeps the intent record | One-time: Settings → General per repo (not ruleset material) |
 
 Check-run contexts from reusable workflows are two-segment —
 **`<caller job name> / <callee job name>`** — so the required contexts are
-`Review gate / gate` and `PR title check / check`. Repo-local CI jobs
+`Review gate / gate`, `PR title check / check`, and `PR size / check`. Repo-local CI jobs
 (schema/rust/go/…) keep single-segment names.
 
 ## Onboard a sibling repo

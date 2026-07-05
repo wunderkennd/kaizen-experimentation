@@ -150,7 +150,8 @@ reviewer feedback → merge**, and the review-feedback step is enforced by the
    exactly what to address) and natively by the ruleset's
    `required_review_thread_resolution`.
 6. **All required checks must pass**: `PR title check / check`,
-   `Review gate / gate`, `schema`, `rust`, `go`, `typescript`, `hash-parity`
+   `Review gate / gate`, `PR size / check`, `schema`, `rust`, `go`,
+   `typescript`, `hash-parity`
    (path-skipped jobs satisfy the requirement on unrelated PRs; the two-segment
    names are the reusable-workflow check contexts — H6). Set as a native
    ruleset: `.github/rulesets/main.json`, stamped fleet-wide by

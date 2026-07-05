@@ -54,6 +54,7 @@
         "required_status_checks": [
           { "context": "PR title check / check" },
           { "context": "Review gate / gate" },
+          { "context": "PR size / check" },
           { "context": "schema" },
           { "context": "rust" },
           { "context": "go" },
