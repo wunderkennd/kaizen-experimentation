@@ -69,3 +69,5 @@ jobs:
           fi
           gh issue comment 692 --body-file "$OUT"
           [ "$APPLY_OK" -eq 1 ] && [ "$DRIFT_OK" -eq 1 ]
+
+# rerun-nonce: 2 (post #680 body de-tokenization — see the P1 parity finding)
