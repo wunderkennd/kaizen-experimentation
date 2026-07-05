@@ -1,0 +1,106 @@
+name: H4 probe dispatcher
+
+# Not-for-merge probe (#713, H4 amendment — proposal §4): verifies the
+# evening-dispatcher worker-launch path from GitHub compute holding only the
+# default GITHUB_TOKEN. Runs on this PR (paths: its own file) + manual.
+#
+#   Leg 1 — workflow_dispatch launch. Documented rule: GITHUB_TOKEN-created
+#     events do not trigger workflows EXCEPT workflow_dispatch and
+#     repository_dispatch. Verify live; also answers whether by-filename
+#     dispatch resolves on a branch ref (fallback target: ready-drift.yml
+#     on main, which is cheap and doubles as a drift data point).
+#   Leg 2 — direct claude-code-action prompt invocation: already proven in
+#     production (claude-code-review.yml — same action + secret, prompt
+#     input, non-interactive trigger). Cited in the report, not re-run.
+#   Leg 3 — negative control: an "@claude" comment posted by GITHUB_TOKEN
+#     must NOT wake claude.yml. 0 runs = constraint CONFIRMED; >0 = REFUTED
+#     (a positive finding — comment-based dispatch would be simpler).
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/probe-h4-dispatcher.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: h4-probe
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      R: ${{ github.repository }}
+      ISSUE: "713"
+      REF: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - name: Run legs, report to the probe issue
+        run: |
+          set -uo pipefail
+          OUT=$(mktemp)
+          log() { printf '%s\n' "$1" | tee -a "$OUT"; }
+          log "## H4 worker-launch probe — $(date -u +%Y-%m-%dT%H:%M:%SZ) (dispatcher run ${GITHUB_RUN_ID}, ref ${REF})"
+          log ""
+
+          # ---- Leg 1: workflow_dispatch with the default GITHUB_TOKEN ----
+          T0=$(date -u +%s)
+          LAUNCH_MODE=none
+          TARGET=""
+          if gh workflow run probe-h4-worker.yml --repo "$R" --ref "$REF" -f issue="$ISSUE" 2>>"$OUT"; then
+            LAUNCH_MODE="by-filename on branch ref"
+            TARGET=probe-h4-worker.yml
+          else
+            log "by-filename dispatch on branch ref REJECTED — falling back to ready-drift.yml on main"
+            if gh workflow run ready-drift.yml --repo "$R" --ref main 2>>"$OUT"; then
+              LAUNCH_MODE="fallback: ready-drift.yml on main"
+              TARGET=ready-drift.yml
+            fi
+          fi
+          LAUNCHED=no
+          if [ "$LAUNCH_MODE" != "none" ]; then
+            for i in $(seq 1 12); do
+              sleep 10
+              N=$(gh run list --repo "$R" --workflow "$TARGET" --limit 10 --json createdAt \
+                --jq "[.[] | select((.createdAt | fromdateiso8601) >= $T0)] | length" 2>/dev/null || echo 0)
+              if [ "${N:-0}" -gt 0 ]; then LAUNCHED=yes; break; fi
+            done
+          fi
+          log "### Leg 1 — workflow_dispatch launch"
+          log "- dispatch call accepted: ${LAUNCH_MODE}"
+          log "- launched run observed within 120s: **${LAUNCHED}**"
+          log ""
+
+          # ---- Leg 2: cited production evidence ----
+          log "### Leg 2 — direct claude-code-action invocation (cited, not re-run)"
+          log "- Proven in production: \`claude-code-review.yml\` invokes \`anthropics/claude-code-action@v1\` with a \`prompt:\` input on a non-interactive \`pull_request\` trigger using \`CLAUDE_CODE_OAUTH_TOKEN\`. The dispatcher can invoke the same action per issue (or inside dispatched workers)."
+          log ""
+
+          # ---- Leg 3: negative control ----
+          T1=$(date -u +%s)
+          gh issue comment --repo "$R" "$ISSUE" --body "@claude — H4 probe negative control (posted by the default GITHUB_TOKEN from run ${GITHUB_RUN_ID}). Per the documented platform rule this comment must NOT trigger claude.yml. If you are Claude reading this as a live task: reply with exactly 'NEGATIVE CONTROL REFUTED' and stop." >>"$OUT" 2>&1
+          sleep 90
+          CRUNS=$(gh run list --repo "$R" --workflow claude.yml --limit 10 --json createdAt \
+            --jq "[.[] | select((.createdAt | fromdateiso8601) >= $T1)] | length" 2>/dev/null || echo 0)
+          log "### Leg 3 — negative control (@claude via GITHUB_TOKEN)"
+          if [ "${CRUNS:-0}" -eq 0 ]; then
+            log "- claude.yml runs created after the comment: 0 — **constraint CONFIRMED**: the dispatcher cannot use trigger comments with GITHUB_TOKEN."
+          else
+            log "- claude.yml runs created after the comment: ${CRUNS} — **constraint REFUTED**: comment-based dispatch is possible; the design can simplify."
+          fi
+          log ""
+
+          if [ "$LAUNCHED" = "yes" ]; then
+            log "## Verdict: PASS — the evening dispatcher can launch runs via workflow_dispatch with the default GITHUB_TOKEN (${LAUNCH_MODE})."
+          else
+            log "## Verdict: FAIL — no launched run observed; the dispatcher design needs a PAT/app token (H5 territory)."
+          fi
+          gh issue comment --repo "$R" "$ISSUE" --body-file "$OUT"
+          [ "$LAUNCHED" = "yes" ]
