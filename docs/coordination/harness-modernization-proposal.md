@@ -25,7 +25,7 @@ merge queue, rulesets, `claude-code-action`).
 | H1 | Claim protocol + executor-agnostic dispatch (`work-on N executor=X`) | #521 duplicate PRs, tool lock-in | ~1–2 days |
 | H2 | Native sub-issue dependencies as the work graph; retire awk/`## Blocked by` parsing | fragile DAG, hardcoded `sprint-I.3` automation, beads sync burden | ~1–2 days |
 | H3 | Ruleset + required checks + GitHub merge queue; merge-queue agent becomes a shepherd | prompt-as-infrastructure, un-codified branch protection | ~1 day + settings |
-| H4 | Executor consolidation pilot: Claude Code (remote/scheduled/`@claude`) as the reference executor, with ADR-031-style kill criteria | 5-tool maintenance surface, local-daemon dependence | 1 sprint, evaluated |
+| H4 | Executor consolidation pilot: Claude Code (remote/scheduled/`@claude`) as the reference executor, with ADR-031-style kill criteria. *Amended 2026-07-05:* the pilot vehicle is a GitHub-native **evening dispatcher**; multiclaude retires behind it on evidence (don't vendor the daemon) | 5-tool maintenance surface, local-daemon dependence | 1 sprint, evaluated |
 
 ---
 
@@ -334,6 +334,76 @@ speaks GraphQL**." H2 is that "until."
 
 ### H4 — Executor consolidation pilot (1 sprint, with kill criteria)
 
+> **Amended 2026-07-05 (owner decision): the multiclaude question is settled as an
+> absorption already in progress — finish it, don't vendor it.** Prompted by the owner
+> asking whether to incorporate `dlorenc/multiclaude` directly into the harness. The
+> audit answer: the harness has already absorbed multiclaude's *coordination plane*,
+> capability by capability — task queue/state → Issues + native dependency edges +
+> GraphQL `_ready` (H2); assignment → the claim protocol (H1); merge queue + CI gating →
+> ruleset required checks + `automerge.yml` + review/size gates (H3/H6); agent personas →
+> the OKF registry (canonical; `.multiclaude/agents/*` carry banners pending #682's
+> generator); worktree isolation → first-party Claude Code. What remains uniquely
+> multiclaude is the **local supervision daemon**: overnight parallel workers on the
+> owner's machine, with stall-detection and restart. Decision, honoring §5's
+> deprecated-by-evidence-not-by-proposal rule:
+>
+> - **Do not vendor the daemon.** Process supervision is the fiddly 20%; vendoring means
+>   owning its bugs while upstream keeps moving. It also points the wrong way — every
+>   recent harness move pushed execution *off* the local machine (`claude.yml`, the
+>   workflow-vehicle pattern, remote sessions, `ready-drift.yml`).
+> - **Build the replacement as `.github/workflows/evening-dispatcher.yml`**: a scheduled
+>   workflow that reads `_ready` for the target cohort, posts claims, and launches one
+>   worker per issue. **Claim expiry is the self-healing loop** — a dead worker's claim
+>   lapses and the next tick re-dispatches with R2 resume semantics. No supervisor
+>   process anywhere; the schedule survives the owner's laptop being off (the
+>   session-mortality boundary dissolves).
+> - **Multiclaude keeps `just evening` until the dispatcher wins on evidence** — the
+>   pilot below stops being a one-shot comparison and becomes the graduated cutover.
+>
+> **Probes before build** (locked-plan v2 rule; two documented-but-wrong platform
+> assumptions burned this repo on 2026-07-04):
+>
+> 1. **Worker-launch path.** Documented constraint to design around: events created with
+>    the default `GITHUB_TOKEN` do not trigger other workflows — a dispatcher comment
+>    saying "@claude …" will NOT wake `claude.yml`. Probe, in preference order: invoke
+>    `claude-code-action` directly as a dispatcher job step with a `prompt` input;
+>    `workflow_dispatch` a worker workflow per issue; app/PAT token for trigger comments
+>    (H5 credential territory — least preferred).
+> 2. **Wall-clock and parallelism.** One right-sized issue (PR-size-gate sized) per
+>    worker inside the 6-hour hosted-job ceiling; matrix fan-out for N workers; public
+>    repo → Actions minutes are free, so marginal cost is API spend only.
+> 3. Claim writes from Actions `GITHUB_TOKEN` are already proven (the H2 workflow
+>    vehicles) — no probe needed.
+>
+> **Cutover evidence (graduated — same doctrine as H2's drift window):**
+>
+> - **Shadow**: ≥3 nights of dry-run — the dispatcher logs what it *would* claim and
+>   dispatch; compare against what multiclaude actually picked up, diagnosing
+>   disagreements the way `READY_DRIFT` mismatches are diagnosed on #680.
+> - **Limited live**: the dispatcher owns one cohort for ~a week, multiclaude disabled
+>   for that cohort. Metrics unchanged from #682: duplicate-PR rate **0** (claims),
+>   acceptance **≥ multiclaude baseline**, review burden and cost **≤ current**.
+> - **Full**: one complete overnight sprint driven by the dispatcher with multiclaude
+>   never invoked — the acceptance test for retirement.
+> - **Retire**: `just evening` retargets to arm/inspect the dispatcher; `.multiclaude/`
+>   shrinks to an archival tombstone plus a how-to-resurrect note; #682's generator
+>   drops the multiclaude view target; beads and Gas Town stay governed by §8 Q4 —
+>   this amendment settles the multiclaude/overnight half only.
+> - **Kill** (unchanged in spirit): any metric regresses → multiclaude remains the
+>   overnight default and the dispatcher stays a secondary adapter. H1's
+>   executor-agnosticism means nothing is lost either way.
+>
+> **Pre-step, needs access beyond a repo-scoped session**: a review of upstream
+> `dlorenc/multiclaude` as it exists today — license check plus a short
+> worth-lifting-narrowly-with-attribution list (candidates: stall-detection heuristics,
+> worker prompt scaffolding). Upstream may itself have grown GitHub-native features
+> since our integration was built; the review should say so either way.
+>
+> Two knock-ons for #682's child list: the deepagents 10-primitive audit now targets
+> the **dispatcher + worker preamble** (what must the replacement cover — planning,
+> context offload, HITL) rather than a tool being retired; and the Success bullet
+> below reads "becomes optional" — sharpened here to the Retire checklist above.
+
 Run this like ADR-031 — a bounded pilot with explicit success/kill criteria, not a rewrite:
 
 - **Hypothesis**: Claude Code covers three of the five executor roles with zero bespoke
@@ -467,7 +537,7 @@ The moves (per-PR checklist on #699):
 | H1 | claim protocol · `scripts/orchestration/` · `work-on`/`sprint` façade | — | 1 issue (absorbs #521; relates #522) |
 | H2 | probe-gated native work graph: dependency edges · GraphQL `_ready` (graduated cutover + drift window) · Iteration-based sprint reads · then delete parsers/auto-promote · slim beads-sync | H1 (claims — satisfied 2026-07-04, #684) | #680 (plan v2, 2026-07-05; Goal-child *scoping* for #650/#654/#655 split out to the Goal issues) |
 | H3 | ruleset + merge queue · shepherd role · graduated human review | H0 (#632 for review signal) | 1 issue, `chore` + settings change |
-| H4 | Claude-executor pilot + agent registry | H1, H3 | 1 Goal (it has a metric: duplicate rate 0, acceptance ≥ multiclaude baseline, cost ≤ current) |
+| H4 | Claude-executor pilot + agent registry (registry seeded via #677; *amended 2026-07-05*: evening-dispatcher design + graduated multiclaude retirement) | H1, H3 | #682 (Goal; metric: duplicate rate 0, acceptance ≥ multiclaude baseline, cost ≤ current) |
 | H5 | Least-privilege worker credentials + dispatch instrumentation (see §7 R4) | H1 | 1 issue, `chore` — replaces the deferred `--dangerously-skip-permissions` item |
 | H6 | Ecosystem governance: reusable workflows · ruleset JSON · Pulumi fleet stamping · org-migration path | H3 (gate + graduated review are what gets fleet-ified) | 1 issue, `chore` + owner decision on wunderkind-ventures transfer timing |
 | H7 | Delivery-practice codification: lifecycle map · templates (PRD/RFC/ux-spec, OKF frontmatter) · locked-plan v2 + plan-review · advisory doc-lints | — (extends the `prime-issue` ratchet; composes with #683) | #699, four right-sized PRs |
@@ -592,5 +662,8 @@ multi-executor fleet; Issues/PRs/ADRs are our memory) and adopting any framework
    trail?
 4. **Gas Town's future** — if H4 succeeds, does interactive steering move to Claude Code
    teams, or is the Mayor/polecat model worth keeping for its tmux-native visibility?
+   *(Narrowed 2026-07-05: the H4 amendment settles the multiclaude/overnight half —
+   evidence-gated retirement behind the evening dispatcher. This question now covers
+   interactive steering only.)*
 5. **Devin** — `.devin/skills/` and comment-citations show it's used for review/coverage;
    should it become an H1 adapter, or remain manual-dispatch outside the harness?
