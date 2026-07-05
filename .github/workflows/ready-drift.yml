@@ -1,0 +1,50 @@
+name: Ready drift check
+
+# H2 graduated-cutover evidence (#692 → #694 gate): daily comparison of the
+# native dependency-graph `_ready` against the deprecated body-parse path,
+# per open sprint-* cohort. Comments on #680 ONLY on drift (or on an evidence
+# gap — a native-path failure counts as one); clean days are silent and the
+# Actions run history IS the clean-window record the #694 gate reads.
+# P3 deletes this workflow together with the fallback path.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare native vs body-parse readiness per cohort
+        run: |
+          set -uo pipefail
+          LABELS=$(gh issue list --state open --limit 200 --json labels \
+            --jq '[.[].labels[].name | select(startswith("sprint-"))] | unique | .[]' || true)
+          if [ -z "$LABELS" ]; then
+            echo "No open sprint-* cohorts — clean by vacuity."
+            exit 0
+          fi
+          FAIL=0
+          OUT=$(mktemp)
+          for L in $LABELS; do
+            echo "── cohort: $L" | tee -a "$OUT"
+            if ! READY_DRIFT=1 bash scripts/orchestration/ready.sh "$L" 2>&1 | tee -a "$OUT"; then
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" -eq 1 ]; then
+            gh issue comment 680 --body "$(printf '## READY_DRIFT — mismatch or evidence gap (%s)\n\n```\n%s\n```\n\nNative vs body-parse disagreement (or native-path failure). The #694 clean-window count resets; diagnose before P3 proceeds. Source: ready-drift.yml run %s.' "$(date -u +%F)" "$(cat "$OUT")" "$GITHUB_RUN_ID")"
+            exit 1
+          fi
+          echo "Drift clean across cohorts:"
+          echo "$LABELS"
