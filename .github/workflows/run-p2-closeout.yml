@@ -59,5 +59,6 @@ jobs:
           else
             log "## Result: ATTENTION — failed=$FAILED remaining=$REMAINING"
           fi
-          gh issue comment 693 --body-file "$OUT"
+          # --repo is required: no checkout step, so gh can't infer it from git.
+          gh issue comment --repo "$R" 693 --body-file "$OUT"
           [ "$FAILED" -eq 0 ] && [ "$REMAINING" = "0" ]
