@@ -225,6 +225,8 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Phase 5 plan & changelog | `docs/coordination/phase5-implementation-plan.md`, `docs/coordination/CHANGELOG-phase5.md` |
 | Playbook | `docs/coordination/phase5-playbook.md` |
 | Developer guides | `docs/guides/` (git-hygiene, github-issues-workflow, orchestration-workflow, pr-triage-and-cleanup, merge-conflict-resolution, gastown-setup, palette) |
+| **Delivery lifecycle (H7)** | `docs/guides/delivery-lifecycle.md` — idea → PRD → RFC/ADR → spec → plan-review → `prime-issue` → dispatch; plan quality bar; Lock convention |
+| Document templates | `docs/templates/` (PRD, RFC; ux-spec pending #699 PR-4) + `docs/superpowers/templates/` (locked plan) |
 | Issue specs (QoE etc.) | `docs/issues/` |
 | Infrastructure (Pulumi) | `infra/` (`main.go`, `Pulumi.{dev,staging,prod}.yaml`, `fullstack_test.go`) |
 | GitHub governance (rulesets, H6) | `.github/rulesets/main.json` (this repo) · `infra/github-governance/` (fleet stamping, org-ready) |
