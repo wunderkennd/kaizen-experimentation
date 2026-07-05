@@ -400,6 +400,49 @@ The move, three layers (all landed with this section):
 kaizen-experimentation last (most automation pinned to its identity) → flip `orgMode` once
 the org plan supports it.
 
+### H7 — Codify delivery practices: requirements → design → spec → plan (added 2026-07-05)
+
+The knowledge-layer counterpart to H1–H6: requirements gathering, planning, UX design,
+architecture, and spec writing are already *practiced* well here — the move is to finish
+codifying them with the same mechanism that carried the rest of the harness:
+**artifact conventions + skill carriers + advisory lints promoted to required checks once
+proven**. Tracking: #699 (four right-sized PRs — this phase practices what it codifies).
+
+Inventory (2026-07-05) — codified in pockets, uneven across the lifecycle:
+
+- **Planning is the strongest pocket and proves the enforcement model**:
+  `docs/superpowers/{specs,plans}/` + `locked-plan-template.md` (whose Cross-phase
+  artifacts table encodes the ADR-026 P3 orphaned-RPC incident) + `just prime-issue`,
+  which *refuses to dispatch an issue that has no plan* and stamps the plan's path/SHA
+  into the issue body. An issue without a plan cannot enter the harness — that ratchet
+  is the pattern everything else extends.
+- **Requirements**: `to-prd`/`grill-me`/`grill-with-docs` skills exist; Goals carry the
+  one-metric rule — but PRDs have no stored-artifact convention (requirements evaporate
+  into issue bodies).
+- **Architecture**: ADRs 001–030 with strong discipline; the RFC precedent (#543–545,
+  cross-system boundaries) is uncodified — when-RFC-vs-ADR is unwritten.
+- **Specs**: the **Lock** convention (a decision with the burden of justification on the
+  challenger) is practiced but unnamed; entry/exit criteria undocumented.
+- **UX is the weakest link**: Palette standardizes execution polish, but there is no
+  UX-spec stage — UI decisions get made ad-hoc inside plans (the CodeMirror Lock).
+
+The moves (per-PR checklist on #699):
+
+1. **One lifecycle map** — `docs/guides/delivery-lifecycle.md`: idea → PRD → RFC (iff
+   the boundary crosses repos/teams) / ADR (iff a decision needs a permanent record) →
+   spec (Locks) → locked plan (**plan-review** before blessing — the #680 v1→v2
+   exercise, codified) → `prime-issue` → dispatch. Every stage names its artifact,
+   carrier (skill/template), and check.
+2. **Templates as code** — `docs/templates/` (PRD, RFC, ux-spec) with OKF frontmatter
+   (`type`/status/links — the registry pattern's second consumer, composing with #683);
+   `locked-plan-template.md` upgraded to this session's plan-quality bar (probe-gated
+   platform assumptions, decisions-not-options, executor constraints, phases sized to
+   the PR gate, graduated cutover).
+3. **Checks, not exhortations** (§7 R1) — `scripts/check_docs.py` extending the
+   `check_okf.py` pattern: ADR/spec/plan required sections, Lock format, Cross-phase
+   table when multi-phase, one metric per Goal. Advisory first; promotion to required
+   only after a clean window (verify-then-require, proven three times in H3/H6).
+
 ---
 
 ## 5. What NOT to change
@@ -427,6 +470,7 @@ the org plan supports it.
 | H4 | Claude-executor pilot + agent registry | H1, H3 | 1 Goal (it has a metric: duplicate rate 0, acceptance ≥ multiclaude baseline, cost ≤ current) |
 | H5 | Least-privilege worker credentials + dispatch instrumentation (see §7 R4) | H1 | 1 issue, `chore` — replaces the deferred `--dangerously-skip-permissions` item |
 | H6 | Ecosystem governance: reusable workflows · ruleset JSON · Pulumi fleet stamping · org-migration path | H3 (gate + graduated review are what gets fleet-ified) | 1 issue, `chore` + owner decision on wunderkind-ventures transfer timing |
+| H7 | Delivery-practice codification: lifecycle map · templates (PRD/RFC/ux-spec, OKF frontmatter) · locked-plan v2 + plan-review · advisory doc-lints | — (extends the `prime-issue` ratchet; composes with #683) | #699, four right-sized PRs |
 
 Each phase is independently shippable and independently revertible; H1+H2 delete more code
 than they add.
