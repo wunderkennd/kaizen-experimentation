@@ -72,8 +72,8 @@ as a comment on the plan's issue (v1 → v2 diffs are the deliverable, as on
 - Skills: pinned in `skills-lock.json`, restored by `just install-skills`
   (`to-prd`, `grill-me`, `grill-with-docs`, `to-issues`,
   `documentation-and-adrs`, `tdd`, `triage`, …).
-- Templates: `docs/templates/` (PRD, RFC; ux-spec arrives in H7 PR-4) and
-  `docs/superpowers/templates/` (locked plan).
+- Templates: `docs/templates/` (PRD, RFC, UX spec) and
+  `docs/superpowers/templates/` (locked plan v2).
 - Checks: `scripts/check_docs.py` (H7 PR-3, advisory) alongside
   `scripts/check_okf.py`; the merge-path checks are already required.
 
