@@ -237,7 +237,7 @@ place (`scripts/orchestration/sprints.json` or derived from the Project Iteratio
 This also relocates `_ready` and friends out of justfile heredocs into testable scripts
 (P7), with `just`-side names unchanged.
 
-### H2 — GitHub-native work graph (~1–2 days, then delete code)
+### H2 — GitHub-native work graph (probe-gated; ~2 days work + a drift window)
 
 Adopt **native issue dependencies** (blocked-by/blocking) and **sub-issues** as the only DAG.
 
@@ -245,24 +245,41 @@ This finishes what #656 started. That PR migrated the *reporting* plane (Project
 Iteration field, Goal issues, three views) but deliberately left the *automation* plane on
 labels/milestones — `projects-and-goals.md` says so explicitly: "the Owner/Iteration fields
 are for humans and the Roadmap; the labels are for machines, **until the orchestration layer
-speaks GraphQL**." H2 is that "until." Live state as of 2026-07-02: Goals #647 and #648 have
-proper sub-issue trees (5 children each; #648 shows 1/5 done), but **#649, #650, #654, #655
-have zero children linked** despite child issues existing (#599–#602, #554, #558 for #649
-alone), and `just morning` still reads Milestones over REST (`justfile:758`) — the
-"transition sprint with both systems live" was never exited.
+speaks GraphQL**." H2 is that "until."
 
-- Backfill the Goal↔sub-issue linkage for #649/#650/#654/#655 (scripted, minutes — the
-  same `sub_issue` API `seed-goals.sh` already uses).
-- Migrate `## Blocked by` sections to real dependency edges (one-time script; keep the body
-  section as human-readable narrative if desired, but tooling stops parsing it).
-- `_ready` becomes a single GraphQL query: open, unclaimed, no open closing PR, zero open
-  blocking issues. Delete the awk parser and the `IN_FLIGHT` grep.
-- Swap `just morning`'s milestone read for the Project Iteration (GraphQL) with the
-  `sprint-N`-label fallback the migration guide already specifies, then close the remaining
-  Milestones — exiting the dual-system transition state.
-- Delete `auto-promote.yml` — GitHub surfaces "unblocked" natively in issue timelines and
-  Project views; if the dispatch-nudge comment is still wanted, one generic workflow on
-  `issues:closed` can query dependents of *any* label.
+> **Plan v2 (2026-07-05)** — reviewed against the post-H1/H6 codebase; full phased
+> checklist lives on #680. What changed from v1 and why:
+>
+> 1. **Probe-gated (P0)**: v1 bet the design on an unverified platform API. This repo was
+>    burned twice in one day by exactly that — the workflow validator rejected the
+>    *documented* `pull_request_review_thread` trigger, and ruleset `evaluate` turned out
+>    Enterprise-gated. Sub-issues are proven live here (the #649 backfill); the
+>    **dependencies API surface is not** (no `data/features/issue-dependencies.yml` flag
+>    exists in github/docs). P0 creates two throwaway issues, exercises the REST edge
+>    endpoints, introspects GraphQL for `blockedBy`/`subIssues`/
+>    `closedByPullRequestsReferences`, and records design A (one GraphQL query per label
+>    cohort) vs design B (GraphQL + batched REST reads) before anything is built.
+> 2. **Graduated cutover, not same-day deletion**: `ready.sh` becomes native-first with the
+>    body-parse path demoted to deprecated fallback plus a `READY_DRIFT=1` mode diffing the
+>    two; the awk parser, the old in-flight grep, and `auto-promote.yml` are deleted only
+>    after ≥5 drift-free days or one full sprint (the repo's own beads-first /
+>    disabled→active pattern). Where design A holds, in-flight detection upgrades from the
+>    `Closes #N` text search to `closedByPullRequestsReferences` — catches manually-linked
+>    PRs, ignores mere mentions, and collapses today's N+1 `gh issue view` calls per
+>    blocker to ≤2 API calls per `_ready` run.
+> 3. **Goal scoping split out**: #649 is backfilled (6 children); #650/#654/#655 still have
+>    **zero children** (re-verified 2026-07-05) because the children need *filing*, not
+>    linking — that's per-goal product scoping owned by the goal owners, tracked on those
+>    Goal issues, no longer on H2's critical path.
+> 4. **Decisions, not options**: `auto-promote.yml` is deleted **without replacement**
+>    (native UI shows unblocked; H1's dispatch loop computes readiness on demand). The
+>    `autonomous-sprint` launcher also drops its `HAS_STRUCTURE` body heuristic and
+>    milestone fallback — after the migration, `_ready` is always authoritative.
+> 5. **Offline tests required** (H1 precedent): fixture-backed predicate tests wired into
+>    `orchestration-tests.yml`; enumerated doc touchpoints (CLAUDE.md sprint/work-tracking
+>    sections, orchestration README, guide's transition note) are in scope, and remaining
+>    Milestones are closed — finally exiting the #656 dual-system transition.
+
 - **Beads/Gas Town**: beads remains a *projection* for `gt` (`beads-sync.sh` reads edges from
   the API instead of body text — smaller script, same behavior). If H4 retires Gas Town,
   beads and both sync scripts retire with it; until then it stays read-side only.
@@ -392,7 +409,7 @@ the org plan supports it.
 | --- | --- | --- | --- |
 | H0 | #632 decision · pin refresh · placeholder fixes · doc archival · unvendor library · worker permissions | — | 1 issue, `chore` |
 | H1 | claim protocol · `scripts/orchestration/` · `work-on`/`sprint` façade | — | 1 issue (absorbs #521; relates #522) |
-| H2 | native dependencies · GraphQL `_ready` · delete parsers/auto-promote · slim beads-sync | H1 (claims) | 1 issue (absorbs the Goal-linkage P0 from status 2026-07-02) |
+| H2 | probe-gated native work graph: dependency edges · GraphQL `_ready` (graduated cutover + drift window) · Iteration-based sprint reads · then delete parsers/auto-promote · slim beads-sync | H1 (claims — satisfied 2026-07-04, #684) | #680 (plan v2, 2026-07-05; Goal-child *scoping* for #650/#654/#655 split out to the Goal issues) |
 | H3 | ruleset + merge queue · shepherd role · graduated human review | H0 (#632 for review signal) | 1 issue, `chore` + settings change |
 | H4 | Claude-executor pilot + agent registry | H1, H3 | 1 Goal (it has a metric: duplicate rate 0, acceptance ≥ multiclaude baseline, cost ≤ current) |
 | H5 | Least-privilege worker credentials + dispatch instrumentation (see §7 R4) | H1 | 1 issue, `chore` — replaces the deferred `--dangerously-skip-permissions` item |
