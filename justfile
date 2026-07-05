@@ -164,6 +164,16 @@ update-skills:
 check-registry:
     python3 scripts/check_okf.py docs/agents/registry
 
+# Lint delivery-lifecycle documents (ADR headers, plan v2 sections, PRD
+# one-metric rule) — advisory; DOCS_LINT_STRICT=1 escalates warnings.
+# See docs/guides/delivery-lifecycle.md (H7, #699).
+check-docs:
+    python3 scripts/check_docs.py .
+
+# Offline tests for the docs lint
+test-check-docs:
+    @bash scripts/test_check_docs.sh
+
 # Restore the optional third-party agent library (msitarzewski/agency-agents)
 # into .claude/agents/. Not committed (gitignored except repo-authored agents
 # like pr-triage.md) — same pattern as skills. Safe to skip; nothing in the
