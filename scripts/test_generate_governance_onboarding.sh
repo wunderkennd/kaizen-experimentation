@@ -27,7 +27,7 @@ check "kaizen-recsys generated" "[ -d '$OUT/kaizen-recsys' ]"
 SIBLINGS=$(find "$OUT" -mindepth 1 -maxdepth 1 -type d | wc -l)
 check "7 sibling repos generated (8 fleet - host)" "[ '$SIBLINGS' -eq 7 ]"
 
-for f in workflows/review-gate.yml workflows/pr-title.yml workflows/automerge.yml rulesets/main.json; do
+for f in workflows/review-gate.yml workflows/pr-title.yml workflows/automerge.yml workflows/pr-size.yml rulesets/main.json; do
   check "kaizen-recsys has .github/$f" "[ -f '$OUT/kaizen-recsys/.github/$f' ]"
 done
 check "kaizen-recsys has README.md" "[ -f '$OUT/kaizen-recsys/README.md' ]"
@@ -46,10 +46,10 @@ out = pathlib.Path(sys.argv[1])
 rs = json.loads((out / "kaizen-recsys/.github/rulesets/main.json").read_text())
 checks = [r for r in rs["rules"] if r["type"] == "required_status_checks"][0]
 contexts = [c["context"] for c in checks["parameters"]["required_status_checks"]]
-assert contexts == ["PR title check / check", "Review gate / gate"], contexts
+assert contexts == ["PR title check / check", "Review gate / gate", "PR size / check"], contexts
 assert rs["enforcement"] == "disabled", rs["enforcement"]
 EOF
-check "sibling ruleset: exactly the 2 governance contexts, enforcement disabled" "[ $? -eq 0 ]"
+check "sibling ruleset: exactly the 3 governance contexts, enforcement disabled" "[ $? -eq 0 ]"
 
 echo "=== apply mode ==="
 PARENT="$TMP/parent"

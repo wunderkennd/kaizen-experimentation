@@ -30,13 +30,13 @@ onboarded (a required check that never reports would block every merge).
 
 | Layer | Lives at | Applied by |
 | --- | --- | --- |
-| **Workflow logic** (Review gate, PR-title lint, auto-merge) | `.github/workflows/_review-gate.yml`, `_pr-title.yml`, `_automerge.yml` (reusable, `workflow_call`) | Each repo adds ~20-line **caller** workflows |
+| **Workflow logic** (Review gate, PR-title lint, auto-merge, PR-size gate) | `.github/workflows/_review-gate.yml`, `_pr-title.yml`, `_automerge.yml`, `_pr-size.yml` (reusable, `workflow_call`) | Each repo adds ~20-line **caller** workflows |
 | **Branch protection** (required checks, thread resolution, linear history) | `.github/rulesets/main.json` (this repo's copy) + `infra/github-governance/` (fleet) | `pulumi up` with an admin PAT, or one-time import/`gh api` per repo |
 | **Repo toggles** (allow auto-merge, delete branch on merge) | Documented here; `settings.yml` keeps the intent record | One-time: Settings → General per repo (not ruleset material) |
 
 Check-run contexts from reusable workflows are two-segment —
 **`<caller job name> / <callee job name>`** — so the required contexts are
-`Review gate / gate` and `PR title check / check`. Repo-local CI jobs
+`Review gate / gate`, `PR title check / check`, and `PR size / check`. Repo-local CI jobs
 (schema/rust/go/…) keep single-segment names.
 
 ## Onboard a sibling repo
@@ -114,8 +114,9 @@ Check-run contexts from reusable workflows are two-segment —
    Notes: the `@main` refs are **owner-qualified** — update them if the
    workflows' home repo transfers to the org. Cross-repo `workflow_call`
    works because kaizen-experimentation is public.
-3. **Open a PR in the sibling with the callers and verify** the two checks
-   report with the expected two-segment names.
+3. **Open a PR in the sibling with the callers and verify** the three
+   governance checks report with the expected two-segment names
+   (`Review gate / gate`, `PR title check / check`, `PR size / check`).
 4. **Enable protection**: in `Pulumi.governance.yaml`, set the repo's
    `enforcement: active` and add its own CI contexts to `requiredChecks`,
    then apply (below). Or one-off: import `.github/rulesets/main.json` in
