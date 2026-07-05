@@ -86,6 +86,11 @@ $BODY
 == Working rules ==
 - One unit of work per session. Leave a merge-ready state: no half-implemented
   features, code orderly and documented, tests green.
+- Keep the PR inside the size gate: soft limit 400 changed lines / 10 files,
+  hard limit 900 / 25 (lockfiles, generated trees, and markdown are exempt —
+  the 'PR size / check' CI check measures exactly this). If the issue's scope
+  cannot fit, do NOT ship an omnibus: deliver the first coherent slice, post
+  an issue comment proposing the split for the remainder, and stop there.
 - Commit incrementally with descriptive messages.
 - progress.log.md is append-only status: flip statuses and add dated entries;
   it is unacceptable to remove or edit existing spec or test content.

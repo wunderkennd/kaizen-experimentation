@@ -247,8 +247,12 @@ labels/milestones — `projects-and-goals.md` says so explicitly: "the Owner/Ite
 are for humans and the Roadmap; the labels are for machines, **until the orchestration layer
 speaks GraphQL**." H2 is that "until."
 
-> **Plan v2 (2026-07-05)** — reviewed against the post-H1/H6 codebase; full phased
-> checklist lives on #680. What changed from v1 and why:
+> **Plan v2 (2026-07-05)** — reviewed against the post-H1/H6 codebase. Executed as
+> **dispatchable sub-issues** #691 (P0 probe) → #692 (P1) → #693 (P2) → #694 (P3,
+> calendar-gated), chained with `## Blocked by` today and converted to native edges by
+> P0 itself; #680 is the coordinator (recommended: one worker session claims P0→P1→P2
+> sequentially for design coherence; P3 dispatches separately after the drift gate).
+> What changed from v1 and why:
 >
 > 1. **Probe-gated (P0)**: v1 bet the design on an unverified platform API. This repo was
 >    burned twice in one day by exactly that — the workflow validator rejected the
@@ -305,6 +309,15 @@ speaks GraphQL**." H2 is that "until."
 > confirm the Settings app is installed so the ruleset syncs, and evaluate a native
 > merge queue (merge-group testing) once ruleset management is confirmed — auto-merge
 > delivers merge-when-green today.
+> **Third tranche (2026-07-05): PR-size gate.** The #684 omnibus (20 files, ~1,300
+> lines, three tranches) drew three real review findings; its focused follow-ups
+> (#689/#690) reviewed clean. Codified per §7 R1 as a check, not a prompt rule:
+> `_pr-size.yml` (reusable, fleet-callable) + `pr-size.yml` caller — soft 400
+> lines/10 files (warn), hard 900/25 (fail) with lockfiles/generated/markdown
+> exempt and an auditable `oversize-approved` label override; the dispatch prompt
+> tells workers to slice-and-propose rather than ship omnibuses. Context
+> "PR size / check" becomes a required ruleset context in a follow-up PR once
+> verified reporting live (verify-then-require, as with the H6 contexts).
 
 - Extend `.github/settings.yml` (settings-as-code is already established by #670) with the
   ruleset: required status checks = `PR title check`, `rust`, `go`, `ts`, `schema`,

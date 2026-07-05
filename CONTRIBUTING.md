@@ -124,6 +124,16 @@ reviewer feedback → merge**, and the review-feedback step is enforced by the
 2. **Open the PR as a draft** while work is in progress. Keep PRs focused —
    one logical change per PR — and include `Closes #<number>` so the Issue
    auto-closes on merge.
+   **Size gate** (enforced by the `PR size / check` CI check — added after
+   the #684 omnibus drew three review findings its focused follow-ups never
+   did): soft limit **400 changed lines / 10 files** (warning), hard limit
+   **900 / 25** (check fails). Lockfiles, generated trees (`gen/`, `dist/`,
+   `test-vectors/`), and markdown are exempt from the counts. If your scope
+   can't fit, split it — deliver the first coherent slice and note the
+   remainder on the issue. Genuinely atomic large diffs (codegen, vendored
+   updates, mechanical migrations) get the **`oversize-approved`** label
+   plus a justifying comment, which turns the check green — deliberate and
+   auditable, never the default.
 3. **Fill in the PR template** (auto-populated when you open a PR).
 4. **Mark the PR ready for review the moment the work is complete.** Ready
    means "I claim this is done": tests green, merge-ready state. Harness

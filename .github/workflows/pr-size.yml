@@ -1,0 +1,31 @@
+name: PR size
+
+# Fleet CALLER for the PR-size gate — logic lives in _pr-size.yml so sibling
+# repos enforce the identical policy. Context: "PR size / check".
+# Runs on drafts too (early signal beats late surprise), and on
+# labeled/unlabeled so the 'oversize-approved' override re-evaluates
+# immediately (same lesson as automerge's disarm-on-late-risk).
+#
+# ADVISORY until wired into .github/rulesets/main.json as a required context
+# (follow-up PR after this check is verified reporting live).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # Caller half of the "PR size / check" context.
+    name: PR size
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/_pr-size.yml
