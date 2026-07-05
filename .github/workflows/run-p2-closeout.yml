@@ -1,0 +1,63 @@
+name: H2 P2 close-out — milestone exit
+
+# Not-for-merge vehicle (probe pattern): closes every open Milestone —
+# exiting the #656 dual-system transition for good — and reports to #693.
+# Sprints ride Project #5 Iterations + sprint-* labels from here on.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/run-p2-closeout.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: p2-closeout
+  cancel-in-progress: false
+
+jobs:
+  closeout:
+    name: closeout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      R: ${{ github.repository }}
+    steps:
+      - name: Close all open milestones, report to #693
+        run: |
+          set -uo pipefail
+          OUT=$(mktemp)
+          log() { printf '%s\n' "$1" | tee -a "$OUT"; }
+          log "## P2 close-out run — $(date -u +%Y-%m-%dT%H:%M:%SZ) (run ${GITHUB_RUN_ID})"
+          log ""
+          log "### Open milestones before"
+          log '```'
+          gh api "repos/$R/milestones?state=open&per_page=100" \
+            --jq '.[] | "\(.number)\t\(.title)\topen_issues=\(.open_issues)"' >>"$OUT" 2>&1 || true
+          log '```'
+          FAILED=0
+          for N in $(gh api "repos/$R/milestones?state=open&per_page=100" --jq '.[].number'); do
+            if gh api -X PATCH "repos/$R/milestones/$N" -f state=closed >/dev/null 2>&1; then
+              log "closed milestone $N"
+            else
+              log "FAILED to close milestone $N"
+              FAILED=1
+            fi
+          done
+          log ""
+          log "### Open milestones after"
+          log '```'
+          REMAINING=$(gh api "repos/$R/milestones?state=open&per_page=100" --jq length)
+          echo "count: $REMAINING" >>"$OUT"
+          log '```'
+          if [ "$FAILED" -eq 0 ] && [ "$REMAINING" = "0" ]; then
+            log "## Result: PASS — open Milestones = 0; the #656 dual-system transition is exited."
+          else
+            log "## Result: ATTENTION — failed=$FAILED remaining=$REMAINING"
+          fi
+          gh issue comment 693 --body-file "$OUT"
+          [ "$FAILED" -eq 0 ] && [ "$REMAINING" = "0" ]
