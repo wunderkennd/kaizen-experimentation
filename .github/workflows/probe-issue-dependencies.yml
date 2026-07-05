@@ -1,0 +1,113 @@
+name: H2 P0 probe — issue dependencies API
+
+# One-shot platform probe for #691 (H2 P0, plan v2's design gate). Runs ON the
+# draft PR that adds this file — pull_request workflows execute from the head
+# ref with the permissions declared here, and the runner has gh + a token that
+# can write issues. Deterministic by design: a probe wants exact commands and
+# verbatim output, not an agent. The PR is NOT for merge; it closes once the
+# verdict lands on #691. workflow_dispatch retained for re-probes if the
+# platform changes.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/probe-issue-dependencies.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: p0-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      R: ${{ github.repository }}
+      REPORT: "691"
+    steps:
+      - name: Probe REST edges + GraphQL surface, report to the issue
+        run: |
+          set -uo pipefail
+          OUT=$(mktemp)
+          log() { printf '%s\n' "$1" | tee -a "$OUT"; }
+
+          log "## P0 probe run — $(date -u +%Y-%m-%dT%H:%M:%SZ) (run ${GITHUB_RUN_ID})"
+          log ""
+
+          # 1. Throwaway issues -----------------------------------------------
+          A_URL=$(gh issue create -R "$R" --title "P0 probe throwaway A — disposable" \
+            --body "Created by probe-issue-dependencies.yml for #${REPORT}. Safe to close.")
+          B_URL=$(gh issue create -R "$R" --title "P0 probe throwaway B — disposable" \
+            --body "Created by probe-issue-dependencies.yml for #${REPORT}. Safe to close.")
+          A=${A_URL##*/}; B=${B_URL##*/}
+          B_ID=$(gh api "repos/$R/issues/$B" --jq .id)
+          log "Throwaways: A=#$A B=#$B (B database id: $B_ID)"
+          log ""
+
+          # 2. REST: create edge A blocked_by B --------------------------------
+          REST_OK=0
+          log '### REST create: POST issues/'"$A"'/dependencies/blocked_by (issue_id='"$B_ID"')'
+          log '```'
+          if gh api "repos/$R/issues/$A/dependencies/blocked_by" -X POST -F issue_id="$B_ID" >>"$OUT" 2>&1; then
+            REST_OK=1
+          fi
+          log '```'
+          log "REST create exit: $([ $REST_OK -eq 1 ] && echo OK || echo FAILED)"
+          log ""
+
+          # 3. REST: read back --------------------------------------------------
+          log '### REST read-back: GET issues/'"$A"'/dependencies/blocked_by'
+          log '```'
+          gh api "repos/$R/issues/$A/dependencies/blocked_by" >>"$OUT" 2>&1 || true
+          log '```'
+          log ""
+
+          # 4. GraphQL surface ---------------------------------------------------
+          log '### GraphQL Issue fields matching block|subIssue|closedBy'
+          log '```'
+          FIELDS=$(gh api graphql -f query='{ __type(name:"Issue"){ fields{ name } } }' \
+            --jq '.data.__type.fields[].name' 2>>"$OUT" | grep -iE 'block|subissue|closedby' || true)
+          printf '%s\n' "$FIELDS" >>"$OUT"
+          log '```'
+          log ""
+
+          # 5. Verdict (decision matrix from #691) ------------------------------
+          GQL_DEPS=0
+          printf '%s' "$FIELDS" | grep -qiE 'blockedby|blocking' && GQL_DEPS=1
+          if [ "$REST_OK" -eq 1 ] && [ "$GQL_DEPS" -eq 1 ]; then
+            VERDICT="**Design A** — REST edges work AND GraphQL exposes dependency fields: \`_ready\` becomes one GraphQL query per label cohort."
+          elif [ "$REST_OK" -eq 1 ]; then
+            VERDICT="**Design B** — REST edges work; GraphQL does not expose dependency fields: GraphQL for open/label/closing-PRs + one batched REST dependencies read per candidate."
+          else
+            VERDICT="**STOP** — the dependencies REST endpoint was rejected on this platform. Keep body-parse another sprint; findings above."
+          fi
+          log "## Verdict"
+          log "$VERDICT"
+          log ""
+
+          # 6. Production edges on success (P1←P0, P2←P1, P3←P2) ---------------
+          if [ "$REST_OK" -eq 1 ]; then
+            log '### Production edges (#692←#691, #693←#692, #694←#693)'
+            log '```'
+            for pair in "692 691" "693 692" "694 693"; do
+              set -- $pair
+              BLOCKER_ID=$(gh api "repos/$R/issues/$2" --jq .id)
+              gh api "repos/$R/issues/$1/dependencies/blocked_by" -X POST -F issue_id="$BLOCKER_ID" >>"$OUT" 2>&1 \
+                && echo "#$1 blocked_by #$2: created" >>"$OUT" \
+                || echo "#$1 blocked_by #$2: FAILED (may already exist)" >>"$OUT"
+            done
+            log '```'
+          fi
+
+          # 7. Close throwaways, report ----------------------------------------
+          gh issue close -R "$R" "$A" --comment "Probe complete — see #${REPORT}." || true
+          gh issue close -R "$R" "$B" --comment "Probe complete — see #${REPORT}." || true
+          gh issue comment -R "$R" "$REPORT" --body-file "$OUT"
+          echo "Probe complete; report posted to #${REPORT}."
