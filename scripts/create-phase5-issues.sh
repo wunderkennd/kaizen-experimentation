@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Phase 5 GitHub Issues Bootstrap
+# Phase 5 GitHub Issues Bootstrap — ARCHIVAL (ran once, 2026-03; kept as the
+# historical record). Do not re-run: Milestones were retired by H2 #693 —
+# sprints ride Project #5 Iterations + sprint-N labels now.
 # Run once to create milestones, issues, and sub-issues for all 6 sprints.
 # Requires: gh CLI authenticated with repo write access.
 

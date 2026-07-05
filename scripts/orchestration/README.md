@@ -45,7 +45,7 @@ lease; `claims.sh sweep` (run by `just morning`) clears stale leases.
 
 ## Ready predicate (`ready.sh`)
 
-open ∧ not claimed ∧ no open closing PR ∧ all `## Blocked by` refs closed
+open ∧ not claimed ∧ no open closing PR ∧ no OPEN native dependency edges (body-parse fallback until P3 #694)
 (beads DAG preferred when initialized). H2 (#680) replaces the body parsing
 with native issue dependencies over GraphQL; the claimed/in-flight predicates
 stay.

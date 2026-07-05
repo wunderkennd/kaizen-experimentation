@@ -102,10 +102,11 @@ See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHA
 
 **Palette UI polish**: Ongoing standardization of search, empty states, filter clearing, accessibility, and CopyButton usage in M6. Look for commits prefixed `🎨 Palette:`.
 
-**Current sprint**: Check the active GitHub Milestone:
+**Current sprint**: sprints live on Project #5's Iteration field (humans/roadmap) and `sprint-*` labels (machines) — Milestones are closed (H2 #693):
 ```bash
-gh issue list --milestone "Sprint 5.6" --state open       # ADR-026/027 stream
-gh issue list --milestone "Sprint I.2" --state open       # infrastructure stream
+just morning                                    # iteration + per-cohort ready counts
+gh issue list --label sprint-5.6 --state open   # ADR-026/027 stream
+gh issue list --label sprint-I.3 --state open   # infrastructure stream
 ```
 
 ## Work Tracking
@@ -113,8 +114,8 @@ gh issue list --milestone "Sprint I.2" --state open       # infrastructure strea
 Work is tracked in **GitHub Issues**, not markdown status files.
 
 ```
-Milestone    =  Sprint (e.g., "Sprint 5.0: Schema & Foundations")
-  └── Issue  =  ADR implementation unit (e.g., "ADR-015: AVLM Implementation")
+Iteration (Project #5) = Sprint — `sprint-N` labels carry it for machines
+  └── Issue  =  ADR implementation unit; blockers = native dependency edges (H2)
 ```
 
 ### For agents: how to find your work
@@ -123,7 +124,7 @@ Milestone    =  Sprint (e.g., "Sprint 5.0: Schema & Foundations")
 gh issue list --assignee @me --state open
 
 # What's in the current sprint?
-gh issue list --milestone "Sprint 5.0: Schema & Foundations"
+gh issue list --label sprint-5.6 --state open
 
 # What's blocked?
 gh issue list --label "blocked"
@@ -215,7 +216,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Ecosystem governance runbook (H6) | `docs/runbooks/ecosystem-governance.md` (fleet onboarding, ruleset apply, wunderkind-ventures org migration) |
 | Operator runbook (creating M5 custom metrics) | `docs/runbooks/m5-metric-definitions.md` (Tier 1 types FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #434) |
 | Operator runbook (ADR-026 Phase 3 migration) | `docs/runbooks/adr-026-phase-3-migration.md` (scan + translate + shadow + apply workflow for legacy CUSTOM metrics; #437) |
-| Work tracking | GitHub Issues (Milestones = Sprints, Issues = Tasks) |
+| Work tracking | GitHub Issues (Project #5 Iterations = Sprints; `sprint-N` labels for machines; native dependency edges = blockers) |
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |
 | Multiclaude config | `.multiclaude/config.json` |
