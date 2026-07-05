@@ -264,8 +264,9 @@ Full narrative: `docs/runbooks/ecosystem-governance.md` there.
 
 1. Copy `.github/` from this directory into a checkout of `{full}`
    (or run `just governance-onboard-apply` next to your sibling checkouts).
-2. Open a PR in `{full}` with the three workflows; verify the checks report as
-   `Review gate / gate` and `PR title check / check` on that PR.
+2. Open a PR in `{full}` with the four workflows; verify the checks report as
+   `Review gate / gate`, `PR title check / check`, and `PR size / check` on
+   that PR.
 3. Apply the ruleset (choose one):
    - Fleet (preferred): set `enforcement: active` for `{repo['name']}` in the
      fleet config and `pulumi up` in `infra/github-governance/`.

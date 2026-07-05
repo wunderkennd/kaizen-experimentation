@@ -114,8 +114,9 @@ Check-run contexts from reusable workflows are two-segment —
    Notes: the `@main` refs are **owner-qualified** — update them if the
    workflows' home repo transfers to the org. Cross-repo `workflow_call`
    works because kaizen-experimentation is public.
-3. **Open a PR in the sibling with the callers and verify** the two checks
-   report with the expected two-segment names.
+3. **Open a PR in the sibling with the callers and verify** the three
+   governance checks report with the expected two-segment names
+   (`Review gate / gate`, `PR title check / check`, `PR size / check`).
 4. **Enable protection**: in `Pulumi.governance.yaml`, set the repo's
    `enforcement: active` and add its own CI contexts to `requiredChecks`,
    then apply (below). Or one-off: import `.github/rulesets/main.json` in
