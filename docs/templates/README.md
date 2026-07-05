@@ -10,7 +10,7 @@ conventions as `docs/agents/registry/`.
 | --- | --- | --- | --- |
 | `prd-template.md` | PRD | `docs/prds/YYYY-MM-DD-<slug>.md` | Requirements |
 | `rfc-template.md` | RFC (issue body) | Issue titled `RFC-NNN: <title>` | Cross-boundary design |
-| `ux-spec-template.md` | UX spec | `docs/superpowers/specs/` | UX design (arrives with H7 PR-4, #699) |
+| `ux-spec-template.md` | UX spec | `docs/superpowers/specs/YYYY-MM-DD-<slug>-ux.md` | UX design (M6-touching work) |
 | `../superpowers/templates/locked-plan-template.md` | Locked plan | `docs/superpowers/plans/` | Plan |
 
 ADRs have no template file — imitate `docs/adrs/001`–`030` (the corpus is the
