@@ -1,0 +1,71 @@
+name: H2 P1 close-out — live migration + parity
+
+# Not-for-merge vehicle (same pattern as the #691 probe): runs the merged P1
+# machinery against live data with issues: write, reports to #692, then the
+# PR closes. Steps: migration dry-run → --apply → READY_DRIFT parity across
+# open sprint-* cohorts plus the P1 cohort (the H2 chain's real edges).
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/run-p1-closeout.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: p1-closeout
+  cancel-in-progress: false
+
+jobs:
+  closeout:
+    name: closeout
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migration dry-run, apply, and drift parity — report to #692
+        run: |
+          set -uo pipefail
+          OUT=$(mktemp)
+          log() { printf '%s\n' "$1" | tee -a "$OUT"; }
+
+          log "## P1 close-out run — $(date -u +%Y-%m-%dT%H:%M:%SZ) (run ${GITHUB_RUN_ID})"
+          log ""
+          log "### Migration dry-run"
+          log '```'
+          bash scripts/projects/migrate-blocked-by-to-dependencies.sh >>"$OUT" 2>&1 || true
+          log '```'
+          log ""
+          log "### Migration --apply"
+          log '```'
+          APPLY_OK=1
+          bash scripts/projects/migrate-blocked-by-to-dependencies.sh --apply >>"$OUT" 2>&1 || APPLY_OK=0
+          log '```'
+          log "apply exit: $([ $APPLY_OK -eq 1 ] && echo OK || echo FAILED)"
+          log ""
+
+          log "### READY_DRIFT parity"
+          COHORTS=$(gh issue list --state open --limit 200 --json labels \
+            --jq '[.[].labels[].name | select(startswith("sprint-"))] | unique | .[]' || true)
+          COHORTS="$COHORTS P1"
+          DRIFT_OK=1
+          for L in $COHORTS; do
+            [ -n "$L" ] || continue
+            log "── cohort: $L"
+            log '```'
+            READY_DRIFT=1 bash scripts/orchestration/ready.sh "$L" >>"$OUT" 2>&1 || DRIFT_OK=0
+            log '```'
+          done
+          log ""
+          if [ "$APPLY_OK" -eq 1 ] && [ "$DRIFT_OK" -eq 1 ]; then
+            log "## Result: PASS — migration applied; native and body-parse agree on every cohort checked."
+          else
+            log "## Result: ATTENTION — apply=$APPLY_OK drift=$DRIFT_OK (see raw output above)."
+          fi
+          gh issue comment 692 --body-file "$OUT"
+          [ "$APPLY_OK" -eq 1 ] && [ "$DRIFT_OK" -eq 1 ]
