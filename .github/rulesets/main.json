@@ -5,10 +5,15 @@
     "settings.yml `branches:` block it replaces never synced (app not",
     "installed; main was still unprotected on 2026-07-04).",
     "",
-    "Apply it one of two ways:",
+    "FIRST apply (no ruleset named 'main' exists yet):",
     "  UI:  Settings → Rules → Rulesets → New … → Import a ruleset → this file",
     "  API: gh api repos/{owner}/{repo}/rulesets -X POST --input .github/rulesets/main.json",
-    "       (needs repo Administration: write — fine-grained PAT, not GITHUB_TOKEN)",
+    "RE-apply (ruleset exists — POST 422s with 'Name must be unique'; UI import",
+    "also only creates). Update in place instead:",
+    "  ID=$(gh api repos/{owner}/{repo}/rulesets --jq '.[] | select(.name==\"main\") | .id')",
+    "  gh api -X PUT repos/{owner}/{repo}/rulesets/$ID --input .github/rulesets/main.json",
+    "Either way needs repo Administration: write (fine-grained PAT, not",
+    "GITHUB_TOKEN). Verify: gh api repos/{owner}/{repo}/rules/branches/main",
     "Fleet-wide application is automated by infra/github-governance (Pulumi);",
     "keep this file and that stack's config in sync — they encode the same intent.",
     "",
@@ -29,14 +34,22 @@
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["~DEFAULT_BRANCH"],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
       "exclude": []
     }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
-    { "type": "required_linear_history" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -52,14 +65,30 @@
       "parameters": {
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
-          { "context": "PR title check / check" },
-          { "context": "Review gate / gate" },
-          { "context": "PR size / check" },
-          { "context": "schema" },
-          { "context": "rust" },
-          { "context": "go" },
-          { "context": "typescript" },
-          { "context": "hash-parity" }
+          {
+            "context": "PR title check / check"
+          },
+          {
+            "context": "Review gate / gate"
+          },
+          {
+            "context": "PR size / check"
+          },
+          {
+            "context": "schema"
+          },
+          {
+            "context": "rust"
+          },
+          {
+            "context": "go"
+          },
+          {
+            "context": "typescript"
+          },
+          {
+            "context": "hash-parity"
+          }
         ]
       }
     }
