@@ -5,6 +5,13 @@ Use this skeleton for every multi-phase ADR implementation plan landed under
 **Cross-phase artifacts** table is mandatory whenever a plan has more than one
 phase. Filename convention: `YYYY-MM-DD-<adr-or-issue>-<slug>.md`.
 
+**v2 (2026-07-05, H7 #699)** adds the plan-quality bar from the #680 v1→v2
+review: a Platform assumptions & probes section, decided-by columns on Locks,
+per-phase executor constraints and size budgets, and the graduated-cutover
+rule. Every plan gets a [plan-review](../../guides/plan-review.md) before
+`just prime-issue` blesses it — the review note links from the plan's Status
+block.
+
 ---
 
 ## What the template captures (and why)
@@ -43,6 +50,7 @@ which doesn't appear in the table is treated as a spec-review blocker.
 # <ADR-N Phase X / Issue title> (#<issue>)
 
 **Status:** <Design lock — RFC for review | Locked | Executing | Shipped>.
+**Plan-review:** <link to the review note on the issue — required before `prime-issue`>.
 **Issue:** [#N](https://github.com/<org>/<repo>/issues/N) — <priority>, <sprint>, <cluster>, owners <agent-X, agent-Y>.
 **Blocked by:** <upstream PRs/issues with strikethrough once merged>.
 
@@ -60,17 +68,39 @@ constraint motivates the design.>
 
 ---
 
+## Platform assumptions & probes
+
+Any capability this design bets on that has **not been exercised on this
+infrastructure** gets a probe BEFORE implementation phases dispatch — a
+numbered P0 task with exact commands and a decision matrix. Documentation is
+not evidence: this repo was burned twice in one day by documented-but-rejected
+platform behavior (the `pull_request_review_thread` workflow trigger; ruleset
+`evaluate` on non-Enterprise plans).
+
+| # | Assumption | Exercised here before? | Probe (task + command) | Verdict |
+|---|---|---|---|---|
+| PA1 | <API/feature/behavior the design depends on> | <yes: link · no> | P0.<n>: `<command>` | <pending / confirmed / refuted → design B> |
+
+A plan whose assumptions are all previously-exercised states so in one line —
+the section is mandatory, the probes are conditional.
+
+---
+
 ## Locks — binding for implementers
 
 Locks freeze the cross-cutting design decisions. **Locks are normative — copy
 verbatim, do not drift.** If a Lock seems wrong, BLOCK and escalate via an
 issue comment rather than overriding in implementation.
 
-| # | Lock | One-line answer |
-|---|---|---|
-| L1 | <Topic> | <Answer> |
-| L2 | <Topic> | <Answer> |
-| ... | | |
+| # | Lock | One-line answer | Decided (owner, date) |
+|---|---|---|---|
+| L1 | <Topic> | <Answer> | <owner, YYYY-MM-DD> |
+| L2 | <Topic> | <Answer> | <owner, YYYY-MM-DD> |
+| ... | | | |
+
+**Decisions, not options:** a Lock that offers alternatives ("X or Y") is a
+spec gap, not a Lock — record ONE answer with its owner and date. An undated
+decision is a suggestion.
 
 <Per-lock detail sections follow if more nuance is needed.>
 
@@ -106,6 +136,12 @@ PR; missing rows are a blocker.
 ---
 
 ## Phase A — <name>
+
+**Executor:** <any | local/multiclaude only (needs `gh api`/local auth — claude-web has no `gh`)>
+**Size budget:** ~<lines>/<files> counted (PR gate: soft 400/10, hard 900/25; lockfiles/generated/markdown exempt)
+
+One phase = one worker session = one PR. A phase that cannot fit the size
+gate is two phases.
 
 <Per-task breakdown with checkbox steps. Each task names the file(s) it
 touches and the test(s) it owns.>
@@ -172,6 +208,11 @@ with every row at `verified`.
 
 **Rollback for any phase:** <one-line per phase>
 
+**Replacement rule (graduated cutover):** a phase that replaces an existing
+path ships the new path ALONGSIDE the old one with a drift check; the
+deletion is a separate, later phase gated on a clean window (≥N drift-free
+days or one sprint) — never same-day. Precedent: #680 P1→P3.
+
 ---
 
 ## Follow-ups
@@ -198,6 +239,9 @@ with every row at `verified`.
 ## Worked examples
 
 - **Done right (will be):** the next ADR plan after this template lands.
+- **Plan-review exemplar:** #680's v1→v2 (2026-07-05) — probe-gating added,
+  goal-scoping split out, options hardened into decisions, then decomposed
+  into dispatchable sub-issues (#691–#694). The review note lives on #680.
 - **Cautionary tale:** [`docs/superpowers/plans/2026-05-30-adr-026-phase-3-custom-migration.md`](../plans/2026-05-30-adr-026-phase-3-custom-migration.md)
   shipped without a Cross-phase artifacts table; the missing
   `MigrateMetricDefinition` RPC went un-owned and #437 closed

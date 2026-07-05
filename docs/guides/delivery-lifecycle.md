@@ -63,8 +63,9 @@ Every plan must clear the bar the #680 v1→v2 review established:
    locked-plan template's rationale; ADR-026 P3's orphaned RPC is the
    incident it encodes).
 
-Run plan-review before `prime-issue`; record the review as a comment on the
-plan's issue (v1 → v2 diffs are the deliverable, as on #680).
+Run [plan-review](./plan-review.md) before `prime-issue`; record the review
+as a comment on the plan's issue (v1 → v2 diffs are the deliverable, as on
+#680).
 
 ## Where each carrier lives
 
