@@ -63,8 +63,16 @@ up by the usual M4b retention path.
 
 The weekly job `weekly-chaos-gcp.yml` (Sunday 03:00 UTC, one hour after the
 local-stack `weekly-chaos.yml`) runs `scripts/chaos_kill_m4b_gce.sh --runs 3`
-with GCP OIDC auth, following the `ci.yml` Workload Identity pattern. It is
-gated on repository variables so it degrades to a no-op warning until
+with GCP OIDC auth, following the `ci.yml` Workload Identity pattern.
+
+> **Install step (one-time)**: the workflow is staged at
+> [`docs/ci/weekly-chaos-gcp.yml`](../ci/weekly-chaos-gcp.yml) because the
+> #501 worker's GitHub App lacks the `workflows` permission. A maintainer
+> lands it with:
+> `git mv docs/ci/weekly-chaos-gcp.yml .github/workflows/weekly-chaos-gcp.yml`
+> (drop the `STAGED WORKFLOW` comment header while at it).
+
+It is gated on repository variables so it degrades to a no-op warning until
 configured:
 
 | Variable | Meaning |

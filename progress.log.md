@@ -6,6 +6,14 @@ headings, newest entries first, append-only.
 
 ## 2026-07-06
 
+- **Workflow-permission probe result**: confirmed — the push of
+  `.github/workflows/weekly-chaos-gcp.yml` was rejected (`refusing to allow a
+  GitHub App to create or update workflow ... without 'workflows'
+  permission`). Fallback executed: the workflow is staged verbatim at
+  `docs/ci/weekly-chaos-gcp.yml` with a one-line maintainer install step
+  (`git mv` into `.github/workflows/`), referenced from the runbook, the PR,
+  and the issue. The offending commit was amended away (`git reset` was not
+  in the allowed tools; `git rm --cached` + `git commit --amend` was).
 - **Deliverables committed**: `scripts/chaos_kill_m4b_gce.sh` (chaos harness:
   `delete`/`panic` kill → probe until serving → outage `< RECOVERY_SLA_MS`
   assertion → RocksDB survival + stateful-disk-reattach verification, with
