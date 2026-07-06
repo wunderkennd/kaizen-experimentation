@@ -472,6 +472,18 @@ loadtest-policy:
 loadtest-pipeline:
     bash scripts/loadtest_pipeline.sh
 
+# Run M2 throughput gate: 100K events/sec via Redpanda for 5 min (#502; see docs/runbooks/m2-throughput-loadtest.md)
+loadtest-m2-throughput:
+    bash scripts/loadtest_m2_throughput.sh
+
+# M2 throughput harness wiring check: low rate, short run, local stack
+loadtest-m2-throughput-smoke:
+    SMOKE=1 bash scripts/loadtest_m2_throughput.sh
+
+# Offline unit tests for the M2 throughput gate evaluator (no cluster needed)
+test-m2-throughput-gate:
+    bash scripts/test_m2_throughput_gate.sh
+
 # Build pipeline service with PGO optimization (instrument → profile → optimize)
 pgo-build-pipeline:
     @echo "  Building PGO-optimized pipeline service..."
