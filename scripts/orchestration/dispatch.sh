@@ -92,8 +92,11 @@ $BODY
   cannot fit, do NOT ship an omnibus: deliver the first coherent slice, post
   an issue comment proposing the split for the remainder, and stop there.
 - Commit incrementally with descriptive messages.
-- progress.log.md is append-only status: flip statuses and add dated entries;
-  it is unacceptable to remove or edit existing spec or test content.
+- progress.log.md is your append-only working-branch breadcrumb (it powers
+  RESUME): flip statuses and add dated entries; never remove or edit existing
+  spec or test content. It is NOT a merge artifact — CONTRIBUTING forbids
+  in-repo status files, so \`git rm progress.log.md\` as your FINAL step before
+  marking the PR ready (keep it during the work, drop it before merge).
 - After your FIRST push, post an issue comment that is exactly:
   progress-branch: <your-branch-name>
 - Your PR description must include 'Closes #$ISSUE'. Mark the PR ready for
