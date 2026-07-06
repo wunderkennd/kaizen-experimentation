@@ -7,7 +7,7 @@ tags: [infra-agent, go, pulumi, kafka, msk, redpanda]
 timestamp: 2026-07-04T12:00:00Z
 id: infra-3
 label: infra-3
-executors: [claude-workflow, claude-web, multiclaude]
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Go (Pulumi)
 owned_paths:
   - infra/pkg/aws/streaming.go

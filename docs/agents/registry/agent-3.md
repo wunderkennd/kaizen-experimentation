@@ -7,7 +7,7 @@ tags: [module-agent, go, spark, delta-lake, metricql]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-3
 label: agent-3
-executors: [claude-workflow, claude-web, multiclaude]
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Go
 ports: [50056, 50059]
 owned_paths:

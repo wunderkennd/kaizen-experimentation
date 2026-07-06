@@ -7,7 +7,7 @@ tags: [infra-agent, go, pulumi, ecs, cloud-run, ecr]
 timestamp: 2026-07-04T12:00:00Z
 id: infra-4
 label: infra-4
-executors: [claude-workflow, claude-web, multiclaude]
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Go (Pulumi)
 owned_paths:
   - infra/pkg/aws/compute.go

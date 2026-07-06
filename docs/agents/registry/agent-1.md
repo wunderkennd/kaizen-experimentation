@@ -7,7 +7,7 @@ tags: [module-agent, rust, assignment, sdks]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-1
 label: agent-1
-executors: [claude-workflow, claude-web, multiclaude]
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Rust
 ports: [50051]
 owned_paths:

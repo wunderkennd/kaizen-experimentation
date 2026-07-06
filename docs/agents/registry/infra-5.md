@@ -7,7 +7,7 @@ tags: [infra-agent, go, pulumi, ingress, observability, grafana]
 timestamp: 2026-07-04T12:00:00Z
 id: infra-5
 label: infra-5
-executors: [claude-workflow, claude-web, multiclaude]
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Go (Pulumi)
 owned_paths:
   - infra/pkg/aws/edge.go
