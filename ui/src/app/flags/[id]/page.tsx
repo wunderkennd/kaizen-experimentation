@@ -95,7 +95,7 @@ function FlagDetailContent() {
         {canAtLeast('experimenter') && (
           <Link
             href={`/flags/${flag.flagId}/edit`}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none"
             data-testid="edit-flag-link"
           >
             Edit
@@ -105,7 +105,7 @@ function FlagDetailContent() {
 
       <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <dl className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-          <div>
+          <div className="group">
             <dt className="font-medium text-gray-500">Flag ID</dt>
             <dd className="flex items-center gap-2 text-gray-900">
               <code className="text-xs">{flag.flagId}</code>
@@ -113,6 +113,7 @@ function FlagDetailContent() {
                 value={flag.flagId}
                 label="Copy flag ID"
                 successMessage="Flag ID copied to clipboard"
+                className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
               />
             </dd>
           </div>
@@ -120,7 +121,7 @@ function FlagDetailContent() {
             <dt className="font-medium text-gray-500">Description</dt>
             <dd className="text-gray-900">{flag.description || '—'}</dd>
           </div>
-          <div>
+          <div className="group">
             <dt className="font-medium text-gray-500">Default Value</dt>
             <dd className="flex items-center gap-2 text-gray-900">
               <code className="text-xs">{flag.defaultValue}</code>
@@ -128,6 +129,7 @@ function FlagDetailContent() {
                 value={flag.defaultValue}
                 label="Copy default value"
                 successMessage="Default value copied to clipboard"
+                className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
               />
             </dd>
           </div>
@@ -147,7 +149,7 @@ function FlagDetailContent() {
             </dd>
           </div>
           {flag.targetingRuleId && (
-            <div>
+            <div className="group">
               <dt className="font-medium text-gray-500">Targeting Rule</dt>
               <dd className="flex items-center gap-2 text-gray-900">
                 <code className="text-xs">{flag.targetingRuleId}</code>
@@ -155,6 +157,7 @@ function FlagDetailContent() {
                   value={flag.targetingRuleId}
                   label="Copy targeting rule ID"
                   successMessage="Targeting rule ID copied to clipboard"
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                 />
               </dd>
             </div>
@@ -176,7 +179,11 @@ function FlagDetailContent() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {flag.variants.map((v) => (
-                  <tr key={v.variantId} data-testid={`variant-row-${v.variantId}`}>
+                  <tr
+                    key={v.variantId}
+                    className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+                    data-testid={`variant-row-${v.variantId}`}
+                  >
                     <td className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-2">
                         <code>{v.variantId}</code>
@@ -184,6 +191,7 @@ function FlagDetailContent() {
                           value={v.variantId}
                           label={`Copy variant ID ${v.variantId}`}
                           successMessage="Variant ID copied to clipboard"
+                          className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                         />
                       </div>
                     </td>
@@ -194,6 +202,7 @@ function FlagDetailContent() {
                           value={v.value}
                           label={`Copy variant value ${v.value}`}
                           successMessage="Variant value copied to clipboard"
+                          className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                         />
                       </div>
                     </td>
@@ -211,7 +220,7 @@ function FlagDetailContent() {
           {!showPromote ? (
             <button
               onClick={() => setShowPromote(true)}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none"
               data-testid="promote-button"
             >
               Promote to Experiment
@@ -252,7 +261,7 @@ function FlagDetailContent() {
                 <button
                   type="submit"
                   disabled={promoting || !primaryMetricId.trim()}
-                  className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-50"
                   data-testid="promote-submit"
                 >
                   {promoting && (
@@ -284,7 +293,7 @@ function FlagDetailContent() {
                 <button
                   type="button"
                   onClick={() => setShowPromote(false)}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
                   Cancel
                 </button>
