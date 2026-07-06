@@ -14,12 +14,15 @@ just setup    # Starts infra, generates code, installs deps, seeds data, runs te
 
 ## Work Tracking
 
-All work is tracked via **GitHub Milestones and Issues**. No in-repo status
-files or task trackers.
+All work is tracked via **GitHub Issues** on a native work graph (Milestones
+were retired 2026-07-05 — harness phase H2). No in-repo status files or task
+trackers.
 
 ```
-Milestone    =  Sprint (e.g., "Sprint 5.0: Schema & Foundations")
-  └── Issue  =  ADR implementation unit (e.g., "ADR-015: AVLM Implementation")
+Iteration (Project #5)  =  Sprint — `sprint-*` labels carry it for machines
+  └── Issue             =  one dispatchable unit; blockers = native
+                           "blocked by" dependency edges; Goals track
+                           children as native sub-issues
 ```
 
 ### Finding Your Work
@@ -29,7 +32,7 @@ Milestone    =  Sprint (e.g., "Sprint 5.0: Schema & Foundations")
 gh issue list --assignee @me --state open
 
 # What's in the current sprint?
-gh issue list --milestone "Sprint 5.0: Schema & Foundations"
+gh issue list --label sprint-5.6 --state open
 
 # What's blocked?
 gh issue list --label "blocked"
@@ -40,9 +43,10 @@ gh issue view <number>
 
 ### Updating Progress
 
+- **Claim before starting** (H1 protocol): comment `claim: executor=<tool> worker=<id> expires=<ISO8601>` on the issue; release with a `claim-released:` comment on completion or handoff. See `scripts/orchestration/README.md`.
 - **Comment** on the issue with progress updates (what's done, what's next, blockers)
-- **Link PRs** to issues: include `Closes #<number>` in the PR description — the issue auto-closes on merge
-- **Label blockers**: add the `blocked` label and comment explaining what you're waiting on and which issue blocks you
+- **Link PRs** to issues: include `Closes #<number>` in the PR description — the issue auto-closes on merge (use `Refs #<n>` when the issue has post-merge steps)
+- **Label blockers**: add the `blocked` label, comment explaining what you're waiting on — and wire the real edge natively (issue *Relationships* → "Blocked by"); readiness tooling reads the native edges, not body text
 - **Never leave an issue in limbo**: if you can't finish, comment with current state so another agent can pick it up
 
 ### Labels

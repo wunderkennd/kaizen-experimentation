@@ -69,6 +69,7 @@ Hash parity across SDKs is enforced by `test-vectors/hash_vectors.json` and veri
 - **Proptest invariants**: Every public function in experimentation-stats gets proptest invariants. Nightly CI runs 10K cases.
 - **Contract tests**: Cross-module interfaces require wire-format contract tests. The consumer agent writes the test.
 - **Conventional commits**: `feat(crate):`, `fix(crate):`, `test(crate):`, `docs:`, `chore:`.
+- **Right-sized PRs**: the PR-size gate (`PR size / check`, required) warns at 400 changed lines / 10 files and fails at 900 / 25 — lockfiles, generated trees, and markdown exempt. Genuinely atomic oversize diffs take the `oversize-approved` label plus a justifying comment. Workers slice-and-propose instead of shipping omnibuses.
 - **Branch naming**: see [Branch-naming convention](#branch-naming) below — canonical pattern is `agent-N/feat/adr-XXX-description`, with documented alternates for infra, palette, and chore work. Validate before pushing with `just check-branch-name`; a CI advisory check (`.github/workflows/branch-naming.yml`) also flags violations on PR open.
 - **Work tracking**: All work tracked via GitHub Issues. PRs reference issues with `Closes #N`. Check your assigned issues with `gh issue list --assignee @me`.
 
@@ -89,12 +90,13 @@ See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHA
 
 ## Active Work (Post-Phase 5)
 
-**New ADRs (Proposed)**:
+**New ADRs (026–030 Proposed; 031 Accepted)**:
 - **ADR-026** (`docs/adrs/026-custom-metrics-layer.md`) — Custom metrics definition layer (composite / derived / joined metrics beyond the six built-in types). Impact: M5, M3, M4a. **Phase 1 implemented** (Rust M5 + M6 UI + M3 topo-order scheduling — FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #552, #555, #475 — M3 dependency ordering via Kahn's algorithm with `metric_computation_status` table). **Phase 2 #435 implemented**: M3 MetricQL parser/compiler in `services/metrics/internal/metricql/` (lexer + recursive-descent parser + AST + semantic analyzer + DFS cycle detector + Spark SQL codegen; proto field `metricql_expression`; migration 013; integrated with #475 topo-order via @metric_ref operand extraction; symmetric upstream-failure gate). #436 (M5 expression validation + M6 expression editor) and Phase 3 (CUSTOM deprecation, #437) remain Proposed.
 - **ADR-027** (`docs/adrs/027-tost-equivalence-testing.md`) — Two One-Sided Tests for proving equivalence (infra migrations, refactor validation). Impact: M4a, M5, M6. Core impl landed (#443); see `crates/experimentation-stats/src/tost.rs`.
 - **ADR-028** (`docs/adrs/028-m4b-shadow-inference.md`) — M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation). Impact: M4b, M4a, M5, M6.
 - **ADR-029** (`docs/adrs/029-cross-modal-score-calibration.md`) — Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce). Introduces a new `experimentation-calibration` Rust crate owned by Agent-4 and opens cluster **G — Personalization Orchestration**. Impact: M4a, M4b, M5, Personalization service.
 - **ADR-030** (`docs/adrs/030-shadow-experiment-mode.md`) — Shadow mode flag on experiments — run candidate variants on production traffic without user exposure. Impact: M1, M4a, M4b, M5, M6.
+- **ADR-031** (`docs/adrs/031-connectrpc-rust-assignment-pilot.md`) — **Accepted** (2026-06-23, #634): ConnectRPC (Rust) pilot on M1 Assignment via the Tower-based `connectrpc` runtime — a scoped revisit of ADR-010's "Connect for Go, tonic for Rust" split; fleet-wide adoption gated on the pilot's success criteria. Impact: M1, SDKs.
 
 **Infrastructure sprint (Pulumi + Go on AWS)**: `infra/` contains Pulumi stacks (`Pulumi.{dev,staging,prod}.yaml`) and a full Go test suite (`fullstack_test.go`). Sprint I.0 (all 13 modules) and I.1/I.2 (wiring + hardening) merged; ECR repos exist for all 9 Kaizen services.
 
@@ -134,10 +136,11 @@ gh issue view <number>
 ```
 
 ### For agents: how to update progress
+- **Claim before starting** (H1 protocol): comment `claim: executor=<tool> worker=<id> expires=<ISO8601>` on the issue; release with a `claim-released:` comment on completion or handoff. Expired claims are re-dispatchable. See `scripts/orchestration/README.md`.
 - Comment on the issue with progress updates
-- When creating a PR, include `Closes #<issue-number>` in the PR description
+- When creating a PR, include `Closes #<issue-number>` in the PR description (use `Refs #<n>` instead when the issue has post-merge steps)
 - The issue auto-closes when the PR merges
-- If blocked, add the `blocked` label and comment explaining what you're waiting on
+- If blocked, add the `blocked` label and comment explaining what you're waiting on — and wire the real edge natively (issue *Relationships* → "Blocked by", or `gh api .../dependencies/blocked_by`); `_ready` reads the native edges, not body text
 
 ### Labels
 - `agent-1` through `agent-7` — ownership
@@ -181,13 +184,15 @@ Phase 5 uses a multi-tool orchestration model. Each tool has a specific role.
 | Tool | Role | When |
 | --- | --- | --- |
 | **Gas Town** | Interactive parallel work — Mayor coordinates polecats, you steer in real time | Daytime active sessions |
-| **Multiclaude** | Autonomous overnight grinding — daemon, CI-gated merge queue, self-healing workers | You're away (overnight, weekends) |
+| **Multiclaude** | Autonomous overnight grinding — local daemon + workers (the merge path itself is now owned by the platform gates, not the daemon) | You're away (overnight, weekends) — **retirement path decided**, see H4 note below |
 | **Jules** | CI-triggered automation — scheduled maintenance, test generation, dependency bumps | Continuous / event-driven (GitHub Actions) |
-| **Devin** | Bounded autonomous tasks — test coverage, migrations, repetitive refactoring | Batch dispatch for well-specified work |
+| **Devin** | Bounded autonomous tasks — test coverage, migrations, repetitive refactoring; automatic PR review | Batch dispatch for well-specified work |
 | **Gemini CLI** | Quick lookups, second-opinion code review, research | Ad-hoc |
-| **Claude Code** (solo) | Single focused task in an isolated worktree | Quick one-off work |
+| **Claude Code** (solo / web / `@claude`) | Focused tasks in isolated worktrees; remote/web sessions drive harness work and run privileged operations via **workflow vehicles** (not-for-merge PRs carrying `pull_request`-triggered workflows) | One-off work; H4's reference executor |
 
-**Daily rhythm**: `just morning` (check overnight results) → `just interactive` (Gas Town) → `just evening <sprint>` (Multiclaude overnight).
+**Harness modernization (H0–H7)** — the orchestration layer is being consolidated onto GitHub-native primitives; status lives in `docs/coordination/harness-modernization-proposal.md`. Shipped so far: **H1** claim protocol + executor-agnostic dispatch (`scripts/orchestration/`), **H2** native work graph (dependency edges + GraphQL `_ready`; Milestones retired 2026-07-05; final parser deletions calendar-gated on #694), **H3/H6** platform merge path (ruleset-required checks + `automerge.yml` + PR-size gate, fleet-reusable workflows + Pulumi ruleset stamping), **H7** delivery-practice codification (lifecycle map, templates, plan-review, advisory doc-lints). **H4 (amended 2026-07-05)**: multiclaude's coordination plane is fully absorbed; the daemon retires behind a GitHub-native **evening dispatcher** on graduated evidence (shadow → limited-live → full sprint). Probe #713 confirmed the dispatcher is buildable with the default `GITHUB_TOKEN` (`workflow_dispatch` launch works; worker workflows must be registered on `main`; comment-based triggering is dead).
+
+**Daily rhythm**: `just morning` (check overnight results) → `just interactive` (Gas Town) → `just evening <sprint>` (Multiclaude overnight, until the H4 dispatcher graduates).
 
 **Launching workers from Issues**: Workers read their task spec directly from the GitHub Issue:
 ```bash
@@ -205,7 +210,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | --- | --- |
 | This file (agent context) | `CLAUDE.md` (repo root) |
 | Design document | `docs/design/design_doc_v7.0.md` |
-| ADRs (001–030) | `docs/adrs/` |
+| ADRs (001–031) | `docs/adrs/` |
 | ADR index | `docs/adrs/README.md` |
 | **Agent registry (canonical identity)** | `docs/agents/registry/` — OKF v0.1 bundle; validate with `just check-registry` |
 | Agent definitions (modules) | `.multiclaude/agents/agent-N-*.md` (view of the registry; generated under #682) |
@@ -217,6 +222,10 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Operator runbook (creating M5 custom metrics) | `docs/runbooks/m5-metric-definitions.md` (Tier 1 types FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #434) |
 | Operator runbook (ADR-026 Phase 3 migration) | `docs/runbooks/adr-026-phase-3-migration.md` (scan + translate + shadow + apply workflow for legacy CUSTOM metrics; #437) |
 | Work tracking | GitHub Issues (Project #5 Iterations = Sprints; `sprint-N` labels for machines; native dependency edges = blockers) |
+| **Harness modernization proposal (H0–H7)** | `docs/coordination/harness-modernization-proposal.md` — phase status annotations, prior-art revisions, open questions |
+| Dispatch layer (H1) | `scripts/orchestration/` — `claims.sh` (claim protocol), `ready.sh` (native `_ready` + drift mode), `dispatch.sh` + `dispatch.d/` adapters; offline tests in `orchestration-tests.yml` |
+| Plan-review procedure (H7) | `docs/guides/plan-review.md` — run before blessing any locked plan; worked example: #680 v1→v2 |
+| Docs lint (H7) | `scripts/check_docs.py` (`just check-docs`; advisory via `docs-conformance.yml`, strict mode `DOCS_LINT_STRICT=1`) |
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |
 | Multiclaude config | `.multiclaude/config.json` |
@@ -225,7 +234,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Test vectors (hash parity) | `test-vectors/hash_vectors.json` |
 | Phase 5 plan & changelog | `docs/coordination/phase5-implementation-plan.md`, `docs/coordination/CHANGELOG-phase5.md` |
 | Playbook | `docs/coordination/phase5-playbook.md` |
-| Developer guides | `docs/guides/` (git-hygiene, github-issues-workflow, orchestration-workflow, pr-triage-and-cleanup, merge-conflict-resolution, gastown-setup, palette) |
+| Developer guides | `docs/guides/` (git-hygiene, github-issues-workflow, orchestration-workflow, projects-and-goals, plan-review, pr-triage-and-cleanup, merge-conflict-resolution, gastown-setup, palette) |
 | **Delivery lifecycle (H7)** | `docs/guides/delivery-lifecycle.md` — idea → PRD → RFC/ADR → spec → plan-review → `prime-issue` → dispatch; plan quality bar; Lock convention |
 | Document templates | `docs/templates/` (PRD, RFC, UX spec) + `docs/superpowers/templates/` (locked plan v2) |
 | Issue specs (QoE etc.) | `docs/issues/` |
@@ -269,6 +278,11 @@ just test-hash       # cross-SDK MurmurHash3 parity
 just test-infra      # Pulumi mock suite
 just lint            # proto + rust + go + ts
 just fmt-check
+
+# Harness conformance (advisory lints, promoted to required only after a clean window)
+just check-registry     # OKF agent-registry conformance
+just check-docs         # delivery-lifecycle doc lints (ADRs, plans, PRDs, templates)
+just check-branch-name  # branch-name allowlist
 ```
 
 ## Golden-File Validation Targets
