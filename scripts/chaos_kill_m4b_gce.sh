@@ -171,10 +171,12 @@ probe_serving() {
 }
 
 extract_experiment_id() {
+    # Trailing `|| true` keeps a no-match grep from tripping set -e/pipefail
+    # before the snake_case fallback (or the caller's error path) can run.
     local body="$1" id
-    id=$(grep -o '"experimentId"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$body" | head -1 | sed 's/.*"experimentId"[[:space:]]*:[[:space:]]*"//;s/"//')
+    id=$(grep -o '"experimentId"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$body" | head -1 | sed 's/.*"experimentId"[[:space:]]*:[[:space:]]*"//;s/"//' || true)
     if [[ -z "$id" ]]; then
-        id=$(grep -o '"experiment_id"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$body" | head -1 | sed 's/.*"experiment_id"[[:space:]]*:[[:space:]]*"//;s/"//')
+        id=$(grep -o '"experiment_id"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$body" | head -1 | sed 's/.*"experiment_id"[[:space:]]*:[[:space:]]*"//;s/"//' || true)
     fi
     echo "$id"
 }
