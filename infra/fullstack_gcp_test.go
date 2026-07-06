@@ -10,8 +10,9 @@ import (
 )
 
 // gcpFullstackMocks records all GCP resources Deploy() registers under
-// cloudProvider=gcp. Phase 1 only covers Artifact Registry — once compute,
-// network, etc. land, this file should grow type-token cases for them.
+// cloudProvider=gcp, with type-token cases enriching the computed outputs
+// each wired stage reads downstream (network, data stores, streaming,
+// secrets, compute, and the Stage 6 edge slice from #496).
 type gcpFullstackMocks struct {
 	mu        sync.Mutex
 	resources []fsResource
@@ -68,9 +69,10 @@ func (m *gcpFullstackMocks) NewResource(args pulumi.MockResourceArgs) (string, r
 		outputs["selfLink"] = resource.NewStringProperty(
 			"projects/test/locations/us-central1/connectors/" + args.Name)
 
-	// --- PSA (Private Service Access) ---
+	// --- PSA (Private Service Access) + edge global anycast IP ---
 	case "gcp:compute/globalAddress:GlobalAddress":
 		outputs["name"] = resource.NewStringProperty(args.Name)
+		outputs["address"] = resource.NewStringProperty("203.0.113.10")
 	case "gcp:servicenetworking/connection:Connection":
 		outputs["peering"] = resource.NewStringProperty("servicenetworking-googleapis-com")
 
@@ -173,6 +175,38 @@ func (m *gcpFullstackMocks) NewResource(args pulumi.MockResourceArgs) (string, r
 		}
 		outputs["uri"] = resource.NewStringProperty(
 			"https://" + name + "-mock-" + region + ".a.run.app")
+
+	// --- Stage 6 edge: LB + DNS + cert + Cloud Armor (#496) ---
+	case "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/regions/us-central1/networkEndpointGroups/" + args.Name)
+	case "gcp:compute/backendService:BackendService":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/backendServices/" + args.Name)
+	case "gcp:compute/securityPolicy:SecurityPolicy":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/securityPolicies/" + args.Name)
+	case "gcp:compute/uRLMap:URLMap":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/urlMaps/" + args.Name)
+	case "gcp:compute/managedSslCertificate:ManagedSslCertificate":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/sslCertificates/" + args.Name)
+	case "gcp:compute/sSLPolicy:SSLPolicy":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/sslPolicies/" + args.Name)
+	case "gcp:compute/targetHttpsProxy:TargetHttpsProxy",
+		"gcp:compute/targetHttpProxy:TargetHttpProxy":
+		outputs["selfLink"] = resource.NewStringProperty(
+			"https://www.googleapis.com/compute/v1/projects/test/global/targetProxies/" + args.Name)
+	case "gcp:compute/globalForwardingRule:GlobalForwardingRule",
+		"gcp:dns/recordSet:RecordSet",
+		"gcp:cloudrunv2/serviceIamMember:ServiceIamMember":
+		// Default input copy is sufficient (no computed fields read downstream).
+	case "gcp:dns/managedZone:ManagedZone":
+		outputs["nameServers"] = resource.NewArrayProperty([]resource.PropertyValue{
+			resource.NewStringProperty("ns-cloud-a1.googledomains.com."),
+		})
 	}
 	return id, outputs, nil
 }
@@ -207,6 +241,9 @@ func gcpFullstackConfig() pulumi.RunOption {
 			"kaizen-experimentation:environment":          "dev",
 			"kaizen-experimentation:cloudProvider":        "gcp",
 			"kaizen-experimentation:streamingProvider":    "redpanda",
+			"kaizen-experimentation:domain":               "example.com",
+			"kaizen-experimentation:wafEnabled":           "true",
+			"kaizen-experimentation:wafRateLimitPerIP":    "1000",
 			"kaizen-experimentation:gcpProjectId":         "kaizen-experimentation-dev",
 			"kaizen-experimentation:gcpRegion":            "us-central1",
 			"kaizen-experimentation:gcpArLocation":        "us",

@@ -196,6 +196,11 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		if v, err := cfg.Try("vpcCidr"); err == nil {
 			out.VpcCidr = v
 		}
+		// wafEnabled gates Cloud Armor on GCP exactly as it gates WAF v2 on
+		// AWS (charter parity: the kaizen:enableWaf toggle spans providers).
+		if v, err := cfg.TryBool("wafEnabled"); err == nil {
+			out.WafEnabled = v
+		}
 		if v, err := cfg.TryInt("natGatewayCount"); err == nil {
 			out.NatGatewayCount = v
 		}

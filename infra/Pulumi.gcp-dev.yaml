@@ -11,6 +11,16 @@ config:
 
   # Core identification
   kaizen-experimentation:environment: dev
+  # Public zone suffix consumed by the edge stage (#496): the LB terminates
+  # kaizen.{domain}, assign.kaizen.{domain}, api.kaizen.{domain}. Placeholder
+  # satisfies `pulumi preview`; override per real account before delegating DNS.
+  kaizen-experimentation:domain: example.com
+
+  # Edge security (#496): wafEnabled gates the Cloud Armor policy exactly as
+  # it gates WAF v2 on the AWS stacks; the rate limit mirrors the AWS default
+  # (1000 requests / 5 min / IP).
+  kaizen-experimentation:wafEnabled: "true"
+  kaizen-experimentation:wafRateLimitPerIP: "1000"
 
   # GCP project + Artifact Registry settings
   # Override `gcpProjectId` per real account before applying. The default here
@@ -48,7 +58,6 @@ config:
   kaizen-experimentation:redisNodeType: cache.t4g.medium
   kaizen-experimentation:m4bInstanceType: t3.large
   kaizen-experimentation:natGatewayCount: "1"
-  kaizen-experimentation:wafEnabled: "false"
   kaizen-experimentation:fargateMinTasks: "1"
   kaizen-experimentation:cloudwatchRetentionDays: "7"
 
