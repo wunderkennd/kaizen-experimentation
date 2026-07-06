@@ -53,6 +53,37 @@ open ∧ not claimed ∧ no open closing PR ∧ no OPEN native dependency edges 
 with native issue dependencies over GraphQL; the claimed/in-flight predicates
 stay.
 
+## Executor contracts (normative — LLM/vendor agnosticism)
+
+The coordination plane never names a vendor; vendor-specific tokens live only
+inside that vendor's own executor files (audited clean 2026-07-06: every
+`@claude` in the repo sits in `claude.yml`'s triggers or the `claude-web`
+adapter; `auto-ready.yml`'s done-signal is the neutral `ready` label /
+`/ready` comment). Adding a new model/vendor lane = exactly two files, both
+conforming to these contracts:
+
+**Adapter contract** (`dispatch.d/<lane>.sh`):
+- receives the rendered task prompt on **stdin** and the issue number as `$1`;
+- launches the executor and exits `0` on successful hand-off, non-zero on
+  failure (dispatch.sh then releases the claim);
+- must NOT claim, comment progress, or interpret the prompt — the prompt is
+  executor-agnostic and self-contained (startup ritual, size gate,
+  `progress-branch:` convention, `Closes #N`, review conduct).
+
+**Worker-workflow contract** (`.github/workflows/<lane>-worker.yml`), for
+lanes launched from GitHub compute (probe #713 constraints):
+- `workflow_dispatch` with exactly two inputs: `issue` (string, required) and
+  `prompt` (string, required — the adapter enforces the ~60k input budget);
+- registered on `main` before first launch (by-filename dispatch resolves
+  against the default branch);
+- `run-name` carries the issue number; the job runs the vendor's agent action
+  with the prompt verbatim and the vendor's own credential secret;
+- everything behavioral (branching, progress, PR conventions) comes from the
+  prompt, never from the workflow.
+
+Which lanes may work which agent's issues is the registry's `executors:`
+field (`docs/agents/registry/`); routing policy on top is H8 (#720).
+
 ## Evening dispatcher (`evening_dispatch.sh`, H4 #716)
 
 The nightly autonomous front door (`.github/workflows/evening-dispatcher.yml`,

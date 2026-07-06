@@ -7,6 +7,7 @@ tags: [module-agent, rust, flags]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-7
 label: agent-7
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Rust (ADR-024 port from Go shipped)
 ports: [50057]
 owned_paths:

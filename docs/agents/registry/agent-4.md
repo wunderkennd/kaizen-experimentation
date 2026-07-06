@@ -7,6 +7,7 @@ tags: [module-agent, rust, statistics, bandits, golden-files]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-4
 label: agent-4
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Rust
 ports: [50053, 50054]
 owned_paths:

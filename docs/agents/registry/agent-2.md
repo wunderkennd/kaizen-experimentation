@@ -7,6 +7,7 @@ tags: [module-agent, rust, go, kafka, ingestion, qoe]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-2
 label: agent-2
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Rust + Go
 ports: [50052, 50058]
 owned_paths:

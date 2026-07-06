@@ -7,6 +7,7 @@ tags: [module-agent, go, rust-port, lifecycle, rbac]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-5
 label: agent-5
+executors: [claude-workflow, claude-web, multiclaude, jules]
 language: Go (production) + Rust port in progress (ADR-025)
 ports: [50055, 50060]
 owned_paths:

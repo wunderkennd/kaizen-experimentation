@@ -10,6 +10,14 @@ bundle. Each concept below is one agent: YAML frontmatter carries the machine-re
 identity (id, label, language, ports, owned paths, dependencies); the body carries the
 charter (responsibilities, standards, contract-test obligations).
 
+Frontmatter also carries **`executors:`** — the executor lanes permitted to work this
+agent's issues (`dispatch.d/` adapter names; see the executor contracts in
+[`scripts/orchestration/README.md`](../../../scripts/orchestration/README.md)). Today the
+field is uniform and *descriptive*; it becomes the constraint layer under the H8 routing
+policy ([#720](https://github.com/wunderkennd/kaizen-experimentation/issues/720)) —
+routing consults policy ∩ affinity, and narrowing an agent to specific lanes is a
+one-line registry edit.
+
 This bundle is the **single source of truth** for agent identity (harness proposal
 [§7 R3/R6](../../coordination/harness-modernization-proposal.md)). Generated views
 (`just gen-agents`, drift-checked in CI — [#682](https://github.com/wunderkennd/kaizen-experimentation/issues/682)):
