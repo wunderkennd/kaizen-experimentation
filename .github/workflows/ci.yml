@@ -32,6 +32,7 @@ jobs:
           filters: |
             rust:
               - 'crates/**'
+              - '!crates/**/*.md'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain.toml'
@@ -39,6 +40,7 @@ jobs:
               - '.github/workflows/ci.yml'
             go:
               - 'services/**'
+              - '!services/**/*.md'
               - 'proto/**'
               - '.github/workflows/ci.yml'
 

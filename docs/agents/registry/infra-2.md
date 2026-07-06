@@ -7,6 +7,7 @@ tags: [infra-agent, go, pulumi, postgres, redis, secrets]
 timestamp: 2026-07-04T12:00:00Z
 id: infra-2
 label: infra-2
+executors: [claude-workflow, claude-web, multiclaude]
 language: Go (Pulumi)
 owned_paths:
   - infra/pkg/config/

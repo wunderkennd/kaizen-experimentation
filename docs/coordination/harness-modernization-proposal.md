@@ -521,6 +521,48 @@ The moves (per-PR checklist on #699):
    table when multi-phase, one metric per Goal. Advisory first; promotion to required
    only after a clean window (verify-then-require, proven three times in H3/H6).
 
+### H8 — Model/vendor routing: evidence-first lane selection (staged 2026-07-06)
+
+Prompted by the owner: *"optimize routing of tasks, tool calls, and sub-agents across
+the various models available across vendors."* Tracking: #720. **Design-stage until H4
+Phase B produces per-lane data** — the optimizer is earned by evidence, not built on
+speculation.
+
+Three routing levels, three owners:
+
+1. **Task → lane** (issue granularity) — the harness's lever. Which executor lane
+   (`claude-workflow`, `claude-web`, `multiclaude`, `jules`, future
+   `<vendor>-workflow`) gets a given issue.
+2. **Intra-session** (sub-agents, tool-heavy steps, effort tiers) — owned by the
+   executor itself; the harness's only lever is *advisory* per-task-class guidance
+   carried in the dispatch prompt. Keep it advisory — reaching into an executor's
+   internals couples the queue to a vendor (the Manus lesson, §7).
+3. **Cross-vendor verification** — reviewer lane ≠ author lane as a deliberate
+   diversity property (Devin auto-review + Gemini second-opinion already do this
+   organically; same-model blind spots are real).
+
+Phasing (evidence before optimizer):
+
+- **Phase 0 — instrument** (composes with H5's dispatch instrumentation): every
+  dispatch records lane, task class (verb label + agent + size budget), and outcome
+  (merged/rejected, rework rounds, wall-clock, review burden, cost). #682's pilot
+  scorecard is the seed schema.
+- **Phase 1 — routing as data**: `.github/routing.yml` maps task-class → ordered lane
+  preferences with fallbacks; per-issue override label (`executor:<lane>`); the
+  registry's `executors:` field is the per-agent constraint layer (landed 2026-07-06).
+  The dispatcher consults **policy ∩ affinity**.
+- **Phase 2 — adaptive selection, only if volume warrants**: at a few dispatches/day,
+  hand-tuned rules beat bandits on data efficiency. Explicit kill criterion: do NOT
+  build this while weekly dispatch volume < 50. If volume grows past it, the platform
+  dogfoods its own `experimentation-bandit` crate on lane selection — the harness
+  becomes its own experiment.
+
+Hard rules (candidate Locks for the eventual plan): route at **issue granularity,
+never mid-issue** (vendor switches discard `progress-branch` resume state);
+risk-labeled work (`breaking`/`contract-test`/proto) routes to the strongest lane AND
+human review — routing never weakens the merge gates; **every lane earns traffic
+through the same H4 scorecard**, Claude included.
+
 ---
 
 ## 5. What NOT to change
@@ -549,6 +591,7 @@ The moves (per-PR checklist on #699):
 | H5 | Least-privilege worker credentials + dispatch instrumentation (see §7 R4) | H1 | 1 issue, `chore` — replaces the deferred `--dangerously-skip-permissions` item |
 | H6 | Ecosystem governance: reusable workflows · ruleset JSON · Pulumi fleet stamping · org-migration path | H3 (gate + graduated review are what gets fleet-ified) | 1 issue, `chore` + owner decision on wunderkind-ventures transfer timing |
 | H7 | Delivery-practice codification: lifecycle map · templates (PRD/RFC/ux-spec, OKF frontmatter) · locked-plan v2 + plan-review · advisory doc-lints | — (extends the `prime-issue` ratchet; composes with #683) | #699, four right-sized PRs |
+| H8 | Model/vendor routing: dispatch instrumentation · `routing.yml` ∩ registry `executors:` affinity · adaptive selection only past the volume bar | H4 Phase B (per-lane scorecard data), H5 (instrumentation) | #720 — design-stage; first dispatchable unit is Phase 0 instrumentation |
 
 Each phase is independently shippable and independently revertible; H1+H2 delete more code
 than they add.

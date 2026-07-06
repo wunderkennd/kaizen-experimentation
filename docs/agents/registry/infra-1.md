@@ -7,6 +7,7 @@ tags: [infra-agent, go, pulumi, networking]
 timestamp: 2026-07-04T12:00:00Z
 id: infra-1
 label: infra-1
+executors: [claude-workflow, claude-web, multiclaude]
 language: Go (Pulumi)
 owned_paths:
   - infra/pkg/aws/network.go

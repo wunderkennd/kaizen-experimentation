@@ -7,6 +7,7 @@ tags: [module-agent, typescript, nextjs, ui, palette]
 timestamp: 2026-07-04T12:00:00Z
 id: agent-6
 label: agent-6
+executors: [claude-workflow, claude-web, multiclaude]
 language: TypeScript
 ports: [3000]
 owned_paths:
