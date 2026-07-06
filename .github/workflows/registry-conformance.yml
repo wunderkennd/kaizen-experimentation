@@ -10,6 +10,11 @@ on:
     paths:
       - "docs/agents/registry/**"
       - "scripts/check_okf.py"
+      - "scripts/gen_agents.py"
+      - "scripts/test_gen_agents.sh"
+      - "AGENTS.md"
+      - "**/AGENTS.md"
+      - ".multiclaude/agents/**"
       - ".github/workflows/registry-conformance.yml"
 
 permissions:
@@ -27,3 +32,7 @@ jobs:
         run: pip install pyyaml
       - name: OKF v0.1 conformance
         run: python3 scripts/check_okf.py docs/agents/registry
+      - name: Generated agent views are current (gen-agents drift check, #682)
+        run: python3 scripts/gen_agents.py --check
+      - name: Generator behavior tests
+        run: bash scripts/test_gen_agents.sh

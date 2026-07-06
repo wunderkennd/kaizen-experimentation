@@ -164,6 +164,17 @@ update-skills:
 check-registry:
     python3 scripts/check_okf.py docs/agents/registry
 
+# Regenerate all agent-context views from the registry (#682): module-scoped
+# AGENTS.md files (nearest-file-wins, vendor-neutral), the root AGENTS.md
+# anchor, and the .multiclaude/agents/ executor views. Edit the registry,
+# then run this — never edit a generated view by hand.
+gen-agents:
+    python3 scripts/gen_agents.py
+
+# Fail if any generated agent view is stale relative to the registry.
+check-agents:
+    python3 scripts/gen_agents.py --check
+
 # Lint delivery-lifecycle documents (ADR headers, plan v2 sections, PRD
 # one-metric rule) — advisory; DOCS_LINT_STRICT=1 escalates warnings.
 # See docs/guides/delivery-lifecycle.md (H7, #699).

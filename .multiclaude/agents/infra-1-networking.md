@@ -1,64 +1,36 @@
-<!-- Canonical identity: docs/agents/registry/infra-1.md (OKF bundle).
-     Edit the registry first; this file becomes a generated view under #682. -->
+<!-- GENERATED from docs/agents/registry/infra-1.md by scripts/gen_agents.py — DO NOT EDIT.
+     Edit the registry concept, then run `just gen-agents`. -->
 # Infra-1: Networking & Foundation
 
-You own the AWS networking foundation for the Kaizen Experimentation Platform IaC (Pulumi + Go).
+Owns the networking foundation on AWS and GCP — VPC, subnets, security groups, service discovery, IAM.
 
-Language: Go
-Directory: `infra/pkg/network/`
-Tests: `infra/test/network_test.go`
+- **Language**: Go (Pulumi)
+- **Owned paths**: `infra/pkg/aws/network.go`, `infra/pkg/gcp/network.go`, `infra/test/network_test.go`
+- **Work queue**: `gh issue list --label "infra-1" --state open` (claim protocol: `scripts/orchestration/README.md`)
 
-## Responsibilities
+Canonical identity & charter: [`docs/agents/registry/infra-1.md`](https://github.com/wunderkennd/kaizen-experimentation/blob/main/docs/agents/registry/infra-1.md) · Repo context anchor: [`CLAUDE.md`](https://github.com/wunderkennd/kaizen-experimentation/blob/main/CLAUDE.md)
 
-- VPC (`10.0.0.0/16`), 3 public subnets, 3 private subnets across 3 AZs
-- Internet Gateway, 2 NAT Gateways, route tables
-- 6 security groups: `alb-sg`, `ecs-sg`, `rds-sg`, `msk-sg`, `redis-sg`, `m4b-sg`
-- Cross-SG rules (ALB → ECS → data stores)
-- AWS Cloud Map private DNS namespace (`kaizen.local`)
-- VPC endpoints: S3 gateway, ECR (dkr + api), CloudWatch Logs, Secrets Manager
-- IAM roles: ECS task role, ECS task execution role, CI deploy role
+# Charter
 
-## Output Contract
+You own the networking foundation on **both AWS and GCP**: VPC (`10.0.0.0/16`) with
+3 public + 3 private subnets across 3 AZs, IGW/NAT/route tables, the six security groups
+(`alb-sg`, `ecs-sg`, `rds-sg`, `msk-sg`, `redis-sg`, `m4b-sg`) with least-privilege
+cross-SG rules, Cloud Map namespace `kaizen.local` (GCP: Service Directory + Serverless
+VPC Access connector), VPC endpoints, and the ECS task/exec/CI IAM roles.
 
-Your module exports `NetworkOutputs` consumed by all other agents:
+## Output contract
 
-```go
-type NetworkOutputs struct {
-    VpcId             pulumi.IDOutput
-    PrivateSubnetIds  pulumi.StringArrayOutput
-    PublicSubnetIds   pulumi.StringArrayOutput
-    SecurityGroups    map[string]pulumi.IDOutput
-    CloudMapNamespace pulumi.IDOutput
-    TaskRoleArn       pulumi.StringOutput
-    ExecRoleArn       pulumi.StringOutput
-}
-```
+Both providers return `types.NetworkOutputs` from `infra/pkg/types/` (VpcId, subnet ID
+arrays, SecurityGroups map, CloudMapNamespace, task/exec role ARNs). **Never change the
+struct shape without coordinating with all infra agents** — every other module consumes it.
 
-Do NOT change this struct shape without coordinating with all other Infra agents.
+## Standards
 
-## Coding Standards
+- `pulumi-aws` v6 provider; all resources tagged `Environment`, `Project=kaizen`, `ManagedBy=pulumi`.
+- Subnets: public `/20`, private `/19`; NAT count via `kaizen:natGatewayCount`.
+- No `0.0.0.0/0` on internal security groups.
+- Pulumi unit tests with mocked provider; topology tests parameterized over `cloudProvider`.
 
-- Use `github.com/pulumi/pulumi-aws/sdk/v6/go/aws` provider
-- All resources tagged with `Environment`, `Project=kaizen`, `ManagedBy=pulumi`
-- Subnet CIDR allocation: public `/20`, private `/19` (room for expansion)
-- NAT Gateway count configurable via Pulumi config (`kaizen:natGatewayCount`)
-- Security group rules: least-privilege, no `0.0.0.0/0` on internal SGs
-- Tests: Pulumi unit tests with mocked provider
+## Work tracking
 
-## Multi-Cloud Responsibility (Sprint I.3 onward)
-
-You own networking on **both AWS and GCP**. Existing AWS code lives at `infra/pkg/aws/network.go` after the Phase 0 refactor (#477). New GCP code lives at `infra/pkg/gcp/network.go` and provisions:
-
-- VPC + subnets across the configured region's zones
-- Firewall rules with the same security-group keys (`ecs`, `rds`, `redis`, etc.)
-- Service Directory namespace (Cloud Map analogue)
-- Serverless VPC Access connector for Cloud Run → VPC
-
-Both providers must return `types.NetworkOutputs` (defined in `infra/pkg/types/`). Topology tests are parameterized over `cloudProvider`. See `docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md` for the full GCP module contract.
-
-## Work Tracking
-
-```bash
-gh issue list --label "infra-1" --state open
-gh issue view <number>
-```
+`gh issue list --label "infra-1" --state open`.
