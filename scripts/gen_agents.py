@@ -52,8 +52,17 @@ def load_registry(root: Path):
             continue
         text = f.read_text(encoding="utf-8")
         fm, raw = parse_frontmatter(text)
-        if not fm or "id" not in fm:
-            print(f"gen-agents: {f} has no parseable frontmatter id", file=sys.stderr)
+        if not fm:
+            print(f"gen-agents: {f} has no parseable frontmatter", file=sys.stderr)
+            sys.exit(2)
+        missing = [k for k in ("id", "label") if not fm.get(k)]
+        if missing:
+            print(
+                f"gen-agents: {f} frontmatter is missing required field(s): "
+                f"{', '.join(missing)} — every concept needs `id` (filename identity) "
+                f"and `label` (the GitHub work-queue label)",
+                file=sys.stderr,
+            )
             sys.exit(2)
         # body = everything after the closing frontmatter fence
         end = text.find("\n---\n", 4)

@@ -83,6 +83,21 @@ touch "$ROOT2/.multiclaude/agents/x-1-legacyname.md"
 python3 "$HERE/gen_agents.py" --root "$ROOT2" >/dev/null 2>&1
 check "pre-existing <id>-slug filename is regenerated in place" "grep -q 'GENERATED' '$ROOT2/.multiclaude/agents/x-1-legacyname.md' && [ ! -f '$ROOT2/.multiclaude/agents/x-1.md' ]"
 
+echo "=== required-field validation ==="
+ROOT3="$TMP/repo3"
+mkdir -p "$ROOT3/docs/agents/registry"
+cat > "$ROOT3/docs/agents/registry/x-3.md" <<'EOF'
+---
+type: Test Agent
+title: "X-3: No Label"
+id: x-3
+---
+
+# Charter
+EOF
+if python3 "$HERE/gen_agents.py" --root "$ROOT3" >"$TMP/v.txt" 2>&1; then RCV=0; else RCV=$?; fi
+check "missing label is a clear diagnostic, not a traceback (exit 2)" "[ $RCV -eq 2 ] && grep -q 'missing required field(s): label' '$TMP/v.txt' && ! grep -q 'Traceback' '$TMP/v.txt'"
+
 echo ""
 echo "=== $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ]
