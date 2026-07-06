@@ -101,18 +101,15 @@ func Deploy(ctx *pulumi.Context) error {
 
 	// =====================================================================
 	// GCP early return — Phase 1 storage + cache + database + streaming +
-	// secrets + cicd + M4b + Cloud Run compute slice
+	// secrets + cicd + M4b + Cloud Run compute slice + Phase 3 edge
 	// =====================================================================
-	// Stage 4 (streaming + secrets) is now wired for GCP: the per-service
-	// Cloud Run deploys (#488..#495) need Redpanda bootstrap brokers + Secret
-	// Manager refs threaded into compute. Stage 6 (edge) remains AWS-only
-	// today. We run every wired GCP stage (network, storage, cache, database
-	// above; streaming + secrets + cicd + compute below — compute covering
-	// M4b stateful (#487), the Cloud Run factory + canary (#486), and the
-	// per-service deploys as they land, M2-Orch via #490) and return cleanly
-	// so `pulumi preview --stack gcp-dev` succeeds. Each subsequent Phase 1
-	// PR moves this early-return marker further down Deploy() and removes it
-	// entirely once all stages (incl. edge) are wired.
+	// Stage 4 (streaming + secrets) is wired: the per-service Cloud Run
+	// deploys (#488..#495) need Redpanda bootstrap brokers + Secret Manager
+	// refs threaded into compute. Stage 6 edge (#496) fronts the Cloud Run
+	// services with the global external HTTPS LB + Cloud DNS + managed cert
+	// + Cloud Armor. We run every wired GCP stage and return cleanly so
+	// `pulumi preview --stack gcp-dev` succeeds. Observability (#497) is the
+	// remaining GCP stage; its PR removes this early return entirely.
 	if cfg.CloudProvider == "gcp" {
 		// Required-config gate. Validated upfront so the fail-fast behavior
 		// (and `TestFullStackDeploy_GCP_RejectsMissingProject`) is preserved
@@ -168,7 +165,7 @@ func Deploy(ctx *pulumi.Context) error {
 		// Run service factory + canary (#486), and the per-service stateless
 		// Cloud Run deploys as they land — M2 Orchestration via #490. Sibling
 		// services (#488, #489, #491..#495) extend the same call.
-		gcpComputeOut, err := gcp.NewCompute(ctx, cfg, services.StageOutputs{
+		gcpComputeOut, gcpSvcs, err := gcp.NewCompute(ctx, cfg, services.StageOutputs{
 			Net: netOut, CICD: cicdOut, DB: dbOut, Cache: cacheOut,
 			Stream: gcpStreamOut, Secrets: gcpSecretsOut, Storage: storageOut,
 		})
@@ -182,6 +179,16 @@ func Deploy(ctx *pulumi.Context) error {
 		for name, url := range gcpComputeOut.ServiceEndpoints {
 			ctx.Export("cloudRunUrl_"+name, url)
 		}
+
+		// ── Stage 6: Edge (#496) ─────────────────────────────────────────
+		// Global external HTTPS LB with serverless NEGs over the Cloud Run
+		// services, Cloud DNS, managed cert, Cloud Armor at WAF v2 parity.
+		gcpEdgeOut, err := gcp.NewEdge(ctx, cfg, gcp.EdgeBackends(gcpSvcs))
+		if err != nil {
+			return err
+		}
+
+		ctx.Export("loadBalancerDns", gcpEdgeOut.LoadBalancerDns)
 		ctx.Export("dataBucket", storageOut.DataBucketName)
 		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
 		ctx.Export("databaseEndpoint", dbOut.Endpoint)
@@ -320,14 +327,13 @@ func Deploy(ctx *pulumi.Context) error {
 func unsupportedCloud(provider string) error {
 	switch provider {
 	case "gcp":
-		// Phase 1 supports network, storage, cache, database (Stage 3), cicd,
-		// and M4b compute on GCP. Stage 4 (streaming + secrets), Stage 5
-		// stateless compute, and Stage 6 (edge) are AWS-only today; GCP
-		// should never reach their switches because Deploy() early-returns
-		// after the cicd + M4b block. Hitting this is a programming error:
-		// a stage switch is missing a gcp case or the early-return was
-		// removed without wiring the remaining stages.
-		return fmt.Errorf("internal: cloudProvider=gcp reached an unimplemented stage (Phase 1 supports Network + Storage + Cache + Database + CICD + M4b only)")
+		// GCP supports network, storage, data stores, streaming, secrets,
+		// cicd, compute (M4b + Cloud Run), and edge (#496). GCP should never
+		// reach the shared stage switches because Deploy() early-returns
+		// after the edge block. Hitting this is a programming error: a stage
+		// switch is missing a gcp case or the early-return was removed
+		// without wiring the remaining stages (observability, #497).
+		return fmt.Errorf("internal: cloudProvider=gcp reached an unimplemented stage (GCP wires Network + Storage + Data Stores + Streaming + Secrets + CICD + Compute + Edge; Observability #497 pending)")
 	default:
 		return fmt.Errorf("unsupported cloudProvider %q (expected \"aws\" or \"gcp\")", provider)
 	}

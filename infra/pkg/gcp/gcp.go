@@ -330,12 +330,17 @@ func NewCICD(ctx *pulumi.Context, cfg *kconfig.Config) (types.CICDOutputs, error
 // for every Cloud Run service (canary + per-service). ClusterId is
 // zero-valued — Cloud Run is serverless and M4b is a single instance, not an
 // orchestrator cluster.
+//
+// The second return value is the raw service map from services.Walk, keyed
+// like ServiceEndpoints. The edge stage (edge.go, #496) consumes it via
+// EdgeBackends to build serverless NEGs against the Cloud Run service names
+// — mirroring aws.NewCompute's (outputs, provider-specific, error) shape.
 
 func NewCompute(
 	ctx *pulumi.Context,
 	cfg *kconfig.Config,
 	stages services.StageOutputs,
-) (types.ComputeOutputs, error) {
+) (types.ComputeOutputs, map[string]*compute.CloudRunService, error) {
 	region := cfg.GCPRegion
 	if region == "" {
 		region = "us-central1"
@@ -356,7 +361,7 @@ func NewCompute(
 		ServiceDirectoryNamespaceName: namespaceName,
 	})
 	if err != nil {
-		return types.ComputeOutputs{}, err
+		return types.ComputeOutputs{}, nil, err
 	}
 	ctx.Export("m4bMigName", m4bOut.MigName)
 	ctx.Export("m4bInstanceName", m4bOut.InstanceName)
@@ -365,7 +370,7 @@ func NewCompute(
 	ctx.Export("m4bDataDiskName", m4bOut.DataDiskName)
 
 	if cfg.GCPProjectID == "" {
-		return types.ComputeOutputs{}, fmt.Errorf(
+		return types.ComputeOutputs{}, nil, fmt.Errorf(
 			"gcp.NewCompute: cfg.GCPProjectID is required when cloudProvider=gcp")
 	}
 	cloudRunInputs := &compute.Inputs{
@@ -399,7 +404,7 @@ func NewCompute(
 
 	svcs, err := services.Walk(ctx, cfg, cloudRunInputs, stages, registry)
 	if err != nil {
-		return types.ComputeOutputs{}, err
+		return types.ComputeOutputs{}, nil, err
 	}
 
 	endpoints := make(map[string]pulumi.StringOutput, len(svcs))
@@ -419,5 +424,5 @@ func NewCompute(
 		M4bAsgName:       m4bOut.MigName,
 		ServiceEndpoints: endpoints,
 		ServiceArns:      arns,
-	}, nil
+	}, svcs, nil
 }
