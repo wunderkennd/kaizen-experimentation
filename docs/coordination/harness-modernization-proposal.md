@@ -403,6 +403,14 @@ speaks GraphQL**." H2 is that "until."
 > the **dispatcher + worker preamble** (what must the replacement cover — planning,
 > context offload, HITL) rather than a tool being retired; and the Success bullet
 > below reads "becomes optional" — sharpened here to the Retire checklist above.
+>
+> **Phase A shipped 2026-07-06 (#716)**: probe #713 PASS (workflow_dispatch launch
+> with the default token confirmed live; workers must be registered on `main`;
+> comment-triggering from Actions is dead) → shadow dispatcher on a nightly
+> schedule (`evening-dispatcher.yml` + `scripts/orchestration/evening_dispatch.sh`),
+> worker (`claude-worker.yml`) and `dispatch.d/claude-workflow.sh` adapter
+> registered dormant. Live mode double-gated (plan L4); Phase B opens on ≥3
+> clean shadow nights. Plan: `docs/superpowers/plans/2026-07-06-h4-evening-dispatcher-shadow.md`.
 
 Run this like ADR-031 — a bounded pilot with explicit success/kill criteria, not a rewrite:
 

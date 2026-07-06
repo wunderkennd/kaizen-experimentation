@@ -1,0 +1,46 @@
+name: Claude worker
+
+# H4 evening-dispatcher worker (#716, plan L3): launched once per dispatched
+# issue via workflow_dispatch by dispatch.d/claude-workflow.sh, using the
+# default GITHUB_TOKEN (probe #713). Registered on main because by-filename
+# workflow_dispatch resolves against the default branch (same probe).
+# DORMANT in Phase A — nothing invokes it until the Phase B double-gate
+# (evening-dispatcher.yml mode=live + EVENING_DISPATCH_LIVE=1) opens.
+
+run-name: "worker: issue #${{ inputs.issue }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number this worker is dispatched against"
+        required: true
+        type: string
+      prompt:
+        description: "Rendered task prompt from dispatch.sh"
+        required: true
+        type: string
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code worker
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          prompt: ${{ inputs.prompt }}

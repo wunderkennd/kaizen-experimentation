@@ -34,8 +34,11 @@ bash scripts/orchestration/claims.sh sweep   # expire stale leases (also in `jus
 3. **Adapt**: `dispatch.d/<executor>.sh` receives the prompt on stdin and the
    issue number as `$1`. Shipped adapters: `multiclaude` (worker daemon),
    `claude-web` (posts an `@claude` issue comment; `claude.yml` runs the session
-   in GitHub-hosted compute), `jules` (cloud VM). Adding an executor = adding
-   one file here — nothing else changes.
+   in GitHub-hosted compute — works from human/PAT contexts only, since
+   `GITHUB_TOKEN` comments don't trigger workflows, probe #713),
+   `claude-workflow` (launches `.github/workflows/claude-worker.yml` via
+   `workflow_dispatch` — the Actions-safe launch path, probe #713), `jules`
+   (cloud VM). Adding an executor = adding one file here — nothing else changes.
 4. **Release on failure**: if the adapter exits non-zero the claim is released
    so the issue returns to the ready pool.
 
@@ -50,9 +53,23 @@ open ∧ not claimed ∧ no open closing PR ∧ no OPEN native dependency edges 
 with native issue dependencies over GraphQL; the claimed/in-flight predicates
 stay.
 
+## Evening dispatcher (`evening_dispatch.sh`, H4 #716)
+
+The nightly autonomous front door (`.github/workflows/evening-dispatcher.yml`,
+cron 04:07 UTC): resolves open `sprint-*` cohorts → `ready.sh` per cohort →
+dedupe, ascending order, `DISPATCH_CAP` (default 3) → **shadow** report to the
+run summary. **Shadow is the default at every layer**; live dispatch (each
+selected issue through `dispatch.sh <n> claude-workflow`) requires the
+`mode=live` input AND repo variable `EVENING_DISPATCH_LIVE=1`, and opens only
+after ≥3 clean shadow nights (plan `docs/superpowers/plans/2026-07-06-h4-evening-dispatcher-shadow.md`,
+Locks L1/L4). Claim expiry is the self-healing loop: a dead worker's lease
+lapses and the next night re-dispatches in RESUME mode.
+
 ## Tests
 
 `test_dispatch.sh` stubs `gh` with a filesystem fake and records adapter calls;
 covers the #679 acceptance criteria: double-dispatch guard, sweep-then-reclaim,
-resume-mode prompts, ready exclusions, failure release. CI:
+resume-mode prompts, ready exclusions, failure release. `test_ready_native.sh`
+covers the H2 native `_ready` + migration; `test_evening_dispatch.sh` covers
+the H4 shadow/live dispatcher and the `claude-workflow` adapter. CI:
 `.github/workflows/orchestration-tests.yml`.

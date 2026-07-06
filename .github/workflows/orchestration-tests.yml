@@ -33,3 +33,5 @@ jobs:
         run: bash scripts/test_generate_governance_onboarding.sh
       - name: Run native work-graph tests (H2)
         run: bash scripts/orchestration/test_ready_native.sh
+      - name: Run evening-dispatcher tests (H4)
+        run: bash scripts/orchestration/test_evening_dispatch.sh
