@@ -11,12 +11,17 @@ identity (id, label, language, ports, owned paths, dependencies); the body carri
 charter (responsibilities, standards, contract-test obligations).
 
 This bundle is the **single source of truth** for agent identity (harness proposal
-[§7 R3/R6](../../coordination/harness-modernization-proposal.md)). The copies in
-`.multiclaude/agents/`, `docs/coordination/prompts/`, and `docs/onboarding/` become
-generated views under [#682](https://github.com/wunderkennd/kaizen-experimentation/issues/682);
-until the generator lands, edit HERE first and mirror by hand.
+[§7 R3/R6](../../coordination/harness-modernization-proposal.md)). Generated views
+(`just gen-agents`, drift-checked in CI — [#682](https://github.com/wunderkennd/kaizen-experimentation/issues/682)):
+module-scoped `AGENTS.md` in every owned directory (nearest-file-wins; the
+vendor-neutral [agents.md](https://agents.md) convention), the root `AGENTS.md`
+anchor, and the `.multiclaude/agents/` executor views. **Edit HERE, then run
+`just gen-agents`** — never edit a generated view by hand.
+`docs/coordination/prompts/` and `docs/onboarding/` remain a hand-maintained
+view layer for now (the remaining #682 child scope).
 
-Conformance: `just check-registry` (three OKF rules + reserved-file structure).
+Conformance: `just check-registry` (three OKF rules + reserved-file structure)
+and `just check-agents` (generated views current).
 
 ## Module agents (product)
 
