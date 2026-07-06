@@ -96,7 +96,7 @@ Phase 5 shipped all 15 ADRs (011–025) across sprints 5.0–5.5 (41 PRs, comple
 | E: Platform Operations | 019, 021 | Portfolio optimization, feedback loop interference detection |
 | F: Language Migration | 024, 025 | M7 Go→Rust (shipped), M5 Go→Rust (Phase 2/4 landed; RBAC + stats integration pending) |
 
-Post-Phase-5 ADRs **026–030** (custom metrics layer, TOST equivalence testing, M4b shadow inference, cross-modal score calibration, shadow experiment mode) form the active product stream — see `CLAUDE.md` §Active Work for per-ADR status.
+Post-Phase-5 ADRs **026–031** (custom metrics layer, TOST equivalence testing, M4b shadow inference, cross-modal score calibration, shadow experiment mode, ConnectRPC Rust pilot) form the active product stream — see `CLAUDE.md` §Active Work for per-ADR status.
 
 ### Work Tracking
 
@@ -204,7 +204,7 @@ kaizen/
 | Document | Description |
 | --- | --- |
 | [Design Document v7.0](docs/design/design_doc_v7.0.md) | Complete system reference + Phase 5 architecture plan |
-| [ADR Index](docs/adrs/README.md) | 30 architecture decision records |
+| [ADR Index](docs/adrs/README.md) | 31 architecture decision records |
 | [Harness Modernization Proposal](docs/coordination/harness-modernization-proposal.md) | H0–H7: claim protocol, native work graph, platform merge path, executor consolidation, fleet governance, delivery codification |
 | [Delivery Lifecycle](docs/guides/delivery-lifecycle.md) | Idea → PRD → RFC/ADR → spec → locked plan → plan-review → `prime-issue` → dispatch |
 | [Projects & Goals](docs/guides/projects-and-goals.md) | Iterations-as-sprints, Goal sub-issue trees, native dependency edges |

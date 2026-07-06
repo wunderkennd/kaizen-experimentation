@@ -90,12 +90,13 @@ See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHA
 
 ## Active Work (Post-Phase 5)
 
-**New ADRs (Proposed)**:
+**New ADRs (026–030 Proposed; 031 Accepted)**:
 - **ADR-026** (`docs/adrs/026-custom-metrics-layer.md`) — Custom metrics definition layer (composite / derived / joined metrics beyond the six built-in types). Impact: M5, M3, M4a. **Phase 1 implemented** (Rust M5 + M6 UI + M3 topo-order scheduling — FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #552, #555, #475 — M3 dependency ordering via Kahn's algorithm with `metric_computation_status` table). **Phase 2 #435 implemented**: M3 MetricQL parser/compiler in `services/metrics/internal/metricql/` (lexer + recursive-descent parser + AST + semantic analyzer + DFS cycle detector + Spark SQL codegen; proto field `metricql_expression`; migration 013; integrated with #475 topo-order via @metric_ref operand extraction; symmetric upstream-failure gate). #436 (M5 expression validation + M6 expression editor) and Phase 3 (CUSTOM deprecation, #437) remain Proposed.
 - **ADR-027** (`docs/adrs/027-tost-equivalence-testing.md`) — Two One-Sided Tests for proving equivalence (infra migrations, refactor validation). Impact: M4a, M5, M6. Core impl landed (#443); see `crates/experimentation-stats/src/tost.rs`.
 - **ADR-028** (`docs/adrs/028-m4b-shadow-inference.md`) — M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation). Impact: M4b, M4a, M5, M6.
 - **ADR-029** (`docs/adrs/029-cross-modal-score-calibration.md`) — Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce). Introduces a new `experimentation-calibration` Rust crate owned by Agent-4 and opens cluster **G — Personalization Orchestration**. Impact: M4a, M4b, M5, Personalization service.
 - **ADR-030** (`docs/adrs/030-shadow-experiment-mode.md`) — Shadow mode flag on experiments — run candidate variants on production traffic without user exposure. Impact: M1, M4a, M4b, M5, M6.
+- **ADR-031** (`docs/adrs/031-connectrpc-rust-assignment-pilot.md`) — **Accepted** (2026-06-23, #634): ConnectRPC (Rust) pilot on M1 Assignment via the Tower-based `connectrpc` runtime — a scoped revisit of ADR-010's "Connect for Go, tonic for Rust" split; fleet-wide adoption gated on the pilot's success criteria. Impact: M1, SDKs.
 
 **Infrastructure sprint (Pulumi + Go on AWS)**: `infra/` contains Pulumi stacks (`Pulumi.{dev,staging,prod}.yaml`) and a full Go test suite (`fullstack_test.go`). Sprint I.0 (all 13 modules) and I.1/I.2 (wiring + hardening) merged; ECR repos exist for all 9 Kaizen services.
 
@@ -209,7 +210,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | --- | --- |
 | This file (agent context) | `CLAUDE.md` (repo root) |
 | Design document | `docs/design/design_doc_v7.0.md` |
-| ADRs (001–030) | `docs/adrs/` |
+| ADRs (001–031) | `docs/adrs/` |
 | ADR index | `docs/adrs/README.md` |
 | **Agent registry (canonical identity)** | `docs/agents/registry/` — OKF v0.1 bundle; validate with `just check-registry` |
 | Agent definitions (modules) | `.multiclaude/agents/agent-N-*.md` (view of the registry; generated under #682) |
