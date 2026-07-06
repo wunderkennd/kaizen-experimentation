@@ -1,0 +1,60 @@
+name: Evening dispatcher
+
+# H4 Phase A (#716): nightly SHADOW dispatcher — computes the per-cohort
+# ready set (H2 native _ready via ready.sh), caps it, and records what it
+# WOULD dispatch in the run summary. The Actions history of these runs is
+# the Phase B gate evidence (≥3 clean shadow nights; ready-drift precedent).
+# LIVE dispatch is double-gated (plan L4): the mode=live input AND the repo
+# variable EVENING_DISPATCH_LIVE=1 — shadow is the default at every layer.
+
+on:
+  schedule:
+    - cron: "7 4 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "shadow (default) or live"
+        type: choice
+        options:
+          - shadow
+          - live
+        default: shadow
+      cohort:
+        description: "Optional single cohort label (default: all open sprint-*)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: evening-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute the nightly set (dispatch only when double-gated live)
+        env:
+          MODE: ${{ inputs.mode || 'shadow' }}
+          COHORT: ${{ inputs.cohort || '' }}
+          LIVE_ENABLED: ${{ vars.EVENING_DISPATCH_LIVE || '0' }}
+        run: |
+          set -uo pipefail
+          ARGS=()
+          if [ "$MODE" = "live" ] && [ "$LIVE_ENABLED" = "1" ]; then
+            ARGS+=(--live)
+          elif [ "$MODE" = "live" ]; then
+            echo "live requested but repo variable EVENING_DISPATCH_LIVE != 1 — running SHADOW instead (plan L4)."
+          fi
+          [ -n "$COHORT" ] && ARGS+=("$COHORT")
+          bash scripts/orchestration/evening_dispatch.sh "${ARGS[@]}"
