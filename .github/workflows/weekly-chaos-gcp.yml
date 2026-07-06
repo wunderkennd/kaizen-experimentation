@@ -1,0 +1,74 @@
+name: Weekly Chaos — GCP (M4b GCE)
+
+# Cloud-level companion to weekly-chaos.yml (which kills local processes on a
+# staging docker deploy): terminates the real M4b GCE instance and verifies
+# the MIG-recreate + PD-reattach recovery invariant (< 10s, RocksDB intact).
+# Spec: docs/superpowers/specs/2026-04-20-multi-cloud-gcp-aws-design.md
+# (Compute Model → M4b). Operated per docs/runbooks/m4b-gce-chaos.md (#501).
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"  # Sunday 3 AM UTC — one hour after weekly-chaos
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions:
+  contents: read
+  id-token: write # GCP OIDC via Workload Identity Federation (ci.yml pattern)
+
+jobs:
+  m4b-gce-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gated on repo vars so the job degrades to a warning instead of a
+      # guaranteed-red weekly run until the environment is ready. Note the
+      # M4b endpoint is a private-subnet IP: GitHub-hosted runners cannot
+      # reach it, so GCP_CHAOS_ENABLED stays unset until a VPC-attached
+      # runner or forwarder path exists (see the runbook).
+      - name: Check chaos gate
+        id: gate
+        env:
+          CHAOS_ENABLED: ${{ vars.GCP_CHAOS_ENABLED }}
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          CHAOS_SA: ${{ vars.GCP_CHAOS_SA }}
+        run: |
+          if [ "$CHAOS_ENABLED" = "true" ] \
+             && [ -n "$WIF_PROVIDER" ] \
+             && [ -n "$CHAOS_SA" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GCP M4b chaos skipped — set vars.GCP_CHAOS_ENABLED=true plus GCP_WORKLOAD_IDENTITY_PROVIDER / GCP_CHAOS_SA / GCP_PROJECT_ID (docs/runbooks/m4b-gce-chaos.md)."
+          fi
+
+      - name: Authenticate to Google Cloud
+        if: steps.gate.outputs.enabled == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_CHAOS_SA }}
+
+      - name: Set up Cloud SDK
+        if: steps.gate.outputs.enabled == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install grpcurl
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          curl -sSL "https://github.com/fullstorydev/grpcurl/releases/download/v1.9.3/grpcurl_1.9.3_linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin grpcurl
+          grpcurl -version
+
+      - name: Chaos — Kill M4b GCE instance
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          GCP_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          KAIZEN_ENV: dev
+        run: ./scripts/chaos_kill_m4b_gce.sh --runs 3
+        # Verifies: MIG recreates the instance, PD (m4b-data) reattaches,
+        # RocksDB state survives, outage < 10s across 3 consecutive runs (#501)
