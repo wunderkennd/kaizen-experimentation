@@ -127,3 +127,4 @@ graphify-out/cache/
 
 # Go module build binaries (nested Pulumi programs)
 infra/github-governance/github-governance
+__pycache__/
