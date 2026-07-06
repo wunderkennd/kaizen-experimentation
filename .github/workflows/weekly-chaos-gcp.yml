@@ -1,12 +1,3 @@
-# STAGED WORKFLOW — install by moving into .github/workflows/ (verbatim):
-#
-#   git mv docs/ci/weekly-chaos-gcp.yml .github/workflows/weekly-chaos-gcp.yml
-#
-# It lives here because the #501 worker's GitHub App lacks the `workflows`
-# permission (push of .github/workflows/** was rejected). Everything the
-# workflow calls (scripts/chaos_kill_m4b_gce.sh, the runbook, the justfile
-# recipe) is already merged and functional; only this file needs the move.
-# ---------------------------------------------------------------------------
 name: Weekly Chaos — GCP (M4b GCE)
 
 # Cloud-level companion to weekly-chaos.yml (which kills local processes on a
@@ -41,10 +32,14 @@ jobs:
       # runner or forwarder path exists (see the runbook).
       - name: Check chaos gate
         id: gate
+        env:
+          CHAOS_ENABLED: ${{ vars.GCP_CHAOS_ENABLED }}
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          CHAOS_SA: ${{ vars.GCP_CHAOS_SA }}
         run: |
-          if [ "${{ vars.GCP_CHAOS_ENABLED }}" = "true" ] \
-             && [ -n "${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] \
-             && [ -n "${{ vars.GCP_CHAOS_SA }}" ]; then
+          if [ "$CHAOS_ENABLED" = "true" ] \
+             && [ -n "$WIF_PROVIDER" ] \
+             && [ -n "$CHAOS_SA" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
