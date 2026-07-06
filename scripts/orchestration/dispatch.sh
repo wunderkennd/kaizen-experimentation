@@ -52,7 +52,9 @@ if [ -n "$RESUME_BRANCH" ]; then
   MODE_BLOCK=$(cat <<EOF
 MODE: RESUME — a previous session already worked this issue on branch \`$RESUME_BRANCH\`.
 2. Fetch and check out \`$RESUME_BRANCH\`. Read \`progress.log.md\` at the branch root
-   and \`git log --oneline -15\` to learn exactly where work stopped. Do NOT start a
+   IF IT STILL EXISTS (a prior session that reached "ready" removes it — the PR
+   diff, review threads, and \`git log --oneline -15\` are then your state), plus
+   \`git log --oneline -15\` to learn exactly where work stopped. Do NOT start a
    new branch and do NOT open a duplicate PR — continue the existing work.
 EOF
 )
