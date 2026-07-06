@@ -483,6 +483,10 @@ chaos-assignment:
 chaos-policy:
     bash scripts/chaos_kill_policy.sh
 
+# Kill the M4b GCE instance on a live GCP stack (MIG recreate + PD reattach, recovery < 10s)
+chaos-policy-gce *args:
+    bash scripts/chaos_kill_m4b_gce.sh {{ args }}
+
 # Run M2 pipeline kill-9 chaos test (Kafka idempotent producer, no data loss)
 chaos-pipeline:
     bash scripts/chaos_kill_ingestion.sh
