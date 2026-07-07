@@ -12,6 +12,7 @@
 set -euo pipefail
 
 CLAIM_LABEL="claimed"
+HUMAN_GATE_LABEL="needs-human-input"
 CLAIM_TTL_HOURS="${ORCH_CLAIM_TTL_HOURS:-24}"
 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -76,6 +77,15 @@ in_flight_numbers() {
 # Space-separated open issue numbers currently carrying the claim label.
 claimed_numbers() {
   gh issue list --label "$CLAIM_LABEL" --state open --limit 200 \
+    --json number --jq '[.[].number] | join(" ")' 2>/dev/null || echo ""
+}
+
+# Space-separated open issue numbers carrying the operator-gate label: a human
+# owes an action no machine lane can take (live validation, credentials, a
+# settings toggle). Machine ready sets skip them — symmetrically across the
+# native and body-parse paths, so READY_DRIFT keeps comparing like with like.
+human_gated_numbers() {
+  gh issue list --label "$HUMAN_GATE_LABEL" --state open --limit 200 \
     --json number --jq '[.[].number] | join(" ")' 2>/dev/null || echo ""
 }
 

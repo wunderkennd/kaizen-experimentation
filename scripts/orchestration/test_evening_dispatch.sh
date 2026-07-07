@@ -38,13 +38,14 @@ GHEOF
 chmod +x "$STUB/bin/gh"
 export PATH="$STUB/bin:$PATH"
 
-# Native _ready fixture: #1 and #5 ready; #2 claimed; #3 blocked; #4 in-flight.
+# Native _ready fixture: #1 and #5 ready; #2 claimed; #3 blocked; #7 operator-gated.
 cat > "$STUB/graphql.json" <<'EOF'
 {"data":{"repository":{"issues":{"nodes":[
  {"number":5,"title":"ready five","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}},
  {"number":1,"title":"ready one","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}},
  {"number":2,"title":"claimed","labels":{"nodes":[{"name":"sprint-9"},{"name":"claimed"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}},
- {"number":3,"title":"blocked","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[{"number":9,"state":"OPEN"}]},"closedByPullRequestsReferences":{"nodes":[]}}
+ {"number":3,"title":"blocked","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[{"number":9,"state":"OPEN"}]},"closedByPullRequestsReferences":{"nodes":[]}},
+ {"number":7,"title":"operator gated","labels":{"nodes":[{"name":"sprint-9"},{"name":"needs-human-input"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}}
 ]}}}}
 EOF
 
@@ -53,7 +54,7 @@ ED="$HERE/evening_dispatch.sh"
 echo "=== shadow mode ==="
 OUT=$(bash "$ED" sprint-9 2>&1)
 check "shadow reports both ready issues" "grep -q 'would dispatch #1' <<<'$OUT' && grep -q 'would dispatch #5' <<<'$OUT'"
-check "shadow excludes claimed/blocked" "! grep -q '#2' <<<'$OUT' && ! grep -q '#3' <<<'$OUT'"
+check "shadow excludes claimed/blocked/operator-gated" "! grep -q '#2' <<<'$OUT' && ! grep -q '#3' <<<'$OUT' && ! grep -q '#7' <<<'$OUT'"
 check "shadow launches nothing" "[ ! -f '$STUB/wfrun.log' ]"
 check "shadow posts no comments" "! grep -q 'issue comment' '$CALLLOG'"
 check "shadow orders ascending" "[ \"\$(grep -o 'would dispatch #[0-9]*' <<<'$OUT' | head -1)\" = 'would dispatch #1' ]"

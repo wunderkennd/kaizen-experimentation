@@ -7,7 +7,7 @@
 #   A. double dispatch → exactly one worker; second exits 3 "already claimed"
 #   B. stale lease sweeps clean and the issue becomes dispatchable again
 #   C. re-dispatch after a progress-branch comment renders a RESUME prompt
-#   D. ready.sh excludes claimed and in-flight issues
+#   D. ready.sh excludes claimed, in-flight, and operator-gated issues
 #   E. adapter failure releases the claim
 #
 # Run: bash scripts/orchestration/test_dispatch.sh   (or `just test-orchestration`)
@@ -203,16 +203,19 @@ check "prompt says RESUME" grep -q 'MODE: RESUME' "$GH_STATE/adapter/last_prompt
 check "prompt names the branch" grep -q 'agent-3/feat/adr-999-widget' "$GH_STATE/adapter/last_prompt_43"
 check "resume forbids duplicate PR" grep -q 'duplicate PR' "$GH_STATE/adapter/last_prompt_43"
 
-echo "== D. ready.sh excludes claimed and in-flight =="
+echo "== D. ready.sh excludes claimed, in-flight, and operator-gated =="
 mkissue 50 "Free issue" "lbl"
 mkissue 51 "Claimed issue" "lbl"
 echo "claimed" >> "$GH_STATE/issues/51/labels"
 mkissue 52 "In-flight issue" "lbl"
 echo "52" > "$GH_STATE/prs_closing"
+mkissue 53 "Operator-gated issue" "lbl"
+echo "needs-human-input" >> "$GH_STATE/issues/53/labels"
 READY=$(bash "$HERE/ready.sh" lbl)
 check "lists the free issue" bash -c 'echo "$0" | grep -q "\"number\":50"' "$READY"
 check "excludes the claimed issue" bash -c '! echo "$0" | grep -q "\"number\":51"' "$READY"
 check "excludes the in-flight issue" bash -c '! echo "$0" | grep -q "\"number\":52"' "$READY"
+check "excludes the operator-gated issue" bash -c '! echo "$0" | grep -q "\"number\":53"' "$READY"
 
 echo "== E. adapter failure releases the claim =="
 mkissue 60 "Doomed dispatch" "sprint-x"

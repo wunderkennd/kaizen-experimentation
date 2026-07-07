@@ -48,10 +48,13 @@ lease; `claims.sh sweep` (run by `just morning`) clears stale leases.
 
 ## Ready predicate (`ready.sh`)
 
-open ∧ not claimed ∧ no open closing PR ∧ no OPEN native dependency edges (body-parse fallback until P3 #694)
+open ∧ not claimed ∧ not operator-gated (`needs-human-input`) ∧ no open closing PR ∧ no OPEN native dependency edges (body-parse fallback until P3 #694)
 (beads DAG preferred when initialized). H2 (#680) replaces the body parsing
 with native issue dependencies over GraphQL; the claimed/in-flight predicates
-stay.
+stay. The `needs-human-input` exclusion (#729) marks issues where an operator
+owes an action no machine lane can take (live validation, credentials, a
+settings toggle) — applied symmetrically in the native and fallback paths so
+READY_DRIFT keeps comparing like with like.
 
 ## Executor contracts (normative — LLM/vendor agnosticism)
 

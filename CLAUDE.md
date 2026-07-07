@@ -147,6 +147,7 @@ gh issue view <number>
 - `P0` through `P4` — priority
 - `cluster-a` through `cluster-g` — capability cluster (cluster-g = ADR-029 Personalization Orchestration)
 - `blocked` — waiting on another issue/agent
+- `needs-human-input` — an operator owes an action machines can't take (live validation, credentials, settings); machine-ready sets (`just _ready`, evening dispatcher) skip it
 - `contract-test` — cross-module contract test
 
 ## Branch-naming

@@ -31,6 +31,8 @@ case "$*" in
       echo "GraphQL error" >&2; exit 1
     fi
     cat "$STUB/graphql.json" ;;
+  "issue list --label needs-human-input"*)
+    cat "$STUB/human_gated.txt" 2>/dev/null || echo "" ;;
   "issue list --label "*"--state open --limit 200 --json number,title,body")
     cat "$STUB/legacy_list.json" ;;
   "issue list --state open --limit 500 --json number,body --jq"*)
@@ -60,14 +62,15 @@ export PATH="$STUB/bin:$PATH"
 
 # --- fixtures: native cohort -------------------------------------------------
 # #1 plain-ready · #2 claimed · #3 blocked by OPEN #9 · #4 in-flight PR ·
-# #5 blocker CLOSED → ready
+# #5 blocker CLOSED → ready · #6 operator-gated (needs-human-input)
 cat > "$STUB/graphql.json" <<'EOF'
 {"data":{"repository":{"issues":{"nodes":[
  {"number":1,"title":"plain ready","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}},
  {"number":2,"title":"claimed","labels":{"nodes":[{"name":"sprint-9"},{"name":"claimed"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}},
  {"number":3,"title":"blocked open","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[{"number":9,"state":"OPEN"}]},"closedByPullRequestsReferences":{"nodes":[]}},
  {"number":4,"title":"in flight","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[{"number":77}]}},
- {"number":5,"title":"blocker closed","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[{"number":8,"state":"CLOSED"}]},"closedByPullRequestsReferences":{"nodes":[]}}
+ {"number":5,"title":"blocker closed","labels":{"nodes":[{"name":"sprint-9"}]},"blockedBy":{"nodes":[{"number":8,"state":"CLOSED"}]},"closedByPullRequestsReferences":{"nodes":[]}},
+ {"number":6,"title":"operator gated","labels":{"nodes":[{"name":"sprint-9"},{"name":"needs-human-input"}]},"blockedBy":{"nodes":[]},"closedByPullRequestsReferences":{"nodes":[]}}
 ]}}}}
 EOF
 
@@ -78,6 +81,7 @@ check "native path returns exactly the ready set (1, 5)" "[ '$NUMS' = '1 5 ' ]"
 check "claimed excluded via labels-in-query" "! grep -q '\"number\":2' <<<'$OUT'"
 check "open-blocker excluded via blockedBy" "! grep -q '\"number\":3' <<<'$OUT'"
 check "in-flight excluded via closedByPullRequestsReferences" "! grep -q '\"number\":4' <<<'$OUT'"
+check "operator-gated excluded via needs-human-input label" "! grep -q '\"number\":6' <<<'$OUT'"
 check "native path made exactly one graphql call" "[ \$(grep -c 'api graphql' '$CALLLOG') -eq 1 ]"
 
 echo "=== fallback on native failure ==="
@@ -91,14 +95,18 @@ check "graphql failure falls back to body-parse" "grep -q '\"number\":42' <<<'$O
 check "fallback emits the PA-residual warning" "grep -q 'PA-residual' '$TMP/warn.txt'"
 
 echo "=== drift mode ==="
-# Aligned: legacy list mirrors native's ready set {1,5}
+# Aligned: legacy list mirrors native's ready set {1,5}. #6 is operator-gated —
+# present in both paths' inputs, excluded by both (label in-query natively,
+# human_gated_numbers in the fallback), so the drift stays clean.
 cat > "$STUB/legacy_list.json" <<'EOF'
 [{"number":1,"title":"plain ready","body":""},
- {"number":5,"title":"blocker closed","body":"## Blocked by\n\n- #8\n"}]
+ {"number":5,"title":"blocker closed","body":"## Blocked by\n\n- #8\n"},
+ {"number":6,"title":"operator gated","body":""}]
 EOF
+echo "6" > "$STUB/human_gated.txt"
 echo "CLOSED" > "$STUB/state_8"
 READY_DRIFT=1 bash "$HERE/ready.sh" sprint-9 >"$TMP/drift1.txt" 2>&1
-check "drift clean exits 0 and says clean" "[ $? -eq 0 ] && grep -q 'clean' '$TMP/drift1.txt'"
+check "drift clean exits 0 and says clean (operator-gate symmetric)" "[ $? -eq 0 ] && grep -q 'clean' '$TMP/drift1.txt'"
 
 cat > "$STUB/legacy_list.json" <<'EOF'
 [{"number":1,"title":"plain ready","body":""}]

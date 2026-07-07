@@ -5,7 +5,10 @@
 # An issue is ready when:
 #   1. it has NO open PR closing it (in-flight), AND
 #   2. it is NOT claimed by a worker (claim protocol — see claims.sh), AND
-#   3. every blocker is CLOSED.
+#   3. every blocker is CLOSED, AND
+#   4. it is NOT operator-gated (needs-human-input label — a human owes an
+#      action no machine lane can take; excluded symmetrically in every path
+#      so READY_DRIFT compares like with like).
 #
 # Resolution order (H2 Design A, probe #691; graduated cutover per plan v2):
 #   1. NATIVE  — one GraphQL query per cohort: blockedBy (dependency edges),
@@ -53,6 +56,7 @@ native_ready() {
   printf '%s' "$resp" | jq -c '
     .data.repository.issues.nodes[]
     | select(((.labels.nodes // []) | map(.name) | index("claimed")) | not)
+    | select(((.labels.nodes // []) | map(.name) | index("needs-human-input")) | not)
     | select((.closedByPullRequestsReferences.nodes // []) | length == 0)
     | select(((.blockedBy.nodes // []) | map(select(.state == "OPEN")) | length) == 0)
     | {number, title}'
@@ -61,10 +65,14 @@ native_ready() {
 # --- 3. Body-parse fallback (deprecated — P3 deletes this) ------------------
 legacy_ready() {
   local label="$1"
-  local IN_FLIGHT CLAIMED
+  local IN_FLIGHT CLAIMED HUMAN_GATED
   IN_FLIGHT=$(in_flight_numbers)
   CLAIMED=$(claimed_numbers)
-  excluded() { contains_num "$IN_FLIGHT" "$1" || contains_num "$CLAIMED" "$1"; }
+  HUMAN_GATED=$(human_gated_numbers)
+  excluded() {
+    contains_num "$IN_FLIGHT" "$1" || contains_num "$CLAIMED" "$1" \
+      || contains_num "$HUMAN_GATED" "$1"
+  }
 
   gh issue list --label "$label" --state open --limit 200 --json number,title,body \
     | jq -c '.[]' \
@@ -119,7 +127,11 @@ echo "warning: native dependency query unavailable — falling back (#692 PA-res
 if command -v bd >/dev/null 2>&1 && bd list --all --json >/dev/null 2>&1; then
   IN_FLIGHT=$(in_flight_numbers)
   CLAIMED=$(claimed_numbers)
-  excluded() { contains_num "$IN_FLIGHT" "$1" || contains_num "$CLAIMED" "$1"; }
+  HUMAN_GATED=$(human_gated_numbers)
+  excluded() {
+    contains_num "$IN_FLIGHT" "$1" || contains_num "$CLAIMED" "$1" \
+      || contains_num "$HUMAN_GATED" "$1"
+  }
   bd ready --label "$LABEL" --json --limit 200 2>/dev/null \
     | jq -c '.[] | select(.external_ref != null) | select(.external_ref | startswith("gh-")) | {number: (.external_ref | sub("^gh-"; "") | tonumber), title}' \
     | while IFS= read -r issue; do
