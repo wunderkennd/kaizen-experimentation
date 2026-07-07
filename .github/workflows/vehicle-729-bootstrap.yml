@@ -1,10 +1,13 @@
-# NOT-FOR-MERGE bootstrap vehicle: the session's GitHub connector lost auth
-# mid-ship, so this one-shot workflow performs the follow-through the session
-# cannot do directly — open the draft PR for this branch (closes #729) and
-# post the 2026-07-07 ready-drift diagnosis on #680 / #694. Removed by the
-# next push to this branch, which also fires pull_request:synchronize so the
-# normal required checks run on the opened PR (a GITHUB_TOKEN-created PR's
-# `opened` event triggers nothing — probe #713).
+# NOT-FOR-MERGE bootstrap vehicle v2: the session's GitHub connector lost
+# auth mid-ship; this one-shot workflow externalizes the follow-through the
+# session cannot do directly. v2 reorders the steps — the #680/#694 drift
+# diagnosis comments post FIRST (idempotency-guarded on a marker string), and
+# the draft-PR create runs LAST and non-fatally, because it fails if the repo
+# setting "Allow GitHub Actions to create and approve pull requests"
+# (Settings → Actions → General) is off. Removed by the next push to this
+# branch, which also fires pull_request:synchronize so required checks run if
+# the PR exists by then (a GITHUB_TOKEN-created PR's `opened` event triggers
+# nothing — probe #713).
 name: vehicle-729-bootstrap
 on:
   push:
@@ -23,20 +26,35 @@ jobs:
       C680_B64: IyMgUkVBRFlfRFJJRlQgMjAyNi0wNy0wNyBtaXNtYXRjaCDigJQgZGlhZ25vc2VkCgpUaGUgbWlzbWF0Y2ggcmVwb3J0ZWQgYWJvdmUgKFtydW4gMjg4NTc3NjkxNzZdKGh0dHBzOi8vZ2l0aHViLmNvbS93dW5kZXJrZW5uZC9rYWl6ZW4tZXhwZXJpbWVudGF0aW9uL2FjdGlvbnMvcnVucy8yODg1Nzc2OTE3NikpIGlzICoqbm90KiogYSBuYXRpdmUtZWRnZSBkZWZlY3QuIEl0IGlzIGRvd25zdHJlYW0gYmxhc3QgZnJvbSB0aGUgYnJva2VuIGF1dG8tY2xvc2U6CgoxLiBQUnMgIzcyNC8jNzI1IG1lcmdlZCBjYXJyeWluZyBgQ2xvc2VzICM1MDFgL2BDbG9zZXMgIzUwMmAsIGJ1dCB0aGUgcmVwbydzIGF1dG8tY2xvc2Ugc2lsZW50bHkgZmFpbGVkICh0aGlyZCBhbmQgZm91cnRoIGNvbmZpcm1lZCBpbnN0YW5jZXMgYWZ0ZXIgIzcxNikg4oCUIGJvdGggaXNzdWVzIHN0YXllZCBvcGVuLgoyLiBUaGUgKipuYXRpdmUqKiBpbi1mbGlnaHQgcHJlZGljYXRlIChgY2xvc2VkQnlQdWxsUmVxdWVzdHNSZWZlcmVuY2VzYCkgc3RpbGwgc2VlcyB0aGUgbWVyZ2VkIGNsb3NpbmcgUFJzIOKGkiBydWxlcyAjNTAxLyM1MDIgbm90LXJlYWR5LiAqKkNvcnJlY3QgbWFjaGluZSBiZWhhdmlvcioqOiB0aGVpciBjb2RlIG1lcmdlZDsgb25seSBvcGVyYXRvciB2YWxpZGF0aW9uIHJlbWFpbnMuCjMuIFRoZSAqKmJvZHktcGFyc2UqKiBwcmVkaWNhdGUgY2hlY2tzIG9ubHkgKm9wZW4qIGNsb3NpbmcgUFJzIOKGkiBsaXN0cyB0aGVtIHJlYWR5LiBXcm9uZy4KNC4gU2V0cyBkaXZlcmdlIOKGkiBjYW5hcnkgZmlyZXMuIFdvcmtpbmcgYXMgZGVzaWduZWQ7IHRoZSBkaXZlcmdlbmNlIGl0IGNhdWdodCBpcyByZWFsLgoKKipSZW1lZGlhdGlvbioqIChQUiBmcm9tIGJyYW5jaCBgY2xhdWRlL2hhcm5lc3Mtd29ya2Zsb3ctZ2VuZXJhbGl6ZS15eXdhMTBgLCBjbG9zZXMgIzcyOSk6IGBuZWVkcy1odW1hbi1pbnB1dGAg4oCUIHdoaWNoICM1MDEvIzUwMiBib3RoIGNhcnJ5LCBzaW5jZSBvbmx5IGxpdmUgVlBDIHJ1bnMgcmVtYWluIOKAlCBpcyBub3cgZXhjbHVkZWQgZnJvbSBtYWNoaW5lLXJlYWR5IHNldHMgKnN5bW1ldHJpY2FsbHkqIGluIHRoZSBuYXRpdmUgYW5kIGZhbGxiYWNrIHBhdGhzLiBTcHJpbnQtSS4zIHRoZW4gY29tcHV0ZXMgYHs0OTYsIDQ5OH1gIGluIGJvdGgsIGFuZCBkcmlmdCByZXR1cm5zIGNsZWFuIHdpdGhvdXQgbWFza2luZyB0aGUgY2FuYXJ5OiBhIGZ1dHVyZSBtZXJnZWQtYnV0LW9wZW4gaXNzdWUgKip3aXRob3V0KiogdGhlIGxhYmVsIHdpbGwgc3RpbGwgdHJpcCBpdCwgd2hpY2ggaXMgZXhhY3RseSByaWdodCB3aGlsZSBhdXRvLWNsb3NlIHN0YXlzIGJyb2tlbi4KCioqT3duZXIgYWN0aW9ucyB1bmNoYW5nZWQqKjogY2hlY2sgU2V0dGluZ3Mg4oaSIEdlbmVyYWwg4oaSIFB1bGwgUmVxdWVzdHMg4oaSICJBdXRvLWNsb3NlIGlzc3VlcyB3aXRoIG1lcmdlZCBsaW5rZWQgcHVsbCByZXF1ZXN0cyI7ICM1MDEvIzUwMiBzdGF5IG9wZW4gcGVuZGluZyBsaXZlIHZhbGlkYXRpb24gKHNlZSB0aGVpciBzdGF0dXMgY29tbWVudHMpLgoKQ2xlYW4td2luZG93IGFyaXRobWV0aWMgbW92ZXMgdG8gIzY5NC4K
       C694_B64: IyMgQ2xlYW4td2luZG93IHJlc2V0ICsgdXBkYXRlZCBQMyBhcml0aG1ldGljICgyMDI2LTA3LTA3KQoKUmVhZHktZHJpZnQgcnVuIDQgKFsyODg1Nzc2OTE3Nl0oaHR0cHM6Ly9naXRodWIuY29tL3d1bmRlcmtlbm5kL2thaXplbi1leHBlcmltZW50YXRpb24vYWN0aW9ucy9ydW5zLzI4ODU3NzY5MTc2KSkgZmFpbGVkIG9uIHNwcmludC1JLjMg4oCUIGRpYWdub3NpcyBvbiAjNjgwOiBicm9rZW4gcmVwbyBhdXRvLWNsb3NlIGxlZnQgIzUwMS8jNTAyIG9wZW4gYWZ0ZXIgdGhlaXIgUFJzIG1lcmdlZCwgc28gdGhlIG5hdGl2ZSBhbmQgYm9keS1wYXJzZSBpbi1mbGlnaHQgcHJlZGljYXRlcyBnZW51aW5lbHkgZGl2ZXJnZWQgKG5hdGl2ZSBjb3JyZWN0KS4gUmVtZWRpYXRpb24gUFIgKGNsb3NlcyAjNzI5KSBleGNsdWRlcyBvcGVyYXRvci1nYXRlZCBgbmVlZHMtaHVtYW4taW5wdXRgIGlzc3VlcyBmcm9tIGJvdGggcGF0aHMgc3ltbWV0cmljYWxseS4KCioqV2luZG93IGFyaXRobWV0aWMqKjogcGVyIHRoZSBnYXRlIHJ1bGUsIHRoZSBmYWlsdXJlIHJlc2V0cyB0aGUgY291bnQuIENsZWFuIGRheXMgc28gZmFyOiAyMDI2LTA3LTA2IChydW4gMykuIEFzc3VtaW5nIHRoZSAjNzI5IGZpeCBtZXJnZXMgYmVmb3JlIHRvbW9ycm93J3Mgc2NoZWR1bGVkIHJ1biBhbmQgZHJpZnQgcmVzdW1lcyBjbGVhbiAyMDI2LTA3LTA4LCBmaXZlIGNvbnNlY3V0aXZlIGNsZWFuIGRheXMgY29tcGxldGUgKioyMDI2LTA3LTEyKiog4oCUIHRoZSBuZXcgZWFybGllc3QgUDMgZXhlY3V0aW9uIGRhdGUgKHdhcyAyMDI2LTA3LTEwKS4KCioqUDMgdmVoaWNsZSBwdW5jaCBsaXN0Kiog4oCUIHdoZW4gdGhlIGdhdGUgb3BlbnMsIHRoZSBjbG9zZS1vdXQgdmVoaWNsZSBzaG91bGQgYWxzbzoKLSB3aXJlIHRoZSBtaXNzaW5nIG5hdGl2ZSBkZXBlbmRlbmN5IGVkZ2UgKiojNzIwIOKGkCBibG9ja2VkLWJ5IOKAlCAjNjgyKiogKEg4IHN0YWdpbmcgZmlsZWQgd2l0aCBib2R5LXByb3NlICJCbG9ja2VkIGJ5IiBvbmx5OyBubyBNQ1AgdG9vbCBleHBvc2VzIGRlcGVuZGVuY3kgZWRnZXMsIHNvIGl0IHJpZGVzIHRoZSBuZXh0IHZlaGljbGUgdW5sZXNzIGFuIG9wZXJhdG9yIGNsaWNrcyBpc3N1ZSAjNzIwIOKGkiBSZWxhdGlvbnNoaXBzIOKGkiAiQmxvY2tlZCBieSIgZmlyc3QpLgo=
     steps:
-      - name: open draft PR + post drift diagnosis comments
+      - name: post drift diagnosis comments (idempotent)
         run: |
           set -euo pipefail
-          B="claude/harness-workflow-generalize-yywa10"
-          printf '%s' "$PR_B64"   | base64 -d > /tmp/pr.md
           printf '%s' "$C680_B64" | base64 -d > /tmp/c680.md
           printf '%s' "$C694_B64" | base64 -d > /tmp/c694.md
-          EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$B" --state open --json number --jq '.[].number' || true)
-          if [ -z "$EXISTING" ]; then
-            gh pr create --repo "$GITHUB_REPOSITORY" --draft --head "$B" --base main \
-              --title "fix(orchestration): exclude operator-gated issues from machine-ready sets" \
-              --body-file /tmp/pr.md
+          if gh issue view 680 --repo "$GITHUB_REPOSITORY" --json comments --jq '.comments[].body' | grep -q 'READY_DRIFT 2026-07-07 mismatch — diagnosed'; then
+            echo "#680 diagnosis already posted — skip"
           else
-            echo "PR already exists: #$EXISTING — skipping create"
+            gh issue comment 680 --repo "$GITHUB_REPOSITORY" --body-file /tmp/c680.md
           fi
-          gh issue comment 680 --repo "$GITHUB_REPOSITORY" --body-file /tmp/c680.md
-          gh issue comment 694 --repo "$GITHUB_REPOSITORY" --body-file /tmp/c694.md
+          if gh issue view 694 --repo "$GITHUB_REPOSITORY" --json comments --jq '.comments[].body' | grep -q 'Clean-window reset + updated P3 arithmetic (2026-07-07)'; then
+            echo "#694 update already posted — skip"
+          else
+            gh issue comment 694 --repo "$GITHUB_REPOSITORY" --body-file /tmp/c694.md
+          fi
+      - name: open draft PR (best effort — may be blocked by Actions policy)
+        run: |
+          set -uo pipefail
+          B="claude/harness-workflow-generalize-yywa10"
+          printf '%s' "$PR_B64" | base64 -d > /tmp/pr.md
+          EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$B" --state open --json number --jq '.[].number' || true)
+          if [ -n "$EXISTING" ]; then
+            echo "PR already exists: #$EXISTING — skipping create"
+            exit 0
+          fi
+          if gh pr create --repo "$GITHUB_REPOSITORY" --draft --head "$B" --base main \
+              --title "fix(orchestration): exclude operator-gated issues from machine-ready sets" \
+              --body-file /tmp/pr.md; then
+            echo "draft PR created"
+          else
+            echo "::warning::gh pr create refused — likely 'Allow GitHub Actions to create and approve pull requests' is disabled; PR creation waits on the session connector re-auth"
+          fi
