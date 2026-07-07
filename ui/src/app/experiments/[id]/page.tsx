@@ -146,7 +146,7 @@ export default function ExperimentDetailPage() {
           {experiment.state === 'CONCLUDED' && (
             <Link
               href={`/experiments/${experiment.experimentId}/results`}
-              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             >
               View Results
             </Link>
@@ -154,14 +154,14 @@ export default function ExperimentDetailPage() {
           {(experiment.type === 'MAB' || experiment.type === 'CONTEXTUAL_BANDIT') && experiment.state !== 'DRAFT' && (
             <Link
               href={`/experiments/${experiment.experimentId}/bandit`}
-              className="rounded-md bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+              className="rounded-md bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             >
               Bandit Dashboard
             </Link>
           )}
           <Link
             href={`/experiments/${experiment.experimentId}/sql`}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             View SQL
           </Link>

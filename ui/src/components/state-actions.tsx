@@ -75,7 +75,7 @@ export function StateActions({ state, onTransition }: StateActionsProps) {
         onClick={() => allowed && setDialogOpen(true)}
         disabled={!allowed}
         title={tooltip}
-        className={`rounded-md px-3 py-2 text-sm font-medium ${config.buttonClass} ${
+        className={`rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${config.buttonClass} ${
           !allowed ? 'opacity-50 cursor-not-allowed' : ''
         }`}
       >
