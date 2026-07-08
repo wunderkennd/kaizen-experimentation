@@ -190,7 +190,7 @@ export default function ExperimentDetailPage() {
               value={experiment.ownerEmail}
               label="Copy owner email"
               successMessage="Owner email copied"
-              className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+              className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
             />
           </dd>
         </div>
@@ -204,7 +204,7 @@ export default function ExperimentDetailPage() {
               value={experiment.primaryMetricId}
               label="Copy metric ID"
               successMessage="Metric ID copied"
-              className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+              className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
             />
           </dd>
         </div>
