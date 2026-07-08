@@ -118,12 +118,13 @@ export default function ExperimentDetailPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="group flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">{experiment.name}</h1>
             <CopyButton
               value={experiment.experimentId}
               label="Copy experiment ID"
               successMessage="Experiment ID copied to clipboard"
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             />
             <StateBadge state={experiment.state} />
             <TypeBadge type={experiment.type} />
@@ -189,8 +190,8 @@ export default function ExperimentDetailPage() {
             <CopyButton
               value={experiment.ownerEmail}
               label="Copy owner email"
-              successMessage="Owner email copied"
-              className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+              successMessage="Owner email copied to clipboard"
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             />
           </dd>
         </div>
@@ -203,8 +204,8 @@ export default function ExperimentDetailPage() {
             <CopyButton
               value={experiment.primaryMetricId}
               label="Copy metric ID"
-              successMessage="Metric ID copied"
-              className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+              successMessage="Metric ID copied to clipboard"
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             />
           </dd>
         </div>
@@ -293,8 +294,8 @@ export default function ExperimentDetailPage() {
                         <CopyButton
                           value={g.metricId}
                           label="Copy metric ID"
-                          successMessage="Metric ID copied"
-                          className="h-4 w-4 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                          successMessage="Metric ID copied to clipboard"
+                          className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                         />
                       </div>
                     </td>
