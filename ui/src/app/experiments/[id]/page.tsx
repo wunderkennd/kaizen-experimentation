@@ -181,12 +181,20 @@ export default function ExperimentDetailPage() {
       )}
 
       {/* Metadata grid */}
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-white p-4 sm:grid-cols-4">
-        <div>
+      <dl className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-white p-4 sm:grid-cols-4">
+        <div className="group">
           <dt className="text-xs font-medium uppercase text-gray-500">Owner</dt>
-          <dd className="mt-1 text-sm text-gray-900">{experiment.ownerEmail}</dd>
+          <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+            <span>{experiment.ownerEmail}</span>
+            <CopyButton
+              value={experiment.ownerEmail}
+              label="Copy owner email"
+              successMessage="Owner email copied"
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+            />
+          </dd>
         </div>
-        <div>
+        <div className="group">
           <dt className="text-xs font-medium uppercase text-gray-500">Primary Metric</dt>
           <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
             <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
@@ -196,6 +204,7 @@ export default function ExperimentDetailPage() {
               value={experiment.primaryMetricId}
               label="Copy metric ID"
               successMessage="Metric ID copied"
+              className="opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
             />
           </dd>
         </div>
@@ -209,7 +218,7 @@ export default function ExperimentDetailPage() {
             {experiment.startedAt ? formatDate(experiment.startedAt) : '—'}
           </dd>
         </div>
-      </div>
+      </dl>
 
       {/* Variant section: editable form for DRAFT, read-only table otherwise */}
       <section className="mb-6">
