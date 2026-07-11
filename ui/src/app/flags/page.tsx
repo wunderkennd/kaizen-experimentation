@@ -189,7 +189,7 @@ function FlagListContent() {
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             data-testid="clear-filters-toolbar"
           >
             Clear filters
