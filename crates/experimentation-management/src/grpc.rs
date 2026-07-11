@@ -439,8 +439,8 @@ impl ExperimentManagementService for ManagementServiceHandler {
                 is_cumulative_holdout: exp.is_cumulative_holdout,
                 type_config: &type_config,
                 sequential_method: seq_method,
-                planned_looks: planned_looks.and_then(|l| if l == 0 { None } else { Some(l) }),
-                overall_alpha: overall_alpha.and_then(|a| if a == 0.0 { None } else { Some(a) }),
+                planned_looks: planned_looks.filter(|&l| l != 0),
+                overall_alpha: overall_alpha.filter(|&a| a != 0.0),
                 surrogate_model_id,
                 variants: &variants,
             })
