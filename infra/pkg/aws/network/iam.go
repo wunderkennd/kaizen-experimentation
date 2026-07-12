@@ -99,8 +99,12 @@ func newEcsTaskRole(
 	identity *aws.GetCallerIdentityResult,
 	region *aws.GetRegionResult,
 ) (*iam.Role, error) {
-	role, err := iam.NewRole(ctx, "ecs-task-role", &iam.RoleArgs{
-		Name:             pulumi.Sprintf("%s-ecs-task-role", prefix),
+	// Named "-shared" to avoid colliding with compute's per-service task role
+	// (services.go newTaskRole), which is what task definitions actually use.
+	// TODO(#TBD): consolidate the two roles — this one carries the Secrets
+	// Manager / S3 grants but is only referenced via IAMOutputs.TaskRoleRef.
+	role, err := iam.NewRole(ctx, "ecs-task-role-shared", &iam.RoleArgs{
+		Name:             pulumi.Sprintf("%s-ecs-task-shared-role", prefix),
 		AssumeRolePolicy: pulumi.String(ecsTrustPolicy),
 		Tags: pulumi.StringMap{
 			"Project":     pulumi.String("kaizen"),
@@ -182,8 +186,10 @@ func newEcsExecRole(
 	identity *aws.GetCallerIdentityResult,
 	region *aws.GetRegionResult,
 ) (*iam.Role, error) {
-	role, err := iam.NewRole(ctx, "ecs-exec-role", &iam.RoleArgs{
-		Name:             pulumi.Sprintf("%s-ecs-exec-role", prefix),
+	// "-shared" suffix for the same reason as ecs-task-role-shared above:
+	// compute's services.go creates the execution role task definitions use.
+	role, err := iam.NewRole(ctx, "ecs-exec-role-shared", &iam.RoleArgs{
+		Name:             pulumi.Sprintf("%s-ecs-exec-shared-role", prefix),
 		AssumeRolePolicy: pulumi.String(ecsTrustPolicy),
 		Tags: pulumi.StringMap{
 			"Project":     pulumi.String("kaizen"),

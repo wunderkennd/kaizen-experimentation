@@ -117,17 +117,17 @@ func (m *providerMocks) countByType(typeToken string) int {
 
 // hasBucketNamed returns true if the mock recorded a resource of the given
 // type whose `name` (GCP) or `bucket` (AWS) input matches `wantName`.
-func (m *providerMocks) hasBucketNamed(typeToken, wantName string) bool {
+func (m *providerMocks) hasBucketWithPrefix(typeToken, prefix string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, r := range m.resources {
 		if r.TypeToken != typeToken {
 			continue
 		}
-		if v, ok := r.Inputs["name"]; ok && v.HasValue() && v.StringValue() == wantName {
+		if v, ok := r.Inputs["name"]; ok && v.HasValue() && startsWith(v.StringValue(), prefix) {
 			return true
 		}
-		if v, ok := r.Inputs["bucket"]; ok && v.HasValue() && v.StringValue() == wantName {
+		if v, ok := r.Inputs["bucket"]; ok && v.HasValue() && startsWith(v.StringValue(), prefix) {
 			return true
 		}
 	}
@@ -218,14 +218,16 @@ func TestTopologyStorageRefShape(t *testing.T) {
 }
 
 // assertBucketTopology checks that exactly three buckets of the given
-// resource type were registered, named `kaizen-dev-{data,mlflow,logs}`.
+// resource type were registered, named `kaizen-dev-{data,mlflow,logs}` —
+// exact on GCP; on AWS an account-ID suffix follows (global S3 namespace),
+// so matching is by prefix.
 func assertBucketTopology(t *testing.T, provider string, mocks *providerMocks, typeToken string) {
 	t.Helper()
 	if got := mocks.countByType(typeToken); got != 3 {
 		t.Errorf("%s: bucket count = %d, want 3 (data, mlflow, logs)", provider, got)
 	}
 	for _, name := range []string{"kaizen-dev-data", "kaizen-dev-mlflow", "kaizen-dev-logs"} {
-		if !mocks.hasBucketNamed(typeToken, name) {
+		if !mocks.hasBucketWithPrefix(typeToken, name) {
 			t.Errorf("%s: missing bucket named %q", provider, name)
 		}
 	}

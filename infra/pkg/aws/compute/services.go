@@ -65,6 +65,9 @@ type ServicesOutputs struct {
 	// M5ServiceResource exposes the M5 ECS service for dependency wiring.
 	// Downstream modules (e.g., M4b) can use pulumi.DependsOn with this.
 	M5ServiceResource pulumi.Resource
+	// AllServiceResources lists every ECS service resource, for stages that
+	// address services by name string (autoscaling) and need a real edge.
+	AllServiceResources []pulumi.Resource
 	// Tier1Resources lists all Tier 1 ECS service resources, used for
 	// external dependency wiring (e.g., M4b Cloud Map depends on Tier 1).
 	Tier1Resources []pulumi.Resource
@@ -377,12 +380,21 @@ func NewServices(ctx *pulumi.Context, args *ServicesArgs) (*ServicesOutputs, err
 		m5Resource = svc
 	}
 
+	// All service resources, for downstream stages that reference services
+	// by constructed name string (e.g. autoscaling ResourceIds) and would
+	// otherwise race service creation without an explicit edge.
+	allResources := make([]pulumi.Resource, 0, len(ecsServices))
+	for _, svc := range ecsServices {
+		allResources = append(allResources, svc)
+	}
+
 	return &ServicesOutputs{
-		ServiceArns:       serviceArns,
-		TaskRoleArn:       taskRole.Arn,
-		ExecRoleArn:       execRole.Arn,
-		M5ServiceResource: m5Resource,
-		Tier1Resources:    tier1Resources,
+		ServiceArns:         serviceArns,
+		TaskRoleArn:         taskRole.Arn,
+		ExecRoleArn:         execRole.Arn,
+		M5ServiceResource:   m5Resource,
+		Tier1Resources:      tier1Resources,
+		AllServiceResources: allResources,
 	}, nil
 }
 
@@ -854,6 +866,13 @@ func newExecutionRole(ctx *pulumi.Context, prefix string, args *ServicesArgs) (*
 // Grants permissions for Cloud Map discovery, S3 data access (metrics),
 // ECS Exec (SSM for debugging), and X-Ray trace export (ADOT sidecar).
 func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
+	// Bucket names carry an account-ID suffix (see storage/s3.go — global
+	// S3 namespace), so the policy ARNs below must too.
+	identity, err := aws.GetCallerIdentity(ctx, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("caller identity: %w", err)
+	}
+
 	assumeRolePolicy := `{
   "Version": "2012-10-17",
   "Statement": [{
@@ -928,13 +947,13 @@ func newTaskRole(ctx *pulumi.Context, prefix string) (*iam.Role, error) {
       "s3:DeleteObject"
     ],
     "Resource": [
-      "arn:aws:s3:::%s-data",
-      "arn:aws:s3:::%s-data/*",
-      "arn:aws:s3:::%s-mlflow",
-      "arn:aws:s3:::%s-mlflow/*"
+      "arn:aws:s3:::%[1]s-data-%[2]s",
+      "arn:aws:s3:::%[1]s-data-%[2]s/*",
+      "arn:aws:s3:::%[1]s-mlflow-%[2]s",
+      "arn:aws:s3:::%[1]s-mlflow-%[2]s/*"
     ]
   }]
-}`, prefix, prefix, prefix, prefix),
+}`, prefix, identity.AccountId),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("attaching S3 policy: %w", err)

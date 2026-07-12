@@ -252,7 +252,7 @@ func newM4bCloudMapService(
 
 	svc, err := servicediscovery.NewService(ctx, "m4b-cloud-map-service", &servicediscovery.ServiceArgs{
 		Name:        pulumi.String("m4b-policy"),
-		Description: pulumi.String("M4b Policy service — LMAX bandit evaluation (port 50054)"),
+		Description: pulumi.String("M4b Policy service - LMAX bandit evaluation (port 50054)"),
 		DnsConfig: &servicediscovery.ServiceDnsConfigArgs{
 			NamespaceId:   args.CloudMapNamespaceId.ToStringOutput(),
 			RoutingPolicy: pulumi.String("WEIGHTED"),

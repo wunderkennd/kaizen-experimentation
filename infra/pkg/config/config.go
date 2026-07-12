@@ -49,9 +49,12 @@ type Config struct {
 	CloudwatchRetention int
 
 	// Security
-	WafEnabled           bool
-	WafBlockedCountries  []string
-	WafRateLimitPerIP    int
+	WafEnabled bool
+	// GrafanaEnabled gates the Amazon Managed Grafana workspace, which
+	// hard-requires IAM Identity Center (SSO). Optional; defaults true.
+	GrafanaEnabled      bool
+	WafBlockedCountries []string
+	WafRateLimitPerIP   int
 
 	// Provider routing — read by Deploy()'s switch dispatch.
 	// Defaults preserve current AWS-only behavior when stack config omits them.
@@ -187,6 +190,10 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		out.M4bInstanceType = cfg.Require("m4bInstanceType")
 		out.NatGatewayCount = cfg.RequireInt("natGatewayCount")
 		out.WafEnabled = cfg.RequireBool("wafEnabled")
+		out.GrafanaEnabled = true
+		if v, err := cfg.TryBool("grafanaEnabled"); err == nil {
+			out.GrafanaEnabled = v
+		}
 		out.FargateMinTasks = cfg.RequireInt("fargateMinTasks")
 		out.CloudwatchRetention = cfg.RequireInt("cloudwatchRetentionDays")
 	} else {

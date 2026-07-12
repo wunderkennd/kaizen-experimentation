@@ -207,9 +207,11 @@ func NewSchemaRegistry(ctx *pulumi.Context, args *SchemaRegistryArgs) (*SchemaRe
 	// Registers as schema-registry.kaizen.local, A record with 10s TTL.
 
 	cmService, err := servicediscovery.NewService(ctx, "sr-discovery", &servicediscovery.ServiceArgs{
-		Name:        pulumi.String("schema-registry"),
-		NamespaceId: args.NamespaceId.ToStringOutput(),
+		Name: pulumi.String("schema-registry"),
+		// namespace_id must live inside dns_config (top-level NamespaceId is
+		// only for HTTP namespaces) — mirrors compute/services.go cm-* shape.
 		DnsConfig: &servicediscovery.ServiceDnsConfigArgs{
+			NamespaceId: args.NamespaceId.ToStringOutput(),
 			DnsRecords: servicediscovery.ServiceDnsConfigDnsRecordArray{
 				&servicediscovery.ServiceDnsConfigDnsRecordArgs{
 					Type: pulumi.String("A"),

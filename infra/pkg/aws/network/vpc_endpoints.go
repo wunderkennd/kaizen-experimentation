@@ -48,7 +48,7 @@ func NewVpcEndpoints(ctx *pulumi.Context, args *VpcEndpointArgs) (*VpcEndpointOu
 	// Interface endpoints receive HTTPS traffic from ECS and M4b compute.
 	endpointSg, err := ec2.NewSecurityGroup(ctx, "kaizen-vpce-sg", &ec2.SecurityGroupArgs{
 		VpcId:               args.VpcId.ToStringOutput(),
-		Description:         pulumi.String("VPC interface endpoints — HTTPS from compute"),
+		Description:         pulumi.String("VPC interface endpoints - HTTPS from compute"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags: kconfig.MergeTags(tags, pulumi.StringMap{
 			"Name": pulumi.String("kaizen-vpce-sg"),

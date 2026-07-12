@@ -6,6 +6,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/kaizen-experimentation/infra/pkg/aws"
+	"github.com/kaizen-experimentation/infra/pkg/aws/compute"
 	"github.com/kaizen-experimentation/infra/pkg/aws/loadbalancer"
 	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/gcp"
@@ -251,12 +252,13 @@ func Deploy(ctx *pulumi.Context) error {
 	// =====================================================================
 	var (
 		computeOut    types.ComputeOutputs
+		svcOut        *compute.ServicesOutputs
 		schemaUrl     pulumi.StringOutput
 		schemaSvcName pulumi.StringOutput
 	)
 	switch cfg.CloudProvider {
 	case "aws":
-		computeOut, _, err = aws.NewCompute(ctx, cfg, netOut, cicdOut, secretsOut)
+		computeOut, svcOut, err = aws.NewCompute(ctx, cfg, netOut, cicdOut, secretsOut)
 		if err != nil {
 			return err
 		}
@@ -290,7 +292,7 @@ func Deploy(ctx *pulumi.Context) error {
 		// Autoscaling's ALBRequestCountPerTarget metric needs the ALB ARN
 		// suffix (e.g. "app/kaizen-dev-alb/50dc6c495c0c9188"), not the full
 		// ARN — see types.EdgeOutputs.LoadBalancerArnSuffix.
-		if err = aws.NewAutoscaling(ctx, cfg, computeOut, edgeOut.LoadBalancerArnSuffix, tgOut); err != nil {
+		if err = aws.NewAutoscaling(ctx, cfg, computeOut, svcOut, edgeOut.LoadBalancerArnSuffix, tgOut); err != nil {
 			return err
 		}
 		if err = aws.NewObservability(ctx, cfg, dbOut, streamOut, computeOut); err != nil {

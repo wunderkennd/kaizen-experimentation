@@ -32,7 +32,7 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 
 	albSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-alb-sg", prefix), &ec2.SecurityGroupArgs{
 		VpcId:              vpcId,
-		Description:        pulumi.String("ALB — public HTTPS ingress"),
+		Description:        pulumi.String("ALB - public HTTPS ingress"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags:               pulumi.StringMap{"Name": pulumi.Sprintf("%s-alb-sg", prefix)},
 	})
@@ -42,7 +42,7 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 
 	ecsSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-ecs-sg", prefix), &ec2.SecurityGroupArgs{
 		VpcId:              vpcId,
-		Description:        pulumi.String("ECS Fargate services — inter-service gRPC"),
+		Description:        pulumi.String("ECS Fargate services - inter-service gRPC"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags:               pulumi.StringMap{"Name": pulumi.Sprintf("%s-ecs-sg", prefix)},
 	})
@@ -52,7 +52,7 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 
 	rdsSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-rds-sg", prefix), &ec2.SecurityGroupArgs{
 		VpcId:              vpcId,
-		Description:        pulumi.String("RDS PostgreSQL — port 5432 from ECS/M4b only"),
+		Description:        pulumi.String("RDS PostgreSQL - port 5432 from ECS/M4b only"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags:               pulumi.StringMap{"Name": pulumi.Sprintf("%s-rds-sg", prefix)},
 	})
@@ -62,7 +62,7 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 
 	mskSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-msk-sg", prefix), &ec2.SecurityGroupArgs{
 		VpcId:              vpcId,
-		Description:        pulumi.String("MSK Kafka brokers — ports 9092/9094 from ECS/M4b only"),
+		Description:        pulumi.String("MSK Kafka brokers - ports 9092/9094 from ECS/M4b only"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags:               pulumi.StringMap{"Name": pulumi.Sprintf("%s-msk-sg", prefix)},
 	})
@@ -72,7 +72,7 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 
 	redisSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-redis-sg", prefix), &ec2.SecurityGroupArgs{
 		VpcId:              vpcId,
-		Description:        pulumi.String("ElastiCache Redis — port 6379 from ECS/M4b only"),
+		Description:        pulumi.String("ElastiCache Redis - port 6379 from ECS/M4b only"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags:               pulumi.StringMap{"Name": pulumi.Sprintf("%s-redis-sg", prefix)},
 	})
@@ -82,7 +82,7 @@ func NewSecurityGroups(ctx *pulumi.Context, prefix string, args *SecurityGroupsA
 
 	m4bSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-m4b-sg", prefix), &ec2.SecurityGroupArgs{
 		VpcId:              vpcId,
-		Description:        pulumi.String("M4b Policy service (EC2) — same rules as ECS"),
+		Description:        pulumi.String("M4b Policy service (EC2) - same rules as ECS"),
 		RevokeRulesOnDelete: pulumi.Bool(true),
 		Tags:               pulumi.StringMap{"Name": pulumi.Sprintf("%s-m4b-sg", prefix)},
 	})

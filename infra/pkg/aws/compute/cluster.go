@@ -286,9 +286,10 @@ chown -R 1000:1000 /data/rocksdb
 		},
 
 		// EC2 auto-recovery: migrate to new hardware on system-level failures,
-		// preserving EBS volumes, private IP, and instance ID.
+		// preserving EBS volumes, private IP, and instance ID. The API's
+		// vocabulary is "default" (recovery on) / "disabled" — not "enabled".
 		MaintenanceOptions: &ec2.LaunchTemplateMaintenanceOptionsArgs{
-			AutoRecovery: pulumi.String("enabled"),
+			AutoRecovery: pulumi.String("default"),
 		},
 
 		// Metadata options: IMDSv2 required for security.

@@ -88,7 +88,7 @@ func NewHealthGate(ctx *pulumi.Context, args *HealthGateArgs) (*HealthGateOutput
 
 	healthAlarm, err := cloudwatch.NewMetricAlarm(ctx, "sr-health-alarm", &cloudwatch.MetricAlarmArgs{
 		Name:               pulumi.Sprintf("%s-schema-registry-unhealthy", prefix),
-		AlarmDescription:   pulumi.String("Schema Registry has 0 running ECS tasks — /subjects health check is failing"),
+		AlarmDescription:   pulumi.String("Schema Registry has 0 running ECS tasks - /subjects health check is failing"),
 		ComparisonOperator: pulumi.String("LessThanThreshold"),
 		EvaluationPeriods:  pulumi.Int(2),
 		Threshold:          pulumi.Float64(1),
