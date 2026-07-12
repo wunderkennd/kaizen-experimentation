@@ -188,6 +188,17 @@ func Deploy(ctx *pulumi.Context) error {
 			return err
 		}
 
+		// ── Stage 6b: Observability (#498) ───────────────────────────────
+		// Cloud Monitoring + Cloud Logging + GMP query endpoint, at AWS
+		// CloudWatch alarm-inventory parity. See pkg/gcp/observability.go
+		// for the parity table and alertPolicies authoritative list.
+		if err := gcp.NewObservability(ctx, cfg, &gcp.ObservabilityInputs{
+			CloudSQLInstanceName: dbOut.InstanceId,
+			M4bInstanceName:      gcpComputeOut.M4bInstanceId,
+		}); err != nil {
+			return err
+		}
+
 		ctx.Export("loadBalancerDns", gcpEdgeOut.LoadBalancerDns)
 		ctx.Export("dataBucket", storageOut.DataBucketName)
 		ctx.Export("cacheEndpoint", cacheOut.Endpoint)
