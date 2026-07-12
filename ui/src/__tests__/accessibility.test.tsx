@@ -184,7 +184,9 @@ describe('Accessibility', () => {
     it('experiment list loading spinner has role="status" and sr-only text', () => {
       render(
         <AuthProvider initialUser={defaultUser}>
-          <ExperimentListPage />
+          <ToastProvider>
+            <ExperimentListPage />
+          </ToastProvider>
         </AuthProvider>,
       );
 
@@ -200,7 +202,9 @@ describe('Accessibility', () => {
     it('renders a button inside <th> for keyboard access', async () => {
       render(
         <AuthProvider initialUser={defaultUser}>
-          <ExperimentListPage />
+          <ToastProvider>
+            <ExperimentListPage />
+          </ToastProvider>
         </AuthProvider>,
       );
 
@@ -217,7 +221,9 @@ describe('Accessibility', () => {
       const user = userEvent.setup();
       render(
         <AuthProvider initialUser={defaultUser}>
-          <ExperimentListPage />
+          <ToastProvider>
+            <ExperimentListPage />
+          </ToastProvider>
         </AuthProvider>,
       );
 

@@ -52,7 +52,7 @@ export function ExperimentRow({ experiment }: ExperimentCardProps) {
           >
             {experiment.name}
           </Link>
-          <code className="hidden text-[10px] text-gray-400 sm:inline">
+          <code className="hidden text-[10px] text-gray-500 sm:inline">
             {experiment.experimentId.slice(0, 8)}
           </code>
           <CopyButton
