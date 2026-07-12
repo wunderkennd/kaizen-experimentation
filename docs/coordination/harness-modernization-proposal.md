@@ -563,6 +563,37 @@ risk-labeled work (`breaking`/`contract-test`/proto) routes to the strongest lan
 human review — routing never weakens the merge gates; **every lane earns traffic
 through the same H4 scorecard**, Claude included.
 
+### H9 — Executor runtime formalized on the Claude Agent SDK (drafted 2026-07-11)
+
+> **Plan v1 drafted 2026-07-11, pending plan-review:**
+> `docs/superpowers/plans/2026-07-11-h9-agent-sdk-executor-runtime.md`.
+
+The Claude lanes still run on a prompt-string boundary: `dispatch.sh` renders prose,
+`claude-code-action@v1` executes it verbatim, and every law the session must honor
+(claims, branch rules, PR metadata, size gate) rides as exhortation — the
+prompt-as-infrastructure pattern §3.5 retired everywhere else, still live at the
+execution plane. The #682 pilot findings (App token can't open PRs, push
+`.github/workflows/**`, or release claims; scorecard hand-collected) are the cost,
+and H4 Phase B is about to put live traffic on that boundary. H9 formalizes the
+execution plane of the reference executor on the **Claude Agent SDK** (the
+programmatic engine under Claude Code): a typed `harness/` runtime that assembles
+session options from the OKF registry live (one identity source, no third view),
+enforces R1-style in-session policy via SDK hooks (deny with the fix in the message),
+caps spend per dispatch, and ends every run with a versioned structured outcome
+record — the instrumentation H8 Phase 0 needs, machine-produced. Composes, never
+replaces: claims/ready/dispatch stay the H1/H2 scripts; the runtime arrives as one
+new adapter (`claude-sdk`) + dormant worker workflow honoring the existing normative
+contracts, probe-gated (SDK never exercised in this repo), shadow-piloted against the
+bare-action lane, and graduated on the #682 scorecard. Owner decisions carried in the
+plan's Locks: the CLAUDE.md "TypeScript is UI only" scope note (L2) and the
+fine-grained worker PAT that is H5's first concrete credential (L4). *Amended
+2026-07-12 (owner direction: multi-vendor):* the plan now records the harness's
+multi-vendor posture — vendor plurality at the lane/contract layer with vendor-native
+engines per lane, the L7 outcome record as the vendor-neutral currency — and an
+"Alternatives considered" evaluation of **Google ADK in Go** (rejected for the Claude
+lane; recorded as the candidate engine for a future programmatic Gemini lane under
+H8).
+
 ---
 
 ## 5. What NOT to change
@@ -592,6 +623,7 @@ through the same H4 scorecard**, Claude included.
 | H6 | Ecosystem governance: reusable workflows · ruleset JSON · Pulumi fleet stamping · org-migration path | H3 (gate + graduated review are what gets fleet-ified) | 1 issue, `chore` + owner decision on wunderkind-ventures transfer timing |
 | H7 | Delivery-practice codification: lifecycle map · templates (PRD/RFC/ux-spec, OKF frontmatter) · locked-plan v2 + plan-review · advisory doc-lints | — (extends the `prime-issue` ratchet; composes with #683) | #699, four right-sized PRs |
 | H8 | Model/vendor routing: dispatch instrumentation · `routing.yml` ∩ registry `executors:` affinity · adaptive selection only past the volume bar | H4 Phase B (per-lane scorecard data), H5 (instrumentation) | #720 — design-stage; first dispatchable unit is Phase 0 instrumentation |
+| H9 | SDK executor runtime: probes · `harness/` package (registry-driven options, policy hooks, budget caps) · `harness.outcome.v1` records · `claude-sdk` lane + pilot | H4 Phase A (contracts, worker); feeds H8 Phase 0 and carries H5's first worker credential | plan v1 drafted 2026-07-11 (pending plan-review); tracking issue to file on acceptance |
 
 Each phase is independently shippable and independently revertible; H1+H2 delete more code
 than they add.
