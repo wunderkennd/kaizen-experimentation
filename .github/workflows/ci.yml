@@ -27,11 +27,15 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      go: ${{ steps.filter.outputs.go }}
+      # workflow_dispatch means "run the full pipeline": paths-filter can't
+      # diff a dispatch event (no base), so short-circuit to true instead of
+      # letting the step error and paint the run red.
+      rust: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.rust }}
+      go: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.go }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+        if: github.event_name != 'workflow_dispatch'
         id: filter
         with:
           filters: |
