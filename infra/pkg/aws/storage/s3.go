@@ -317,9 +317,13 @@ func newLogsBucket(ctx *pulumi.Context, env, acct string, tags pulumi.StringMap)
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-// applyVpcEndpointPolicy attaches a bucket policy that denies access unless
-// the request originates from the specified S3 Gateway VPC endpoint. This
-// ensures data/mlflow bucket traffic stays within the VPC.
+// applyVpcEndpointPolicy attaches a bucket policy that denies object
+// reads/writes unless the request originates from the specified S3 Gateway
+// VPC endpoint, keeping data/mlflow object traffic inside the VPC. The deny
+// covers object data-plane actions only: bucket-level actions (notably
+// s3:ListBucket, which HeadBucket maps to) must stay allowed or the IaC
+// provider — running outside the VPC — can't read the bucket back after
+// create, and refresh drops the bucket from state as unreadable.
 func applyVpcEndpointPolicy(ctx *pulumi.Context, prefix string, bucket *s3.BucketV2, vpceId pulumi.IDOutput) error {
 	policyJSON := pulumi.All(bucket.Arn, vpceId).ApplyT(func(args []interface{}) string {
 		bucketArn := args[0].(string)
@@ -332,15 +336,15 @@ func applyVpcEndpointPolicy(ctx *pulumi.Context, prefix string, bucket *s3.Bucke
     "Sid": "VPCEndpointOnly",
     "Effect": "Deny",
     "Principal": "*",
-    "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
-    "Resource": ["%s", "%s/*"],
+    "Action": ["s3:GetObject", "s3:PutObject"],
+    "Resource": "%s/*",
     "Condition": {
       "StringNotEquals": {
         "aws:sourceVpce": "%s"
       }
     }
   }]
-}`, bucketArn, bucketArn, endpointId)
+}`, bucketArn, endpointId)
 	}).(pulumi.StringOutput)
 
 	_, err := s3.NewBucketPolicy(ctx, prefix+"-bucket-vpce-policy", &s3.BucketPolicyArgs{
