@@ -61,7 +61,7 @@ func NewRedis(ctx *pulumi.Context, name string, cfg *RedisConfig) (*RedisOutputs
 
 	// --- Subnet group (placeholder for Sprint I.1 VPC wiring) ---
 	subnetGroup, err := elasticache.NewSubnetGroup(ctx, name+"-subnet-group", &elasticache.SubnetGroupArgs{
-		Description: pulumi.Sprintf("Kaizen Redis subnet group — %s", name),
+		Description: pulumi.Sprintf("Kaizen Redis subnet group - %s", name),
 		SubnetIds:   cfg.SubnetIds,
 		Tags:        cfg.Tags,
 	})
@@ -71,7 +71,7 @@ func NewRedis(ctx *pulumi.Context, name string, cfg *RedisConfig) (*RedisOutputs
 
 	// --- Replication group: 1 primary + 1 replica, encryption at rest + in transit ---
 	rg, err := elasticache.NewReplicationGroup(ctx, name, &elasticache.ReplicationGroupArgs{
-		Description: pulumi.String("Kaizen experimentation platform — Redis cache"),
+		Description: pulumi.String("Kaizen experimentation platform - Redis cache"),
 
 		// Engine
 		Engine:        pulumi.String("redis"),

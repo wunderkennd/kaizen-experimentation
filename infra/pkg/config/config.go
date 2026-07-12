@@ -37,6 +37,11 @@ type Config struct {
 	// Streaming
 	MskBrokerCount  int
 	MskInstanceType string
+	// ManageKafkaTopics gates the declarative kafka:Topic resources. The
+	// Kafka provider needs direct broker connectivity, which only exists
+	// from inside the VPC — set false (dev) to skip topic resources and
+	// enable MSK auto-create instead. Defaults true.
+	ManageKafkaTopics bool
 
 	// Cache
 	RedisNodeType string
@@ -49,9 +54,12 @@ type Config struct {
 	CloudwatchRetention int
 
 	// Security
-	WafEnabled           bool
-	WafBlockedCountries  []string
-	WafRateLimitPerIP    int
+	WafEnabled bool
+	// GrafanaEnabled gates the Amazon Managed Grafana workspace, which
+	// hard-requires IAM Identity Center (SSO). Optional; defaults true.
+	GrafanaEnabled      bool
+	WafBlockedCountries []string
+	WafRateLimitPerIP   int
 
 	// Provider routing — read by Deploy()'s switch dispatch.
 	// Defaults preserve current AWS-only behavior when stack config omits them.
@@ -187,6 +195,14 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		out.M4bInstanceType = cfg.Require("m4bInstanceType")
 		out.NatGatewayCount = cfg.RequireInt("natGatewayCount")
 		out.WafEnabled = cfg.RequireBool("wafEnabled")
+		out.GrafanaEnabled = true
+		if v, err := cfg.TryBool("grafanaEnabled"); err == nil {
+			out.GrafanaEnabled = v
+		}
+		out.ManageKafkaTopics = true
+		if v, err := cfg.TryBool("manageKafkaTopics"); err == nil {
+			out.ManageKafkaTopics = v
+		}
 		out.FargateMinTasks = cfg.RequireInt("fargateMinTasks")
 		out.CloudwatchRetention = cfg.RequireInt("cloudwatchRetentionDays")
 	} else {
@@ -322,4 +338,7 @@ type MskConfig struct {
 	EbsVolumeSize      int
 	Environment        string
 	EnhancedMonitoring string
+	// AutoCreateTopics sets auto.create.topics.enable on the cluster.
+	// True only when declarative topic management is disabled (dev).
+	AutoCreateTopics bool
 }

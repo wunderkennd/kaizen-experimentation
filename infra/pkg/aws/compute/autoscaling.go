@@ -47,6 +47,11 @@ type AutoscalingArgs struct {
 
 	// M7TargetGroupFullName is the target group full name for M7 Flags.
 	M7TargetGroupFullName pulumi.StringInput
+
+	// DependsOn carries the ECS service resources. Scaling targets address
+	// services via constructed ResourceId strings, so without these edges
+	// target creation races service creation ("ECS service doesn't exist").
+	DependsOn []pulumi.Resource
 }
 
 // AutoscalingOutputs holds references to the created scaling targets and policies.
@@ -109,7 +114,7 @@ func NewAutoscaling(ctx *pulumi.Context, args *AutoscalingArgs) (*AutoscalingOut
 	}
 
 	for _, svc := range cpuServices {
-		target, policy, err := newCPUScalingPolicy(ctx, prefix, svc.key, svc.service, args.ClusterName, svc.config, args.Environment)
+		target, policy, err := newCPUScalingPolicy(ctx, prefix, svc.key, svc.service, args.ClusterName, svc.config, args.Environment, args.DependsOn)
 		if err != nil {
 			return nil, fmt.Errorf("creating CPU autoscaling for %s: %w", svc.key, err)
 		}
@@ -133,7 +138,7 @@ func NewAutoscaling(ctx *pulumi.Context, args *AutoscalingArgs) (*AutoscalingOut
 			ctx, prefix, svc.key, svc.service,
 			args.ClusterName, svc.config,
 			args.ALBFullName, svc.targetGroupFull,
-			args.Environment,
+			args.Environment, args.DependsOn,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("creating ALB autoscaling for %s: %w", svc.key, err)
@@ -153,6 +158,7 @@ func newCPUScalingPolicy(
 	clusterName pulumi.StringInput,
 	cfg ServiceScalingConfig,
 	env string,
+	deps []pulumi.Resource,
 ) (*appautoscaling.Target, *appautoscaling.Policy, error) {
 	resourceId := pulumi.Sprintf("service/%s/%s-%s", clusterName, prefix, serviceName)
 
@@ -167,7 +173,7 @@ func newCPUScalingPolicy(
 			"Project":     pulumi.String("kaizen"),
 			"Service":     pulumi.String(key),
 		},
-	})
+	}, pulumi.DependsOn(deps))
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating scaling target: %w", err)
 	}
@@ -204,6 +210,7 @@ func newALBScalingPolicy(
 	albFullName pulumi.StringInput,
 	targetGroupFullName pulumi.StringInput,
 	env string,
+	deps []pulumi.Resource,
 ) (*appautoscaling.Target, *appautoscaling.Policy, error) {
 	resourceId := pulumi.Sprintf("service/%s/%s-%s", clusterName, prefix, serviceName)
 
@@ -218,7 +225,7 @@ func newALBScalingPolicy(
 			"Project":     pulumi.String("kaizen"),
 			"Service":     pulumi.String(key),
 		},
-	})
+	}, pulumi.DependsOn(deps))
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating scaling target: %w", err)
 	}

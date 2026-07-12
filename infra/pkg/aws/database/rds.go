@@ -66,7 +66,7 @@ func NewRds(ctx *pulumi.Context, kcfg *kconfig.KaizenConfig, inputs *RdsInputs) 
 	// --- Parameter group (PG 16 tuning) ---
 	paramGroup, err := rds.NewParameterGroup(ctx, "kaizen-pg16-params", &rds.ParameterGroupArgs{
 		Family:      pulumi.String("postgres16"),
-		Description: pulumi.String("Kaizen experimentation platform — PG 16 tuning"),
+		Description: pulumi.String("Kaizen experimentation platform - PG 16 tuning"),
 		Parameters: rds.ParameterGroupParameterArray{
 			&rds.ParameterGroupParameterArgs{
 				Name:        pulumi.String("shared_buffers"),
@@ -93,7 +93,7 @@ func NewRds(ctx *pulumi.Context, kcfg *kconfig.KaizenConfig, inputs *RdsInputs) 
 	if inputs != nil && inputs.SubnetIds != nil {
 		sg, err := rds.NewSubnetGroup(ctx, "kaizen-db-subnets", &rds.SubnetGroupArgs{
 			SubnetIds:   inputs.SubnetIds,
-			Description: pulumi.String("Kaizen RDS — private subnets"),
+			Description: pulumi.String("Kaizen RDS - private subnets"),
 			Tags: pulumi.StringMap{
 				"Project": pulumi.String("kaizen"),
 			},

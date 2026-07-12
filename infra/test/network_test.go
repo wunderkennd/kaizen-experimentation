@@ -126,19 +126,19 @@ func withConfig(cfg map[string]string) pulumi.RunOption {
 // defaultConfig returns the standard config map used across all network tests.
 func defaultConfig() map[string]string {
 	return map[string]string{
-		"kaizen:vpcCidr":                        "10.0.0.0/16",
-		"kaizen:natGatewayCount":                "2",
-		"kaizen-experimentation:environment":    "dev",
-		"kaizen-experimentation:vpcCidr":        "10.0.0.0/16",
-		"kaizen-experimentation:rdsInstanceClass":  "db.t3.medium",
-		"kaizen-experimentation:rdsMultiAz":        "false",
-		"kaizen-experimentation:mskBrokerCount":    "3",
-		"kaizen-experimentation:mskInstanceType":   "kafka.m5.large",
-		"kaizen-experimentation:redisNodeType":     "cache.t3.medium",
-		"kaizen-experimentation:m4bInstanceType":   "c5.xlarge",
-		"kaizen-experimentation:natGatewayCount":   "2",
-		"kaizen-experimentation:wafEnabled":        "false",
-		"kaizen-experimentation:fargateMinTasks":   "1",
+		"kaizen:vpcCidr":                                 "10.0.0.0/16",
+		"kaizen:natGatewayCount":                         "2",
+		"kaizen-experimentation:environment":             "dev",
+		"kaizen-experimentation:vpcCidr":                 "10.0.0.0/16",
+		"kaizen-experimentation:rdsInstanceClass":        "db.t3.medium",
+		"kaizen-experimentation:rdsMultiAz":              "false",
+		"kaizen-experimentation:mskBrokerCount":          "3",
+		"kaizen-experimentation:mskInstanceType":         "kafka.m5.large",
+		"kaizen-experimentation:redisNodeType":           "cache.t3.medium",
+		"kaizen-experimentation:m4bInstanceType":         "c5.xlarge",
+		"kaizen-experimentation:natGatewayCount":         "2",
+		"kaizen-experimentation:wafEnabled":              "false",
+		"kaizen-experimentation:fargateMinTasks":         "1",
 		"kaizen-experimentation:cloudwatchRetentionDays": "7",
 	}
 }
@@ -148,16 +148,16 @@ func defaultConfig() map[string]string {
 // ---------------------------------------------------------------------------
 
 const (
-	typeVpc              = "aws:ec2/vpc:Vpc"
-	typeSubnet           = "aws:ec2/subnet:Subnet"
-	typeSecurityGroup    = "aws:ec2/securityGroup:SecurityGroup"
-	typeSGRule           = "aws:ec2/securityGroupRule:SecurityGroupRule"
-	typeVpcEndpoint      = "aws:ec2/vpcEndpoint:VpcEndpoint"
-	typePrivateDnsNS     = "aws:servicediscovery/privateDnsNamespace:PrivateDnsNamespace"
-	typeIAMRole          = "aws:iam/role:Role"
-	typeIAMRolePolicy    = "aws:iam/rolePolicy:RolePolicy"
-	typeIAMAttachment    = "aws:iam/rolePolicyAttachment:RolePolicyAttachment"
-	typeOIDCProvider     = "aws:iam/openIdConnectProvider:OpenIdConnectProvider"
+	typeVpc           = "aws:ec2/vpc:Vpc"
+	typeSubnet        = "aws:ec2/subnet:Subnet"
+	typeSecurityGroup = "aws:ec2/securityGroup:SecurityGroup"
+	typeSGRule        = "aws:ec2/securityGroupRule:SecurityGroupRule"
+	typeVpcEndpoint   = "aws:ec2/vpcEndpoint:VpcEndpoint"
+	typePrivateDnsNS  = "aws:servicediscovery/privateDnsNamespace:PrivateDnsNamespace"
+	typeIAMRole       = "aws:iam/role:Role"
+	typeIAMRolePolicy = "aws:iam/rolePolicy:RolePolicy"
+	typeIAMAttachment = "aws:iam/rolePolicyAttachment:RolePolicyAttachment"
+	typeOIDCProvider  = "aws:iam/openIdConnectProvider:OpenIdConnectProvider"
 )
 
 // ---------------------------------------------------------------------------
@@ -558,8 +558,8 @@ func TestVpcEndpointsExist(t *testing.T) {
 	// Expected endpoints: S3 (gateway), ECR DKR, ECR API, CW Logs, Secrets Manager
 	expectedServices := map[string]bool{
 		"com.amazonaws.us-east-1.s3":             false,
-		"com.amazonaws.us-east-1.ecr.dkr":       false,
-		"com.amazonaws.us-east-1.ecr.api":       false,
+		"com.amazonaws.us-east-1.ecr.dkr":        false,
+		"com.amazonaws.us-east-1.ecr.api":        false,
 		"com.amazonaws.us-east-1.logs":           false,
 		"com.amazonaws.us-east-1.secretsmanager": false,
 	}
@@ -680,9 +680,9 @@ func TestIAMRolesCreated(t *testing.T) {
 	roles := mocks.byType(typeIAMRole)
 
 	expectedRoles := map[string]bool{
-		"ecs-task-role":  false,
-		"ecs-exec-role":  false,
-		"ci-deploy-role": false,
+		"ecs-task-role-shared": false,
+		"ecs-exec-role-shared": false,
+		"ci-deploy-role":       false,
 	}
 
 	for _, role := range roles {
@@ -712,10 +712,12 @@ func TestEcsTaskRoleTrustPolicy(t *testing.T) {
 		t.Fatalf("pulumi.RunErr: %v", err)
 	}
 
+	matched := 0
 	for _, role := range mocks.byType(typeIAMRole) {
-		if role.Name != "ecs-task-role" && role.Name != "ecs-exec-role" {
+		if role.Name != "ecs-task-role-shared" && role.Name != "ecs-exec-role-shared" {
 			continue
 		}
+		matched++
 
 		trustDoc := role.Inputs["assumeRolePolicy"].StringValue()
 		var doc map[string]interface{}
@@ -735,6 +737,10 @@ func TestEcsTaskRoleTrustPolicy(t *testing.T) {
 		if !ok || service != "ecs-tasks.amazonaws.com" {
 			t.Errorf("role %q: trust policy principal = %v, want ecs-tasks.amazonaws.com", role.Name, principal)
 		}
+	}
+	// Guard against the filter going vacuous after a role rename.
+	if matched != 2 {
+		t.Errorf("trust-policy check matched %d shared ECS roles, want 2", matched)
 	}
 }
 

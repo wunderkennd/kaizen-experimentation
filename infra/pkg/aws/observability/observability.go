@@ -35,6 +35,9 @@ type Args struct {
 	EcsClusterName pulumi.StringOutput
 	// Tags are the default resource tags.
 	Tags pulumi.StringMap
+	// DisableGrafana skips the AMG workspace for accounts without IAM
+	// Identity Center (SSO), which AMG hard-requires at create time.
+	DisableGrafana bool
 }
 
 // Outputs holds all resources exported by the observability module.
@@ -90,9 +93,16 @@ func New(ctx *pulumi.Context, args *Args) (*Outputs, error) {
 	}
 
 	// ── 3. AMG Workspace ────────────────────────────────────────────────
-	amgOutputs, err := newAmgWorkspace(ctx, prefix, ampWorkspace, tags)
-	if err != nil {
-		return nil, fmt.Errorf("AMG workspace: %w", err)
+	// Amazon Managed Grafana requires IAM Identity Center (SSO) to be
+	// enabled account-wide; accounts without it get "SSO is not enabled in
+	// any region" at create time. DisableGrafana lets such stacks (dev)
+	// skip the workspace while keeping AMP metrics collection.
+	var amgOutputs *amgResult
+	if !args.DisableGrafana {
+		amgOutputs, err = newAmgWorkspace(ctx, prefix, ampWorkspace, tags)
+		if err != nil {
+			return nil, fmt.Errorf("AMG workspace: %w", err)
+		}
 	}
 
 	// ── 4. Prometheus scrape configuration (SSM Parameter) ──────────────
@@ -104,15 +114,17 @@ func New(ctx *pulumi.Context, args *Args) (*Outputs, error) {
 	// ── Exports ─────────────────────────────────────────────────────────
 	ctx.Export("ampWorkspaceId", ampWorkspace.ID())
 	ctx.Export("ampRemoteWriteEndpoint", remoteWriteEp)
-	ctx.Export("amgWorkspaceId", amgOutputs.workspaceId)
-	ctx.Export("amgEndpoint", amgOutputs.endpoint)
+	if amgOutputs != nil {
+		ctx.Export("amgWorkspaceId", amgOutputs.workspaceId)
+		ctx.Export("amgEndpoint", amgOutputs.endpoint)
+	}
 
 	return &Outputs{
 		AmpWorkspaceId:         ampWorkspace.ID(),
 		AmpRemoteWriteEndpoint: remoteWriteEp,
 		AmpQueryEndpoint:       queryEp,
-		AmgWorkspaceId:         amgOutputs.workspaceId,
-		AmgEndpoint:            amgOutputs.endpoint,
+		AmgWorkspaceId:         amgWorkspaceIdOrZero(amgOutputs),
+		AmgEndpoint:            amgEndpointOrZero(amgOutputs),
 		EcsRemoteWriteRoleArn:  remoteWriteRole.Arn,
 	}, nil
 }
@@ -232,12 +244,12 @@ func newAmgWorkspace(
 
 	// AMG workspace.
 	workspace, err := grafana.NewWorkspace(ctx, "kaizen-amg", &grafana.WorkspaceArgs{
-		Name:                  pulumi.Sprintf("%s-grafana", prefix),
-		AccountAccessType:     pulumi.String("CURRENT_ACCOUNT"),
+		Name:                    pulumi.Sprintf("%s-grafana", prefix),
+		AccountAccessType:       pulumi.String("CURRENT_ACCOUNT"),
 		AuthenticationProviders: pulumi.StringArray{pulumi.String("AWS_SSO")},
-		PermissionType:        pulumi.String("SERVICE_MANAGED"),
-		RoleArn:               amgRole.Arn,
-		DataSources:           pulumi.StringArray{pulumi.String("PROMETHEUS")},
+		PermissionType:          pulumi.String("SERVICE_MANAGED"),
+		RoleArn:                 amgRole.Arn,
+		DataSources:             pulumi.StringArray{pulumi.String("PROMETHEUS")},
 		Tags: config.MergeTags(tags, pulumi.StringMap{
 			"Component": pulumi.String("observability"),
 			"Service":   pulumi.String("amg"),
@@ -336,4 +348,20 @@ scrape_configs:
 	}
 
 	return nil
+}
+
+// amgWorkspaceIdOrZero returns the workspace ID or a zero output when AMG
+// is disabled (DisableGrafana).
+func amgWorkspaceIdOrZero(o *amgResult) pulumi.IDOutput {
+	if o == nil {
+		return pulumi.IDOutput{}
+	}
+	return o.workspaceId
+}
+
+func amgEndpointOrZero(o *amgResult) pulumi.StringOutput {
+	if o == nil {
+		return pulumi.StringOutput{}
+	}
+	return o.endpoint
 }

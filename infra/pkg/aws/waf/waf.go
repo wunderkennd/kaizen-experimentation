@@ -74,7 +74,7 @@ func New(ctx *pulumi.Context, inputs *Inputs) (*Outputs, error) {
 	// ── Web ACL ────────────────────────────────────────────────────────
 	webAcl, err := wafv2.NewWebAcl(ctx, fmt.Sprintf("%s-waf", namePrefix), &wafv2.WebAclArgs{
 		Name:        pulumi.Sprintf("%s-waf", namePrefix),
-		Description: pulumi.String("WAF web ACL for Kaizen ALB — rate limiting, managed rules, geo-restriction"),
+		Description: pulumi.String("WAF web ACL for Kaizen ALB - rate limiting, managed rules, geo-restriction"),
 		Scope:       pulumi.String("REGIONAL"),
 
 		DefaultAction: &wafv2.WebAclDefaultActionArgs{

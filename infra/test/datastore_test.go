@@ -6,6 +6,7 @@
 package test
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -13,10 +14,10 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/kaizen-experimentation/infra/pkg/aws/cache"
-	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/aws/database"
 	"github.com/kaizen-experimentation/infra/pkg/aws/secrets"
 	"github.com/kaizen-experimentation/infra/pkg/aws/storage"
+	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 )
 
 // ---------------------------------------------------------------------------
@@ -84,6 +85,14 @@ func (m *datastoreMocks) NewResource(args pulumi.MockResourceArgs) (string, reso
 
 func (m *datastoreMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 	switch args.Token {
+	case "aws:index/getCallerIdentity:getCallerIdentity":
+		return resource.PropertyMap{
+			"accountId": resource.NewStringProperty("123456789012"),
+			"arn":       resource.NewStringProperty("arn:aws:iam::123456789012:root"),
+			"id":        resource.NewStringProperty("123456789012"),
+			"userId":    resource.NewStringProperty("AIDEXAMPLE"),
+		}, nil
+
 	case "aws:elb/getServiceAccount:getServiceAccount":
 		return resource.PropertyMap{
 			"arn": resource.NewStringProperty("arn:aws:iam::123456789012:root"),
@@ -276,8 +285,17 @@ func TestS3BucketsExistWithLifecycleRules(t *testing.T) {
 			names[v.StringValue()] = true
 		}
 	}
+	// Bucket names carry an account-ID suffix (global S3 namespace) — match
+	// by prefix rather than exact name.
 	for _, want := range []string{"kaizen-dev-data", "kaizen-dev-mlflow", "kaizen-dev-logs"} {
-		if !names[want] {
+		found := false
+		for name := range names {
+			if strings.HasPrefix(name, want) {
+				found = true
+				break
+			}
+		}
+		if !found {
 			t.Errorf("missing bucket: %s", want)
 		}
 	}

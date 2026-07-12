@@ -7,8 +7,8 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
-	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/kaizen-experimentation/infra/pkg/aws/streaming"
+	kconfig "github.com/kaizen-experimentation/infra/pkg/config"
 )
 
 // newMskMockInputs returns a standard MskInputs suitable for mock testing.
@@ -18,7 +18,7 @@ func newMskMockInputs() *streaming.MskInputs {
 		SecurityGroupIds: pulumi.StringArray{pulumi.String("sg-msk")},
 		KafkaSecretArn:   nil,
 		Config: kconfig.MskConfig{
-			KafkaVersion:  "3.5.1",
+			KafkaVersion:  "3.6.0",
 			BrokerCount:   3,
 			InstanceType:  "kafka.m5.large",
 			EbsVolumeSize: 100,
@@ -101,7 +101,7 @@ func TestMskClusterBrokerCount(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestMskClusterKafkaVersion — verify kafka version is "3.5.1"
+// TestMskClusterKafkaVersion — verify kafka version is "3.6.0"
 // ---------------------------------------------------------------------------
 
 func TestMskClusterKafkaVersion(t *testing.T) {
@@ -117,8 +117,8 @@ func TestMskClusterKafkaVersion(t *testing.T) {
 	if !ok {
 		t.Fatal("MSK cluster missing kafkaVersion property")
 	}
-	if got := v.StringValue(); got != "3.5.1" {
-		t.Errorf("kafkaVersion = %q, want %q", got, "3.5.1")
+	if got := v.StringValue(); got != "3.6.0" {
+		t.Errorf("kafkaVersion = %q, want %q", got, "3.6.0")
 	}
 }
 

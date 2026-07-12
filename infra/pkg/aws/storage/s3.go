@@ -5,6 +5,7 @@ package storage
 import (
 	"fmt"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elb"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
@@ -34,17 +35,26 @@ type StorageInputs struct {
 func NewStorage(ctx *pulumi.Context, env string, inputs *StorageInputs) (*StorageOutputs, error) {
 	tags := config.DefaultTags(env)
 
-	data, err := newDataBucket(ctx, env, tags)
+	// S3 bucket names are globally unique across all AWS accounts; suffix
+	// with the account ID so `kaizen-dev-data` can't collide with a
+	// same-named bucket in someone else's account (observed in the wild).
+	identity, err := aws.GetCallerIdentity(ctx, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("caller identity: %w", err)
+	}
+	acct := identity.AccountId
+
+	data, err := newDataBucket(ctx, env, acct, tags)
 	if err != nil {
 		return nil, fmt.Errorf("data bucket: %w", err)
 	}
 
-	mlflow, err := newMlflowBucket(ctx, env, tags)
+	mlflow, err := newMlflowBucket(ctx, env, acct, tags)
 	if err != nil {
 		return nil, fmt.Errorf("mlflow bucket: %w", err)
 	}
 
-	logs, err := newLogsBucket(ctx, env, tags)
+	logs, err := newLogsBucket(ctx, env, acct, tags)
 	if err != nil {
 		return nil, fmt.Errorf("logs bucket: %w", err)
 	}
@@ -75,8 +85,8 @@ func NewStorage(ctx *pulumi.Context, env string, inputs *StorageInputs) (*Storag
 // kaizen-{env}-data — Delta Lake storage
 // ---------------------------------------------------------------------------
 
-func newDataBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.BucketV2, error) {
-	name := fmt.Sprintf("kaizen-%s-data", env)
+func newDataBucket(ctx *pulumi.Context, env, acct string, tags pulumi.StringMap) (*s3.BucketV2, error) {
+	name := fmt.Sprintf("kaizen-%s-data-%s", env, acct)
 
 	bucket, err := s3.NewBucketV2(ctx, "data-bucket", &s3.BucketV2Args{
 		Bucket:       pulumi.String(name),
@@ -159,8 +169,8 @@ func newDataBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.
 // kaizen-{env}-mlflow — MLflow artifact storage
 // ---------------------------------------------------------------------------
 
-func newMlflowBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.BucketV2, error) {
-	name := fmt.Sprintf("kaizen-%s-mlflow", env)
+func newMlflowBucket(ctx *pulumi.Context, env, acct string, tags pulumi.StringMap) (*s3.BucketV2, error) {
+	name := fmt.Sprintf("kaizen-%s-mlflow-%s", env, acct)
 
 	bucket, err := s3.NewBucketV2(ctx, "mlflow-bucket", &s3.BucketV2Args{
 		Bucket:       pulumi.String(name),
@@ -208,8 +218,8 @@ func newMlflowBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s
 // kaizen-{env}-logs — ALB access log bucket
 // ---------------------------------------------------------------------------
 
-func newLogsBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.BucketV2, error) {
-	name := fmt.Sprintf("kaizen-%s-logs", env)
+func newLogsBucket(ctx *pulumi.Context, env, acct string, tags pulumi.StringMap) (*s3.BucketV2, error) {
+	name := fmt.Sprintf("kaizen-%s-logs-%s", env, acct)
 
 	bucket, err := s3.NewBucketV2(ctx, "logs-bucket", &s3.BucketV2Args{
 		Bucket:       pulumi.String(name),
@@ -278,7 +288,13 @@ func newLogsBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.
 				},
 				Actions: []string{"s3:PutObject"},
 				Resources: []string{
-					fmt.Sprintf("arn:aws:s3:::%s/AWSLogs/*", name),
+					// Whole-bucket path: the ALB writes under its
+					// accessLogs prefix (alb/<env>/AWSLogs/...), so a bare
+					// AWSLogs/* resource never matches and enabling access
+					// logs fails with Access Denied. The bucket exists only
+					// for ALB logs and the principal is the regional ELB
+					// account, so /* is the robust scope.
+					fmt.Sprintf("arn:aws:s3:::%s/*", name),
 				},
 			},
 		},
@@ -301,28 +317,34 @@ func newLogsBucket(ctx *pulumi.Context, env string, tags pulumi.StringMap) (*s3.
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-// applyVpcEndpointPolicy attaches a bucket policy that denies access unless
-// the request originates from the specified S3 Gateway VPC endpoint. This
-// ensures data/mlflow bucket traffic stays within the VPC.
+// applyVpcEndpointPolicy attaches a bucket policy that denies object
+// reads/writes unless the request originates from the specified S3 Gateway
+// VPC endpoint, keeping data/mlflow object traffic inside the VPC. The deny
+// covers object data-plane actions only: bucket-level actions (notably
+// s3:ListBucket, which HeadBucket maps to) must stay allowed or the IaC
+// provider — running outside the VPC — can't read the bucket back after
+// create, and refresh drops the bucket from state as unreadable.
 func applyVpcEndpointPolicy(ctx *pulumi.Context, prefix string, bucket *s3.BucketV2, vpceId pulumi.IDOutput) error {
 	policyJSON := pulumi.All(bucket.Arn, vpceId).ApplyT(func(args []interface{}) string {
 		bucketArn := args[0].(string)
-		endpointId := args[1].(string)
+		// vpceId is an IDOutput; inside ApplyT it arrives as pulumi.ID,
+		// not string — a bare string assertion panics at deploy time.
+		endpointId := string(args[1].(pulumi.ID))
 		return fmt.Sprintf(`{
   "Version": "2012-10-17",
   "Statement": [{
     "Sid": "VPCEndpointOnly",
     "Effect": "Deny",
     "Principal": "*",
-    "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
-    "Resource": ["%s", "%s/*"],
+    "Action": ["s3:GetObject", "s3:PutObject"],
+    "Resource": "%s/*",
     "Condition": {
       "StringNotEquals": {
         "aws:sourceVpce": "%s"
       }
     }
   }]
-}`, bucketArn, bucketArn, endpointId)
+}`, bucketArn, endpointId)
 	}).(pulumi.StringOutput)
 
 	_, err := s3.NewBucketPolicy(ctx, prefix+"-bucket-vpce-policy", &s3.BucketPolicyArgs{

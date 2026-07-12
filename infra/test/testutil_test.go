@@ -101,9 +101,9 @@ func (m *universalMocks) NewResource(args pulumi.MockResourceArgs) (string, reso
 		outputs["domainValidationOptions"] = resource.NewArrayProperty(
 			[]resource.PropertyValue{
 				resource.NewObjectProperty(resource.PropertyMap{
-					"domainName":       resource.NewStringProperty("kaizen.example.com"),
-					"resourceRecordName": resource.NewStringProperty("_acme.kaizen.example.com"),
-					"resourceRecordType": resource.NewStringProperty("CNAME"),
+					"domainName":          resource.NewStringProperty("kaizen.example.com"),
+					"resourceRecordName":  resource.NewStringProperty("_acme.kaizen.example.com"),
+					"resourceRecordType":  resource.NewStringProperty("CNAME"),
 					"resourceRecordValue": resource.NewStringProperty("mock-validation.acm-validations.aws"),
 				}),
 			})
@@ -204,7 +204,7 @@ func (m *universalMocks) NewResource(args pulumi.MockResourceArgs) (string, reso
 		"kafka:index/topic:Topic":
 		// Default copy is sufficient.
 
-	// -- Default: inputs copied above are sufficient --
+		// -- Default: inputs copied above are sufficient --
 	}
 
 	return id, outputs, nil

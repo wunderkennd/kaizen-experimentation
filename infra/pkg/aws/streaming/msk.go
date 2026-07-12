@@ -49,7 +49,7 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 	}
 
 	// --- MSK configuration ---
-	serverProperties := "auto.create.topics.enable=false\n" +
+	serverProperties := fmt.Sprintf("auto.create.topics.enable=%t\n", cfg.AutoCreateTopics) +
 		"default.replication.factor=3\n" +
 		"min.insync.replicas=2\n" +
 		"compression.type=lz4\n" +

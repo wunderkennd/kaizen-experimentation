@@ -169,11 +169,15 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 		SecurityGroupIds: mskSgArr,
 		KafkaSecretArn:   nil, // SCRAM association wired after secrets are created.
 		Config: kconfig.MskConfig{
-			KafkaVersion:  "3.5.1",
+			KafkaVersion:  "3.6.0",
 			BrokerCount:   cfg.MskBrokerCount,
 			InstanceType:  cfg.MskInstanceType,
 			EbsVolumeSize: 100,
 			Environment:   cfg.Environment,
+			// Brokers must auto-create topics when the declarative
+			// kafka:Topic resources are gated off (no broker
+			// reachability from outside the VPC).
+			AutoCreateTopics: !cfg.ManageKafkaTopics,
 		},
 		Tags: kconfig.DefaultTags(cfg.Environment),
 	})
@@ -230,7 +234,7 @@ func NewKafkaTopics(ctx *pulumi.Context, streamOut types.StreamingOutputs) error
 		BootstrapBrokers: streamOut.BootstrapBrokers,
 		SaslUsername:     pulumi.String(kafkaCfg.Require("saslUsername")),
 		SaslPassword:     pulumi.String(kafkaCfg.Require("saslPassword")),
-		KafkaVersion:     "3.5.1",
+		KafkaVersion:     "3.6.0",
 	})
 	return err
 }
@@ -437,10 +441,14 @@ func NewEdge(
 }
 
 // NewAutoscaling wires ECS service auto-scaling policies to ALB metrics.
+// svcOut supplies the ECS service resources as explicit DependsOn edges —
+// scaling targets reference services by constructed name string, which
+// otherwise races service creation.
 func NewAutoscaling(
 	ctx *pulumi.Context,
 	cfg *kconfig.Config,
 	computeOut types.ComputeOutputs,
+	svcOut *compute.ServicesOutputs,
 	albArnSuffix pulumi.StringOutput,
 	tgOut *loadbalancer.TargetGroupOutputs,
 ) error {
@@ -449,6 +457,9 @@ func NewAutoscaling(
 	args.ALBFullName = albArnSuffix
 	args.M1TargetGroupFullName = tgOut.M1AssignmentTgArnSuffix
 	args.M7TargetGroupFullName = tgOut.M7FlagsTgArnSuffix
+	if svcOut != nil {
+		args.DependsOn = svcOut.AllServiceResources
+	}
 	_, err := compute.NewAutoscaling(ctx, &args)
 	return err
 }
@@ -486,6 +497,7 @@ func NewObservability(
 		Environment:    cfg.Environment,
 		EcsClusterName: computeOut.ClusterName,
 		Tags:           kconfig.DefaultTags(cfg.Environment),
+		DisableGrafana: !cfg.GrafanaEnabled,
 	}); err != nil {
 		return err
 	}

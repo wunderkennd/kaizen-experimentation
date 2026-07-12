@@ -51,7 +51,7 @@ type TargetGroupOutputs struct {
 type targetGroupSpec struct {
 	name            string
 	port            int
-	protocolVersion string // "gRPC", "HTTP2", or "HTTP1"
+	protocolVersion string // "GRPC", "HTTP2", or "HTTP1"
 	healthCheckPath string
 	healthCheckMatcher string // gRPC codes for gRPC TGs, HTTP codes otherwise
 }
@@ -71,7 +71,7 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 		{
 			name:               "m1-assignment",
 			port:               50051,
-			protocolVersion:    "gRPC",
+			protocolVersion:    "GRPC",
 			healthCheckPath:    "/grpc.health.v1.Health/Check",
 			healthCheckMatcher: "0",  // gRPC OK
 		},
@@ -92,7 +92,7 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 		{
 			name:               "m7-flags",
 			port:               50057,
-			protocolVersion:    "gRPC",
+			protocolVersion:    "GRPC",
 			healthCheckPath:    "/grpc.health.v1.Health/Check",
 			healthCheckMatcher: "0",
 		},

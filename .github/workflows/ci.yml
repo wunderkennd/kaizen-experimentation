@@ -507,7 +507,9 @@ jobs:
       # ── AWS auth (OIDC) ────────────────────────────────────────────────
       - name: Configure AWS credentials
         id: aws-auth
-        if: vars.AWS_DEPLOY_ROLE_ARN != ''
+        # Push-event gate: PR builds must stay build-only — without it any PR
+        # would push :latest to ECR the moment AWS_DEPLOY_ROLE_ARN is set.
+        if: vars.AWS_DEPLOY_ROLE_ARN != '' && github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -521,7 +523,8 @@ jobs:
       # ── GCP auth (OIDC via Workload Identity Federation) ───────────────
       - name: Authenticate to Google Cloud
         id: gcp-auth
-        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_CI_PUSH_SA != ''
+        # Same push-event gate as aws-auth above.
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_CI_PUSH_SA != '' && github.event_name == 'push'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
