@@ -586,7 +586,13 @@ new adapter (`claude-sdk`) + dormant worker workflow honoring the existing norma
 contracts, probe-gated (SDK never exercised in this repo), shadow-piloted against the
 bare-action lane, and graduated on the #682 scorecard. Owner decisions carried in the
 plan's Locks: the CLAUDE.md "TypeScript is UI only" scope note (L2) and the
-fine-grained worker PAT that is H5's first concrete credential (L4).
+fine-grained worker PAT that is H5's first concrete credential (L4). *Amended
+2026-07-12 (owner direction: multi-vendor):* the plan now records the harness's
+multi-vendor posture — vendor plurality at the lane/contract layer with vendor-native
+engines per lane, the L7 outcome record as the vendor-neutral currency — and an
+"Alternatives considered" evaluation of **Google ADK in Go** (rejected for the Claude
+lane; recorded as the candidate engine for a future programmatic Gemini lane under
+H8).
 
 ---
 
