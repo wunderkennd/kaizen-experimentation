@@ -712,10 +712,12 @@ func TestEcsTaskRoleTrustPolicy(t *testing.T) {
 		t.Fatalf("pulumi.RunErr: %v", err)
 	}
 
+	matched := 0
 	for _, role := range mocks.byType(typeIAMRole) {
-		if role.Name != "ecs-task-role" && role.Name != "ecs-exec-role" {
+		if role.Name != "ecs-task-role-shared" && role.Name != "ecs-exec-role-shared" {
 			continue
 		}
+		matched++
 
 		trustDoc := role.Inputs["assumeRolePolicy"].StringValue()
 		var doc map[string]interface{}
@@ -735,6 +737,10 @@ func TestEcsTaskRoleTrustPolicy(t *testing.T) {
 		if !ok || service != "ecs-tasks.amazonaws.com" {
 			t.Errorf("role %q: trust policy principal = %v, want ecs-tasks.amazonaws.com", role.Name, principal)
 		}
+	}
+	// Guard against the filter going vacuous after a role rename.
+	if matched != 2 {
+		t.Errorf("trust-policy check matched %d shared ECS roles, want 2", matched)
 	}
 }
 

@@ -85,6 +85,14 @@ func (m *datastoreMocks) NewResource(args pulumi.MockResourceArgs) (string, reso
 
 func (m *datastoreMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 	switch args.Token {
+	case "aws:index/getCallerIdentity:getCallerIdentity":
+		return resource.PropertyMap{
+			"accountId": resource.NewStringProperty("123456789012"),
+			"arn":       resource.NewStringProperty("arn:aws:iam::123456789012:root"),
+			"id":        resource.NewStringProperty("123456789012"),
+			"userId":    resource.NewStringProperty("AIDEXAMPLE"),
+		}, nil
+
 	case "aws:elb/getServiceAccount:getServiceAccount":
 		return resource.PropertyMap{
 			"arn": resource.NewStringProperty("arn:aws:iam::123456789012:root"),
