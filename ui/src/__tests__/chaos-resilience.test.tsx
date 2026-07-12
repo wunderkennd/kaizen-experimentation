@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
 import { clearApiCache } from '@/lib/api';
 import { AuthProvider } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 import ResultsPage from '@/app/experiments/[id]/results/page';
 import ExperimentListPage from '@/app/page';
 import ExperimentDetailPage from '@/app/experiments/[id]/page';
@@ -79,7 +80,7 @@ describe('Chaos: Full backend outage on list page', () => {
       }),
     );
 
-    render(<AuthProvider initialUser={defaultUser}><ExperimentListPage /></AuthProvider>);
+    render(<AuthProvider initialUser={defaultUser}><ToastProvider><ExperimentListPage /></ToastProvider></AuthProvider>);
 
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
@@ -102,7 +103,7 @@ describe('Chaos: Full backend outage on list page', () => {
       }),
     );
 
-    render(<AuthProvider initialUser={defaultUser}><ExperimentListPage /></AuthProvider>);
+    render(<AuthProvider initialUser={defaultUser}><ToastProvider><ExperimentListPage /></ToastProvider></AuthProvider>);
 
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
@@ -307,7 +308,7 @@ describe('Chaos: Network error on list page', () => {
       }),
     );
 
-    render(<AuthProvider initialUser={defaultUser}><ExperimentListPage /></AuthProvider>);
+    render(<AuthProvider initialUser={defaultUser}><ToastProvider><ExperimentListPage /></ToastProvider></AuthProvider>);
 
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();

@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import ExperimentListPage from '@/app/page';
 import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 
 const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'experimenter' };
 
@@ -24,7 +25,9 @@ vi.mock('next/link', () => ({
 async function renderAndWait(user: AuthUser = defaultUser) {
   render(
     <AuthProvider initialUser={user}>
-      <ExperimentListPage />
+      <ToastProvider>
+        <ExperimentListPage />
+      </ToastProvider>
     </AuthProvider>,
   );
   await waitFor(() => {

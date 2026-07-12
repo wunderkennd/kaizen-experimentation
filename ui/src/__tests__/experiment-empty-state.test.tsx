@@ -5,6 +5,7 @@ import { server } from '@/__mocks__/server';
 import ExperimentListPage from '@/app/page';
 import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 
@@ -33,7 +34,9 @@ describe('Experiment List Empty State', () => {
     const experimenter: AuthUser = { email: 'exp@streamco.com', role: 'experimenter' };
     render(
       <AuthProvider initialUser={experimenter}>
-        <ExperimentListPage />
+        <ToastProvider>
+          <ExperimentListPage />
+        </ToastProvider>
       </AuthProvider>,
     );
 
@@ -56,7 +59,9 @@ describe('Experiment List Empty State', () => {
     const viewer: AuthUser = { email: 'viewer@streamco.com', role: 'viewer' };
     render(
       <AuthProvider initialUser={viewer}>
-        <ExperimentListPage />
+        <ToastProvider>
+          <ExperimentListPage />
+        </ToastProvider>
       </AuthProvider>,
     );
 
@@ -77,7 +82,9 @@ describe('Experiment List Empty State', () => {
 
     render(
       <AuthProvider initialUser={{ email: 'test@streamco.com', role: 'viewer' }}>
-        <ExperimentListPage />
+        <ToastProvider>
+          <ExperimentListPage />
+        </ToastProvider>
       </AuthProvider>,
     );
 
