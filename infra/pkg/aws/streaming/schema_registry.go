@@ -251,10 +251,10 @@ func NewSchemaRegistry(ctx *pulumi.Context, args *SchemaRegistryArgs) (*SchemaRe
 			AssignPublicIp: pulumi.Bool(false),
 		},
 
+		// A-record Cloud Map services in awsvpc mode take only the registry
+		// ARN — ECS rejects containerName/containerPort for non-SRV records.
 		ServiceRegistries: &ecs.ServiceServiceRegistriesArgs{
-			RegistryArn:   cmService.Arn,
-			ContainerName: pulumi.String("schema-registry"),
-			ContainerPort: pulumi.Int(8081),
+			RegistryArn: cmService.Arn,
 		},
 
 		Tags: args.Tags,

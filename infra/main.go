@@ -234,7 +234,10 @@ func Deploy(ctx *pulumi.Context) error {
 		// MSK requires a Pulumi-managed kafka provider against the cluster's
 		// SCRAM creds; Redpanda already provisioned topics inside NewRedpanda
 		// using the same Kafka-protocol provider, so skip duplicate creation.
-		if needsAWSStreamingStages {
+		// The kafka provider dials brokers directly, which only works from
+		// inside the VPC (MSK lives in private subnets) — manageKafkaTopics
+		// false (dev) skips these resources and relies on MSK auto-create.
+		if needsAWSStreamingStages && cfg.ManageKafkaTopics {
 			if err = aws.NewKafkaTopics(ctx, streamOut); err != nil {
 				return err
 			}

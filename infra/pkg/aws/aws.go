@@ -174,6 +174,10 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 			InstanceType:  cfg.MskInstanceType,
 			EbsVolumeSize: 100,
 			Environment:   cfg.Environment,
+			// Brokers must auto-create topics when the declarative
+			// kafka:Topic resources are gated off (no broker
+			// reachability from outside the VPC).
+			AutoCreateTopics: !cfg.ManageKafkaTopics,
 		},
 		Tags: kconfig.DefaultTags(cfg.Environment),
 	})
