@@ -727,6 +727,76 @@ fn select_variant(exp: &ExperimentConfig, bucket: u32) -> &crate::config::Varian
         .expect("experiment must have at least one variant")
 }
 
+impl AssignmentServiceImpl {
+    /// Batch-evaluate every experiment in the current snapshot for a user,
+    /// applying the ADR-014 two-phase layer/holdout rules. Extracted so the
+    /// tonic `get_assignments` handler and the Connect bridge (ADR-031 #642)
+    /// share a single implementation.
+    ///
+    /// Holdouts run first; a holdout that assigns a non-empty variant, or
+    /// fails to evaluate, claims its layer for the user. Regular experiments
+    /// whose layer is claimed are skipped. Regular-experiment errors are
+    /// logged and dropped (soft-failure); holdout errors are fail-closed
+    /// (the layer is treated as held-out) to prevent holdout leakage.
+    pub async fn assign_batch(
+        &self,
+        user_id: &str,
+        session_id: &str,
+        attributes: &HashMap<String, String>,
+    ) -> Vec<GetAssignmentResponse> {
+        let config = self.config.snapshot();
+        let mut assignments = Vec::new();
+
+        let (holdouts, regular): (Vec<_>, Vec<_>) = config
+            .experiments
+            .iter()
+            .partition(|e| e.is_cumulative_holdout);
+
+        let mut holdout_layers: HashSet<String> = HashSet::new();
+        for exp in &holdouts {
+            match self
+                .assign(&exp.experiment_id, user_id, session_id, attributes)
+                .await
+            {
+                Ok(resp) => {
+                    if !resp.variant_id.is_empty() {
+                        holdout_layers.insert(exp.layer_id.clone());
+                    }
+                    assignments.push(resp);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        experiment_id = %exp.experiment_id,
+                        layer_id = %exp.layer_id,
+                        error = %e,
+                        "holdout assignment failed, excluding layer (fail-closed)",
+                    );
+                    holdout_layers.insert(exp.layer_id.clone());
+                }
+            }
+        }
+
+        for exp in &regular {
+            if holdout_layers.contains(&exp.layer_id) {
+                continue;
+            }
+            match self
+                .assign(&exp.experiment_id, user_id, session_id, attributes)
+                .await
+            {
+                Ok(resp) => assignments.push(resp),
+                Err(e) => tracing::warn!(
+                    experiment_id = %exp.experiment_id,
+                    error = %e,
+                    "assignment failed for regular experiment, skipping",
+                ),
+            }
+        }
+
+        assignments
+    }
+}
+
 #[tonic::async_trait]
 impl AssignmentService for AssignmentServiceImpl {
     async fn get_assignment(
@@ -750,79 +820,9 @@ impl AssignmentService for AssignmentServiceImpl {
         request: Request<GetAssignmentsRequest>,
     ) -> Result<Response<GetAssignmentsResponse>, Status> {
         let req = request.into_inner();
-        let config = self.config.snapshot();
-        let mut assignments = Vec::new();
-
-        // Two-phase evaluation: holdouts first, then regular experiments.
-        // Holdout users are excluded from other experiments in the same layer.
-        let (holdouts, regular): (Vec<_>, Vec<_>) = config
-            .experiments
-            .iter()
-            .partition(|e| e.is_cumulative_holdout);
-
-        // Phase 1: Evaluate holdout experiments. Track layers claimed by holdouts.
-        // On holdout assignment error, treat the layer as held-out (fail-closed)
-        // to avoid accidentally exposing holdout users to treatments.
-        let mut holdout_layers: HashSet<String> = HashSet::new();
-        for exp in &holdouts {
-            match self
-                .assign(
-                    &exp.experiment_id,
-                    &req.user_id,
-                    &req.session_id,
-                    &req.attributes,
-                )
-                .await
-            {
-                Ok(resp) => {
-                    if !resp.variant_id.is_empty() {
-                        holdout_layers.insert(exp.layer_id.clone());
-                    }
-                    assignments.push(resp);
-                }
-                Err(e) => {
-                    // Fail-closed: mark this layer as held-out so that the user
-                    // is NOT assigned to regular experiments in this layer.
-                    // This prevents holdout leakage when the holdout assignment
-                    // itself fails (e.g., missing layer config).
-                    tracing::warn!(
-                        experiment_id = %exp.experiment_id,
-                        layer_id = %exp.layer_id,
-                        error = %e,
-                        "holdout assignment failed, excluding layer (fail-closed)",
-                    );
-                    holdout_layers.insert(exp.layer_id.clone());
-                }
-            }
-        }
-
-        // Phase 2: Evaluate regular experiments, skipping layers claimed by holdouts.
-        for exp in &regular {
-            if holdout_layers.contains(&exp.layer_id) {
-                continue;
-            }
-            match self
-                .assign(
-                    &exp.experiment_id,
-                    &req.user_id,
-                    &req.session_id,
-                    &req.attributes,
-                )
-                .await
-            {
-                Ok(resp) => {
-                    assignments.push(resp);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        experiment_id = %exp.experiment_id,
-                        error = %e,
-                        "assignment failed for regular experiment, skipping",
-                    );
-                }
-            }
-        }
-
+        let assignments = self
+            .assign_batch(&req.user_id, &req.session_id, &req.attributes)
+            .await;
         Ok(Response::new(GetAssignmentsResponse { assignments }))
     }
 

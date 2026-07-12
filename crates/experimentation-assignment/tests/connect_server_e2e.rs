@@ -1,8 +1,11 @@
-//! ADR-031 pilot — in-process round-trip test for GetAssignment over Connect.
+//! ADR-031 pilot — in-process round-trip tests for the unary RPCs on
+//! `AssignmentService` over Connect/JSON.
 //!
-//! Binds the ConnectRPC server on 127.0.0.1:0, POSTs a Connect/JSON request to
-//! `/experimentation.assignment.v1.AssignmentService/GetAssignment`, and
-//! asserts the response matches the existing tonic/http_json contract.
+//! Binds the ConnectRPC server on 127.0.0.1:0, POSTs Connect/JSON to
+//! `/experimentation.assignment.v1.AssignmentService/{method}`, and asserts
+//! the JSON shape matches the tonic/http_json contract for each method that
+//! has one. `GetInterleavedList` had no hand-rolled JSON path before this
+//! PR — the round-trip test here closes that coverage gap (#642).
 
 #![cfg(feature = "connectrpc")]
 
@@ -115,12 +118,103 @@ async fn connect_get_assignment_unknown_experiment_returns_not_found() {
 }
 
 #[tokio::test]
-async fn connect_other_rpcs_return_unimplemented() {
+async fn connect_get_assignments_returns_batch() {
     let (addr, _svc) = start_connect_server().await;
 
-    let body = serde_json::json!({"userId":"u1","sessionId":"s1","attributes":{}});
-    let (status, _resp) = connect_json_post(addr, "GetAssignments", body).await;
+    let body = serde_json::json!({
+        "userId": "test-user-1",
+        "sessionId": "sess-1",
+        "attributes": {},
+    });
+    let (status, resp) = connect_json_post(addr, "GetAssignments", body).await;
 
-    // Connect maps Unimplemented to HTTP 501.
-    assert_eq!(status, 501, "other RPCs should be Unimplemented until #642/#643");
+    assert_eq!(status, 200, "GetAssignments failed: {resp}");
+    // Two-phase batch always returns a (possibly empty) assignments array.
+    // dev/config.json has 13 running experiments so we expect >0 here — a
+    // dropped/empty batch would silently regress the ADR-014 evaluator.
+    let assignments = resp
+        .get("assignments")
+        .and_then(|v| v.as_array())
+        .expect("assignments array missing");
+    assert!(
+        !assignments.is_empty(),
+        "expected at least one assignment for dev/config.json, got empty batch",
+    );
+}
+
+#[tokio::test]
+async fn connect_get_interleaved_list_merges_two_algorithms() {
+    let (addr, _svc) = start_connect_server().await;
+
+    // exp_dev_004 is the TEAM_DRAFT interleaving experiment in dev/config.json
+    // (algorithm_ids: ["algo_a", "algo_b"]). Two disjoint ranked lists let us
+    // assert the merged output is populated without knowing the exact draft
+    // order (which is seed-derived and would over-fit the test).
+    let body = serde_json::json!({
+        "experimentId": "exp_dev_004",
+        "userId": "test-user-interleave",
+        "algorithmLists": {
+            "algo_a": {"itemIds": ["a1", "a2", "a3"]},
+            "algo_b": {"itemIds": ["b1", "b2", "b3"]},
+        },
+    });
+    let (status, resp) = connect_json_post(addr, "GetInterleavedList", body).await;
+
+    assert_eq!(status, 200, "GetInterleavedList failed: {resp}");
+    let merged = resp
+        .get("mergedList")
+        .and_then(|v| v.as_array())
+        .expect("mergedList array missing");
+    assert!(!merged.is_empty(), "expected merged list, got empty");
+    // Provenance carries the algorithm-id contribution map for each item
+    // (M4a needs this for the interleaving contribution analysis).
+    assert!(
+        resp.get("provenance").is_some(),
+        "missing provenance: {resp}",
+    );
+}
+
+#[tokio::test]
+async fn connect_get_slate_assignment_returns_ordered_slate() {
+    let (addr, _svc) = start_connect_server().await;
+
+    // exp_dev_slate_001 is the SLATE_FACTORIZED_TS experiment with num_slots=3
+    // and candidate_pool_size=6. Six candidate item IDs saturate the pool
+    // and let the assign_slate fallback produce a valid slate even without
+    // a live M4b bandit backend.
+    let body = serde_json::json!({
+        "userId": "test-user-slate",
+        "experimentId": "exp_dev_slate_001",
+        "candidateItemIds": ["i1","i2","i3","i4","i5","i6"],
+        "attributes": {},
+    });
+    let (status, resp) = connect_json_post(addr, "GetSlateAssignment", body).await;
+
+    assert_eq!(status, 200, "GetSlateAssignment failed: {resp}");
+    let slate = resp
+        .get("slateItemIds")
+        .and_then(|v| v.as_array())
+        .expect("slateItemIds missing");
+    assert_eq!(slate.len(), 3, "num_slots=3 → slate length must be 3");
+    let probs = resp
+        .get("slotProbabilities")
+        .and_then(|v| v.as_array())
+        .expect("slotProbabilities missing");
+    assert_eq!(probs.len(), 3, "one probability entry per slot");
+}
+
+#[tokio::test]
+async fn connect_stream_config_updates_still_unimplemented() {
+    let (addr, _svc) = start_connect_server().await;
+
+    // StreamConfigUpdates is server-streaming and lands in #643. Until then
+    // it must return Unimplemented (HTTP 501). This test is the negative
+    // guard that flips green once #643 wires the stream.
+    let body = serde_json::json!({"lastKnownVersion": 0});
+    let (status, _resp) =
+        connect_json_post(addr, "StreamConfigUpdates", body).await;
+    assert_eq!(
+        status, 501,
+        "StreamConfigUpdates should still be Unimplemented until #643",
+    );
 }
