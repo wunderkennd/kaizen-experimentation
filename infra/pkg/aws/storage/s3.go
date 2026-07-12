@@ -288,7 +288,13 @@ func newLogsBucket(ctx *pulumi.Context, env, acct string, tags pulumi.StringMap)
 				},
 				Actions: []string{"s3:PutObject"},
 				Resources: []string{
-					fmt.Sprintf("arn:aws:s3:::%s/AWSLogs/*", name),
+					// Whole-bucket path: the ALB writes under its
+					// accessLogs prefix (alb/<env>/AWSLogs/...), so a bare
+					// AWSLogs/* resource never matches and enabling access
+					// logs fails with Access Denied. The bucket exists only
+					// for ALB logs and the principal is the regional ELB
+					// account, so /* is the robust scope.
+					fmt.Sprintf("arn:aws:s3:::%s/*", name),
 				},
 			},
 		},

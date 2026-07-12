@@ -107,10 +107,11 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return string(b), nil
 	}).(pulumi.StringOutput)
 
-	if _, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-database")+"-version", &secretsmanager.SecretVersionArgs{
+	dbVersion, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-database")+"-version", &secretsmanager.SecretVersionArgs{
 		SecretId:     dbSecret.ID(),
 		SecretString: dbSecretValue,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -136,10 +137,11 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return string(b), nil
 	}).(pulumi.StringOutput)
 
-	if _, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-kafka")+"-version", &secretsmanager.SecretVersionArgs{
+	kafkaVersion, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-kafka")+"-version", &secretsmanager.SecretVersionArgs{
 		SecretId:     kafkaSecret.ID(),
 		SecretString: kafkaSecretValue,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -162,10 +164,11 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return string(b), nil
 	}).(pulumi.StringOutput)
 
-	if _, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-redis")+"-version", &secretsmanager.SecretVersionArgs{
+	redisVersion, err := secretsmanager.NewSecretVersion(ctx, cfg.ResourceName("secret-redis")+"-version", &secretsmanager.SecretVersionArgs{
 		SecretId:     redisSecret.ID(),
 		SecretString: redisSecretValue,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -179,10 +182,15 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return nil, err
 	}
 
+	// ARN refs flow through the SecretVersion resources, not the bare
+	// Secret containers: the ARN string is identical, but consumers
+	// (migration task, ECS services) then carry a real dependency edge on
+	// the version existing. With container ARNs, a task could launch and
+	// GetSecretValue before any version exists -> ResourceNotFoundException.
 	return &SecretsOutputs{
-		DatabaseSecretArn: dbSecret.Arn,
-		KafkaSecretArn:    kafkaSecret.Arn,
-		RedisSecretArn:    redisSecret.Arn,
+		DatabaseSecretArn: dbVersion.Arn,
+		KafkaSecretArn:    kafkaVersion.Arn,
+		RedisSecretArn:    redisVersion.Arn,
 		AuthSecretArn:     authSecret.Arn,
 	}, nil
 }
