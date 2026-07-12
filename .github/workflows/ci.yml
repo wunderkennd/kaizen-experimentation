@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual trigger — needed because auto-merges performed by the automerge
+  # workflow's GITHUB_TOKEN do not fire `push` events (GitHub suppresses
+  # workflow-triggered triggers), so post-merge main CI (and the ECR image
+  # push) silently never ran for auto-merged PRs.
+  workflow_dispatch:
 
 defaults:
   run:
