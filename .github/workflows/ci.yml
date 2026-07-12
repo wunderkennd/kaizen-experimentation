@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual trigger — needed because auto-merges performed by the automerge
+  # workflow's GITHUB_TOKEN do not fire `push` events (GitHub suppresses
+  # workflow-triggered triggers), so post-merge main CI (and the ECR image
+  # push) silently never ran for auto-merged PRs.
+  workflow_dispatch:
 
 defaults:
   run:
@@ -22,11 +27,15 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      go: ${{ steps.filter.outputs.go }}
+      # workflow_dispatch means "run the full pipeline": paths-filter can't
+      # diff a dispatch event (no base), so short-circuit to true instead of
+      # letting the step error and paint the run red.
+      rust: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.rust }}
+      go: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.go }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+        if: github.event_name != 'workflow_dispatch'
         id: filter
         with:
           filters: |
@@ -509,7 +518,7 @@ jobs:
         id: aws-auth
         # Push-event gate: PR builds must stay build-only — without it any PR
         # would push :latest to ECR the moment AWS_DEPLOY_ROLE_ARN is set.
-        if: vars.AWS_DEPLOY_ROLE_ARN != '' && github.event_name == 'push'
+        if: vars.AWS_DEPLOY_ROLE_ARN != '' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -524,7 +533,7 @@ jobs:
       - name: Authenticate to Google Cloud
         id: gcp-auth
         # Same push-event gate as aws-auth above.
-        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_CI_PUSH_SA != '' && github.event_name == 'push'
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_CI_PUSH_SA != '' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
