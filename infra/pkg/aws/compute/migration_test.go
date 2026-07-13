@@ -7,7 +7,7 @@ import (
 
 // TestMigrationContainerDef verifies that the migration container definition
 // produces valid JSON with the expected structure: entrypoint override,
-// command override, no port mappings, and individual secret field extraction.
+// no port mappings, and individual secret field extraction.
 func TestMigrationContainerDef(t *testing.T) {
 	env := "dev"
 	dbSecretArn := "arn:aws:secretsmanager:us-east-1:123456789012:secret:kaizen/dev/database-AbCdEf"
@@ -16,8 +16,7 @@ func TestMigrationContainerDef(t *testing.T) {
 		Name:       "db-migration",
 		Image:      "123456789012.dkr.ecr.us-east-1.amazonaws.com/kaizen-management:latest",
 		Essential:  true,
-		EntryPoint: []string{"sh", "-c"},
-		Command:    []string{`set -e; migrate -path /app/sql/migrations -database "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}/${DB_NAME}?sslmode=require" up`},
+		EntryPoint: []string{"/bin/sh", "/app/run-migrations.sh"},
 		PortMappings: []portMap{},
 		LogConfiguration: logCfg{
 			LogDriver: "awslogs",
@@ -59,21 +58,16 @@ func TestMigrationContainerDef(t *testing.T) {
 	if !ok {
 		t.Fatal("entryPoint missing or wrong type")
 	}
-	if len(ep) != 2 || ep[0] != "sh" || ep[1] != "-c" {
-		t.Errorf("entryPoint: got %v, want [sh, -c]", ep)
+	if len(ep) != 2 || ep[0] != "/bin/sh" || ep[1] != "/app/run-migrations.sh" {
+		t.Errorf("entryPoint: got %v, want [/bin/sh, /app/run-migrations.sh]", ep)
 	}
 
-	// Verify command override is present.
-	cmd, ok := d["command"].([]interface{})
-	if !ok {
-		t.Fatal("command missing or wrong type")
-	}
-	if len(cmd) != 1 {
-		t.Fatalf("command: expected 1 element, got %d", len(cmd))
-	}
-	cmdStr := cmd[0].(string)
-	if cmdStr == "" {
-		t.Error("command string is empty")
+	// No command override: the entrypoint script is self-contained, and
+	// with omitempty an unset Command must not appear in the JSON.
+	if cmd, ok := d["command"]; ok {
+		if cmdSlice, isSlice := cmd.([]interface{}); !isSlice || len(cmdSlice) != 0 {
+			t.Errorf("command: expected absent or empty, got %v", cmd)
+		}
 	}
 
 	// Verify no port mappings. With omitempty, an empty slice may be

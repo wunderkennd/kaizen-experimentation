@@ -1,8 +1,8 @@
 // Package compute — migration.go provisions an ECS Fargate task definition
 // and Pulumi Command trigger for running database migrations as a pre-deploy
 // step. The migration container uses the M5 management image (which bundles
-// sql/migrations/*.sql) with a command override that runs golang-migrate
-// against RDS PostgreSQL.
+// sql/migrations/*.sql and scripts/run-migrations.sh) with an entrypoint
+// override that applies the SQL tree via psql against RDS PostgreSQL.
 //
 // Sprint I.2.2 scope: task definition, execution role, log group, and a
 // local.Command that calls `aws ecs run-task`, waits for completion, and
@@ -58,8 +58,8 @@ type MigrationOutputs struct {
 
 // NewMigration creates an ECS Fargate task definition for database migrations
 // and a Pulumi Command that triggers the task on each deployment. The task
-// reads sql/migrations/*.sql from the M5 management container image and runs
-// golang-migrate against RDS PostgreSQL.
+// reads sql/migrations/*.sql from the M5 management container image and
+// applies them via psql (scripts/run-migrations.sh) against RDS PostgreSQL.
 //
 // The returned RunCommand resource should be added to ServicesArgs.PreDeployDeps
 // so that the M5 management service does not start until migrations succeed.
@@ -200,8 +200,8 @@ func newMigrationExecRole(
 // ---------------------------------------------------------------------------
 
 // buildMigrationContainerDefs constructs the JSON container definition for the
-// migration task. The container uses the M5 management image with entrypoint
-// and command overrides to run golang-migrate.
+// migration task. The container uses the M5 management image with an
+// entrypoint override that runs the bundled run-migrations.sh.
 //
 // Database credentials are injected via ECS Secrets Manager integration using
 // JSON key extraction (e.g., "arn:...:host::") so the container does not need
@@ -220,17 +220,16 @@ func buildMigrationContainerDefs(
 		logGroupName := vals[1].(string)
 		dbSecretArn := vals[2].(string)
 
-		// The migrate command constructs a PostgreSQL URL from individual
-		// secret fields injected by ECS. DB_HOST is the RDS endpoint
-		// (hostname:port format), so it includes the port already.
-		migrateCmd := `set -e; echo "Running database migrations..."; migrate -path /app/sql/migrations -database "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}/${DB_NAME}?sslmode=require" up; echo "Migrations complete."`
-
+		// run-migrations.sh (baked into the management image alongside
+		// sql/migrations/) applies the SQL tree via psql with two-pass
+		// FK-ordering semantics and reads DB_HOST/DB_USER/DB_PASS/DB_NAME
+		// from the environment. DB_HOST is the RDS endpoint in
+		// hostname:port format; the script splits it.
 		def := containerDef{
 			Name:       "db-migration",
 			Image:      imageURL + ":latest",
 			Essential:  true,
-			EntryPoint: []string{"sh", "-c"},
-			Command:    []string{migrateCmd},
+			EntryPoint: []string{"/bin/sh", "/app/run-migrations.sh"},
 			PortMappings: []portMap{},
 			LogConfiguration: logCfg{
 				LogDriver: "awslogs",
