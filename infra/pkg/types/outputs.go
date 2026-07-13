@@ -77,6 +77,11 @@ type DatabaseOutputs struct {
 	// and operational tooling (RDS instance identifier on AWS, Cloud SQL
 	// instance name on GCP).
 	InstanceId pulumi.StringOutput
+
+	// MasterPassword is the master-user password, generated in the
+	// database stage and consumed by the secrets stage so the app-facing
+	// database secret carries the real credential (secret output).
+	MasterPassword pulumi.StringOutput
 }
 
 // CacheOutputs holds outputs from the in-memory cache stage
