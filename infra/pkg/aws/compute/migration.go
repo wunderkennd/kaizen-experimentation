@@ -225,11 +225,15 @@ func buildMigrationContainerDefs(
 		// FK-ordering semantics and reads DB_HOST/DB_USER/DB_PASS/DB_NAME
 		// from the environment. DB_HOST is the RDS endpoint in
 		// hostname:port format; the script splits it.
+		// EntryPoint and Command are both overridden: leaving Command
+		// unset would append the image CMD (the management binary path)
+		// as a stray argument to the script.
 		def := containerDef{
 			Name:       "db-migration",
 			Image:      imageURL + ":latest",
 			Essential:  true,
-			EntryPoint: []string{"/bin/sh", "/app/run-migrations.sh"},
+			EntryPoint: []string{"/bin/sh"},
+			Command:    []string{"/app/run-migrations.sh"},
 			PortMappings: []portMap{},
 			LogConfiguration: logCfg{
 				LogDriver: "awslogs",

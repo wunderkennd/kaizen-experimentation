@@ -16,7 +16,8 @@ func TestMigrationContainerDef(t *testing.T) {
 		Name:       "db-migration",
 		Image:      "123456789012.dkr.ecr.us-east-1.amazonaws.com/kaizen-management:latest",
 		Essential:  true,
-		EntryPoint: []string{"/bin/sh", "/app/run-migrations.sh"},
+		EntryPoint: []string{"/bin/sh"},
+		Command:    []string{"/app/run-migrations.sh"},
 		PortMappings: []portMap{},
 		LogConfiguration: logCfg{
 			LogDriver: "awslogs",
@@ -58,16 +59,15 @@ func TestMigrationContainerDef(t *testing.T) {
 	if !ok {
 		t.Fatal("entryPoint missing or wrong type")
 	}
-	if len(ep) != 2 || ep[0] != "/bin/sh" || ep[1] != "/app/run-migrations.sh" {
-		t.Errorf("entryPoint: got %v, want [/bin/sh, /app/run-migrations.sh]", ep)
+	if len(ep) != 1 || ep[0] != "/bin/sh" {
+		t.Errorf("entryPoint: got %v, want [/bin/sh]", ep)
 	}
 
-	// No command override: the entrypoint script is self-contained, and
-	// with omitempty an unset Command must not appear in the JSON.
-	if cmd, ok := d["command"]; ok {
-		if cmdSlice, isSlice := cmd.([]interface{}); !isSlice || len(cmdSlice) != 0 {
-			t.Errorf("command: expected absent or empty, got %v", cmd)
-		}
+	// Command must override the image CMD — otherwise the management
+	// binary path would be appended as a stray argument to the script.
+	cmd, ok := d["command"].([]interface{})
+	if !ok || len(cmd) != 1 || cmd[0] != "/app/run-migrations.sh" {
+		t.Errorf("command: got %v, want [/app/run-migrations.sh]", d["command"])
 	}
 
 	// Verify no port mappings. With omitempty, an empty slice may be
