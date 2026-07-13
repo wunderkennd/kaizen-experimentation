@@ -24,7 +24,8 @@ experimentation-interleaving = { path = "../experimentation-interleaving" }
 # `connectrpc` feature. Default build is unchanged (tonic gRPC + http_json).
 experimentation-proto-connect = { path = "../experimentation-proto-connect", optional = true }
 tokio = { workspace = true }
-tokio-stream = { workspace = true }
+# `sync` enables BroadcastStream, used by StreamConfigUpdates (ADR-031 #643).
+tokio-stream = { workspace = true, features = ["sync"] }
 tonic = { workspace = true }
 tonic-web = { workspace = true }
 tokio-util = { workspace = true }

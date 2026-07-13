@@ -4,7 +4,7 @@
 //! [`AssignmentServiceImpl`] domain methods. #641 shipped `GetAssignment`
 //! end-to-end; #642 extends the same bridge to `GetAssignments`,
 //! `GetSlateAssignment`, and `GetInterleavedList` (the three remaining unary
-//! RPCs). `StreamConfigUpdates` (server-streaming) lands in #643.
+//! RPCs). `StreamConfigUpdates` (server-streaming) is wired in this PR (#643).
 //!
 //! Every bridge is a thin field-copy delegating to a pub domain method on
 //! `AssignmentServiceImpl` — the `assert_finite!` invariants live inside
@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use experimentation_proto::experimentation::assignment::v1 as domain_pb;
 use experimentation_proto_connect::experimentation::assignment::v1 as connect_pb;
+use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
+use tokio_stream::StreamExt;
 
 use crate::service::AssignmentServiceImpl;
 
@@ -45,10 +47,6 @@ fn tonic_status_to_connect(status: tonic::Status) -> connectrpc::ConnectError {
     connectrpc::ConnectError::new(code, status.message().to_string())
 }
 
-fn unimplemented(msg: &'static str) -> connectrpc::ConnectError {
-    connectrpc::ConnectError::new(connectrpc::ErrorCode::Unimplemented, msg)
-}
-
 /// Field-copy from the tonic-side domain response to the buffa response.
 /// Called from both the single-assignment and batch (`GetAssignments`) paths,
 /// so any future field addition to the response only needs to touch one
@@ -66,6 +64,26 @@ fn assignment_domain_to_connect(
         // Switchback experiments compute a non-zero time-block index that M4a
         // needs for within-block vs cross-block analysis; must not default to 0.
         block_index: d.block_index,
+        ..Default::default()
+    }
+}
+
+/// Bridge one prost-side `ConfigUpdate` to its buffa counterpart. The nested
+/// `Experiment` message is a large tree that lives entirely on the prost/tonic
+/// side today (56 files, 225 sites — ADR-031 §"central cost"); bridging its
+/// full field set requires prost↔buffa parity generation that is out of the
+/// pilot's scope. Until M5 integration lands, the pilot streams the two
+/// scalar fields (`is_deletion`, `version`) which is sufficient to validate
+/// ordering, backpressure, and clean-shutdown parity across transports.
+fn config_update_domain_to_connect(
+    d: domain_pb::ConfigUpdate,
+) -> connect_pb::ConfigUpdate {
+    // `experiment` (a MessageField wrapping the nested Experiment) is left
+    // at its default (unset) via `..Default::default()` — see the doc
+    // comment above for why the nested tree is intentionally omitted.
+    connect_pb::ConfigUpdate {
+        is_deletion: d.is_deletion,
+        version: d.version,
         ..Default::default()
     }
 }
@@ -170,7 +188,24 @@ impl connect_pb::AssignmentService for ConnectAssignment {
     ) -> connectrpc::ServiceResult<
         connectrpc::ServiceStream<connect_pb::ConfigUpdate>,
     > {
-        Err(unimplemented("ADR-031 pilot: StreamConfigUpdates lands in #643"))
+        // ADR-031 #643 — Connect bridge for server-streaming. Subscribes to
+        // the exact same broadcast source the tonic handler uses so every
+        // subscriber, regardless of transport, sees identical events in the
+        // same order. `last_known_version` is ignored until M5 integration
+        // adds replay; each subscriber starts empty on connect.
+        let rx = self.inner.subscribe_config_updates();
+        let stream = BroadcastStream::new(rx).map(|r| match r {
+            Ok(update) => Ok(config_update_domain_to_connect(update)),
+            Err(BroadcastStreamRecvError::Lagged(n)) => Err(
+                connectrpc::ConnectError::new(
+                    connectrpc::ErrorCode::DataLoss,
+                    format!(
+                        "config update stream lagged, skipped {n} messages — reconnect with last_known_version",
+                    ),
+                ),
+            ),
+        });
+        Ok(connectrpc::Response::new(Box::pin(stream)))
     }
 
     async fn get_slate_assignment(
