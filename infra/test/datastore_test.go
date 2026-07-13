@@ -372,6 +372,7 @@ func TestSecretsExistInSecretsManager(t *testing.T) {
 		}
 		_, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
 			RdsEndpoint:         pulumi.String("kaizen-rds.abc.rds.amazonaws.com:5432").ToStringOutput(),
+			RdsMasterPassword:   pulumi.String("test-master-password").ToStringOutput(),
 			MskBootstrapBrokers: pulumi.String("b-1.kaizen.kafka.us-east-1.amazonaws.com:9096").ToStringOutput(),
 			RedisEndpoint:       pulumi.String("kaizen-redis.abc.cache.amazonaws.com").ToStringOutput(),
 			KafkaSaslUsername:   "kaizen-msk-user",
