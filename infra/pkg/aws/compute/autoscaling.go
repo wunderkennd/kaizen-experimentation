@@ -106,7 +106,7 @@ func NewAutoscaling(ctx *pulumi.Context, args *AutoscalingArgs) (*AutoscalingOut
 		config  ServiceScalingConfig
 	}{
 		{"m2", "m2-pipeline", args.M2Pipeline},
-		{"m2-orch", "m2-orch", args.M2Orch},
+		{"m2-orch", "m2-orchestration", args.M2Orch}, // name must match services.go spec.name, not the key
 		{"m3", "m3-metrics", args.M3Metrics},
 		{"m4a", "m4a-analysis", args.M4aAnalysis},
 		{"m5", "m5-management", args.M5Management},
