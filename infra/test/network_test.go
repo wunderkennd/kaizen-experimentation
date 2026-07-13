@@ -1084,16 +1084,37 @@ func TestFullNetworkStackIntegration(t *testing.T) {
 			if !ok || !cidrs.IsArray() {
 				continue
 			}
+			open := false
 			for _, cidr := range cidrs.ArrayValue() {
-				if cidr.StringValue() != "0.0.0.0/0" {
-					continue
-				}
-				for _, prefix := range internalPrefixes {
-					if strings.Contains(rule.Name, prefix) {
-						t.Errorf("rule %q has 0.0.0.0/0 on internal group", rule.Name)
-					}
+				if cidr.StringValue() == "0.0.0.0/0" {
+					open = true
 				}
 			}
+			if !open {
+				continue
+			}
+			internal := false
+			for _, prefix := range internalPrefixes {
+				if strings.Contains(rule.Name, prefix) {
+					internal = true
+				}
+			}
+			if !internal {
+				continue
+			}
+			// 443-only egress to 0.0.0.0/0 is required from private
+			// subnets: ECR layer blobs resolve to S3 public IPs (the
+			// gateway endpoint routes them privately but does not
+			// rewrite destinations, so SG-to-SG rules cannot match),
+			// and M4b ECS agents reach the ECS control plane via NAT.
+			// Open ingress or broader egress stays an error.
+			if ruleType, hasType := rule.Inputs["type"]; hasType &&
+				ruleType.StringValue() == "egress" &&
+				rule.Inputs["fromPort"].NumberValue() == 443 &&
+				rule.Inputs["toPort"].NumberValue() == 443 {
+				continue
+			}
+			t.Errorf("rule %q has 0.0.0.0/0 on internal group", rule.Name)
 		}
 	})
 }

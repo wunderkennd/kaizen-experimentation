@@ -110,6 +110,40 @@ func NewVpcEndpoints(ctx *pulumi.Context, args *VpcEndpointArgs) (*VpcEndpointOu
 		return nil, fmt.Errorf("m4b-out-vpce: %w", err)
 	}
 
+	// The SG-to-SG rules above only cover interface-endpoint ENIs. Three
+	// HTTPS paths terminate at public IPs and need CIDR egress:
+	//   - ECR image layers redirect to S3 public IPs (the gateway endpoint
+	//     routes them privately but does not rewrite the destination, so an
+	//     SG-to-SG rule can never match — pulls fail with dial timeouts)
+	//   - Schema Registry pulls confluentinc/* from Docker Hub via NAT
+	//   - M4b EC2 ECS agents register with the ECS control plane (no
+	//     interface endpoint provisioned for com.amazonaws.<region>.ecs)
+	// S3 traffic still rides the free gateway endpoint: the prefix-list
+	// route is more specific than the NAT default route.
+	if _, err = ec2.NewSecurityGroupRule(ctx, "kaizen-ecs-out-https", &ec2.SecurityGroupRuleArgs{
+		Type:            pulumi.String("egress"),
+		SecurityGroupId: args.EcsSecurityGroupId.ToStringOutput(),
+		Protocol:        pulumi.String("tcp"),
+		FromPort:        pulumi.Int(443),
+		ToPort:          pulumi.Int(443),
+		CidrBlocks:      pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+		Description:     pulumi.String("HTTPS egress - ECR layers via S3 gateway endpoint, public registries"),
+	}); err != nil {
+		return nil, fmt.Errorf("ecs-out-https: %w", err)
+	}
+
+	if _, err = ec2.NewSecurityGroupRule(ctx, "kaizen-m4b-out-https", &ec2.SecurityGroupRuleArgs{
+		Type:            pulumi.String("egress"),
+		SecurityGroupId: args.M4bSecurityGroupId.ToStringOutput(),
+		Protocol:        pulumi.String("tcp"),
+		FromPort:        pulumi.Int(443),
+		ToPort:          pulumi.Int(443),
+		CidrBlocks:      pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+		Description:     pulumi.String("HTTPS egress - ECR layers via S3 gateway endpoint, ECS control plane"),
+	}); err != nil {
+		return nil, fmt.Errorf("m4b-out-https: %w", err)
+	}
+
 	// ── S3 Gateway Endpoint ─────────────────────────────────────────────
 	// Gateway endpoints route traffic via prefix lists in route tables,
 	// so they don't need security groups or subnet placement.
