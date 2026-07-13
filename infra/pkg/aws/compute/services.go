@@ -46,6 +46,10 @@ type ServicesArgs struct {
 	KafkaSecretArn    pulumi.StringOutput
 	RedisSecretArn    pulumi.StringOutput
 	AuthSecretArn     pulumi.StringOutput
+	// KafkaBrokers is the bootstrap list injected as KAFKA_BROKERS.
+	// Dev wires the unauthenticated plaintext listener here — services
+	// carry no SASL/TLS Kafka client wiring yet.
+	KafkaBrokers pulumi.StringOutput
 	// DesiredCount is the initial task count per service.
 	DesiredCount int
 	// PreDeployDeps lists resources that must complete before the M5
@@ -592,6 +596,7 @@ func buildContainerDefsJSON(
 		args.KafkaSecretArn,
 		args.RedisSecretArn,
 		args.AuthSecretArn,
+		args.KafkaBrokers,
 	}
 
 	// If this service has deps, we also need the healthgate ECR URL.
@@ -609,10 +614,11 @@ func buildContainerDefsJSON(
 		kafkaSecretArn := vals[3].(string)
 		redisSecretArn := vals[4].(string)
 		authSecretArn := vals[5].(string)
+		kafkaBrokers, _ := vals[6].(string)
 
 		var gateImageURL string
-		if hasGate && len(vals) > 6 {
-			gateImageURL = vals[6].(string)
+		if hasGate && len(vals) > 7 {
+			gateImageURL = vals[7].(string)
 		}
 
 		logConfig := logCfg{
@@ -651,6 +657,30 @@ func buildContainerDefsJSON(
 			envVars = append(envVars, envKV{Name: k, Value: v})
 		}
 
+		// Kafka bootstrap servers — every backend reads KAFKA_BROKERS.
+		if kafkaBrokers != "" {
+			envVars = append(envVars, envKV{Name: "KAFKA_BROKERS", Value: kafkaBrokers})
+		}
+
+		// Per-service aliases: env names the app binaries actually read
+		// (surveyed from cmd/main.go of each service), where the generic
+		// *_ENDPOINT names above don't match.
+		switch spec.key {
+		case "m5":
+			envVars = append(envVars,
+				envKV{Name: "ANALYSIS_SERVICE_URL", Value: "m4a-analysis.kaizen.local:50053"},
+				envKV{Name: "BANDIT_SERVICE_URL", Value: "m4b-policy.kaizen.local:50054"},
+			)
+		case "m6":
+			envVars = append(envVars,
+				envKV{Name: "BACKEND_MANAGEMENT_URL", Value: "http://m5-management.kaizen.local:50055"},
+				envKV{Name: "BACKEND_ANALYSIS_URL", Value: "http://m4a-analysis.kaizen.local:50053"},
+				envKV{Name: "BACKEND_METRICS_URL", Value: "http://m3-metrics.kaizen.local:50056"},
+				envKV{Name: "BACKEND_BANDIT_URL", Value: "http://m4b-policy.kaizen.local:50054"},
+				envKV{Name: "BACKEND_FLAGS_URL", Value: "http://m7-flags.kaizen.local:50057"},
+			)
+		}
+
 		// Tell the app container to send OTLP traces to the ADOT sidecar.
 		envVars = append(envVars, envKV{
 			Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -661,13 +691,20 @@ func buildContainerDefsJSON(
 			Value: spec.name,
 		})
 
-		// Secrets from Secrets Manager (injected by ECS agent at task start).
+		// Secrets from Secrets Manager (injected by ECS agent at task
+		// start). Services read a single DSN env var, so extract the
+		// assembled `url` key: Go M5 and the Rust crates read
+		// DATABASE_URL, Go M3/M2-orchestration read POSTGRES_URL —
+		// injecting both names everywhere avoids a per-service matrix.
+		// SASL creds ride along for services that grow Kafka auth later.
 		secrets := []secretRef{
-			{Name: "DATABASE_SECRET", ValueFrom: dbSecretArn},
-			{Name: "KAFKA_SECRET", ValueFrom: kafkaSecretArn},
-			{Name: "REDIS_SECRET", ValueFrom: redisSecretArn},
-			{Name: "AUTH_SECRET", ValueFrom: authSecretArn},
+			{Name: "DATABASE_URL", ValueFrom: dbSecretArn + ":url::"},
+			{Name: "POSTGRES_URL", ValueFrom: dbSecretArn + ":url::"},
+			{Name: "KAFKA_SASL_USERNAME", ValueFrom: kafkaSecretArn + ":sasl_username::"},
+			{Name: "KAFKA_SASL_PASSWORD", ValueFrom: kafkaSecretArn + ":sasl_password::"},
 		}
+		_ = redisSecretArn
+		_ = authSecretArn
 
 		// Build the container list.
 		var containers []containerDef

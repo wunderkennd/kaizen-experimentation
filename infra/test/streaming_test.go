@@ -16,7 +16,8 @@ func newMskMockInputs() *streaming.MskInputs {
 	return &streaming.MskInputs{
 		SubnetIds:        pulumi.StringArray{pulumi.String("subnet-a"), pulumi.String("subnet-b"), pulumi.String("subnet-c")},
 		SecurityGroupIds: pulumi.StringArray{pulumi.String("sg-msk")},
-		KafkaSecretArn:   nil,
+		SaslUsername:     "kaizen-msk-user",
+		SaslPassword:     pulumi.String("test-sasl-password"),
 		Config: kconfig.MskConfig{
 			KafkaVersion:  "3.6.0",
 			BrokerCount:   3,

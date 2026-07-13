@@ -4,11 +4,13 @@
 package streaming
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/msk"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/secretsmanager"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/kaizen-experimentation/infra/pkg/config"
@@ -22,9 +24,14 @@ type MskInputs struct {
 	SubnetIds pulumi.StringArrayInput
 	// SecurityGroupIds to attach to the MSK brokers.
 	SecurityGroupIds pulumi.StringArrayInput
-	// KafkaSecretArn is the Secrets Manager secret ARN containing SASL/SCRAM
-	// credentials. Wired in Sprint I.1 to enable SCRAM authentication.
-	KafkaSecretArn pulumi.StringInput
+	// SaslUsername/SaslPassword are the SCRAM credentials to register with
+	// the cluster. MSK associations require a secret named AmazonMSK_*
+	// encrypted with a customer-managed KMS key, so this module creates
+	// that secret itself (reusing the cluster's at-rest key) rather than
+	// taking an external secret ARN. SASL is skipped when SaslPassword is
+	// nil.
+	SaslUsername string
+	SaslPassword pulumi.StringInput
 	// Config holds environment-specific sizing and monitoring settings.
 	Config config.MskConfig
 	// Tags applied to all resources created by this module.
@@ -101,7 +108,9 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 		EncryptionInfo: &msk.ClusterEncryptionInfoArgs{
 			EncryptionAtRestKmsKeyArn: encryptionKey.Arn,
 			EncryptionInTransit: &msk.ClusterEncryptionInfoEncryptionInTransitArgs{
-				ClientBroker: pulumi.String("TLS"),
+				// TLS_PLAINTEXT is required to expose the 9092 plaintext
+				// listener that AllowPlaintext (dev) relies on.
+				ClientBroker: pulumi.String(clientBrokerEncryption(cfg)),
 				InCluster:    pulumi.Bool(true),
 			},
 		},
@@ -110,6 +119,9 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 			Sasl: &msk.ClusterClientAuthenticationSaslArgs{
 				Scram: pulumi.Bool(true),
 			},
+			// Dev-only: app services carry no SASL/TLS Kafka client
+			// wiring yet, so they use the unauthenticated 9092 listener.
+			Unauthenticated: pulumi.Bool(cfg.AllowPlaintext),
 		},
 
 		EnhancedMonitoring: pulumi.String(enhancedMonitoring(cfg)),
@@ -130,23 +142,85 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 	}
 
 	// --- SCRAM secret association ---
-	// Links the Secrets Manager SASL/SCRAM credential to the MSK cluster,
-	// enabling clients to authenticate via SASL/SCRAM-SHA-512 on port 9096.
-	if inputs.KafkaSecretArn != nil {
+	// Registers the SASL/SCRAM-SHA-512 user with the cluster (port 9096).
+	// MSK requires the credential secret to be named AmazonMSK_*, encrypted
+	// with a customer-managed KMS key (the cluster's at-rest key qualifies),
+	// and readable by the kafka.amazonaws.com service principal.
+	if inputs.SaslPassword != nil {
+		scramSecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("%s-scram-secret", name), &secretsmanager.SecretArgs{
+			Name:                       pulumi.Sprintf("AmazonMSK_kaizen-%s", cfg.Environment),
+			KmsKeyId:                   encryptionKey.Arn,
+			RecoveryWindowInDays:       pulumi.Int(0),
+			ForceOverwriteReplicaSecret: pulumi.Bool(true),
+			Tags:                       inputs.Tags,
+		}, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("creating MSK SCRAM secret: %w", err)
+		}
+
+		scramValue := pulumi.All(inputs.SaslPassword).ApplyT(func(vals []interface{}) (string, error) {
+			password, _ := vals[0].(string)
+			b, err := json.Marshal(map[string]string{
+				"username": inputs.SaslUsername,
+				"password": password,
+			})
+			return string(b), err
+		}).(pulumi.StringOutput)
+
+		scramVersion, err := secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("%s-scram-secret-version", name), &secretsmanager.SecretVersionArgs{
+			SecretId:     scramSecret.ID(),
+			SecretString: scramValue,
+		}, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("creating MSK SCRAM secret version: %w", err)
+		}
+
+		scramPolicy := scramSecret.Arn.ApplyT(func(arn string) (string, error) {
+			b, err := json.Marshal(map[string]interface{}{
+				"Version": "2012-10-17",
+				"Statement": []map[string]interface{}{{
+					"Sid":       "AWSKafkaResourcePolicy",
+					"Effect":    "Allow",
+					"Principal": map[string]string{"Service": "kafka.amazonaws.com"},
+					"Action":    "secretsmanager:getSecretValue",
+					"Resource":  arn,
+				}},
+			})
+			return string(b), err
+		}).(pulumi.StringOutput)
+
+		_, err = secretsmanager.NewSecretPolicy(ctx, fmt.Sprintf("%s-scram-secret-policy", name), &secretsmanager.SecretPolicyArgs{
+			SecretArn: scramSecret.Arn,
+			Policy:    scramPolicy,
+		}, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("creating MSK SCRAM secret policy: %w", err)
+		}
+
 		_, err = msk.NewSingleScramSecretAssociation(ctx, fmt.Sprintf("%s-scram-assoc", name), &msk.SingleScramSecretAssociationArgs{
 			ClusterArn: cluster.Arn,
-			SecretArn:  inputs.KafkaSecretArn,
-		}, opts...)
+			SecretArn:  scramSecret.Arn,
+		}, append(opts, pulumi.DependsOn([]pulumi.Resource{scramVersion}))...)
 		if err != nil {
 			return nil, fmt.Errorf("creating SCRAM secret association: %w", err)
 		}
 	}
 
 	return &config.StreamingOutputs{
-		MskClusterArn:       cluster.Arn,
-		MskClusterName:      cluster.ClusterName,
-		MskBootstrapBrokers: cluster.BootstrapBrokersSaslScram,
+		MskClusterArn:                cluster.Arn,
+		MskClusterName:               cluster.ClusterName,
+		MskBootstrapBrokers:          cluster.BootstrapBrokersSaslScram,
+		MskBootstrapBrokersPlaintext: cluster.BootstrapBrokers,
 	}, nil
+}
+
+// clientBrokerEncryption picks the in-transit mode: TLS_PLAINTEXT when the
+// dev-only plaintext listener is enabled, TLS otherwise.
+func clientBrokerEncryption(cfg config.MskConfig) string {
+	if cfg.AllowPlaintext {
+		return "TLS_PLAINTEXT"
+	}
+	return "TLS"
 }
 
 // enhancedMonitoring returns the monitoring level based on config.
