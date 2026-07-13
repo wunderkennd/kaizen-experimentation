@@ -6,6 +6,7 @@ import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 import type { Flag, FlagType } from '@/lib/types';
 import { listFlags } from '@/lib/api';
 import { RetryableError } from '@/components/retryable-error';
+import { CopyButton } from '@/components/copy-button';
 import { useAuth } from '@/lib/auth-context';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { ROLE_LABELS } from '@/lib/auth';
@@ -214,6 +215,7 @@ function FlagListContent() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flag ID</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
@@ -223,11 +225,22 @@ function FlagListContent() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filtered.map((f) => (
-                    <tr key={f.flagId} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
+                    <tr key={f.flagId} className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
                       <td className="px-4 py-3">
                         <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
                           {f.name}
                         </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs text-gray-500">{f.flagId}</code>
+                          <CopyButton
+                            value={f.flagId}
+                            label="Copy flag ID"
+                            successMessage="Flag ID copied"
+                            className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                          />
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_TYPE_BADGE[f.type] || 'bg-gray-100 text-gray-800'}`}>

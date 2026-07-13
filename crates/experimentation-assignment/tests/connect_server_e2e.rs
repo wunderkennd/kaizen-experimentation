@@ -203,18 +203,9 @@ async fn connect_get_slate_assignment_returns_ordered_slate() {
     assert_eq!(probs.len(), 3, "one probability entry per slot");
 }
 
-#[tokio::test]
-async fn connect_stream_config_updates_still_unimplemented() {
-    let (addr, _svc) = start_connect_server().await;
-
-    // StreamConfigUpdates is server-streaming and lands in #643. Until then
-    // it must return Unimplemented (HTTP 501). This test is the negative
-    // guard that flips green once #643 wires the stream.
-    let body = serde_json::json!({"lastKnownVersion": 0});
-    let (status, _resp) =
-        connect_json_post(addr, "StreamConfigUpdates", body).await;
-    assert_eq!(
-        status, 501,
-        "StreamConfigUpdates should still be Unimplemented until #643",
-    );
-}
+// StreamConfigUpdates is now wired end-to-end (#643). The 501 guard that
+// used to live here has been removed. Domain-level streaming semantics
+// (ordering, fan-out, drop cleanup, no-listener push) are covered by
+// tests/stream_config_updates_test.rs; cross-transport wire-level
+// validation (Connect binary framing, gRPC-Web) lands with #644's
+// server-go client + conformance run.
