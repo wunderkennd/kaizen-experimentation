@@ -179,6 +179,7 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 			// kafka:Topic resources are gated off (no broker
 			// reachability from outside the VPC).
 			AutoCreateTopics: !cfg.ManageKafkaTopics,
+			AllowPlaintext:   cfg.MskAllowPlaintext,
 		},
 		Tags: kconfig.DefaultTags(cfg.Environment),
 	})
@@ -188,9 +189,10 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 	ctx.Export("mskBootstrapBrokers", out.MskBootstrapBrokers)
 	ctx.Export("mskClusterArn", out.MskClusterArn)
 	return types.StreamingOutputs{
-		BootstrapBrokers: out.MskBootstrapBrokers,
-		ClusterArn:       out.MskClusterArn,
-		ClusterName:      out.MskClusterName,
+		BootstrapBrokers:          out.MskBootstrapBrokers,
+		BootstrapBrokersPlaintext: out.MskBootstrapBrokersPlaintext,
+		ClusterArn:                out.MskClusterArn,
+		ClusterName:               out.MskClusterName,
 	}, nil
 }
 
@@ -200,14 +202,17 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 // cluster (MSK or Redpanda) the stack is wired to.
 func NewSecrets(ctx *pulumi.Context, cfg *kconfig.Config, dbOut types.DatabaseOutputs, streamOut types.StreamingOutputs, cacheOut types.CacheOutputs) (types.SecretsOutputs, error) {
 	var kafkaSaslUsername string
+	var kafkaSaslPassword pulumi.StringOutput
 	switch cfg.StreamingProvider {
 	case "redpanda":
 		kafkaSaslUsername = pulumiconfig.New(ctx, "redpanda").Require("kafkaUsername")
+		kafkaSaslPassword = pulumiconfig.New(ctx, "redpanda").RequireSecret("kafkaPassword")
 	default:
-		// MSK (and the historical default) reads the username from the
-		// kafka:saslUsername key — the same config NewKafkaTopics uses
-		// when authenticating the topic-provisioning provider.
+		// MSK (and the historical default) reads the credentials from the
+		// kafka:saslUsername/saslPassword keys — the same values the SCRAM
+		// secret association registers with the cluster.
 		kafkaSaslUsername = pulumiconfig.New(ctx, "kafka").Require("saslUsername")
+		kafkaSaslPassword = pulumiconfig.New(ctx, "kafka").RequireSecret("saslPassword")
 	}
 	out, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
 		RdsEndpoint:         dbOut.Endpoint,
@@ -215,6 +220,7 @@ func NewSecrets(ctx *pulumi.Context, cfg *kconfig.Config, dbOut types.DatabaseOu
 		MskBootstrapBrokers: streamOut.BootstrapBrokers,
 		RedisEndpoint:       cacheOut.Endpoint,
 		KafkaSaslUsername:   kafkaSaslUsername,
+		KafkaSaslPassword:   kafkaSaslPassword,
 	})
 	if err != nil {
 		return types.SecretsOutputs{}, err
@@ -267,6 +273,7 @@ func NewCompute(
 	netOut types.NetworkOutputs,
 	cicdOut types.CICDOutputs,
 	secretsOut types.SecretsOutputs,
+	streamOut types.StreamingOutputs,
 ) (types.ComputeOutputs, *compute.ServicesOutputs, error) {
 	clusterOut, err := compute.NewCluster(ctx, &compute.ClusterArgs{
 		Environment:        cfg.Environment,
@@ -304,6 +311,7 @@ func NewCompute(
 		KafkaSecretArn:    secretsOut.KafkaSecretRef,
 		RedisSecretArn:    secretsOut.RedisSecretRef,
 		AuthSecretArn:     secretsOut.AuthSecretRef,
+		KafkaBrokers:      streamOut.BootstrapBrokersPlaintext,
 		DesiredCount:      cfg.FargateMinTasks,
 		PreDeployDeps:     []pulumi.Resource{migOut.RunCommand},
 	})

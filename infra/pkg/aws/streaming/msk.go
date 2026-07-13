@@ -101,7 +101,9 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 		EncryptionInfo: &msk.ClusterEncryptionInfoArgs{
 			EncryptionAtRestKmsKeyArn: encryptionKey.Arn,
 			EncryptionInTransit: &msk.ClusterEncryptionInfoEncryptionInTransitArgs{
-				ClientBroker: pulumi.String("TLS"),
+				// TLS_PLAINTEXT is required to expose the 9092 plaintext
+				// listener that AllowPlaintext (dev) relies on.
+				ClientBroker: pulumi.String(clientBrokerEncryption(cfg)),
 				InCluster:    pulumi.Bool(true),
 			},
 		},
@@ -110,6 +112,9 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 			Sasl: &msk.ClusterClientAuthenticationSaslArgs{
 				Scram: pulumi.Bool(true),
 			},
+			// Dev-only: app services carry no SASL/TLS Kafka client
+			// wiring yet, so they use the unauthenticated 9092 listener.
+			Unauthenticated: pulumi.Bool(cfg.AllowPlaintext),
 		},
 
 		EnhancedMonitoring: pulumi.String(enhancedMonitoring(cfg)),
@@ -143,10 +148,20 @@ func NewMskCluster(ctx *pulumi.Context, name string, inputs *MskInputs, opts ...
 	}
 
 	return &config.StreamingOutputs{
-		MskClusterArn:       cluster.Arn,
-		MskClusterName:      cluster.ClusterName,
-		MskBootstrapBrokers: cluster.BootstrapBrokersSaslScram,
+		MskClusterArn:                cluster.Arn,
+		MskClusterName:               cluster.ClusterName,
+		MskBootstrapBrokers:          cluster.BootstrapBrokersSaslScram,
+		MskBootstrapBrokersPlaintext: cluster.BootstrapBrokers,
 	}, nil
+}
+
+// clientBrokerEncryption picks the in-transit mode: TLS_PLAINTEXT when the
+// dev-only plaintext listener is enabled, TLS otherwise.
+func clientBrokerEncryption(cfg config.MskConfig) string {
+	if cfg.AllowPlaintext {
+		return "TLS_PLAINTEXT"
+	}
+	return "TLS"
 }
 
 // enhancedMonitoring returns the monitoring level based on config.
