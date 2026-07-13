@@ -212,6 +212,11 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		if v, err := cfg.TryBool("mskAllowPlaintext"); err == nil {
 			out.MskAllowPlaintext = v
 		}
+		if out.MskAllowPlaintext && out.IsProd() {
+			// Same failure mode as a missing Require key: refuse to build
+			// a prod plan with the dev-only plaintext listener enabled.
+			panic("mskAllowPlaintext=true is dev-only: prod keeps TLS+SASL — remove the config key from the prod stack")
+		}
 		out.FargateMinTasks = cfg.RequireInt("fargateMinTasks")
 		out.CloudwatchRetention = cfg.RequireInt("cloudwatchRetentionDays")
 	} else {
