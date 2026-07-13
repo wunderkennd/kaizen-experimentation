@@ -62,6 +62,9 @@ type AuthSecret struct {
 type SecretsInputs struct {
 	// RDS endpoint (host:port format from the RDS instance).
 	RdsEndpoint pulumi.StringOutput
+	// RdsMasterPassword is the master-user password generated in the
+	// database stage (secret output).
+	RdsMasterPassword pulumi.StringOutput
 	// MSK bootstrap broker connection string.
 	MskBootstrapBrokers pulumi.StringOutput
 	// Redis primary endpoint address.
@@ -90,14 +93,17 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return nil, err
 	}
 
-	// Database secret version: wire actual RDS endpoint.
-	dbSecretValue := inputs.RdsEndpoint.ApplyT(func(endpoint string) (string, error) {
+	// Database secret version: wire actual RDS endpoint and the real
+	// master password from the database stage.
+	dbSecretValue := pulumi.All(inputs.RdsEndpoint, inputs.RdsMasterPassword).ApplyT(func(vals []interface{}) (string, error) {
+		endpoint := vals[0].(string)
+		password := vals[1].(string)
 		v := DatabaseSecret{
 			Engine:   "postgres",
 			Host:     endpoint,
 			Port:     5432,
 			Username: "kaizen_admin",
-			Password: "CHANGE_ME",
+			Password: password,
 			Dbname:   "kaizen",
 		}
 		b, err := json.Marshal(v)

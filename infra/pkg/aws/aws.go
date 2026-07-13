@@ -152,9 +152,10 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 	}
 	ctx.Export("rdsEndpoint", out.RdsEndpoint)
 	return types.DatabaseOutputs{
-		Endpoint:   out.RdsEndpoint,
-		Port:       out.RdsPort,
-		InstanceId: out.RdsInstanceId,
+		Endpoint:       out.RdsEndpoint,
+		Port:           out.RdsPort,
+		InstanceId:     out.RdsInstanceId,
+		MasterPassword: out.RdsMasterPassword,
 	}, nil
 }
 
@@ -210,6 +211,7 @@ func NewSecrets(ctx *pulumi.Context, cfg *kconfig.Config, dbOut types.DatabaseOu
 	}
 	out, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
 		RdsEndpoint:         dbOut.Endpoint,
+		RdsMasterPassword:   dbOut.MasterPassword,
 		MskBootstrapBrokers: streamOut.BootstrapBrokers,
 		RedisEndpoint:       cacheOut.Endpoint,
 		KafkaSaslUsername:   kafkaSaslUsername,
