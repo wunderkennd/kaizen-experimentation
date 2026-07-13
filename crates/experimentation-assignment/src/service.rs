@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 use tonic::{Request, Response, Status};
 
 use experimentation_proto::experimentation::assignment::v1::{
@@ -24,17 +26,32 @@ use crate::config::{Config, ExperimentConfig};
 use crate::config_cache::ConfigCacheHandle;
 use crate::targeting;
 
+/// Broadcast channel capacity for the `ConfigUpdate` fan-out. Bounded so a
+/// stuck subscriber can't grow the queue unbounded; slow subscribers get
+/// `Lagged(n)` and can reconnect with `StreamConfigUpdatesRequest.last_known_version`
+/// once the M5 integration lands. 1024 leaves headroom for burst updates
+/// while staying small enough that OOM isn't a failure mode.
+const CONFIG_UPDATE_CHANNEL_CAPACITY: usize = 1024;
+
 /// gRPC service implementation backed by a live config cache.
 pub struct AssignmentServiceImpl {
     config: ConfigCacheHandle,
     bandit_client: Option<GrpcBanditClient>,
+    /// Fan-out source for `StreamConfigUpdates` (ADR-031 #643). Every server
+    /// stream — tonic gRPC AND the Connect bridge — subscribes to this one
+    /// channel so both transports see the same events in the same order.
+    /// The M5 integration will push here from the background stream-client
+    /// task in `stream_client.rs`; today only tests call `push_config_update`.
+    config_updates_tx: broadcast::Sender<ConfigUpdate>,
 }
 
 impl AssignmentServiceImpl {
     pub fn new(config: ConfigCacheHandle, bandit_client: Option<GrpcBanditClient>) -> Self {
+        let (config_updates_tx, _) = broadcast::channel(CONFIG_UPDATE_CHANNEL_CAPACITY);
         Self {
             config,
             bandit_client,
+            config_updates_tx,
         }
     }
 
@@ -42,10 +59,32 @@ impl AssignmentServiceImpl {
     ///
     /// Uses no bandit client (uniform random fallback for bandit experiments).
     pub fn from_config(config: Arc<Config>) -> Self {
+        let (config_updates_tx, _) = broadcast::channel(CONFIG_UPDATE_CHANNEL_CAPACITY);
         Self {
             config: ConfigCacheHandle::from_static(config),
             bandit_client: None,
+            config_updates_tx,
         }
+    }
+
+    /// Subscribe to the `ConfigUpdate` broadcast stream. Every subscriber
+    /// starts empty and only sees events pushed *after* it subscribes;
+    /// on-connect replay of missed updates is the M5 client's job (it holds
+    /// `last_known_version` and reconnects on lag).
+    ///
+    /// Bounded capacity — a lagging receiver sees `Lagged(n)` in
+    /// `BroadcastStream` and can decide to reconnect. Server handlers surface
+    /// this as `DataLoss` on the wire.
+    pub fn subscribe_config_updates(&self) -> broadcast::Receiver<ConfigUpdate> {
+        self.config_updates_tx.subscribe()
+    }
+
+    /// Emit a `ConfigUpdate` to every subscriber. Returns the number of
+    /// receivers that saw the event on their next poll — 0 is valid (no
+    /// listeners). Used by tests today; the M5 stream client will call this
+    /// once the integration lands.
+    pub fn push_config_update(&self, update: ConfigUpdate) -> usize {
+        self.config_updates_tx.send(update).unwrap_or(0)
     }
 
     /// Get the current config snapshot (for HTTP handler bulk path).
@@ -835,15 +874,35 @@ impl AssignmentService for AssignmentServiceImpl {
         Ok(Response::new(resp))
     }
 
-    type StreamConfigUpdatesStream = ReceiverStream<Result<ConfigUpdate, Status>>;
+    type StreamConfigUpdatesStream = std::pin::Pin<
+        Box<dyn tokio_stream::Stream<Item = Result<ConfigUpdate, Status>> + Send + 'static>,
+    >;
 
+    // tonic::Status is ~176 bytes; the codebase's convention is to allow this
+    // per-method rather than box it (parity with `assign`, `assign_slate`, etc.).
+    #[allow(clippy::result_large_err)]
     async fn stream_config_updates(
         &self,
         _request: Request<StreamConfigUpdatesRequest>,
     ) -> Result<Response<Self::StreamConfigUpdatesStream>, Status> {
-        Err(Status::unimplemented(
-            "StreamConfigUpdates not yet implemented (M5 integration)",
-        ))
+        // ADR-031 #643 — tonic streaming baseline. Subscribes to the shared
+        // broadcast source so the Connect bridge sees identical events in
+        // the same order. `last_known_version` from the request is ignored
+        // until M5 integration adds replay semantics — for now every
+        // subscriber sees events from the moment they connect.
+        let rx = self.subscribe_config_updates();
+        let stream = BroadcastStream::new(rx).map(|r| match r {
+            Ok(update) => Ok(update),
+            Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
+                // Convert the broadcast lag to a `DataLoss` status; the M5
+                // client uses this signal to reconnect with the last version
+                // it successfully processed.
+                Err(Status::data_loss(format!(
+                    "config update stream lagged, skipped {n} messages — reconnect with last_known_version",
+                )))
+            }
+        });
+        Ok(Response::new(Box::pin(stream)))
     }
 
     async fn get_slate_assignment(
