@@ -483,9 +483,12 @@ jobs:
           - { name: pipeline, path: crates/experimentation-pipeline }
           - { name: analysis, path: crates/experimentation-analysis }
           - { name: policy, path: crates/experimentation-policy }
+          - { name: flags, path: crates/experimentation-flags }
           - { name: management, path: services/management }
           - { name: metrics, path: services/metrics }
+          - { name: orchestration, path: services/orchestration }
           - { name: ui, path: ui }
+          - { name: healthgate, path: docker/healthgate }
     env:
       # Image coordinates, kept as env so the build/push step is one shell
       # block instead of branching across multiple step languages.
