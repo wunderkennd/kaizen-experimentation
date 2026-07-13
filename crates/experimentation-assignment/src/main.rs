@@ -8,6 +8,7 @@ use experimentation_assignment::config::Config;
 use experimentation_assignment::config_cache::ConfigCache;
 #[cfg(feature = "connectrpc")]
 use experimentation_assignment::connect_server::ConnectAssignment;
+#[cfg(not(feature = "connectrpc"))]
 use experimentation_assignment::http_json;
 use experimentation_assignment::service::AssignmentServiceImpl;
 use experimentation_assignment::stream_client::StreamClient;
@@ -22,7 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let grpc_addr = std::env::var("GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
         .parse()?;
-    let http_addr = std::env::var("HTTP_ADDR")
+    // http_addr is unused under `--features connectrpc` (see below); annotate
+    // the type so inference doesn't collapse to `()` when the shim spawn is
+    // cfg'd out.
+    let http_addr: std::net::SocketAddr = std::env::var("HTTP_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
 
@@ -71,17 +75,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let svc = Arc::new(AssignmentServiceImpl::new(handle, bandit_client));
 
-    // Spawn JSON HTTP server for SDK access.
-    let http_svc = svc.clone();
-    tokio::spawn(async move {
-        if let Err(e) = http_json::serve(http_addr, http_svc).await {
-            tracing::error!(error = %e, "JSON HTTP server failed");
-        }
-    });
+    // Spawn JSON HTTP server for SDK access — default build only. Under the
+    // `connectrpc` feature, the ConnectRPC listener below serves the same
+    // routes over `application/connect+json` (ADR-031 #644 retire).
+    #[cfg(not(feature = "connectrpc"))]
+    {
+        let http_svc = svc.clone();
+        tokio::spawn(async move {
+            if let Err(e) = http_json::serve(http_addr, http_svc).await {
+                tracing::error!(error = %e, "JSON HTTP server failed");
+            }
+        });
+    }
+    #[cfg(feature = "connectrpc")]
+    let _ = http_addr; // http_addr is only bound by the shim; silence the warning.
 
-    // ADR-031 pilot: optional ConnectRPC listener (Connect + gRPC + gRPC-Web on
-    // one port). Runs alongside the tonic gRPC + http_json listeners during the
-    // pilot; tonic stays the default build.
+    // ADR-031 pilot: ConnectRPC listener (Connect + gRPC + gRPC-Web on one
+    // port). When the feature is on, this REPLACES the hand-rolled http_json
+    // shim — its `application/connect+json` handler covers the same 3 unary
+    // routes plus GetInterleavedList and StreamConfigUpdates (#644).
     //
     // NOTE: this listener is fire-and-forget and does NOT participate in graceful
     // shutdown — on ctrl+c the runtime drops it without draining in-flight requests.

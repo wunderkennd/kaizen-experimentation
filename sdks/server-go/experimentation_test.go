@@ -2,11 +2,16 @@ package experimentation
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+
+	"connectrpc.com/connect"
+	assignmentv1 "github.com/org/experimentation/gen/go/experimentation/assignment/v1"
+	"github.com/org/experimentation/gen/go/experimentation/assignment/v1/assignmentv1connect"
 )
 
 // ---------------------------------------------------------------------------
@@ -272,54 +277,86 @@ func TestLocalProviderGetAllAssignments(t *testing.T) {
 // RemoteProvider tests
 // ---------------------------------------------------------------------------
 
-func mockAssignmentServer(t *testing.T) *httptest.Server {
+// stubAssignmentServer implements the connect handler for tests. Under the
+// covers it now speaks `application/connect+json` on the wire (via the
+// generated handler) — the hand-rolled JSON shim it used to bridge is gone
+// (ADR-031 #644).
+//
+// We record just the attributes map from GetAssignment calls rather than the
+// whole proto message — protobuf-generated structs embed
+// protoimpl.MessageState (which contains a mutex), so `go vet` blocks any
+// value-copy of the whole message. The captured attributes are all the
+// TestRemoteProviderWithAttributes assertion needs.
+type stubAssignmentServer struct {
+	assignmentv1connect.UnimplementedAssignmentServiceHandler
+	mu             sync.Mutex
+	capturedAttrs  map[string]string
+	capturedAtLeastOnce bool
+}
+
+func (s *stubAssignmentServer) GetAssignment(
+	_ context.Context,
+	req *connect.Request[assignmentv1.GetAssignmentRequest],
+) (*connect.Response[assignmentv1.GetAssignmentResponse], error) {
+	s.mu.Lock()
+	s.capturedAttrs = make(map[string]string, len(req.Msg.Attributes))
+	for k, v := range req.Msg.Attributes {
+		s.capturedAttrs[k] = v
+	}
+	s.capturedAtLeastOnce = true
+	s.mu.Unlock()
+
+	if req.Msg.ExperimentId == "missing" {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("experiment not found"))
+	}
+	return connect.NewResponse(&assignmentv1.GetAssignmentResponse{
+		ExperimentId:          req.Msg.ExperimentId,
+		VariantId:             "treatment",
+		PayloadJson:           `{"color":"red"}`,
+		AssignmentProbability: 0.5,
+		IsActive:              true,
+	}), nil
+}
+
+func (s *stubAssignmentServer) GetAssignments(
+	_ context.Context,
+	_ *connect.Request[assignmentv1.GetAssignmentsRequest],
+) (*connect.Response[assignmentv1.GetAssignmentsResponse], error) {
+	return connect.NewResponse(&assignmentv1.GetAssignmentsResponse{
+		Assignments: []*assignmentv1.GetAssignmentResponse{
+			{ExperimentId: "exp1", VariantId: "control", PayloadJson: "{}", IsActive: true},
+			{ExperimentId: "exp2", VariantId: "treatment", PayloadJson: `{"x":1}`, IsActive: true},
+			{ExperimentId: "exp3", VariantId: "", IsActive: false},
+		},
+	}), nil
+}
+
+// lastAttributes returns a snapshot of the attribute map from the most
+// recent GetAssignment call, or (nil, false) if none.
+func (s *stubAssignmentServer) lastAttributes() (map[string]string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.capturedAtLeastOnce {
+		return nil, false
+	}
+	snap := make(map[string]string, len(s.capturedAttrs))
+	for k, v := range s.capturedAttrs {
+		snap[k] = v
+	}
+	return snap, true
+}
+
+func mockAssignmentServer(t *testing.T) (*httptest.Server, *stubAssignmentServer) {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		switch r.URL.Path {
-		case "/experimentation.assignment.v1.AssignmentService/GetAssignment":
-			var req assignmentJSONRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			if req.ExperimentID == "missing" {
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = w.Write([]byte(`{"code":404,"message":"not found"}`))
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			resp := assignmentJSONResponse{
-				ExperimentID:          req.ExperimentID,
-				VariantID:             "treatment",
-				PayloadJSON:           `{"color":"red"}`,
-				AssignmentProbability: 0.5,
-				IsActive:              true,
-			}
-			_ = json.NewEncoder(w).Encode(resp)
-
-		case "/experimentation.assignment.v1.AssignmentService/GetAssignments":
-			w.Header().Set("Content-Type", "application/json")
-			resp := assignmentsJSONResponse{
-				Assignments: []assignmentJSONResponse{
-					{ExperimentID: "exp1", VariantID: "control", PayloadJSON: "{}", IsActive: true},
-					{ExperimentID: "exp2", VariantID: "treatment", PayloadJSON: `{"x":1}`, IsActive: true},
-					{ExperimentID: "exp3", VariantID: "", IsActive: false},
-				},
-			}
-			_ = json.NewEncoder(w).Encode(resp)
-
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
+	stub := &stubAssignmentServer{}
+	mux := http.NewServeMux()
+	path, handler := assignmentv1connect.NewAssignmentServiceHandler(stub)
+	mux.Handle(path, handler)
+	return httptest.NewServer(mux), stub
 }
 
 func TestRemoteProviderGetAssignment(t *testing.T) {
-	srv := mockAssignmentServer(t)
+	srv, _ := mockAssignmentServer(t)
 	defer srv.Close()
 
 	p := NewRemoteProvider(srv.URL)
@@ -350,7 +387,7 @@ func TestRemoteProviderGetAssignment(t *testing.T) {
 }
 
 func TestRemoteProviderGetAssignment404(t *testing.T) {
-	srv := mockAssignmentServer(t)
+	srv, _ := mockAssignmentServer(t)
 	defer srv.Close()
 
 	p := NewRemoteProvider(srv.URL)
@@ -387,7 +424,7 @@ func TestRemoteProviderNotInitialized(t *testing.T) {
 }
 
 func TestRemoteProviderGetAllAssignments(t *testing.T) {
-	srv := mockAssignmentServer(t)
+	srv, _ := mockAssignmentServer(t)
 	defer srv.Close()
 
 	p := NewRemoteProvider(srv.URL)
@@ -413,13 +450,7 @@ func TestRemoteProviderGetAllAssignments(t *testing.T) {
 }
 
 func TestRemoteProviderWithAttributes(t *testing.T) {
-	var capturedBody assignmentJSONRequest
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
-		w.Header().Set("Content-Type", "application/json")
-		resp := assignmentJSONResponse{ExperimentID: "exp1", VariantID: "v", IsActive: true}
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	srv, stub := mockAssignmentServer(t)
 	defer srv.Close()
 
 	p := NewRemoteProvider(srv.URL)
@@ -431,11 +462,15 @@ func TestRemoteProviderWithAttributes(t *testing.T) {
 		Properties: map[string]any{"plan": "premium", "age": 30},
 	})
 
-	if capturedBody.Attributes["plan"] != "premium" {
-		t.Errorf("expected plan=premium, got %s", capturedBody.Attributes["plan"])
+	attrs, ok := stub.lastAttributes()
+	if !ok {
+		t.Fatal("stub server never observed a GetAssignment call")
 	}
-	if capturedBody.Attributes["age"] != "30" {
-		t.Errorf("expected age=30, got %s", capturedBody.Attributes["age"])
+	if attrs["plan"] != "premium" {
+		t.Errorf("expected plan=premium, got %s", attrs["plan"])
+	}
+	if attrs["age"] != "30" {
+		t.Errorf("expected age=30, got %s", attrs["age"])
 	}
 }
 

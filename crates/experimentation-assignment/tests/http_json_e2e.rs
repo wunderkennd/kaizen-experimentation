@@ -6,6 +6,11 @@
 //!
 //! Tests validate that SDK clients will receive correct assignment data when
 //! talking to the real Assignment Service over HTTP.
+//!
+//! ADR-031 #644 — skipped when `--features connectrpc` is active; the
+//! Connect listener replaces this shim on that path. Domain coverage is
+//! preserved by `tests/connect_server_e2e.rs`.
+#![cfg(not(feature = "connectrpc"))]
 
 use std::net::SocketAddr;
 use std::path::Path;
