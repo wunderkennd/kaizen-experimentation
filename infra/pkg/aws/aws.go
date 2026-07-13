@@ -165,10 +165,15 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 // later by NewSchemaRegistry once compute is up.
 func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.StreamingOutputs, error) {
 	mskSgArr := pulumi.StringArray{netOut.SecurityGroupIds["msk"].ToStringOutput()}
+	kafkaCfg := pulumiconfig.New(ctx, "kafka")
 	out, err := streaming.NewMskCluster(ctx, "kaizen", &streaming.MskInputs{
 		SubnetIds:        netOut.PrivateSubnetIds,
 		SecurityGroupIds: mskSgArr,
-		KafkaSecretArn:   nil, // SCRAM association wired after secrets are created.
+		// The streaming module owns the AmazonMSK_* SCRAM secret +
+		// association (MSK requires a customer-KMS secret with that name
+		// prefix, which the app-facing kafka secret is not).
+		SaslUsername: kafkaCfg.Require("saslUsername"),
+		SaslPassword: kafkaCfg.RequireSecret("saslPassword"),
 		Config: kconfig.MskConfig{
 			KafkaVersion:  "3.6.0",
 			BrokerCount:   cfg.MskBrokerCount,
