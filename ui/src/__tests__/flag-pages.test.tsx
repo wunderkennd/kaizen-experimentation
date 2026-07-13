@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
@@ -33,26 +33,28 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+function customRender(ui: React.ReactNode, initialUser?: AuthUser) {
+  return render(
+    <AuthProvider initialUser={initialUser}>
+      <ToastProvider>
+        {ui}
+      </ToastProvider>
+    </AuthProvider>
+  );
+}
+
 // --- Flag List Page ---
 
 describe('Flag List Page', () => {
   async function renderAndWait() {
-    render(
-      <AuthProvider>
-        <FlagListPage />
-      </AuthProvider>,
-    );
+    customRender(<FlagListPage />);
     await waitFor(() => {
       expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
     });
   }
 
   it('shows loading spinner initially', () => {
-    render(
-      <AuthProvider>
-        <FlagListPage />
-      </AuthProvider>,
-    );
+    customRender(<FlagListPage />);
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -73,11 +75,7 @@ describe('Flag List Page', () => {
       ),
     );
 
-    render(
-      <AuthProvider>
-        <FlagListPage />
-      </AuthProvider>,
-    );
+    customRender(<FlagListPage />);
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });
@@ -92,11 +90,7 @@ describe('Flag List Page', () => {
       ),
     );
 
-    render(
-      <AuthProvider>
-        <FlagListPage />
-      </AuthProvider>,
-    );
+    customRender(<FlagListPage />);
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
@@ -143,7 +137,6 @@ describe('Flag List Page', () => {
     await user.type(screen.getByTestId('flag-search'), 'zzzznonexistent');
     expect(screen.getByTestId('no-filter-matches')).toBeInTheDocument();
 
-    // Use test ID because there's also a "Clear filters" button in the toolbar
     const clearBtn = within(screen.getByTestId('no-filter-matches')).getByRole('button', { name: /clear filters/i });
     await user.click(clearBtn);
 
@@ -194,16 +187,12 @@ describe('Flag List Page', () => {
   it('renders correct type badge colors', async () => {
     await renderAndWait();
 
-    const rows = screen.getAllByRole('row');
-    // BOOLEAN badge for dark_mode_rollout
     const boolRow = screen.getByTestId('flag-row-flag-bool-rollout');
     expect(within(boolRow).getByText('BOOLEAN').className).toContain('bg-blue-100');
 
-    // STRING badge for checkout_flow_variant
     const stringRow = screen.getByTestId('flag-row-flag-string-ab');
     expect(within(stringRow).getByText('STRING').className).toContain('bg-green-100');
 
-    // JSON badge for player_config_override
     const jsonRow = screen.getByTestId('flag-row-flag-json-config');
     expect(within(jsonRow).getByText('JSON').className).toContain('bg-orange-100');
   });
@@ -225,13 +214,7 @@ describe('Flag List Page', () => {
   });
 
   it('shows disabled "New Flag" button for viewers', async () => {
-    // The AuthProvider within FlagListPage will use NEXT_PUBLIC_USER_ROLE which is experimenter
-    // We need to wrap it with an AuthProvider with a viewer user to test RBAC.
-    render(
-      <AuthProvider initialUser={viewerUser}>
-        <FlagListPage />
-      </AuthProvider>,
-    );
+    customRender(<FlagListPage />, viewerUser);
     await waitFor(() => {
       expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
     });
@@ -243,22 +226,20 @@ describe('Flag List Page', () => {
 
 
   it('has breadcrumb and nav link pointing to /flags', async () => {
-    render(
-      <AuthProvider>
+    customRender(
+      <>
         <NavHeader />
         <FlagListPage />
-      </AuthProvider>,
+      </>
     );
     await waitFor(() => {
       expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
     });
 
-    // Check breadcrumb
     const breadcrumb = screen.getByRole('navigation', { name: /breadcrumb/i });
     expect(within(breadcrumb).getByText('Flags')).toBeInTheDocument();
     expect(within(breadcrumb).getByText('Experiments')).toHaveAttribute('href', '/');
 
-    // Check nav link
     const navLink = screen.getByTestId('nav-flags');
     expect(navLink).toHaveAttribute('href', '/flags');
     expect(navLink).toHaveTextContent('Flags');
@@ -271,9 +252,6 @@ describe('Flag List Page', () => {
   });
 });
 
-// Import within for scoped queries
-import { within } from '@testing-library/react';
-
 // --- Flag Detail Page ---
 
 describe('Flag Detail Page', () => {
@@ -283,26 +261,14 @@ describe('Flag Detail Page', () => {
   });
 
   async function renderAndWait() {
-    render(
-      <AuthProvider>
-        <ToastProvider>
-          <FlagDetailPage />
-        </ToastProvider>
-      </AuthProvider>,
-    );
+    customRender(<FlagDetailPage />);
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toBeInTheDocument();
     });
   }
 
   it('shows loading spinner initially', () => {
-    render(
-      <AuthProvider>
-        <ToastProvider>
-          <FlagDetailPage />
-        </ToastProvider>
-      </AuthProvider>,
-    );
+    customRender(<FlagDetailPage />);
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -330,13 +296,7 @@ describe('Flag Detail Page', () => {
 
   it('renders 404 error for nonexistent flag', async () => {
     mockFlagId = 'nonexistent-flag';
-    render(
-      <AuthProvider>
-        <ToastProvider>
-          <FlagDetailPage />
-        </ToastProvider>
-      </AuthProvider>,
-    );
+    customRender(<FlagDetailPage />);
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
@@ -344,13 +304,7 @@ describe('Flag Detail Page', () => {
 
   it('renders variants table for multi-variant flag', async () => {
     mockFlagId = 'flag-string-ab';
-    render(
-      <AuthProvider>
-        <ToastProvider>
-          <FlagDetailPage />
-        </ToastProvider>
-      </AuthProvider>,
-    );
+    customRender(<FlagDetailPage />);
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toHaveTextContent('checkout_flow_variant');
     });
@@ -393,7 +347,6 @@ describe('Flag Detail Page', () => {
   });
 
   it('shows loading spinner during promotion', async () => {
-    // Delay the response to catch the loading state
     server.use(
       http.post(`${FLAGS_SVC}/PromoteToExperiment`, async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -455,11 +408,7 @@ describe('Create Flag Page', () => {
   });
 
   it('renders the create flag form', () => {
-    render(
-      <AuthProvider>
-        <CreateFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<CreateFlagPage />);
 
     expect(screen.getByRole('heading', { name: 'Create Feature Flag' })).toBeInTheDocument();
     expect(screen.getByTestId('flag-name-input')).toBeInTheDocument();
@@ -472,20 +421,12 @@ describe('Create Flag Page', () => {
   });
 
   it('submit is disabled when name is empty', () => {
-    render(
-      <AuthProvider>
-        <CreateFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<CreateFlagPage />);
     expect(screen.getByTestId('create-submit')).toBeDisabled();
   });
 
   it('creates a flag and redirects to detail page', async () => {
-    render(
-      <AuthProvider>
-        <CreateFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<CreateFlagPage />);
     const user = userEvent.setup();
 
     await user.type(screen.getByTestId('flag-name-input'), 'test_new_flag');
@@ -503,11 +444,7 @@ describe('Create Flag Page', () => {
       ),
     );
 
-    render(
-      <AuthProvider>
-        <CreateFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<CreateFlagPage />);
     const user = userEvent.setup();
 
     await user.type(screen.getByTestId('flag-name-input'), 'fail_flag');
@@ -519,21 +456,13 @@ describe('Create Flag Page', () => {
   });
 
   it('has cancel link back to /flags', () => {
-    render(
-      <AuthProvider>
-        <CreateFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<CreateFlagPage />);
     const cancelLink = screen.getByText('Cancel').closest('a');
     expect(cancelLink).toHaveAttribute('href', '/flags');
   });
 
   it('renders all flag type options', () => {
-    render(
-      <AuthProvider>
-        <CreateFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<CreateFlagPage />);
     const select = screen.getByTestId('flag-type-select');
     const options = within(select).getAllByRole('option');
     expect(options.map((o) => o.textContent)).toEqual(['BOOLEAN', 'STRING', 'NUMERIC', 'JSON']);
@@ -549,22 +478,14 @@ describe('Edit Flag Page', () => {
   });
 
   async function renderAndWait() {
-    render(
-      <AuthProvider>
-        <EditFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<EditFlagPage />);
     await waitFor(() => {
       expect(screen.getByTestId('edit-flag-form')).toBeInTheDocument();
     });
   }
 
   it('shows loading spinner initially', () => {
-    render(
-      <AuthProvider>
-        <EditFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<EditFlagPage />);
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
@@ -610,7 +531,6 @@ describe('Edit Flag Page', () => {
   });
 
   it('shows loading spinner during flag update', async () => {
-    // Delay the response to catch the loading state
     server.use(
       http.post(`${FLAGS_SVC}/UpdateFlag`, async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -633,11 +553,7 @@ describe('Edit Flag Page', () => {
 
   it('shows 404 error for nonexistent flag', async () => {
     mockFlagId = 'nonexistent-flag';
-    render(
-      <AuthProvider>
-        <EditFlagPage />
-      </AuthProvider>,
-    );
+    customRender(<EditFlagPage />);
     await waitFor(() => {
       expect(screen.getByTestId('retryable-error')).toBeInTheDocument();
     });
