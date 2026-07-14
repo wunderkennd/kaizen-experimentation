@@ -272,7 +272,7 @@ func Deploy(ctx *pulumi.Context) error {
 	)
 	switch cfg.CloudProvider {
 	case "aws":
-		computeOut, svcOut, err = aws.NewCompute(ctx, cfg, netOut, cicdOut, secretsOut)
+		computeOut, svcOut, err = aws.NewCompute(ctx, cfg, netOut, cicdOut, secretsOut, streamOut)
 		if err != nil {
 			return err
 		}

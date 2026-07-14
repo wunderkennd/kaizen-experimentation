@@ -42,6 +42,11 @@ type Config struct {
 	// from inside the VPC — set false (dev) to skip topic resources and
 	// enable MSK auto-create instead. Defaults true.
 	ManageKafkaTopics bool
+	// MskAllowPlaintext opens MSK's unauthenticated PLAINTEXT listener
+	// (9092) alongside SASL/SCRAM. Dev-only: app services were built
+	// against plaintext Kafka and carry no SASL/TLS client wiring yet.
+	// Defaults false.
+	MskAllowPlaintext bool
 
 	// Cache
 	RedisNodeType string
@@ -203,6 +208,15 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 		if v, err := cfg.TryBool("manageKafkaTopics"); err == nil {
 			out.ManageKafkaTopics = v
 		}
+		out.MskAllowPlaintext = false
+		if v, err := cfg.TryBool("mskAllowPlaintext"); err == nil {
+			out.MskAllowPlaintext = v
+		}
+		if out.MskAllowPlaintext && out.IsProd() {
+			// Same failure mode as a missing Require key: refuse to build
+			// a prod plan with the dev-only plaintext listener enabled.
+			panic("mskAllowPlaintext=true is dev-only: prod keeps TLS+SASL — remove the config key from the prod stack")
+		}
 		out.FargateMinTasks = cfg.RequireInt("fargateMinTasks")
 		out.CloudwatchRetention = cfg.RequireInt("cloudwatchRetentionDays")
 	} else {
@@ -295,7 +309,10 @@ type StreamingOutputs struct {
 	MskClusterArn       pulumi.StringOutput
 	MskClusterName      pulumi.StringOutput
 	MskBootstrapBrokers pulumi.StringOutput
-	SchemaRegistryUrl   pulumi.StringOutput
+	// MskBootstrapBrokersPlaintext is the unauthenticated 9092 listener
+	// list — populated only when MskConfig.AllowPlaintext is set.
+	MskBootstrapBrokersPlaintext pulumi.StringOutput
+	SchemaRegistryUrl            pulumi.StringOutput
 }
 
 // SecretsOutputs is the contract exported by the secrets module.
@@ -341,4 +358,8 @@ type MskConfig struct {
 	// AutoCreateTopics sets auto.create.topics.enable on the cluster.
 	// True only when declarative topic management is disabled (dev).
 	AutoCreateTopics bool
+	// AllowPlaintext opens the unauthenticated PLAINTEXT listener (9092)
+	// alongside SASL/SCRAM by switching client-broker encryption to
+	// TLS_PLAINTEXT. Dev-only.
+	AllowPlaintext bool
 }

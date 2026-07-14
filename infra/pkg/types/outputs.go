@@ -128,6 +128,11 @@ type StreamingOutputs struct {
 	// BootstrapBrokers is the comma-separated bootstrap server list.
 	BootstrapBrokers pulumi.StringOutput
 
+	// BootstrapBrokersPlaintext is the unauthenticated 9092 listener list.
+	// Populated only when mskAllowPlaintext is set (dev); app services
+	// consume it as KAFKA_BROKERS until they grow SASL/TLS client wiring.
+	BootstrapBrokersPlaintext pulumi.StringOutput
+
 	// SchemaRegistryUrl is the URL of the Confluent-compatible schema registry
 	// (Schema Registry service on ECS/Cloud Run, or Redpanda's built-in registry).
 	SchemaRegistryUrl pulumi.StringOutput
