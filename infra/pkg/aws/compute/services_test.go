@@ -310,8 +310,17 @@ func TestAllSpecsHaveRequiredFields(t *testing.T) {
 		if s.lang == "" {
 			t.Errorf("spec %q has empty lang", s.key)
 		}
-		if len(s.healthCmd) == 0 {
-			t.Errorf("spec %q has no healthCmd", s.key)
+		// Container health checks exist only where the runtime image can
+		// execute them: m5 (alpine) and m6 (node:alpine) carry busybox
+		// wget. Distroless/debian-slim images have no shell and no
+		// grpc_health_probe, so a declared check would fail every probe
+		// and the circuit breaker would kill healthy rollouts.
+		canProbe := map[string]bool{"m5": true, "m6": true}
+		if canProbe[s.key] && len(s.healthCmd) == 0 {
+			t.Errorf("spec %q should declare a healthCmd (image has wget)", s.key)
+		}
+		if !canProbe[s.key] && len(s.healthCmd) != 0 {
+			t.Errorf("spec %q declares healthCmd its image cannot run", s.key)
 		}
 	}
 }

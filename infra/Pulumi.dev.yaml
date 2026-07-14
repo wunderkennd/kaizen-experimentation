@@ -19,4 +19,4 @@ config:
   kaizen-experimentation:grafanaEnabled: "false"
   kaizen-experimentation:manageKafkaTopics: "false"
   kaizen-experimentation:mskAllowPlaintext: "true"
-  kaizen-experimentation:tlsEnabled: "false"
+  kaizen-experimentation:tlsEnabled: "true"

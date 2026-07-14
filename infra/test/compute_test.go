@@ -101,7 +101,7 @@ func TestGRPCHealthChecksForRustServices(t *testing.T) {
 	}
 
 	for _, spec := range fargateSpecs {
-		expectedPort, isRust := rustServices[spec.Key]
+		_, isRust := rustServices[spec.Key]
 		if !isRust {
 			continue
 		}
@@ -111,20 +111,15 @@ func TestGRPCHealthChecksForRustServices(t *testing.T) {
 				t.Errorf("service %s: lang = %q, want \"rust\"", spec.Key, spec.Lang)
 			}
 
-			healthCmd := spec.HealthCmd
-			if len(healthCmd) < 2 {
-				t.Fatalf("service %s: health check command too short: %v", spec.Key, healthCmd)
-			}
-
-			// Rust services use CMD (exec form) with grpc_health_probe.
-			if healthCmd[0] != "CMD" {
-				t.Errorf("service %s: health check type = %q, want \"CMD\" (exec form for gRPC probe)", spec.Key, healthCmd[0])
-			}
-
-			expectedProbe := fmt.Sprintf("/bin/grpc_health_probe -addr=:%d", expectedPort)
-			actualCmd := strings.Join(healthCmd[1:], " ")
-			if actualCmd != expectedProbe {
-				t.Errorf("service %s: health check = %q, want %q", spec.Key, actualCmd, expectedProbe)
+			// Rust images (debian-slim/distroless) bundle no
+			// grpc_health_probe and the services don't register
+			// grpc.health.v1 (no tonic-health), so a container health
+			// check could never pass: every declared probe fails and the
+			// deployment circuit breaker kills healthy rollouts. Liveness
+			// rides on ALB target health (matcher 0-99) + health-gate
+			// sidecars until tonic-health + probe bundling ship.
+			if len(spec.HealthCmd) != 0 {
+				t.Errorf("service %s: declares container healthCmd %v its image cannot run", spec.Key, spec.HealthCmd)
 			}
 		})
 	}
@@ -137,14 +132,19 @@ func TestGRPCHealthChecksForRustServices(t *testing.T) {
 func TestHealthzForGoServices(t *testing.T) {
 	fargateSpecs := compute.ServiceSpecs()
 
-	goServices := map[string]int{
-		"m2-orch": 50058,
-		"m3":      50056,
-		"m5":      50055,
+	// Only m5 runs on a base image with busybox wget (alpine); the other
+	// Go services run distroless-static and cannot execute CMD-SHELL.
+	goServices := map[string]struct {
+		port    int
+		hasWget bool
+	}{
+		"m2-orch": {50058, false},
+		"m3":      {50056, false},
+		"m5":      {50055, true},
 	}
 
 	for _, spec := range fargateSpecs {
-		expectedPort, isGo := goServices[spec.Key]
+		cfg, isGo := goServices[spec.Key]
 		if !isGo {
 			continue
 		}
@@ -154,17 +154,23 @@ func TestHealthzForGoServices(t *testing.T) {
 				t.Errorf("service %s: lang = %q, want \"go\"", spec.Key, spec.Lang)
 			}
 
+			if !cfg.hasWget {
+				if len(spec.HealthCmd) != 0 {
+					t.Errorf("service %s: declares container healthCmd %v but its distroless image has no shell", spec.Key, spec.HealthCmd)
+				}
+				return
+			}
+
 			healthCmd := spec.HealthCmd
 			if len(healthCmd) < 2 {
 				t.Fatalf("service %s: health check command too short: %v", spec.Key, healthCmd)
 			}
 
-			// Go services use CMD-SHELL with wget --spider.
 			if healthCmd[0] != "CMD-SHELL" {
 				t.Errorf("service %s: health check type = %q, want \"CMD-SHELL\"", spec.Key, healthCmd[0])
 			}
 
-			expectedCheck := fmt.Sprintf("wget --spider -q http://localhost:%d/healthz || exit 1", expectedPort)
+			expectedCheck := fmt.Sprintf("wget --spider -q http://localhost:%d/healthz || exit 1", cfg.port)
 			if healthCmd[1] != expectedCheck {
 				t.Errorf("service %s: health check = %q, want %q", spec.Key, healthCmd[1], expectedCheck)
 			}
@@ -305,9 +311,11 @@ func TestHealthCheckTimingConstants(t *testing.T) {
 
 	for _, spec := range fargateSpecs {
 		t.Run(spec.Name, func(t *testing.T) {
-			// All health checks must have non-empty commands.
+			// Container health checks are declared only where the runtime
+			// image can execute them (see TestGRPCHealthChecksForRustServices
+			// and TestHealthzForGoServices); specs without one are valid.
 			if len(spec.HealthCmd) == 0 {
-				t.Error("health check command is empty")
+				return
 			}
 
 			// Verify the command format is either CMD (exec) or CMD-SHELL.
