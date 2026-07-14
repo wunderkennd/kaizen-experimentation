@@ -711,6 +711,13 @@ func buildContainerDefsJSON(
 				envKV{Name: "BACKEND_METRICS_URL", Value: "http://m3-metrics.kaizen.local:50056"},
 				envKV{Name: "BACKEND_BANDIT_URL", Value: "http://m4b-policy.kaizen.local:50054"},
 				envKV{Name: "BACKEND_FLAGS_URL", Value: "http://m7-flags.kaizen.local:50057"},
+				envKV{Name: "BACKEND_ASSIGNMENT_URL", Value: "http://m1-assignment.kaizen.local:50051"},
+				// Next.js standalone binds to $HOSTNAME when set, and Docker
+				// injects the container hostname — leaving the server
+				// listening on the ENI address only. Loopback probes
+				// (container health check) then fail even though the ALB
+				// (task-IP) check passes. Force the dual-stack wildcard.
+				envKV{Name: "HOSTNAME", Value: "0.0.0.0"},
 			)
 		}
 
