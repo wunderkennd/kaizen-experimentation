@@ -414,6 +414,10 @@ func NewEdge(
 			Environment: cfg.Environment,
 			Project:     cfg.Project,
 			Env:         cfg.Env,
+			// TlsEnabled gates the cert-validation waiter in dns.go —
+			// omitting it here would zero-value it to false and skip
+			// validation everywhere, including prod.
+			TlsEnabled: cfg.TlsEnabled,
 		},
 	})
 	if err != nil {
