@@ -147,7 +147,10 @@ func serviceSpecs() []serviceSpec {
 			key: "m5", name: "m5-management", ecrKey: "management",
 			cpu: "512", memoryMB: "1024", ports: []int{50055, 50060},
 			lang:      "go",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50055/healthz || exit 1"},
+			// 127.0.0.1, not localhost: alpine resolves localhost to ::1
+			// first and busybox wget tries only that one address, so an
+			// IPv4-only listener would fail every probe.
+			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://127.0.0.1:50055/healthz || exit 1"},
 			tier:      TierFoundation,
 			deps:      nil, // No upstream dependencies.
 		},
@@ -192,7 +195,10 @@ func serviceSpecs() []serviceSpec {
 			key: "m6", name: "m6-ui", ecrKey: "ui",
 			cpu: "512", memoryMB: "1024", ports: []int{3000},
 			lang:      "ts",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:3000/ || exit 1"},
+			// 127.0.0.1 required: Next.js standalone binds 0.0.0.0 (IPv4
+			// only), and busybox wget picks alpine's ::1 for localhost —
+			// the probe never passed and every rollout circuit-broke.
+			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/ || exit 1"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},

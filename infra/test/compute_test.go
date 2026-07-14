@@ -170,7 +170,7 @@ func TestHealthzForGoServices(t *testing.T) {
 				t.Errorf("service %s: health check type = %q, want \"CMD-SHELL\"", spec.Key, healthCmd[0])
 			}
 
-			expectedCheck := fmt.Sprintf("wget --spider -q http://localhost:%d/healthz || exit 1", cfg.port)
+			expectedCheck := fmt.Sprintf("wget --spider -q http://127.0.0.1:%d/healthz || exit 1", cfg.port)
 			if healthCmd[1] != expectedCheck {
 				t.Errorf("service %s: health check = %q, want %q", spec.Key, healthCmd[1], expectedCheck)
 			}
@@ -209,7 +209,7 @@ func TestM6UIHealthCheck(t *testing.T) {
 			t.Errorf("M6 UI: health check type = %q, want \"CMD-SHELL\"", healthCmd[0])
 		}
 
-		expectedCheck := "wget --spider -q http://localhost:3000/ || exit 1"
+		expectedCheck := "wget --spider -q http://127.0.0.1:3000/ || exit 1"
 		if healthCmd[1] != expectedCheck {
 			t.Errorf("M6 UI: health check = %q, want %q", healthCmd[1], expectedCheck)
 		}
