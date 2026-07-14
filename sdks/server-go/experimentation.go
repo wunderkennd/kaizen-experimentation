@@ -16,13 +16,17 @@
 package experimentation
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
+
+	"connectrpc.com/connect"
+	assignmentv1 "github.com/org/experimentation/gen/go/experimentation/assignment/v1"
+	"github.com/org/experimentation/gen/go/experimentation/assignment/v1/assignmentv1connect"
 )
 
 // ---------------------------------------------------------------------------
@@ -68,11 +72,16 @@ type AssignmentProvider interface {
 // RemoteProvider
 // ---------------------------------------------------------------------------
 
-// RemoteProvider calls the Assignment Service via JSON HTTP.
+// RemoteProvider calls the Assignment Service via a generated ConnectRPC
+// client. ADR-031 #644 retired the hand-rolled JSON POST client that used
+// to live here — the generated `assignmentv1connect.AssignmentServiceClient`
+// speaks Connect/JSON on the wire, matching the same routes previously
+// served by http_json.rs on the Rust side.
 type RemoteProvider struct {
-	baseURL   string
-	timeoutMs int
-	client    *http.Client
+	baseURL    string
+	timeoutMs  int
+	httpClient *http.Client
+	client     assignmentv1connect.AssignmentServiceClient
 }
 
 // NewRemoteProvider creates a provider that calls the Assignment Service.
@@ -81,32 +90,23 @@ func NewRemoteProvider(baseURL string) *RemoteProvider {
 }
 
 func (p *RemoteProvider) Initialize(_ context.Context) error {
-	p.client = &http.Client{
+	p.httpClient = &http.Client{
 		Timeout: time.Duration(p.timeoutMs) * time.Millisecond,
 	}
+	p.client = assignmentv1connect.NewAssignmentServiceClient(p.httpClient, p.baseURL)
 	return nil
 }
 
-// assignmentJSONRequest matches the server's JSON API request format.
-type assignmentJSONRequest struct {
-	UserID       string            `json:"userId"`
-	ExperimentID string            `json:"experimentId,omitempty"`
-	SessionID    string            `json:"sessionId,omitempty"`
-	Attributes   map[string]string `json:"attributes,omitempty"`
-}
-
-// assignmentJSONResponse matches the server's JSON API response format.
-type assignmentJSONResponse struct {
-	ExperimentID          string  `json:"experimentId"`
-	VariantID             string  `json:"variantId"`
-	PayloadJSON           string  `json:"payloadJson"`
-	AssignmentProbability float64 `json:"assignmentProbability"`
-	IsActive              bool    `json:"isActive"`
-}
-
-// assignmentsJSONResponse wraps the bulk response.
-type assignmentsJSONResponse struct {
-	Assignments []assignmentJSONResponse `json:"assignments"`
+// notFoundIsNil translates the server's "experiment not found" NotFound
+// into `(nil, nil)`. The old JSON path collapsed any non-200 to nil; the
+// Connect client surfaces a typed error, so we distinguish NotFound
+// (semantically absent) from transport failures (return the error).
+func notFoundIsNil(err error) error {
+	var connectErr *connect.Error
+	if errors.As(err, &connectErr) && connectErr.Code() == connect.CodeNotFound {
+		return nil
+	}
+	return err
 }
 
 func (p *RemoteProvider) GetAssignment(ctx context.Context, experimentID string, attrs UserAttributes) (*Assignment, error) {
@@ -114,52 +114,33 @@ func (p *RemoteProvider) GetAssignment(ctx context.Context, experimentID string,
 		return nil, fmt.Errorf("provider not initialized")
 	}
 
-	url := p.baseURL + "/experimentation.assignment.v1.AssignmentService/GetAssignment"
-	reqBody := assignmentJSONRequest{
-		UserID:       attrs.UserID,
-		ExperimentID: experimentID,
+	resp, err := p.client.GetAssignment(ctx, connect.NewRequest(&assignmentv1.GetAssignmentRequest{
+		UserId:       attrs.UserID,
+		ExperimentId: experimentID,
 		Attributes:   flattenProps(attrs.Properties),
-	}
-	bodyBytes, err := json.Marshal(reqBody)
+	}))
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		if e := notFoundIsNil(err); e == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("connect GetAssignment: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, nil
-	}
-
-	var data assignmentJSONResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	if !data.IsActive || data.VariantID == "" {
+	data := resp.Msg
+	if !data.IsActive || data.VariantId == "" {
 		return nil, nil
 	}
 
 	var payload map[string]any
-	if data.PayloadJSON != "" {
-		if err := json.Unmarshal([]byte(data.PayloadJSON), &payload); err != nil {
+	if data.PayloadJson != "" {
+		if err := json.Unmarshal([]byte(data.PayloadJson), &payload); err != nil {
 			payload = nil
 		}
 	}
 
 	return &Assignment{
-		ExperimentID: data.ExperimentID,
-		VariantName:  data.VariantID,
+		ExperimentID: data.ExperimentId,
+		VariantName:  data.VariantId,
 		Payload:      payload,
 		FromCache:    false,
 	}, nil
@@ -170,51 +151,31 @@ func (p *RemoteProvider) GetAllAssignments(ctx context.Context, attrs UserAttrib
 		return nil, fmt.Errorf("provider not initialized")
 	}
 
-	url := p.baseURL + "/experimentation.assignment.v1.AssignmentService/GetAssignments"
-	reqBody := assignmentJSONRequest{
-		UserID:     attrs.UserID,
+	resp, err := p.client.GetAssignments(ctx, connect.NewRequest(&assignmentv1.GetAssignmentsRequest{
+		UserId:     attrs.UserID,
 		Attributes: flattenProps(attrs.Properties),
-	}
-	bodyBytes, err := json.Marshal(reqBody)
+	}))
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		if e := notFoundIsNil(err); e == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("connect GetAssignments: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, nil
-	}
-
-	var data assignmentsJSONResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	results := make(map[string]*Assignment, len(data.Assignments))
-	for _, a := range data.Assignments {
-		if !a.IsActive || a.VariantID == "" {
+	results := make(map[string]*Assignment, len(resp.Msg.Assignments))
+	for _, a := range resp.Msg.Assignments {
+		if !a.IsActive || a.VariantId == "" {
 			continue
 		}
 		var payload map[string]any
-		if a.PayloadJSON != "" {
-			if err := json.Unmarshal([]byte(a.PayloadJSON), &payload); err != nil {
+		if a.PayloadJson != "" {
+			if err := json.Unmarshal([]byte(a.PayloadJson), &payload); err != nil {
 				payload = nil
 			}
 		}
-		results[a.ExperimentID] = &Assignment{
-			ExperimentID: a.ExperimentID,
-			VariantName:  a.VariantID,
+		results[a.ExperimentId] = &Assignment{
+			ExperimentID: a.ExperimentId,
+			VariantName:  a.VariantId,
 			Payload:      payload,
 			FromCache:    false,
 		}
@@ -223,8 +184,8 @@ func (p *RemoteProvider) GetAllAssignments(ctx context.Context, attrs UserAttrib
 }
 
 func (p *RemoteProvider) Close() error {
-	if p.client != nil {
-		p.client.CloseIdleConnections()
+	if p.httpClient != nil {
+		p.httpClient.CloseIdleConnections()
 	}
 	return nil
 }

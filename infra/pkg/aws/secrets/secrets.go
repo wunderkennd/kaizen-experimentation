@@ -7,6 +7,7 @@ package secrets
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/kaizen-experimentation/infra/pkg/config"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/secretsmanager"
@@ -32,6 +33,11 @@ type DatabaseSecret struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Dbname   string `json:"dbname"`
+	// URL is the assembled DSN. Services read a single connection-string
+	// env var (DATABASE_URL / POSTGRES_URL), injected via ECS secret
+	// JSON-key extraction ("<arn>:url::") — ECS cannot compose a DSN from
+	// the discrete fields at task start.
+	URL string `json:"url"`
 }
 
 // KafkaSecret holds SASL/SCRAM credentials and bootstrap servers for MSK.
@@ -40,6 +46,10 @@ type KafkaSecret struct {
 	SaslPassword     string `json:"sasl_password"`
 	SaslMechanism    string `json:"sasl_mechanism"`
 	BootstrapBrokers string `json:"bootstrap_brokers"`
+	// SaslJaasConfig is the pre-assembled JAAS line consumed directly by
+	// JVM Kafka clients (Schema Registry injects it as
+	// SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG via "<arn>:sasl_jaas_config::").
+	SaslJaasConfig string `json:"sasl_jaas_config"`
 }
 
 // RedisSecret holds the AUTH token and endpoint for ElastiCache Redis.
@@ -62,6 +72,9 @@ type AuthSecret struct {
 type SecretsInputs struct {
 	// RDS endpoint (host:port format from the RDS instance).
 	RdsEndpoint pulumi.StringOutput
+	// RdsMasterPassword is the master-user password generated in the
+	// database stage (secret output).
+	RdsMasterPassword pulumi.StringOutput
 	// MSK bootstrap broker connection string.
 	MskBootstrapBrokers pulumi.StringOutput
 	// Redis primary endpoint address.
@@ -73,6 +86,10 @@ type SecretsInputs struct {
 	// matches the streaming provider in use so service clients can
 	// authenticate against the actual cluster.
 	KafkaSaslUsername string
+	// KafkaSaslPassword is the matching SASL/SCRAM password (secret
+	// config output) — the same value registered with the cluster's SCRAM
+	// association, so the app-facing secret carries the real credential.
+	KafkaSaslPassword pulumi.StringOutput
 }
 
 // NewSecrets creates all four Secrets Manager secrets with environment-
@@ -90,15 +107,23 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 		return nil, err
 	}
 
-	// Database secret version: wire actual RDS endpoint.
-	dbSecretValue := inputs.RdsEndpoint.ApplyT(func(endpoint string) (string, error) {
+	// Database secret version: wire actual RDS endpoint and the real
+	// master password from the database stage.
+	dbSecretValue := pulumi.All(inputs.RdsEndpoint, inputs.RdsMasterPassword).ApplyT(func(vals []interface{}) (string, error) {
+		endpoint := vals[0].(string)
+		password := vals[1].(string)
 		v := DatabaseSecret{
 			Engine:   "postgres",
 			Host:     endpoint,
 			Port:     5432,
 			Username: "kaizen_admin",
-			Password: "CHANGE_ME",
+			Password: password,
 			Dbname:   "kaizen",
+			// endpoint is host:port; the DSN host segment accepts that
+			// form directly. Password is percent-encoded — the generated
+			// charset includes DSN-hostile characters.
+			URL: fmt.Sprintf("postgres://kaizen_admin:%s@%s/kaizen?sslmode=require",
+				url.QueryEscape(password), endpoint),
 		}
 		b, err := json.Marshal(v)
 		if err != nil {
@@ -123,12 +148,17 @@ func NewSecrets(ctx *pulumi.Context, cfg *config.Config, inputs *SecretsInputs) 
 	// Kafka secret version: wire actual bootstrap brokers + streaming-provider
 	// SASL username (kaizen-msk-user for MSK, the Redpanda admin for Redpanda).
 	saslUsername := inputs.KafkaSaslUsername
-	kafkaSecretValue := inputs.MskBootstrapBrokers.ApplyT(func(brokers string) (string, error) {
+	kafkaSecretValue := pulumi.All(inputs.MskBootstrapBrokers, inputs.KafkaSaslPassword).ApplyT(func(vals []interface{}) (string, error) {
+		brokers := vals[0].(string)
+		saslPassword := vals[1].(string)
 		v := KafkaSecret{
 			SaslUsername:     saslUsername,
-			SaslPassword:     "CHANGE_ME",
+			SaslPassword:     saslPassword,
 			SaslMechanism:    "SCRAM-SHA-512",
 			BootstrapBrokers: brokers,
+			SaslJaasConfig: fmt.Sprintf(
+				`org.apache.kafka.common.security.scram.ScramLoginModule required username="%s" password="%s";`,
+				saslUsername, saslPassword),
 		}
 		b, err := json.Marshal(v)
 		if err != nil {

@@ -46,6 +46,17 @@ type ServicesArgs struct {
 	KafkaSecretArn    pulumi.StringOutput
 	RedisSecretArn    pulumi.StringOutput
 	AuthSecretArn     pulumi.StringOutput
+	// KafkaBrokers is the bootstrap list injected as KAFKA_BROKERS.
+	// Dev wires the unauthenticated plaintext listener here — services
+	// carry no SASL/TLS Kafka client wiring yet.
+	KafkaBrokers pulumi.StringOutput
+	// TargetGroupArns maps spec key (m1, m5, m6, m7) → ALB target group
+	// ARN. Services with an entry here register tasks with the ALB.
+	TargetGroupArns map[string]pulumi.StringOutput
+	// LbRuleDeps are the listener-rule resources that attach the target
+	// groups to the load balancer — ECS validates the attachment at
+	// service create/update, so LB-facing services depend on these.
+	LbRuleDeps []pulumi.Resource
 	// DesiredCount is the initial task count per service.
 	DesiredCount int
 	// PreDeployDeps lists resources that must complete before the M5
@@ -117,12 +128,16 @@ type healthDep struct {
 // m5Dep is the health dependency on M5 Management (HTTP healthz).
 var m5Dep = healthDep{name: "M5", host: "m5-management.kaizen.local", port: 50055, proto: "http", path: "/healthz"}
 
-// tier1Deps are the health dependencies on Tier 1 services (M1, M2, M4b).
-// Used by Tier 2 services. M4b is included because it is logically Tier 1.
+// tier1Deps are the health dependencies on Tier 1 services (M1, M2).
+// Used by Tier 2 services. M4b is logically Tier 1 too, but no ECS
+// task/service for it exists yet — only its ASG, capacity provider, and
+// Cloud Map name (m4b.go provisions operational resources only). Gating
+// on a DNS name nothing registers deadlocks all of Tier 2, so M4b stays
+// out of the gate until the real EC2 service ships; consumers dial it
+// lazily via M4B_POLICY_ENDPOINT and degrade until then.
 var tier1Deps = []healthDep{
 	{name: "M1", host: "m1-assignment.kaizen.local", port: 50051, proto: "tcp"},
 	{name: "M2", host: "m2-pipeline.kaizen.local", port: 50052, proto: "tcp"},
-	{name: "M4b", host: "m4b-policy.kaizen.local", port: 50054, proto: "tcp"},
 }
 
 func serviceSpecs() []serviceSpec {
@@ -141,7 +156,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m1", name: "m1-assignment", ecrKey: "assignment",
 			cpu: "512", memoryMB: "1024", ports: []int{50051},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50051"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -149,7 +163,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m2", name: "m2-pipeline", ecrKey: "pipeline",
 			cpu: "512", memoryMB: "1024", ports: []int{50052},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50052"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -157,7 +170,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m2-orch", name: "m2-orchestration", ecrKey: "orchestration",
 			cpu: "256", memoryMB: "512", ports: []int{50058},
 			lang:      "go",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50058/healthz || exit 1"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -166,7 +178,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m3", name: "m3-metrics", ecrKey: "metrics",
 			cpu: "1024", memoryMB: "2048", ports: []int{50056, 50059},
 			lang:      "go",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50056/healthz || exit 1"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},
@@ -174,7 +185,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m4a", name: "m4a-analysis", ecrKey: "analysis",
 			cpu: "1024", memoryMB: "2048", ports: []int{50053},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50053"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},
@@ -190,7 +200,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m7", name: "m7-flags", ecrKey: "flags",
 			cpu: "256", memoryMB: "512", ports: []int{50057},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50057"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},
@@ -549,10 +558,32 @@ func newFargateService(
 		svcArgs.HealthCheckGracePeriodSeconds = pulumi.Int(120)
 	}
 
+	// ALB attachment for public-facing services: register tasks with the
+	// service's target group. Requires the TG to already be attached to
+	// the load balancer (via a listener rule) — LbRuleDeps carries that
+	// ordering.
+	if tgArn, ok := args.TargetGroupArns[spec.key]; ok {
+		svcArgs.LoadBalancers = ecs.ServiceLoadBalancerArray{
+			&ecs.ServiceLoadBalancerArgs{
+				TargetGroupArn: tgArn,
+				ContainerName:  pulumi.String(spec.name),
+				ContainerPort:  pulumi.Int(spec.ports[0]),
+			},
+		}
+		// The ALB health check needs the same grace period the gated
+		// services get, or slow-booting containers get cycled.
+		if svcArgs.HealthCheckGracePeriodSeconds == nil {
+			svcArgs.HealthCheckGracePeriodSeconds = pulumi.Int(120)
+		}
+	}
+
 	// Build Pulumi resource options: DependsOn from previous tier.
 	var opts []pulumi.ResourceOption
 	if len(pulumiDeps) > 0 {
 		opts = append(opts, pulumi.DependsOn(pulumiDeps))
+	}
+	if _, ok := args.TargetGroupArns[spec.key]; ok && len(args.LbRuleDeps) > 0 {
+		opts = append(opts, pulumi.DependsOn(args.LbRuleDeps))
 	}
 
 	ecsSvc, err := ecs.NewService(ctx, fmt.Sprintf("svc-%s", spec.name), svcArgs, opts...)
@@ -592,6 +623,7 @@ func buildContainerDefsJSON(
 		args.KafkaSecretArn,
 		args.RedisSecretArn,
 		args.AuthSecretArn,
+		args.KafkaBrokers,
 	}
 
 	// If this service has deps, we also need the healthgate ECR URL.
@@ -609,10 +641,11 @@ func buildContainerDefsJSON(
 		kafkaSecretArn := vals[3].(string)
 		redisSecretArn := vals[4].(string)
 		authSecretArn := vals[5].(string)
+		kafkaBrokers, _ := vals[6].(string)
 
 		var gateImageURL string
-		if hasGate && len(vals) > 6 {
-			gateImageURL = vals[6].(string)
+		if hasGate && len(vals) > 7 {
+			gateImageURL = vals[7].(string)
 		}
 
 		logConfig := logCfg{
@@ -651,6 +684,30 @@ func buildContainerDefsJSON(
 			envVars = append(envVars, envKV{Name: k, Value: v})
 		}
 
+		// Kafka bootstrap servers — every backend reads KAFKA_BROKERS.
+		if kafkaBrokers != "" {
+			envVars = append(envVars, envKV{Name: "KAFKA_BROKERS", Value: kafkaBrokers})
+		}
+
+		// Per-service aliases: env names the app binaries actually read
+		// (surveyed from cmd/main.go of each service), where the generic
+		// *_ENDPOINT names above don't match.
+		switch spec.key {
+		case "m5":
+			envVars = append(envVars,
+				envKV{Name: "ANALYSIS_SERVICE_URL", Value: "m4a-analysis.kaizen.local:50053"},
+				envKV{Name: "BANDIT_SERVICE_URL", Value: "m4b-policy.kaizen.local:50054"},
+			)
+		case "m6":
+			envVars = append(envVars,
+				envKV{Name: "BACKEND_MANAGEMENT_URL", Value: "http://m5-management.kaizen.local:50055"},
+				envKV{Name: "BACKEND_ANALYSIS_URL", Value: "http://m4a-analysis.kaizen.local:50053"},
+				envKV{Name: "BACKEND_METRICS_URL", Value: "http://m3-metrics.kaizen.local:50056"},
+				envKV{Name: "BACKEND_BANDIT_URL", Value: "http://m4b-policy.kaizen.local:50054"},
+				envKV{Name: "BACKEND_FLAGS_URL", Value: "http://m7-flags.kaizen.local:50057"},
+			)
+		}
+
 		// Tell the app container to send OTLP traces to the ADOT sidecar.
 		envVars = append(envVars, envKV{
 			Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -661,13 +718,20 @@ func buildContainerDefsJSON(
 			Value: spec.name,
 		})
 
-		// Secrets from Secrets Manager (injected by ECS agent at task start).
+		// Secrets from Secrets Manager (injected by ECS agent at task
+		// start). Services read a single DSN env var, so extract the
+		// assembled `url` key: Go M5 and the Rust crates read
+		// DATABASE_URL, Go M3/M2-orchestration read POSTGRES_URL —
+		// injecting both names everywhere avoids a per-service matrix.
+		// SASL creds ride along for services that grow Kafka auth later.
 		secrets := []secretRef{
-			{Name: "DATABASE_SECRET", ValueFrom: dbSecretArn},
-			{Name: "KAFKA_SECRET", ValueFrom: kafkaSecretArn},
-			{Name: "REDIS_SECRET", ValueFrom: redisSecretArn},
-			{Name: "AUTH_SECRET", ValueFrom: authSecretArn},
+			{Name: "DATABASE_URL", ValueFrom: dbSecretArn + ":url::"},
+			{Name: "POSTGRES_URL", ValueFrom: dbSecretArn + ":url::"},
+			{Name: "KAFKA_SASL_USERNAME", ValueFrom: kafkaSecretArn + ":sasl_username::"},
+			{Name: "KAFKA_SASL_PASSWORD", ValueFrom: kafkaSecretArn + ":sasl_password::"},
 		}
+		_ = redisSecretArn
+		_ = authSecretArn
 
 		// Build the container list.
 		var containers []containerDef
@@ -704,13 +768,21 @@ func buildContainerDefsJSON(
 			LogConfiguration: logConfig,
 			Environment:      envVars,
 			Secrets:          secrets,
-			HealthCheck: &healthCheck{
+		}
+		// Container health checks only where the runtime image can execute
+		// them (m5 alpine + m6 node:alpine have busybox wget). Distroless
+		// and debian-slim images ship neither a shell nor grpc_health_probe,
+		// so a declared check would fail every probe and the deployment
+		// circuit breaker would kill otherwise-healthy rollouts. Liveness
+		// for the rest rides on ALB target health + health-gate sidecars.
+		if len(spec.healthCmd) > 0 {
+			mainDef.HealthCheck = &healthCheck{
 				Command:     spec.healthCmd,
 				Interval:    30,
 				Timeout:     5,
 				Retries:     3,
 				StartPeriod: 60,
-			},
+			}
 		}
 
 		// Chain main container to health-gate via container-level dependsOn.

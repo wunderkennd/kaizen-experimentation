@@ -48,6 +48,13 @@ type AutoscalingArgs struct {
 	// M7TargetGroupFullName is the target group full name for M7 Flags.
 	M7TargetGroupFullName pulumi.StringInput
 
+	// AlbAttached reports whether the M1/M7 target groups actually route
+	// traffic (rules + ECS attachment). False in dev tlsEnabled=false mode:
+	// gRPC target groups can't sit behind the plaintext :80 listener, and
+	// PutScalingPolicy rejects ALBRequestCountPerTarget on an unattached
+	// target group. M1/M7 then fall back to CPU tracking.
+	AlbAttached bool
+
 	// DependsOn carries the ECS service resources. Scaling targets address
 	// services via constructed ResourceId strings, so without these edges
 	// target creation races service creation ("ECS service doesn't exist").
@@ -106,7 +113,7 @@ func NewAutoscaling(ctx *pulumi.Context, args *AutoscalingArgs) (*AutoscalingOut
 		config  ServiceScalingConfig
 	}{
 		{"m2", "m2-pipeline", args.M2Pipeline},
-		{"m2-orch", "m2-orch", args.M2Orch},
+		{"m2-orch", "m2-orchestration", args.M2Orch}, // name must match services.go spec.name, not the key
 		{"m3", "m3-metrics", args.M3Metrics},
 		{"m4a", "m4a-analysis", args.M4aAnalysis},
 		{"m5", "m5-management", args.M5Management},
@@ -134,12 +141,23 @@ func NewAutoscaling(ctx *pulumi.Context, args *AutoscalingArgs) (*AutoscalingOut
 	}
 
 	for _, svc := range albServices {
-		target, policy, err := newALBScalingPolicy(
-			ctx, prefix, svc.key, svc.service,
-			args.ClusterName, svc.config,
-			args.ALBFullName, svc.targetGroupFull,
-			args.Environment, args.DependsOn,
-		)
+		var target *appautoscaling.Target
+		var policy *appautoscaling.Policy
+		var err error
+		if args.AlbAttached {
+			target, policy, err = newALBScalingPolicy(
+				ctx, prefix, svc.key, svc.service,
+				args.ClusterName, svc.config,
+				args.ALBFullName, svc.targetGroupFull,
+				args.Environment, args.DependsOn,
+			)
+		} else {
+			target, policy, err = newCPUScalingPolicy(
+				ctx, prefix, svc.key, svc.service,
+				args.ClusterName, svc.config,
+				args.Environment, args.DependsOn,
+			)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("creating ALB autoscaling for %s: %w", svc.key, err)
 		}

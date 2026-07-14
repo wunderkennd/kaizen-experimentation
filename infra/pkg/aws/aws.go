@@ -152,9 +152,10 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 	}
 	ctx.Export("rdsEndpoint", out.RdsEndpoint)
 	return types.DatabaseOutputs{
-		Endpoint:   out.RdsEndpoint,
-		Port:       out.RdsPort,
-		InstanceId: out.RdsInstanceId,
+		Endpoint:       out.RdsEndpoint,
+		Port:           out.RdsPort,
+		InstanceId:     out.RdsInstanceId,
+		MasterPassword: out.RdsMasterPassword,
 	}, nil
 }
 
@@ -164,10 +165,15 @@ func NewDatabase(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkO
 // later by NewSchemaRegistry once compute is up.
 func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.NetworkOutputs) (types.StreamingOutputs, error) {
 	mskSgArr := pulumi.StringArray{netOut.SecurityGroupIds["msk"].ToStringOutput()}
+	kafkaCfg := pulumiconfig.New(ctx, "kafka")
 	out, err := streaming.NewMskCluster(ctx, "kaizen", &streaming.MskInputs{
 		SubnetIds:        netOut.PrivateSubnetIds,
 		SecurityGroupIds: mskSgArr,
-		KafkaSecretArn:   nil, // SCRAM association wired after secrets are created.
+		// The streaming module owns the AmazonMSK_* SCRAM secret +
+		// association (MSK requires a customer-KMS secret with that name
+		// prefix, which the app-facing kafka secret is not).
+		SaslUsername: kafkaCfg.Require("saslUsername"),
+		SaslPassword: kafkaCfg.RequireSecret("saslPassword"),
 		Config: kconfig.MskConfig{
 			KafkaVersion:  "3.6.0",
 			BrokerCount:   cfg.MskBrokerCount,
@@ -178,6 +184,7 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 			// kafka:Topic resources are gated off (no broker
 			// reachability from outside the VPC).
 			AutoCreateTopics: !cfg.ManageKafkaTopics,
+			AllowPlaintext:   cfg.MskAllowPlaintext,
 		},
 		Tags: kconfig.DefaultTags(cfg.Environment),
 	})
@@ -187,9 +194,10 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 	ctx.Export("mskBootstrapBrokers", out.MskBootstrapBrokers)
 	ctx.Export("mskClusterArn", out.MskClusterArn)
 	return types.StreamingOutputs{
-		BootstrapBrokers: out.MskBootstrapBrokers,
-		ClusterArn:       out.MskClusterArn,
-		ClusterName:      out.MskClusterName,
+		BootstrapBrokers:          out.MskBootstrapBrokers,
+		BootstrapBrokersPlaintext: out.MskBootstrapBrokersPlaintext,
+		ClusterArn:                out.MskClusterArn,
+		ClusterName:               out.MskClusterName,
 	}, nil
 }
 
@@ -199,20 +207,25 @@ func NewKafkaCluster(ctx *pulumi.Context, cfg *kconfig.Config, netOut types.Netw
 // cluster (MSK or Redpanda) the stack is wired to.
 func NewSecrets(ctx *pulumi.Context, cfg *kconfig.Config, dbOut types.DatabaseOutputs, streamOut types.StreamingOutputs, cacheOut types.CacheOutputs) (types.SecretsOutputs, error) {
 	var kafkaSaslUsername string
+	var kafkaSaslPassword pulumi.StringOutput
 	switch cfg.StreamingProvider {
 	case "redpanda":
 		kafkaSaslUsername = pulumiconfig.New(ctx, "redpanda").Require("kafkaUsername")
+		kafkaSaslPassword = pulumiconfig.New(ctx, "redpanda").RequireSecret("kafkaPassword")
 	default:
-		// MSK (and the historical default) reads the username from the
-		// kafka:saslUsername key — the same config NewKafkaTopics uses
-		// when authenticating the topic-provisioning provider.
+		// MSK (and the historical default) reads the credentials from the
+		// kafka:saslUsername/saslPassword keys — the same values the SCRAM
+		// secret association registers with the cluster.
 		kafkaSaslUsername = pulumiconfig.New(ctx, "kafka").Require("saslUsername")
+		kafkaSaslPassword = pulumiconfig.New(ctx, "kafka").RequireSecret("saslPassword")
 	}
 	out, err := secrets.NewSecrets(ctx, cfg, &secrets.SecretsInputs{
 		RdsEndpoint:         dbOut.Endpoint,
+		RdsMasterPassword:   dbOut.MasterPassword,
 		MskBootstrapBrokers: streamOut.BootstrapBrokers,
 		RedisEndpoint:       cacheOut.Endpoint,
 		KafkaSaslUsername:   kafkaSaslUsername,
+		KafkaSaslPassword:   kafkaSaslPassword,
 	})
 	if err != nil {
 		return types.SecretsOutputs{}, err
@@ -265,6 +278,8 @@ func NewCompute(
 	netOut types.NetworkOutputs,
 	cicdOut types.CICDOutputs,
 	secretsOut types.SecretsOutputs,
+	streamOut types.StreamingOutputs,
+	tgOut *loadbalancer.TargetGroupOutputs,
 ) (types.ComputeOutputs, *compute.ServicesOutputs, error) {
 	clusterOut, err := compute.NewCluster(ctx, &compute.ClusterArgs{
 		Environment:        cfg.Environment,
@@ -302,8 +317,11 @@ func NewCompute(
 		KafkaSecretArn:    secretsOut.KafkaSecretRef,
 		RedisSecretArn:    secretsOut.RedisSecretRef,
 		AuthSecretArn:     secretsOut.AuthSecretRef,
-		DesiredCount:      cfg.FargateMinTasks,
-		PreDeployDeps:     []pulumi.Resource{migOut.RunCommand},
+		KafkaBrokers:      streamOut.BootstrapBrokersPlaintext,
+		TargetGroupArns: lbAttachableTargetGroups(cfg, tgOut),
+		LbRuleDeps:    tgOut.Rules,
+		DesiredCount:  cfg.FargateMinTasks,
+		PreDeployDeps: []pulumi.Resource{migOut.RunCommand},
 	})
 	if err != nil {
 		return types.ComputeOutputs{}, nil, err
@@ -363,6 +381,23 @@ func NewSchemaRegistry(
 	return out.SchemaRegistryUrl, out.ServiceName, nil
 }
 
+// lbAttachableTargetGroups returns the target groups ECS services may attach
+// to. In dev tlsEnabled=false mode the gRPC target groups (M1, M7) carry no
+// listener rules — ALB forbids GRPC/HTTP2 protocol versions behind the
+// plaintext :80 listener — and ECS rejects a LoadBalancers entry whose target
+// group is not attached to a load balancer.
+func lbAttachableTargetGroups(cfg *kconfig.Config, tgOut *loadbalancer.TargetGroupOutputs) map[string]pulumi.StringOutput {
+	arns := map[string]pulumi.StringOutput{
+		"m5": tgOut.M5ManagementTgArn,
+		"m6": tgOut.M6UITgArn,
+	}
+	if cfg.TlsEnabled {
+		arns["m1"] = tgOut.M1AssignmentTgArn
+		arns["m7"] = tgOut.M7FlagsTgArn
+	}
+	return arns
+}
+
 // ─── Stage 6: Edge + Observability ──────────────────────────────────────────
 
 // NewEdge creates DNS, ALB, DNS aliases, target groups, and (conditionally) WAF.
@@ -379,6 +414,10 @@ func NewEdge(
 			Environment: cfg.Environment,
 			Project:     cfg.Project,
 			Env:         cfg.Env,
+			// TlsEnabled gates the cert-validation waiter in dns.go —
+			// omitting it here would zero-value it to false and skip
+			// validation everywhere, including prod.
+			TlsEnabled: cfg.TlsEnabled,
 		},
 	})
 	if err != nil {
@@ -393,6 +432,7 @@ func NewEdge(
 		CertificateArn:  dnsOut.CertificateArn,
 		LogsBucketName:  storageOut.LogsBucketName,
 		Environment:     cfg.Environment,
+		TlsEnabled:      cfg.TlsEnabled,
 	})
 	if err != nil {
 		return types.EdgeOutputs{}, nil, err
@@ -414,6 +454,7 @@ func NewEdge(
 		HttpsListenerArn: albOut.HttpsListenerArn,
 		Domain:           cfg.Domain,
 		Environment:      cfg.Environment,
+		TlsEnabled:       cfg.TlsEnabled,
 	})
 	if err != nil {
 		return types.EdgeOutputs{}, nil, err
@@ -457,6 +498,7 @@ func NewAutoscaling(
 	args.ALBFullName = albArnSuffix
 	args.M1TargetGroupFullName = tgOut.M1AssignmentTgArnSuffix
 	args.M7TargetGroupFullName = tgOut.M7FlagsTgArnSuffix
+	args.AlbAttached = cfg.TlsEnabled
 	if svcOut != nil {
 		args.DependsOn = svcOut.AllServiceResources
 	}

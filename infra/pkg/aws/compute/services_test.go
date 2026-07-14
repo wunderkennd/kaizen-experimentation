@@ -125,7 +125,9 @@ func TestTier2DependsOnTier1Services(t *testing.T) {
 	requiredHosts := map[string]bool{
 		"m1-assignment.kaizen.local": true,
 		"m2-pipeline.kaizen.local":   true,
-		"m4b-policy.kaizen.local":    true,
+		// m4b-policy is deliberately absent: no ECS service exists for it
+		// yet, and gating on an unregistered DNS name deadlocks Tier 2
+		// (see tier1Deps in services.go).
 	}
 
 	for _, s := range specs {
@@ -308,8 +310,17 @@ func TestAllSpecsHaveRequiredFields(t *testing.T) {
 		if s.lang == "" {
 			t.Errorf("spec %q has empty lang", s.key)
 		}
-		if len(s.healthCmd) == 0 {
-			t.Errorf("spec %q has no healthCmd", s.key)
+		// Container health checks exist only where the runtime image can
+		// execute them: m5 (alpine) and m6 (node:alpine) carry busybox
+		// wget. Distroless/debian-slim images have no shell and no
+		// grpc_health_probe, so a declared check would fail every probe
+		// and the circuit breaker would kill healthy rollouts.
+		canProbe := map[string]bool{"m5": true, "m6": true}
+		if canProbe[s.key] && len(s.healthCmd) == 0 {
+			t.Errorf("spec %q should declare a healthCmd (image has wget)", s.key)
+		}
+		if !canProbe[s.key] && len(s.healthCmd) != 0 {
+			t.Errorf("spec %q declares healthCmd its image cannot run", s.key)
 		}
 	}
 }

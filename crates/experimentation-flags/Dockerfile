@@ -1,0 +1,14 @@
+# Multi-stage build for minimal runtime image.
+FROM rust:1.88-slim as builder
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY proto/ proto/
+RUN apt-get update && apt-get install -y protobuf-compiler cmake g++ libssl-dev libcurl4-openssl-dev pkg-config
+RUN cargo build --release --package experimentation-flags
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/target/release/experimentation-flags /usr/local/bin/service
+EXPOSE 50057
+CMD ["service"]

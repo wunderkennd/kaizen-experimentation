@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
+	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 
@@ -20,6 +21,8 @@ type DatabaseOutputs struct {
 	RdsEndpoint   pulumi.StringOutput
 	RdsPort       pulumi.IntOutput
 	RdsInstanceId pulumi.StringOutput
+	// RdsMasterPassword is a secret output consumed by the secrets stage.
+	RdsMasterPassword pulumi.StringOutput
 }
 
 // RdsInputs contains optional overrides injected by the caller (main.go) once
@@ -104,6 +107,22 @@ func NewRds(ctx *pulumi.Context, kcfg *kconfig.KaizenConfig, inputs *RdsInputs) 
 		subnetGroupName = sg.Name
 	}
 
+	// --- Master password ---
+	// Generated here (not ManageMasterUserPassword) so the secrets stage
+	// can embed the real credential in the app-facing database secret,
+	// which carries host/port/dbname alongside it. The RDS-managed secret
+	// can't serve that role: its JSON has only username/password and it
+	// force-rotates every 7 days, stranding any copy.
+	// Special chars restricted to those RDS accepts (no '/', '@', '"', ' ').
+	masterPassword, err := random.NewRandomPassword(ctx, "kaizen-rds-master-password", &random.RandomPasswordArgs{
+		Length:          pulumi.Int(32),
+		Special:         pulumi.Bool(true),
+		OverrideSpecial: pulumi.String("!#$%&*()-_=+[]{}<>:?"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating RDS master password: %w", err)
+	}
+
 	// --- RDS instance ---
 	instanceArgs := &rds.InstanceArgs{
 		Engine:               pulumi.String("postgres"),
@@ -115,7 +134,7 @@ func NewRds(ctx *pulumi.Context, kcfg *kconfig.KaizenConfig, inputs *RdsInputs) 
 		StorageEncrypted:     pulumi.Bool(true),
 		DbName:               pulumi.String("kaizen"),
 		Username:             pulumi.String("kaizen_admin"),
-		ManageMasterUserPassword: pulumi.Bool(true),
+		Password:             masterPassword.Result,
 		ParameterGroupName:  paramGroup.Name,
 		MultiAz:             pulumi.Bool(multiAz),
 		DeletionProtection:  pulumi.Bool(deletionProtection),
@@ -150,8 +169,9 @@ func NewRds(ctx *pulumi.Context, kcfg *kconfig.KaizenConfig, inputs *RdsInputs) 
 	}
 
 	return &DatabaseOutputs{
-		RdsEndpoint:   instance.Endpoint,
-		RdsPort:       instance.Port,
-		RdsInstanceId: instance.Identifier,
+		RdsEndpoint:       instance.Endpoint,
+		RdsPort:           instance.Port,
+		RdsInstanceId:     instance.Identifier,
+		RdsMasterPassword: masterPassword.Result,
 	}, nil
 }

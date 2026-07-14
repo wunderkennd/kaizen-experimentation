@@ -29,6 +29,12 @@ type TargetGroupInputs struct {
 	Domain string
 	// Environment name used for resource naming and tagging.
 	Environment string
+	// TlsEnabled mirrors the ALB mode. ALB rejects GRPC/HTTP2
+	// protocol-version target groups behind a plaintext listener
+	// ("InvalidLoadBalancerAction: Listener protocol 'HTTP' is not
+	// supported…"), so when false the gRPC rules (M1, M7) are skipped and
+	// M5 falls back to HTTP/1.1 (ConnectRPC unary + /healthz both work).
+	TlsEnabled bool
 }
 
 // TargetGroupOutputs are exported for ECS service registration and monitoring.
@@ -45,6 +51,11 @@ type TargetGroupOutputs struct {
 	M1AssignmentTgArnSuffix pulumi.StringOutput
 	// M7FlagsTgArnSuffix is the target group ARN suffix for ALBRequestCountPerTarget.
 	M7FlagsTgArnSuffix pulumi.StringOutput
+	// Rules are the listener-rule resources. ECS services referencing the
+	// target groups must depend on these: a target group is only
+	// "attached to a load balancer" (an ECS create/update precondition)
+	// once a rule forwards to it.
+	Rules []pulumi.Resource
 }
 
 // targetGroupSpec defines a service target group configuration.
@@ -67,18 +78,28 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 		"Module":      pulumi.String("loadbalancer"),
 	}
 
+	m5ProtocolVersion := "HTTP2"
+	if !inputs.TlsEnabled {
+		m5ProtocolVersion = "HTTP1" // HTTP2 TGs are invalid behind the plaintext :80 rules listener
+	}
+
 	specs := []targetGroupSpec{
 		{
-			name:               "m1-assignment",
-			port:               50051,
-			protocolVersion:    "GRPC",
-			healthCheckPath:    "/grpc.health.v1.Health/Check",
-			healthCheckMatcher: "0",  // gRPC OK
+			name:            "m1-assignment",
+			port:            50051,
+			protocolVersion: "GRPC",
+			healthCheckPath: "/grpc.health.v1.Health/Check",
+			// M1/M7 don't register grpc.health.v1 (no tonic-health), so a
+			// strict "0" matcher would mark every target unhealthy
+			// (UNIMPLEMENTED=12) and the LB-integrated scheduler would kill
+			// the tasks. Any gRPC status proves the server answers HTTP/2;
+			// tighten back to "0" when tonic-health ships.
+			healthCheckMatcher: "0-99",
 		},
 		{
 			name:               "m5-management",
 			port:               50055,
-			protocolVersion:    "HTTP2",
+			protocolVersion:    m5ProtocolVersion,
 			healthCheckPath:    "/healthz",
 			healthCheckMatcher: "200",
 		},
@@ -90,11 +111,12 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 			healthCheckMatcher: "200",
 		},
 		{
-			name:               "m7-flags",
-			port:               50057,
-			protocolVersion:    "GRPC",
-			healthCheckPath:    "/grpc.health.v1.Health/Check",
-			healthCheckMatcher: "0",
+			name:            "m7-flags",
+			port:            50057,
+			protocolVersion: "GRPC",
+			healthCheckPath: "/grpc.health.v1.Health/Check",
+			// See m1-assignment: no grpc.health.v1 service registered yet.
+			healthCheckMatcher: "0-99",
 		},
 	}
 
@@ -120,15 +142,17 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 	assignHost := fmt.Sprintf("assign.kaizen.%s", inputs.Domain)
 
 	rules := []struct {
-		name     string
-		priority int
-		target   string
-		conditions func() lb.ListenerRuleConditionArray
+		name        string
+		priority    int
+		target      string
+		requiresTls bool // gRPC target groups only route behind an HTTPS listener
+		conditions  func() lb.ListenerRuleConditionArray
 	}{
 		{
-			name:     "m1-host",
-			priority: 10,
-			target:   "m1-assignment",
+			name:        "m1-host",
+			priority:    10,
+			target:      "m1-assignment",
+			requiresTls: true,
 			conditions: func() lb.ListenerRuleConditionArray {
 				return lb.ListenerRuleConditionArray{
 					&lb.ListenerRuleConditionArgs{
@@ -154,9 +178,10 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 			},
 		},
 		{
-			name:     "m7-flags",
-			priority: 30,
-			target:   "m7-flags",
+			name:        "m7-flags",
+			priority:    30,
+			target:      "m7-flags",
+			requiresTls: true,
 			conditions: func() lb.ListenerRuleConditionArray {
 				return lb.ListenerRuleConditionArray{
 					&lb.ListenerRuleConditionArgs{
@@ -183,8 +208,12 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 		},
 	}
 
+	var ruleResources []pulumi.Resource
 	for _, rule := range rules {
-		_, err := lb.NewListenerRule(ctx, fmt.Sprintf("%s-rule-%s", prefix, rule.name), &lb.ListenerRuleArgs{
+		if rule.requiresTls && !inputs.TlsEnabled {
+			continue
+		}
+		lr, err := lb.NewListenerRule(ctx, fmt.Sprintf("%s-rule-%s", prefix, rule.name), &lb.ListenerRuleArgs{
 			ListenerArn: inputs.HttpsListenerArn,
 			Priority:    pulumi.Int(rule.priority),
 			Actions: lb.ListenerRuleActionArray{
@@ -199,9 +228,11 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 		if err != nil {
 			return nil, fmt.Errorf("creating listener rule %q: %w", rule.name, err)
 		}
+		ruleResources = append(ruleResources, lr)
 	}
 
 	return &TargetGroupOutputs{
+		Rules:                   ruleResources,
 		M1AssignmentTgArn:       tgArns["m1-assignment"],
 		M5ManagementTgArn:       tgArns["m5-management"],
 		M6UITgArn:               tgArns["m6-ui"],
@@ -250,7 +281,10 @@ func newTargetGroup(
 		},
 
 		Tags: tags,
-	})
+		// Explicit Name + ForceNew fields (e.g. protocolVersion flipping with
+		// TlsEnabled) would otherwise collide: create-replacement-first hits
+		// "duplicate target group name".
+	}, pulumi.DeleteBeforeReplace(true))
 	if err != nil {
 		return nil, fmt.Errorf("creating target group %q: %w", spec.name, err)
 	}

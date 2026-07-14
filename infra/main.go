@@ -262,6 +262,24 @@ func Deploy(ctx *pulumi.Context) error {
 	}
 
 	// =====================================================================
+	// Stage 5a: Edge (DNS, ALB, target groups) — before compute, because
+	// LB-facing ECS services attach their target groups at creation and
+	// ECS validates that the groups are already LB-associated (listener
+	// rules). Autoscaling/observability stay in Stage 6 (they consume
+	// compute outputs).
+	// =====================================================================
+	var (
+		edgeOut types.EdgeOutputs
+		tgOut   *loadbalancer.TargetGroupOutputs
+	)
+	if cfg.CloudProvider == "aws" {
+		edgeOut, tgOut, err = aws.NewEdge(ctx, cfg, netOut, storageOut)
+		if err != nil {
+			return err
+		}
+	}
+
+	// =====================================================================
 	// Stage 5: Compute (cluster, services, M4b, schema registry)
 	// =====================================================================
 	var (
@@ -272,7 +290,7 @@ func Deploy(ctx *pulumi.Context) error {
 	)
 	switch cfg.CloudProvider {
 	case "aws":
-		computeOut, svcOut, err = aws.NewCompute(ctx, cfg, netOut, cicdOut, secretsOut)
+		computeOut, svcOut, err = aws.NewCompute(ctx, cfg, netOut, cicdOut, secretsOut, streamOut, tgOut)
 		if err != nil {
 			return err
 		}
@@ -293,16 +311,10 @@ func Deploy(ctx *pulumi.Context) error {
 	}
 
 	// =====================================================================
-	// Stage 6: Edge + Observability + HealthGate + Autoscaling
+	// Stage 6: Observability + HealthGate + Autoscaling (edge moved to 5a)
 	// =====================================================================
-	var edgeOut types.EdgeOutputs
 	switch cfg.CloudProvider {
 	case "aws":
-		var tgOut *loadbalancer.TargetGroupOutputs
-		edgeOut, tgOut, err = aws.NewEdge(ctx, cfg, netOut, storageOut)
-		if err != nil {
-			return err
-		}
 		// Autoscaling's ALBRequestCountPerTarget metric needs the ALB ARN
 		// suffix (e.g. "app/kaizen-dev-alb/50dc6c495c0c9188"), not the full
 		// ARN — see types.EdgeOutputs.LoadBalancerArnSuffix.

@@ -236,10 +236,14 @@ func newRedpanda(ctx *pulumi.Context, args *RedpandaInputs) (types.StreamingOutp
 	}
 
 	return types.StreamingOutputs{
-		BootstrapBrokers:  bootstrapBrokers,
-		SchemaRegistryUrl: cluster.SchemaRegistryURL,
-		ClusterArn:        pulumi.String("").ToStringOutput(), // Empty for Redpanda; documented in types.StreamingOutputs.
-		ClusterName:       cluster.Name,
+		BootstrapBrokers: bootstrapBrokers,
+		// Redpanda has no separate unauthenticated listener; reuse the
+		// SASL brokers so the field is never a zero-valued Output when
+		// compute plumbs it into KAFKA_BROKERS.
+		BootstrapBrokersPlaintext: bootstrapBrokers,
+		SchemaRegistryUrl:         cluster.SchemaRegistryURL,
+		ClusterArn:                pulumi.String("").ToStringOutput(), // Empty for Redpanda; documented in types.StreamingOutputs.
+		ClusterName:               cluster.Name,
 	}, nil
 }
 
