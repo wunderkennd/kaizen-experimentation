@@ -1,35 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  async rewrites() {
-    const mgmtUrl = process.env.BACKEND_MANAGEMENT_URL || 'http://localhost:50055';
-    const metricsUrl = process.env.BACKEND_METRICS_URL || 'http://localhost:50056';
-    const analysisUrl = process.env.BACKEND_ANALYSIS_URL || 'http://localhost:50053';
-    const banditUrl = process.env.BACKEND_BANDIT_URL || 'http://localhost:50054';
-    const flagsUrl = process.env.BACKEND_FLAGS_URL || 'http://localhost:50057';
-
-    return [
-      {
-        source: '/api/rpc/management/:path*',
-        destination: `${mgmtUrl}/:path*`,
-      },
-      {
-        source: '/api/rpc/metrics/:path*',
-        destination: `${metricsUrl}/:path*`,
-      },
-      {
-        source: '/api/rpc/analysis/:path*',
-        destination: `${analysisUrl}/:path*`,
-      },
-      {
-        source: '/api/rpc/bandit/:path*',
-        destination: `${banditUrl}/:path*`,
-      },
-      {
-        source: '/api/rpc/flags/:path*',
-        destination: `${flagsUrl}/:path*`,
-      },
-    ];
-  },
+  // NOTE: no rewrites() here. With standalone output, rewrites() runs at
+  // BUILD time and its env-var destinations get frozen into the routes
+  // manifest — deployed containers would proxy /api/rpc/* to the build
+  // machine's localhost regardless of runtime BACKEND_*_URL values.
+  // src/app/api/rpc/[module]/[...rpc]/route.ts handles these paths at
+  // runtime instead.
 };
 module.exports = nextConfig;
