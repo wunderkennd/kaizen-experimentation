@@ -279,6 +279,7 @@ func NewCompute(
 	cicdOut types.CICDOutputs,
 	secretsOut types.SecretsOutputs,
 	streamOut types.StreamingOutputs,
+	tgOut *loadbalancer.TargetGroupOutputs,
 ) (types.ComputeOutputs, *compute.ServicesOutputs, error) {
 	clusterOut, err := compute.NewCluster(ctx, &compute.ClusterArgs{
 		Environment:        cfg.Environment,
@@ -317,8 +318,10 @@ func NewCompute(
 		RedisSecretArn:    secretsOut.RedisSecretRef,
 		AuthSecretArn:     secretsOut.AuthSecretRef,
 		KafkaBrokers:      streamOut.BootstrapBrokersPlaintext,
-		DesiredCount:      cfg.FargateMinTasks,
-		PreDeployDeps:     []pulumi.Resource{migOut.RunCommand},
+		TargetGroupArns: lbAttachableTargetGroups(cfg, tgOut),
+		LbRuleDeps:    tgOut.Rules,
+		DesiredCount:  cfg.FargateMinTasks,
+		PreDeployDeps: []pulumi.Resource{migOut.RunCommand},
 	})
 	if err != nil {
 		return types.ComputeOutputs{}, nil, err
@@ -378,6 +381,23 @@ func NewSchemaRegistry(
 	return out.SchemaRegistryUrl, out.ServiceName, nil
 }
 
+// lbAttachableTargetGroups returns the target groups ECS services may attach
+// to. In dev tlsEnabled=false mode the gRPC target groups (M1, M7) carry no
+// listener rules — ALB forbids GRPC/HTTP2 protocol versions behind the
+// plaintext :80 listener — and ECS rejects a LoadBalancers entry whose target
+// group is not attached to a load balancer.
+func lbAttachableTargetGroups(cfg *kconfig.Config, tgOut *loadbalancer.TargetGroupOutputs) map[string]pulumi.StringOutput {
+	arns := map[string]pulumi.StringOutput{
+		"m5": tgOut.M5ManagementTgArn,
+		"m6": tgOut.M6UITgArn,
+	}
+	if cfg.TlsEnabled {
+		arns["m1"] = tgOut.M1AssignmentTgArn
+		arns["m7"] = tgOut.M7FlagsTgArn
+	}
+	return arns
+}
+
 // ─── Stage 6: Edge + Observability ──────────────────────────────────────────
 
 // NewEdge creates DNS, ALB, DNS aliases, target groups, and (conditionally) WAF.
@@ -408,6 +428,7 @@ func NewEdge(
 		CertificateArn:  dnsOut.CertificateArn,
 		LogsBucketName:  storageOut.LogsBucketName,
 		Environment:     cfg.Environment,
+		TlsEnabled:      cfg.TlsEnabled,
 	})
 	if err != nil {
 		return types.EdgeOutputs{}, nil, err
@@ -429,6 +450,7 @@ func NewEdge(
 		HttpsListenerArn: albOut.HttpsListenerArn,
 		Domain:           cfg.Domain,
 		Environment:      cfg.Environment,
+		TlsEnabled:       cfg.TlsEnabled,
 	})
 	if err != nil {
 		return types.EdgeOutputs{}, nil, err
@@ -472,6 +494,7 @@ func NewAutoscaling(
 	args.ALBFullName = albArnSuffix
 	args.M1TargetGroupFullName = tgOut.M1AssignmentTgArnSuffix
 	args.M7TargetGroupFullName = tgOut.M7FlagsTgArnSuffix
+	args.AlbAttached = cfg.TlsEnabled
 	if svcOut != nil {
 		args.DependsOn = svcOut.AllServiceResources
 	}

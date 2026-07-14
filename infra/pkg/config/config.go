@@ -48,6 +48,15 @@ type Config struct {
 	// Defaults false.
 	MskAllowPlaintext bool
 
+	// TlsEnabled gates the ACM validation waiter and the HTTPS listener.
+	// Until the public NS delegation for the hosted zone exists, cert
+	// validation can never complete and everything chained on it (HTTPS
+	// listener → listener rules → target-group attachment → LB-facing
+	// services) deadlocks. With TlsEnabled=false the HTTP :80 listener
+	// carries the routing rules directly and the waiter is skipped; flip
+	// to true once DNS is delegated. Defaults true.
+	TlsEnabled bool
+
 	// Cache
 	RedisNodeType string
 
@@ -216,6 +225,13 @@ func LoadConfig(ctx *pulumi.Context) *Config {
 			// Same failure mode as a missing Require key: refuse to build
 			// a prod plan with the dev-only plaintext listener enabled.
 			panic("mskAllowPlaintext=true is dev-only: prod keeps TLS+SASL — remove the config key from the prod stack")
+		}
+		out.TlsEnabled = true
+		if v, err := cfg.TryBool("tlsEnabled"); err == nil {
+			out.TlsEnabled = v
+		}
+		if !out.TlsEnabled && out.IsProd() {
+			panic("tlsEnabled=false is dev-only: prod always terminates TLS — remove the config key from the prod stack")
 		}
 		out.FargateMinTasks = cfg.RequireInt("fargateMinTasks")
 		out.CloudwatchRetention = cfg.RequireInt("cloudwatchRetentionDays")

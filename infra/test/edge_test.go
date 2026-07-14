@@ -30,6 +30,7 @@ func TestAlbCreated(t *testing.T) {
 			CertificateArn:  pulumi.String("arn:aws:acm:us-east-1:123456789:certificate/abc").ToStringOutput(),
 			LogsBucketName:  pulumi.String("kaizen-dev-logs").ToStringOutput(),
 			Environment:     "dev",
+			TlsEnabled:      true,
 		})
 		return err
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
@@ -63,6 +64,7 @@ func TestAlbHttpsListener(t *testing.T) {
 			CertificateArn:  pulumi.String("arn:aws:acm:us-east-1:123456789:certificate/abc").ToStringOutput(),
 			LogsBucketName:  pulumi.String("kaizen-dev-logs").ToStringOutput(),
 			Environment:     "dev",
+			TlsEnabled:      true,
 		})
 		return err
 	}, pulumi.WithMocks("kaizen", "dev", mocks))
@@ -99,6 +101,7 @@ func TestAlbHttpRedirectListener(t *testing.T) {
 			CertificateArn:  pulumi.String("arn:aws:acm:us-east-1:123456789:certificate/abc").ToStringOutput(),
 			LogsBucketName:  pulumi.String("kaizen-dev-logs").ToStringOutput(),
 			Environment:     "dev",
+			TlsEnabled:      true,
 		})
 		return err
 	}, pulumi.WithMocks("kaizen", "dev", mocks))

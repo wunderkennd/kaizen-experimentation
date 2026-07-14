@@ -50,6 +50,13 @@ type ServicesArgs struct {
 	// Dev wires the unauthenticated plaintext listener here — services
 	// carry no SASL/TLS Kafka client wiring yet.
 	KafkaBrokers pulumi.StringOutput
+	// TargetGroupArns maps spec key (m1, m5, m6, m7) → ALB target group
+	// ARN. Services with an entry here register tasks with the ALB.
+	TargetGroupArns map[string]pulumi.StringOutput
+	// LbRuleDeps are the listener-rule resources that attach the target
+	// groups to the load balancer — ECS validates the attachment at
+	// service create/update, so LB-facing services depend on these.
+	LbRuleDeps []pulumi.Resource
 	// DesiredCount is the initial task count per service.
 	DesiredCount int
 	// PreDeployDeps lists resources that must complete before the M5
@@ -121,12 +128,16 @@ type healthDep struct {
 // m5Dep is the health dependency on M5 Management (HTTP healthz).
 var m5Dep = healthDep{name: "M5", host: "m5-management.kaizen.local", port: 50055, proto: "http", path: "/healthz"}
 
-// tier1Deps are the health dependencies on Tier 1 services (M1, M2, M4b).
-// Used by Tier 2 services. M4b is included because it is logically Tier 1.
+// tier1Deps are the health dependencies on Tier 1 services (M1, M2).
+// Used by Tier 2 services. M4b is logically Tier 1 too, but no ECS
+// task/service for it exists yet — only its ASG, capacity provider, and
+// Cloud Map name (m4b.go provisions operational resources only). Gating
+// on a DNS name nothing registers deadlocks all of Tier 2, so M4b stays
+// out of the gate until the real EC2 service ships; consumers dial it
+// lazily via M4B_POLICY_ENDPOINT and degrade until then.
 var tier1Deps = []healthDep{
 	{name: "M1", host: "m1-assignment.kaizen.local", port: 50051, proto: "tcp"},
 	{name: "M2", host: "m2-pipeline.kaizen.local", port: 50052, proto: "tcp"},
-	{name: "M4b", host: "m4b-policy.kaizen.local", port: 50054, proto: "tcp"},
 }
 
 func serviceSpecs() []serviceSpec {
@@ -553,10 +564,32 @@ func newFargateService(
 		svcArgs.HealthCheckGracePeriodSeconds = pulumi.Int(120)
 	}
 
+	// ALB attachment for public-facing services: register tasks with the
+	// service's target group. Requires the TG to already be attached to
+	// the load balancer (via a listener rule) — LbRuleDeps carries that
+	// ordering.
+	if tgArn, ok := args.TargetGroupArns[spec.key]; ok {
+		svcArgs.LoadBalancers = ecs.ServiceLoadBalancerArray{
+			&ecs.ServiceLoadBalancerArgs{
+				TargetGroupArn: tgArn,
+				ContainerName:  pulumi.String(spec.name),
+				ContainerPort:  pulumi.Int(spec.ports[0]),
+			},
+		}
+		// The ALB health check needs the same grace period the gated
+		// services get, or slow-booting containers get cycled.
+		if svcArgs.HealthCheckGracePeriodSeconds == nil {
+			svcArgs.HealthCheckGracePeriodSeconds = pulumi.Int(120)
+		}
+	}
+
 	// Build Pulumi resource options: DependsOn from previous tier.
 	var opts []pulumi.ResourceOption
 	if len(pulumiDeps) > 0 {
 		opts = append(opts, pulumi.DependsOn(pulumiDeps))
+	}
+	if _, ok := args.TargetGroupArns[spec.key]; ok && len(args.LbRuleDeps) > 0 {
+		opts = append(opts, pulumi.DependsOn(args.LbRuleDeps))
 	}
 
 	ecsSvc, err := ecs.NewService(ctx, fmt.Sprintf("svc-%s", spec.name), svcArgs, opts...)

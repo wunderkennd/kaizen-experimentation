@@ -125,7 +125,9 @@ func TestTier2DependsOnTier1Services(t *testing.T) {
 	requiredHosts := map[string]bool{
 		"m1-assignment.kaizen.local": true,
 		"m2-pipeline.kaizen.local":   true,
-		"m4b-policy.kaizen.local":    true,
+		// m4b-policy is deliberately absent: no ECS service exists for it
+		// yet, and gating on an unregistered DNS name deadlocks Tier 2
+		// (see tier1Deps in services.go).
 	}
 
 	for _, s := range specs {
