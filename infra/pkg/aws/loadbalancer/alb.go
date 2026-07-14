@@ -18,11 +18,16 @@ type ALBInputs struct {
 	// Security group ID for the ALB (from pkg/network SecurityGroups["alb"]).
 	SecurityGroupId pulumi.StringInput
 	// ACM certificate ARN for the HTTPS listener (from pkg/dns).
+	// Unused when TlsEnabled is false.
 	CertificateArn pulumi.StringInput
 	// S3 bucket name for ALB access logs (from pkg/storage).
 	LogsBucketName pulumi.StringInput
 	// Environment name used for resource naming and tagging.
 	Environment string
+	// TlsEnabled gates the HTTPS listener. When false (dev before NS
+	// delegation), the HTTP :80 listener carries the routing rules
+	// directly instead of redirecting, and RulesListenerArn points at it.
+	TlsEnabled bool
 }
 
 // ALBOutputs are exported for downstream consumers (I.1.18 target groups,
@@ -36,9 +41,12 @@ type ALBOutputs struct {
 	AlbDnsName pulumi.StringOutput
 	// ALB canonical hosted zone ID — needed for Route 53 alias target.
 	AlbZoneId pulumi.StringOutput
-	// HTTPS listener ARN — I.1.18 attaches target group rules here.
+	// HttpsListenerArn is the ARN of the listener that carries the
+	// target-group routing rules: the HTTPS :443 listener when TLS is
+	// enabled, otherwise the HTTP :80 listener. (Name kept for schema
+	// stability; treat as "rules listener".)
 	HttpsListenerArn pulumi.StringOutput
-	// HTTP listener ARN (redirect-only, exposed for completeness).
+	// HTTP listener ARN (redirect-only when TLS is enabled).
 	HttpListenerArn pulumi.StringOutput
 	// AlbArnSuffix is the ARN suffix (e.g., "app/kaizen-dev-alb/50dc6c495c0c9188")
 	// used as the ALBFullName in autoscaling ALBRequestCountPerTarget metrics.
@@ -94,44 +102,46 @@ func NewALB(ctx *pulumi.Context, inputs *ALBInputs) (*ALBOutputs, error) {
 		return nil, fmt.Errorf("creating ALB: %w", err)
 	}
 
-	// --- HTTPS Listener (port 443) ---
-	// Default action is a 503 fixed-response until I.1.18 wires target groups.
-	// This allows the ALB to exist and serve health checks / return a clear
-	// "not yet routed" signal during initial deployment.
-	httpsListener, err := lb.NewListener(ctx, fmt.Sprintf("%s-https", namePrefix), &lb.ListenerArgs{
-		LoadBalancerArn: alb.Arn,
-		Port:            pulumi.Int(443),
-		Protocol:        pulumi.String("HTTPS"),
-		SslPolicy:       pulumi.String("ELBSecurityPolicy-TLS13-1-2-2021-06"),
-		CertificateArn:  inputs.CertificateArn,
-
-		DefaultActions: lb.ListenerDefaultActionArray{
-			&lb.ListenerDefaultActionArgs{
-				Type: pulumi.String("fixed-response"),
-				FixedResponse: &lb.ListenerDefaultActionFixedResponseArgs{
-					ContentType: pulumi.String("text/plain"),
-					MessageBody: pulumi.String("Service not yet configured"),
-					StatusCode:  pulumi.String("503"),
-				},
+	// Shared 503 fixed-response default: rules from I.1.18 route real
+	// traffic; anything unmatched gets a clear "not yet routed" signal.
+	notRouted := lb.ListenerDefaultActionArray{
+		&lb.ListenerDefaultActionArgs{
+			Type: pulumi.String("fixed-response"),
+			FixedResponse: &lb.ListenerDefaultActionFixedResponseArgs{
+				ContentType: pulumi.String("text/plain"),
+				MessageBody: pulumi.String("Service not yet configured"),
+				StatusCode:  pulumi.String("503"),
 			},
 		},
-
-		Tags: pulumi.StringMap{
-			"Project":     pulumi.String("kaizen-experimentation"),
-			"Environment": pulumi.String(inputs.Environment),
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating HTTPS listener: %w", err)
+	}
+	listenerTags := pulumi.StringMap{
+		"Project":     pulumi.String("kaizen-experimentation"),
+		"Environment": pulumi.String(inputs.Environment),
 	}
 
-	// --- HTTP Listener (port 80) → redirect to HTTPS ---
-	httpListener, err := lb.NewListener(ctx, fmt.Sprintf("%s-http", namePrefix), &lb.ListenerArgs{
-		LoadBalancerArn: alb.Arn,
-		Port:            pulumi.Int(80),
-		Protocol:        pulumi.String("HTTP"),
+	// --- HTTPS Listener (port 443) --- (TLS mode only)
+	var httpsListener *lb.Listener
+	if inputs.TlsEnabled {
+		httpsListener, err = lb.NewListener(ctx, fmt.Sprintf("%s-https", namePrefix), &lb.ListenerArgs{
+			LoadBalancerArn: alb.Arn,
+			Port:            pulumi.Int(443),
+			Protocol:        pulumi.String("HTTPS"),
+			SslPolicy:       pulumi.String("ELBSecurityPolicy-TLS13-1-2-2021-06"),
+			CertificateArn:  inputs.CertificateArn,
+			DefaultActions:  notRouted,
+			Tags:            listenerTags,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating HTTPS listener: %w", err)
+		}
+	}
 
-		DefaultActions: lb.ListenerDefaultActionArray{
+	// --- HTTP Listener (port 80) ---
+	// TLS mode: 301 redirect to HTTPS. Pre-delegation dev mode: this
+	// listener carries the routing rules itself.
+	httpDefault := notRouted
+	if inputs.TlsEnabled {
+		httpDefault = lb.ListenerDefaultActionArray{
 			&lb.ListenerDefaultActionArgs{
 				Type: pulumi.String("redirect"),
 				Redirect: &lb.ListenerDefaultActionRedirectArgs{
@@ -140,15 +150,22 @@ func NewALB(ctx *pulumi.Context, inputs *ALBInputs) (*ALBOutputs, error) {
 					StatusCode: pulumi.String("HTTP_301"),
 				},
 			},
-		},
-
-		Tags: pulumi.StringMap{
-			"Project":     pulumi.String("kaizen-experimentation"),
-			"Environment": pulumi.String(inputs.Environment),
-		},
+		}
+	}
+	httpListener, err := lb.NewListener(ctx, fmt.Sprintf("%s-http", namePrefix), &lb.ListenerArgs{
+		LoadBalancerArn: alb.Arn,
+		Port:            pulumi.Int(80),
+		Protocol:        pulumi.String("HTTP"),
+		DefaultActions:  httpDefault,
+		Tags:            listenerTags,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP listener: %w", err)
+	}
+
+	rulesListenerArn := httpListener.Arn
+	if inputs.TlsEnabled {
+		rulesListenerArn = httpsListener.Arn
 	}
 
 	return &ALBOutputs{
@@ -156,7 +173,7 @@ func NewALB(ctx *pulumi.Context, inputs *ALBInputs) (*ALBOutputs, error) {
 		AlbArn:           alb.Arn,
 		AlbDnsName:       alb.DnsName,
 		AlbZoneId:        alb.ZoneId,
-		HttpsListenerArn: httpsListener.Arn,
+		HttpsListenerArn: rulesListenerArn,
 		HttpListenerArn:  httpListener.Arn,
 		AlbArnSuffix:     alb.ArnSuffix,
 	}, nil

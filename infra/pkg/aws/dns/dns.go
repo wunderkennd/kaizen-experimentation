@@ -108,6 +108,19 @@ func NewDNS(ctx *pulumi.Context, args *Args) (*Outputs, error) {
 	}
 
 	// --- Wait for Certificate Validation ---
+	// Validation can only complete once the zone's NS delegation exists
+	// publicly. With TlsEnabled=false (dev, pre-delegation) the waiter is
+	// skipped and the raw cert ARN is returned; nothing consumes it until
+	// the HTTPS listener returns with TlsEnabled=true. The validation
+	// record above stays either way, so ACM completes on its own the
+	// moment delegation lands.
+	if !args.Config.TlsEnabled {
+		return &Outputs{
+			HostedZoneID:   zone.ID(),
+			CertificateArn: cert.Arn,
+		}, nil
+	}
+
 	certValidation, err := acm.NewCertificateValidation(ctx, "kaizen-cert-validation-wait", &acm.CertificateValidationArgs{
 		CertificateArn: cert.Arn,
 		ValidationRecordFqdns: pulumi.StringArray{
