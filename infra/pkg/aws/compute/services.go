@@ -156,7 +156,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m1", name: "m1-assignment", ecrKey: "assignment",
 			cpu: "512", memoryMB: "1024", ports: []int{50051},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50051"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -164,7 +163,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m2", name: "m2-pipeline", ecrKey: "pipeline",
 			cpu: "512", memoryMB: "1024", ports: []int{50052},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50052"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -172,7 +170,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m2-orch", name: "m2-orchestration", ecrKey: "orchestration",
 			cpu: "256", memoryMB: "512", ports: []int{50058},
 			lang:      "go",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50058/healthz || exit 1"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -181,7 +178,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m3", name: "m3-metrics", ecrKey: "metrics",
 			cpu: "1024", memoryMB: "2048", ports: []int{50056, 50059},
 			lang:      "go",
-			healthCmd: []string{"CMD-SHELL", "wget --spider -q http://localhost:50056/healthz || exit 1"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},
@@ -189,7 +185,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m4a", name: "m4a-analysis", ecrKey: "analysis",
 			cpu: "1024", memoryMB: "2048", ports: []int{50053},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50053"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},
@@ -205,7 +200,6 @@ func serviceSpecs() []serviceSpec {
 			key: "m7", name: "m7-flags", ecrKey: "flags",
 			cpu: "256", memoryMB: "512", ports: []int{50057},
 			lang:      "rust",
-			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50057"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},
@@ -774,13 +768,21 @@ func buildContainerDefsJSON(
 			LogConfiguration: logConfig,
 			Environment:      envVars,
 			Secrets:          secrets,
-			HealthCheck: &healthCheck{
+		}
+		// Container health checks only where the runtime image can execute
+		// them (m5 alpine + m6 node:alpine have busybox wget). Distroless
+		// and debian-slim images ship neither a shell nor grpc_health_probe,
+		// so a declared check would fail every probe and the deployment
+		// circuit breaker would kill otherwise-healthy rollouts. Liveness
+		// for the rest rides on ALB target health + health-gate sidecars.
+		if len(spec.healthCmd) > 0 {
+			mainDef.HealthCheck = &healthCheck{
 				Command:     spec.healthCmd,
 				Interval:    30,
 				Timeout:     5,
 				Retries:     3,
 				StartPeriod: 60,
-			},
+			}
 		}
 
 		// Chain main container to health-gate via container-level dependsOn.
