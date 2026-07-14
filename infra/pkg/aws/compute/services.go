@@ -121,12 +121,16 @@ type healthDep struct {
 // m5Dep is the health dependency on M5 Management (HTTP healthz).
 var m5Dep = healthDep{name: "M5", host: "m5-management.kaizen.local", port: 50055, proto: "http", path: "/healthz"}
 
-// tier1Deps are the health dependencies on Tier 1 services (M1, M2, M4b).
-// Used by Tier 2 services. M4b is included because it is logically Tier 1.
+// tier1Deps are the health dependencies on Tier 1 services (M1, M2).
+// Used by Tier 2 services. M4b is logically Tier 1 too, but no ECS
+// task/service for it exists yet — only its ASG, capacity provider, and
+// Cloud Map name (m4b.go provisions operational resources only). Gating
+// on a DNS name nothing registers deadlocks all of Tier 2, so M4b stays
+// out of the gate until the real EC2 service ships; consumers dial it
+// lazily via M4B_POLICY_ENDPOINT and degrade until then.
 var tier1Deps = []healthDep{
 	{name: "M1", host: "m1-assignment.kaizen.local", port: 50051, proto: "tcp"},
 	{name: "M2", host: "m2-pipeline.kaizen.local", port: 50052, proto: "tcp"},
-	{name: "M4b", host: "m4b-policy.kaizen.local", port: 50054, proto: "tcp"},
 }
 
 func serviceSpecs() []serviceSpec {
