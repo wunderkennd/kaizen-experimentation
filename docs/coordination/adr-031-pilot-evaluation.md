@@ -44,7 +44,7 @@ The strict-net-negative reading is what ADR-031 §3 asks for. But the pilot's sh
 | **Retire-as-delete**: `#[cfg(not(feature = "connectrpc"))]` on `http_json.rs` (349) + `http_json_e2e.rs` (437) is a deletion under the pilot | −786 | **+209** — still positive, closer to break-even |
 | **Retire-as-delete + fold e2e replacement**: the pilot's Rust `connect_server_e2e.rs` (170) + `stream_config_updates_test.rs` (130) + Go `connect_pilot_e2e_test.go` (170) replace the shim's e2e/tests | −470 | **~−260** — net-negative if we credit the new e2e for replacing the retired one |
 
-**None of these views make the pilot cheaper than the shim on a strict source-code line count.** They vary in what we count as replaced. #645 has to pick one.
+**Only the most generous view — retire-as-delete plus folding in the e2e replacement — makes the pilot net-negative on source-code line count (~−260); the strict and retire-as-delete views both show a net increase.** They vary in what we count as replaced. #645 has to pick one.
 
 ### 1.3 Build-time delta (local, warm-cache)
 
@@ -212,7 +212,7 @@ lines to save ~800 lines of shim. Fleet-wide adoption is not authorized.
 The qualitative wins are real but do not clear the bar this ADR set.
 
 **Rollback strategy**:
-- Retain #737, #739, #740, #743 in-tree; the connectrpc feature is opt-in
+- Retain #661, #739, #740, #743 in-tree; the connectrpc feature is opt-in
   and doesn't affect the default build. No revert needed.
 - Update ADR-031 status to Rejected; ADR-010 (tonic-only) remains
   authoritative for the fleet.
