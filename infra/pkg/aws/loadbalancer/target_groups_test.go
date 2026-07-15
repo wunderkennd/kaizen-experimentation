@@ -87,9 +87,9 @@ func TestTargetGroupSpecs(t *testing.T) {
 func TestListenerRulePriorities(t *testing.T) {
 	// Verify listener rule priority ordering:
 	//   10: M1 (host-based, assign.kaizen.{domain})
-	//   20: M5 (/api/*)
-	//   30: M7 (/flags/*)
-	//  100: M6 (catch-all /*)
+	//   20: M5 (bare ConnectRPC paths /experimentation.management.*)
+	//   30: M7 (bare ConnectRPC paths /experimentation.flags.*)
+	//  100: M6 (catch-all /*; also carries /api/rpc/* for the BFF proxy)
 	type rule struct {
 		name     string
 		priority int
@@ -98,8 +98,8 @@ func TestListenerRulePriorities(t *testing.T) {
 
 	rules := []rule{
 		{name: "m1-host", priority: 10, pattern: "assign.kaizen.{domain}"},
-		{name: "m5-api", priority: 20, pattern: "/api/*"},
-		{name: "m7-flags", priority: 30, pattern: "/flags/*"},
+		{name: "m5-api", priority: 20, pattern: "/experimentation.management.*"},
+		{name: "m7-flags", priority: 30, pattern: "/experimentation.flags.*"},
 		{name: "m6-default", priority: 100, pattern: "/*"},
 	}
 
