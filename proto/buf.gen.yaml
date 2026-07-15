@@ -20,9 +20,15 @@ plugins:
   #   out: gen/rust
 
   # TypeScript (connect-web)
-  - remote: buf.build/connectrpc/es
+  # Pinned to the protobuf-es v1 line: the UI runtime is
+  # @connectrpc/connect ^1.x / @bufbuild/protobuf ^1.x, and unpinned
+  # buf.build/bufbuild/es now floats to protoc-gen-es v2, whose output
+  # (codegenv2/wkt imports) is incompatible with both the v1 runtime and
+  # the v1.6.1 connect-es service stubs — the generated tree wouldn't
+  # even self-compile. Bump both lines together when migrating to v2.
+  - remote: buf.build/connectrpc/es:v1.6.1
     out: gen/ts
     opt: target=ts
-  - remote: buf.build/bufbuild/es
+  - remote: buf.build/bufbuild/es:v1.10.0
     out: gen/ts
     opt: target=ts
