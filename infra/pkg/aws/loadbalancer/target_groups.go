@@ -146,10 +146,10 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 
 	// --- Listener Rules ---
 	// Priority ordering: lower number = evaluated first.
-	//   10: host = assign.kaizen.{domain} → M1
-	//   20: path = /api/*                 → M5
-	//   30: path = /flags/*               → M7
-	//  100: path = /* (catch-all)         → M6
+	//   10: host = assign.kaizen.{domain}       → M1
+	//   20: path = /experimentation.management.* → M5
+	//   30: path = /experimentation.flags.*      → M7
+	//  100: path = /* (catch-all, incl. UI pages and /api/rpc BFF) → M6
 
 	assignHost := fmt.Sprintf("assign.kaizen.%s", inputs.Domain)
 
