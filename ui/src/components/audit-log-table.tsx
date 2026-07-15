@@ -58,7 +58,7 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
             return (
               <tr
                 key={entry.entryId}
-                className="cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+                className="group cursor-pointer hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
                 onClick={() => toggleExpand(entry.entryId)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -73,7 +73,18 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                 data-testid={`audit-row-${entry.entryId}`}
               >
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap align-top">
-                  {formatTimestamp(entry.timestamp)}
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    {formatTimestamp(entry.timestamp)}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm align-top">
                   <Link
@@ -89,32 +100,18 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
                   <AuditActionBadge action={entry.action} />
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600 align-top">
-                  <div className="group flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
                     <span>{entry.actorEmail}</span>
                     <CopyButton
                       value={entry.actorEmail}
                       label="Copy actor email"
                       successMessage="Actor email copied"
-                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                     />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700 align-top">
-                  <div className="flex items-center gap-2">
-                    <svg
-                      className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                    <div>{entry.details}</div>
-                  </div>
-                  <span className="ml-6 text-xs text-gray-400">
-                    {isExpanded ? '(click to collapse)' : '(click to expand details)'}
-                  </span>
+                  <div>{entry.details}</div>
                   {isExpanded && (
                     <div className="mt-2 rounded-md bg-gray-50 p-3 text-xs" data-testid={`audit-detail-${entry.entryId}`}>
                       <div className="mb-2">
