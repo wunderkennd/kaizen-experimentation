@@ -46,8 +46,13 @@ const ASSIGNMENT_URL = process.env.NEXT_PUBLIC_ASSIGNMENT_URL || '/api/rpc/assig
 const ASSIGNMENT_SVC = 'experimentation.assignment.v1.AssignmentService';
 
 // --- Auth header injection ---
-let _authEmail = '';
-let _authRole = '';
+// Initialized to the same defaults AuthProvider derives, not empty strings:
+// AuthProvider syncs these via useEffect, but React runs child effects
+// before parent effects, so the first page's fetch fires before that sync
+// lands — an empty default made every cold navigation send no X-User-Email
+// and fail M5's RBAC check. setApiAuth still overrides at runtime.
+let _authEmail = process.env.NEXT_PUBLIC_USER_EMAIL || 'dev@streamco.com';
+let _authRole = process.env.NEXT_PUBLIC_USER_ROLE || 'experimenter';
 
 /** Set auth credentials injected into all RPC calls. Called by AuthProvider. */
 export function setApiAuth(email: string, role: string): void {
