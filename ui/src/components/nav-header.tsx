@@ -22,14 +22,14 @@ export function NavHeader() {
         <div className="flex items-center gap-6">
           <Link
             href="/"
-            className={`rounded-sm text-lg font-semibold outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${pathname === '/' || pathname.startsWith('/experiments') ? 'text-indigo-600' : 'text-gray-900'}`}
+            className={`rounded-sm text-lg font-semibold outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname === '/' || pathname.startsWith('/experiments') ? 'text-indigo-600' : 'text-gray-900'}`}
             aria-current={pathname === '/' || pathname.startsWith('/experiments') ? 'page' : undefined}
           >
             Experimentation Platform
           </Link>
           <Link
             href="/flags"
-            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${pathname.startsWith('/flags') ? 'text-indigo-600' : 'text-gray-600'}`}
+            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/flags') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/flags') ? 'page' : undefined}
             data-testid="nav-flags"
           >
@@ -37,7 +37,7 @@ export function NavHeader() {
           </Link>
           <Link
             href="/metrics"
-            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${pathname.startsWith('/metrics') ? 'text-indigo-600' : 'text-gray-600'}`}
+            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/metrics') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/metrics') ? 'page' : undefined}
             data-testid="nav-metrics"
           >
@@ -45,7 +45,7 @@ export function NavHeader() {
           </Link>
           <Link
             href="/audit"
-            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${pathname.startsWith('/audit') ? 'text-indigo-600' : 'text-gray-600'}`}
+            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/audit') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/audit') ? 'page' : undefined}
             data-testid="nav-audit"
           >
@@ -53,7 +53,7 @@ export function NavHeader() {
           </Link>
           <Link
             href="/monitoring"
-            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${pathname.startsWith('/monitoring') ? 'text-indigo-600' : 'text-gray-600'}`}
+            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/monitoring') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/monitoring') ? 'page' : undefined}
             data-testid="nav-monitoring"
           >
@@ -61,7 +61,7 @@ export function NavHeader() {
           </Link>
           <Link
             href="/portfolio"
-            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${pathname.startsWith('/portfolio') ? 'text-indigo-600' : 'text-gray-600'}`}
+            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/portfolio') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/portfolio') ? 'page' : undefined}
             data-testid="nav-portfolio"
           >
@@ -75,7 +75,7 @@ export function NavHeader() {
             <select
               value={user.role}
               onChange={(e) => setDevRole(e.target.value as UserRole)}
-              className="rounded border border-dashed border-orange-400 bg-orange-50 px-2 py-1 text-xs text-orange-700"
+              className="rounded border border-dashed border-orange-400 bg-orange-50 px-2 py-1 text-xs text-orange-700 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               data-testid="dev-role-switcher"
               aria-label="Dev role switcher"
             >
