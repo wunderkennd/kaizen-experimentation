@@ -5,10 +5,22 @@
 //
 // Routing topology:
 //
-//	assign.kaizen.{domain}  →  M1 Assignment   (gRPC, port 50051)
-//	/api/*                  →  M5 Management   (HTTP/2, port 50055)
-//	/flags/*                →  M7 Flags        (gRPC, port 50057)
-//	/* (default)            →  M6 UI           (HTTP, port 3000)
+//	assign.kaizen.{domain}          →  M1 Assignment   (gRPC, port 50051)
+//	/experimentation.management.*   →  M5 Management   (bare ConnectRPC paths, port 50055)
+//	/experimentation.flags.*        →  M7 Flags        (gRPC, port 50057)
+//	/* (default)                    →  M6 UI           (HTTP, port 3000)
+//
+// gRPC/Connect rules MUST match on bare /package.Service/Method paths —
+// gRPC clients cannot mount a service under a path prefix, and a
+// human-facing prefix like the old /flags/* shadows the UI's page routes
+// (browsers got ALB 464 Incompatible-protocol on /flags/new because the
+// GET landed on the GRPC-protocol-version target group). The dot in
+// /experimentation.<module>.* keeps these disjoint from UI page routes.
+//
+// Browser API traffic (/api/rpc/<module>/...) intentionally falls through
+// to the M6 catch-all: the Next.js BFF route handler proxies it to the
+// backends over Cloud Map, since ALB cannot rewrite paths and the
+// backends serve bare /package.Service/Method ConnectRPC routes.
 package loadbalancer
 
 import (
@@ -134,10 +146,10 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 
 	// --- Listener Rules ---
 	// Priority ordering: lower number = evaluated first.
-	//   10: host = assign.kaizen.{domain} → M1
-	//   20: path = /api/*                 → M5
-	//   30: path = /flags/*               → M7
-	//  100: path = /* (catch-all)         → M6
+	//   10: host = assign.kaizen.{domain}       → M1
+	//   20: path = /experimentation.management.* → M5
+	//   30: path = /experimentation.flags.*      → M7
+	//  100: path = /* (catch-all, incl. UI pages and /api/rpc BFF) → M6
 
 	assignHost := fmt.Sprintf("assign.kaizen.%s", inputs.Domain)
 
@@ -164,6 +176,10 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 			},
 		},
 		{
+			// Direct ConnectRPC access to M5 (grpcurl, server SDKs). The
+			// UI does NOT use this path — its /api/rpc/* calls go to the
+			// M6 BFF via the catch-all. This rule also keeps the M5 target
+			// group attached to the ALB (an ECS service precondition).
 			name:     "m5-api",
 			priority: 20,
 			target:   "m5-management",
@@ -171,7 +187,7 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 				return lb.ListenerRuleConditionArray{
 					&lb.ListenerRuleConditionArgs{
 						PathPattern: &lb.ListenerRuleConditionPathPatternArgs{
-							Values: pulumi.StringArray{pulumi.String("/api/*")},
+							Values: pulumi.StringArray{pulumi.String("/experimentation.management.*")},
 						},
 					},
 				}
@@ -186,7 +202,7 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 				return lb.ListenerRuleConditionArray{
 					&lb.ListenerRuleConditionArgs{
 						PathPattern: &lb.ListenerRuleConditionPathPatternArgs{
-							Values: pulumi.StringArray{pulumi.String("/flags/*")},
+							Values: pulumi.StringArray{pulumi.String("/experimentation.flags.*")},
 						},
 					},
 				}
