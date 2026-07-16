@@ -43,7 +43,14 @@ permissions:
 # verdict AND cuts short its grace-window polling.
 concurrency:
   group: review-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  # queue, don't cancel: the gate takes ~15s, and cancel-in-progress turns
+  # every burst of near-simultaneous triggers (review submitted + thread
+  # resolved + push land within a second) into cancelled runs of a
+  # REQUIRED check. Rulesets count those cancelled check-runs as failing,
+  # which wedges otherwise-green PRs until every zombie run is manually
+  # re-run to success — and re-running joins this same group, cancelling
+  # any in-flight run, so the cure regenerates the disease (#763/#764).
+  cancel-in-progress: false
 
 jobs:
   gate:
