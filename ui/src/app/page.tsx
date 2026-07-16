@@ -150,7 +150,7 @@ export default function ExperimentListPage() {
           <p className="text-sm text-gray-500">No experiments match your filters.</p>
           <button
             onClick={filters.clearFilters}
-            className="mt-2 rounded-sm text-sm text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="mt-2 rounded-sm text-sm text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             data-testid="clear-filters-empty"
           >
             Clear filters
