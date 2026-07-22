@@ -97,16 +97,11 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 
 	specs := []targetGroupSpec{
 		{
-			name:            "m1-assignment",
-			port:            50051,
-			protocolVersion: "GRPC",
-			healthCheckPath: "/grpc.health.v1.Health/Check",
-			// M1/M7 don't register grpc.health.v1 (no tonic-health), so a
-			// strict "0" matcher would mark every target unhealthy
-			// (UNIMPLEMENTED=12) and the LB-integrated scheduler would kill
-			// the tasks. Any gRPC status proves the server answers HTTP/2;
-			// tighten back to "0" when tonic-health ships.
-			healthCheckMatcher: "0-99",
+			name:               "m1-assignment",
+			port:               50051,
+			protocolVersion:    "GRPC",
+			healthCheckPath:    "/grpc.health.v1.Health/Check",
+			healthCheckMatcher: "0", // grpc.health.v1 registered via tonic-health (#755)
 		},
 		{
 			name:               "m5-management",
@@ -123,12 +118,11 @@ func NewTargetGroups(ctx *pulumi.Context, inputs *TargetGroupInputs) (*TargetGro
 			healthCheckMatcher: "200",
 		},
 		{
-			name:            "m7-flags",
-			port:            50057,
-			protocolVersion: "GRPC",
-			healthCheckPath: "/grpc.health.v1.Health/Check",
-			// See m1-assignment: no grpc.health.v1 service registered yet.
-			healthCheckMatcher: "0-99",
+			name:               "m7-flags",
+			port:               50057,
+			protocolVersion:    "GRPC",
+			healthCheckPath:    "/grpc.health.v1.Health/Check",
+			healthCheckMatcher: "0", // grpc.health.v1 registered via tonic-health (#755)
 		},
 	}
 

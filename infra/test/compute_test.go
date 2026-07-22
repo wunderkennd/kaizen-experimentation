@@ -93,16 +93,24 @@ func TestAllNineServicesInCatalogue(t *testing.T) {
 func TestGRPCHealthChecksForRustServices(t *testing.T) {
 	fargateSpecs := compute.ServiceSpecs()
 
-	rustServices := map[string]int{
-		"m1":  50051,
-		"m2":  50052,
-		"m4a": 50053,
-		"m7":  50057,
+	// Post-#755: m1 and m7 register grpc.health.v1 via tonic-health and
+	// bundle /bin/grpc_health_probe in their debian-slim runtime image, so
+	// their container HEALTHCHECK is a real probe. m2 and m4a still fall
+	// under the pre-#755 rule (no probe bundled, no health service
+	// registered) and MUST leave healthCmd empty until they're ported too.
+	rustWithProbe := map[string]int{
+		"m1": 50051,
+		"m7": 50057,
+	}
+	rustWithoutProbe := map[string]struct{}{
+		"m2":  {},
+		"m4a": {},
 	}
 
 	for _, spec := range fargateSpecs {
-		_, isRust := rustServices[spec.Key]
-		if !isRust {
+		port, wantsProbe := rustWithProbe[spec.Key]
+		_, noProbe := rustWithoutProbe[spec.Key]
+		if !wantsProbe && !noProbe {
 			continue
 		}
 
@@ -111,15 +119,22 @@ func TestGRPCHealthChecksForRustServices(t *testing.T) {
 				t.Errorf("service %s: lang = %q, want \"rust\"", spec.Key, spec.Lang)
 			}
 
-			// Rust images (debian-slim/distroless) bundle no
-			// grpc_health_probe and the services don't register
-			// grpc.health.v1 (no tonic-health), so a container health
-			// check could never pass: every declared probe fails and the
-			// deployment circuit breaker kills healthy rollouts. Liveness
-			// rides on ALB target health (matcher 0-99) + health-gate
-			// sidecars until tonic-health + probe bundling ship.
-			if len(spec.HealthCmd) != 0 {
-				t.Errorf("service %s: declares container healthCmd %v its image cannot run", spec.Key, spec.HealthCmd)
+			if noProbe {
+				if len(spec.HealthCmd) != 0 {
+					t.Errorf("service %s: declares container healthCmd %v its image cannot run (no grpc_health_probe bundled)", spec.Key, spec.HealthCmd)
+				}
+				return
+			}
+
+			// wantsProbe: expect exactly ["CMD", "/bin/grpc_health_probe", "-addr=:<port>"].
+			want := []string{"CMD", "/bin/grpc_health_probe", fmt.Sprintf("-addr=:%d", port)}
+			if len(spec.HealthCmd) != len(want) {
+				t.Fatalf("service %s: healthCmd = %v, want %v", spec.Key, spec.HealthCmd, want)
+			}
+			for i, w := range want {
+				if spec.HealthCmd[i] != w {
+					t.Errorf("service %s: healthCmd[%d] = %q, want %q", spec.Key, i, spec.HealthCmd[i], w)
+				}
 			}
 		})
 	}
