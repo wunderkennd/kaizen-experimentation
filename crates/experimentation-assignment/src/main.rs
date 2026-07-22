@@ -116,12 +116,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // grpc.health.v1: register + mark SERVING right before bind. M5 stream and
+    // M4b client are optional/best-effort (both spawned above with warnings on
+    // failure), so "config loaded, service assembled" IS the honest ready
+    // state — no fake NOT_SERVING→SERVING gate for deps we don't require.
+    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<AssignmentServiceServer<AssignmentServiceImpl>>()
+        .await;
+
     tracing::info!(%grpc_addr, "starting gRPC server");
     tonic::transport::Server::builder()
         .tcp_nodelay(true)
         .concurrency_limit_per_connection(256)
         .initial_connection_window_size(1024 * 1024)
         .initial_stream_window_size(1024 * 1024)
+        .add_service(health_service)
         .add_service(AssignmentServiceServer::from_arc(svc))
         .serve_with_shutdown(grpc_addr, async move {
             tokio::signal::ctrl_c().await.ok();

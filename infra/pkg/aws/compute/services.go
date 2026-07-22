@@ -159,6 +159,8 @@ func serviceSpecs() []serviceSpec {
 			key: "m1", name: "m1-assignment", ecrKey: "assignment",
 			cpu: "512", memoryMB: "1024", ports: []int{50051},
 			lang:      "rust",
+			// grpc.health.v1 via tonic-health (#755); probe bundled in Dockerfile.
+			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50051"},
 			tier:      TierCore,
 			deps:      []healthDep{m5Dep},
 		},
@@ -206,6 +208,8 @@ func serviceSpecs() []serviceSpec {
 			key: "m7", name: "m7-flags", ecrKey: "flags",
 			cpu: "256", memoryMB: "512", ports: []int{50057},
 			lang:      "rust",
+			// grpc.health.v1 via tonic-health (#755); probe bundled in Dockerfile.
+			healthCmd: []string{"CMD", "/bin/grpc_health_probe", "-addr=:50057"},
 			tier:      TierDependent,
 			deps:      tier1Deps,
 		},

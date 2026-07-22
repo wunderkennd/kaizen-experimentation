@@ -778,10 +778,20 @@ pub async fn serve(config: FlagsConfig, store: FlagStore, audit: Option<Arc<Audi
 
     let svc = FeatureFlagServiceServer::new(handler);
 
+    // grpc.health.v1: mark SERVING once the store connected and handler is
+    // built (checked above with `.await`). Reconciler + Kafka are optional
+    // background tasks; treating them as gates would keep M7 NOT_SERVING for
+    // the many deploys that run without M5_ADDR.
+    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<FeatureFlagServiceServer<FlagsServiceHandler>>()
+        .await;
+
     info!(%addr, "feature flag gRPC server starting (tonic-web enabled)");
 
     tonic::transport::Server::builder()
         .accept_http1(true)
+        .add_service(health_service)
         .add_service(tonic_web::enable(svc))
         .serve(addr)
         .await
