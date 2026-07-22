@@ -120,6 +120,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // M4b client are optional/best-effort (both spawned above with warnings on
     // failure), so "config loaded, service assembled" IS the honest ready
     // state — no fake NOT_SERVING→SERVING gate for deps we don't require.
+    //
+    // Note: tonic_health::server::health_reporter() initializes the empty
+    // service name "" (the overall server status) to Serving by default (see
+    // tonic-health 0.12.3 server.rs:44), so `grpc_health_probe -addr=:50051`
+    // and the ALB gRPC health check — both of which query with service="" —
+    // resolve to SERVING out of the box. set_serving::<T>() below adds
+    // per-service reporting for consumers that want to check the named
+    // AssignmentService specifically.
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
         .set_serving::<AssignmentServiceServer<AssignmentServiceImpl>>()

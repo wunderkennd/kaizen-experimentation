@@ -782,6 +782,14 @@ pub async fn serve(config: FlagsConfig, store: FlagStore, audit: Option<Arc<Audi
     // built (checked above with `.await`). Reconciler + Kafka are optional
     // background tasks; treating them as gates would keep M7 NOT_SERVING for
     // the many deploys that run without M5_ADDR.
+    //
+    // Note: tonic_health::server::health_reporter() initializes the empty
+    // service name "" (the overall server status) to Serving by default (see
+    // tonic-health 0.12.3 server.rs:44), so `grpc_health_probe -addr=:50057`
+    // and the ALB gRPC health check — both of which query with service="" —
+    // resolve to SERVING out of the box. set_serving::<T>() below adds
+    // per-service reporting for consumers that want to check the named
+    // FeatureFlagService specifically.
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
         .set_serving::<FeatureFlagServiceServer<FlagsServiceHandler>>()
