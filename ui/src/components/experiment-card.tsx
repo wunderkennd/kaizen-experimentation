@@ -17,7 +17,7 @@ function ResultsCell({ experiment }: { experiment: Experiment }) {
       return (
         <Link
           href={`/experiments/${experiment.experimentId}/results`}
-          className="text-orange-600 hover:text-orange-800"
+          className="text-orange-600 hover:text-orange-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
         >
           Interim results
         </Link>
@@ -26,7 +26,7 @@ function ResultsCell({ experiment }: { experiment: Experiment }) {
       return (
         <Link
           href={`/experiments/${experiment.experimentId}/results`}
-          className="text-blue-600 hover:text-blue-800"
+          className="text-blue-600 hover:text-blue-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
         >
           Results available
         </Link>
@@ -48,7 +48,7 @@ export function ExperimentRow({ experiment }: ExperimentCardProps) {
         <div className="flex items-center gap-2">
           <Link
             href={`/experiments/${experiment.experimentId}`}
-            className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+            className="text-sm font-medium text-indigo-600 hover:text-indigo-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             {experiment.name}
           </Link>

@@ -245,6 +245,28 @@ describe('Accessibility', () => {
     });
   });
 
+  // --- ExperimentRow ---
+
+  describe('ExperimentRow', () => {
+    it('links have focus-visible styling for keyboard accessibility', async () => {
+      render(
+        <AuthProvider initialUser={defaultUser}>
+          <ToastProvider>
+            <ExperimentListPage />
+          </ToastProvider>
+        </AuthProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('homepage_recs_v2')).toBeInTheDocument();
+      });
+
+      const nameLink = screen.getByRole('link', { name: 'homepage_recs_v2' });
+      expect(nameLink).toHaveClass('focus-visible:ring-2');
+      expect(nameLink).toHaveClass('focus-visible:ring-indigo-500');
+    });
+  });
+
   // --- Charts ---
 
   describe('Charts', () => {
