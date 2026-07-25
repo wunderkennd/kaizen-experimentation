@@ -122,7 +122,7 @@ export default function PortfolioDashboard() {
         </div>
         <Link
           href="/portfolio/provider-health"
-          className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+          className="rounded-sm text-sm font-medium text-indigo-600 hover:text-indigo-800 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           data-testid="provider-health-link"
         >
           Provider Health →
