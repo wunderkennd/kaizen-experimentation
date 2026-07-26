@@ -54,7 +54,7 @@ function ExperimentSelectorInner({
 
   return (
     <div className="mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label htmlFor="experiment-search" className="block text-sm font-medium text-gray-700 mb-2">
         Select experiments to compare (2-{maxSelections})
       </label>
 
@@ -72,7 +72,7 @@ function ExperimentSelectorInner({
                 <button
                   type="button"
                   onClick={() => onRemove(exp.experimentId)}
-                  className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10"
+                  className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                   aria-label={`Remove ${exp.name}`}
                 >
                   x
@@ -86,6 +86,7 @@ function ExperimentSelectorInner({
       {/* Search dropdown */}
       <div ref={containerRef} className="relative">
         <input
+          id="experiment-search"
           type="text"
           value={query}
           onChange={(e) => {
@@ -95,7 +96,7 @@ function ExperimentSelectorInner({
           onFocus={() => setIsOpen(true)}
           placeholder={atLimit ? `Maximum ${maxSelections} experiments selected` : 'Search experiments by name or owner...'}
           disabled={atLimit}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:bg-gray-100 disabled:cursor-not-allowed"
           aria-label="Search experiments"
           data-testid="experiment-search"
         />
@@ -118,6 +119,7 @@ function ExperimentSelectorInner({
                     key={exp.experimentId}
                     role="option"
                     aria-selected={false}
+                    tabIndex={0}
                     onClick={() => {
                       onSelect(exp.experimentId);
                       setQuery('');
@@ -125,7 +127,17 @@ function ExperimentSelectorInner({
                         setIsOpen(false);
                       }
                     }}
-                    className="cursor-pointer px-3 py-2 hover:bg-indigo-50 border-b border-gray-100 last:border-b-0"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelect(exp.experimentId);
+                        setQuery('');
+                        if (selectedIds.length + 1 >= maxSelections) {
+                          setIsOpen(false);
+                        }
+                      }
+                    }}
+                    className="cursor-pointer px-3 py-2 hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 border-b border-gray-100 last:border-b-0"
                   >
                     <div className="flex items-center justify-between">
                       <div>
