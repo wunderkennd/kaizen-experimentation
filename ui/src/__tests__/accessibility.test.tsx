@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -11,7 +11,8 @@ import ExperimentListPage from '@/app/page';
 import ResultsPage from '@/app/experiments/[id]/results/page';
 import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
-import type { QueryLogEntry } from '@/lib/types';
+import type { QueryLogEntry, Experiment } from '@/lib/types';
+import { ExperimentSelector } from '@/components/experiment-selector';
 
 const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'experimenter' };
 
@@ -358,6 +359,139 @@ describe('Accessibility', () => {
       // The dot is the first child span inside the badge
       const dot = container.querySelector('span > span');
       expect(dot).toHaveAttribute('aria-hidden', 'true');
+    });
+  });
+
+  // --- ExperimentSelector ---
+
+  describe('ExperimentSelector Accessibility', () => {
+    const mockExperiments: Experiment[] = [
+      {
+        experimentId: 'exp-1',
+        name: 'Running Exp 1',
+        description: 'First mock experiment',
+        ownerEmail: 'owner1@streamco.com',
+        type: 'AB',
+        state: 'RUNNING',
+        variants: [
+          { variantId: 'v1', name: 'Control', trafficFraction: 0.5, isControl: true, payloadJson: '{}' },
+          { variantId: 'v2', name: 'Treatment', trafficFraction: 0.5, isControl: false, payloadJson: '{}' },
+        ],
+        layerId: 'layer-1',
+        hashSalt: 'salt',
+        primaryMetricId: 'metric-1',
+        secondaryMetricIds: [],
+        guardrailConfigs: [],
+        guardrailAction: 'ALERT_ONLY',
+        isCumulativeHoldout: false,
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        experimentId: 'exp-2',
+        name: 'Concluded Exp 2',
+        description: 'Second mock experiment',
+        ownerEmail: 'owner2@streamco.com',
+        type: 'AB',
+        state: 'CONCLUDED',
+        variants: [
+          { variantId: 'v3', name: 'Control', trafficFraction: 0.5, isControl: true, payloadJson: '{}' },
+          { variantId: 'v4', name: 'Treatment', trafficFraction: 0.5, isControl: false, payloadJson: '{}' },
+        ],
+        layerId: 'layer-2',
+        hashSalt: 'salt2',
+        primaryMetricId: 'metric-1',
+        secondaryMetricIds: [],
+        guardrailConfigs: [],
+        guardrailAction: 'ALERT_ONLY',
+        isCumulativeHoldout: false,
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    it('correctly associates label with the input element via htmlFor and id', () => {
+      render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={[]}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      const label = screen.getByText(/Select experiments to compare/);
+      expect(label).toHaveAttribute('for', 'experiment-search');
+
+      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      expect(input).toHaveAttribute('id', 'experiment-search');
+    });
+
+    it('input has focus-visible styling classes', () => {
+      render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={[]}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      expect(input).toHaveClass('focus-visible:ring-2');
+      expect(input).toHaveClass('focus-visible:ring-indigo-500');
+      expect(input).toHaveClass('focus-visible:ring-offset-2');
+    });
+
+    it('provides keyboard-navigable and keyboard-selectable dropdown options', async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+
+      render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={[]}
+          onSelect={onSelect}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      await user.click(input);
+      await user.keyboard('Running');
+
+      const options = await screen.findAllByRole('option');
+      expect(options).toHaveLength(1);
+      const option = options[0];
+
+      // Verify option is in the tab order (tabIndex={0}) and has focus styles
+      expect(option).toHaveAttribute('tabIndex', '0');
+      expect(option).toHaveClass('focus-visible:ring-2');
+      expect(option).toHaveClass('focus-visible:ring-indigo-500');
+
+      // Trigger selection with Enter key
+      await user.click(input); // focus input again
+      fireEvent.keyDown(option, { key: 'Enter', code: 'Enter' });
+      expect(onSelect).toHaveBeenCalledWith('exp-1');
+
+      // Trigger selection with Space key
+      onSelect.mockClear();
+      fireEvent.keyDown(option, { key: ' ', code: 'Space' });
+      expect(onSelect).toHaveBeenCalledWith('exp-1');
+    });
+
+    it('close button on selected chip has accessibility focus ring classes', () => {
+      render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={['exp-1']}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      const removeButton = screen.getByRole('button', { name: 'Remove Running Exp 1' });
+      expect(removeButton).toHaveClass('focus-visible:ring-2');
+      expect(removeButton).toHaveClass('focus-visible:ring-indigo-500');
+      expect(removeButton).toHaveClass('focus-visible:ring-offset-1');
     });
   });
 });
