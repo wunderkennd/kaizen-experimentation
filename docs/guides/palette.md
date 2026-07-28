@@ -76,3 +76,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-06-28 - Platform Navigation and Interaction Consistency
 **Learning:** Standardizing secondary navigation (breadcrumbs) and interaction patterns (disabled buttons vs. hiding) across all primary sections significantly reduces user disorientation and cognitive load. Providing explicit feedback on restricted actions (e.g., tooltips on disabled buttons) is more helpful than removing elements, as it clarifies permission boundaries without changing the UI layout.
 **Action:** Ensure all primary list and detail pages include breadcrumbs starting from the platform root. Use disabled states with role-requirement tooltips for permission-gated actions instead of hiding them.
+
+## 2026-07-10 - Standardizing Focus Styles on Sortable Headers
+**Learning:** Table header buttons used for sorting should implement standard visual focus indicators with a clear visual offset rather than tight inset rings. This consistent gap between the focus outline and the button text ensures clear spatial and visual indication for keyboard navigators, matching global navigation and primary button standards.
+**Action:** Always apply `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` to table header sort buttons across both list views and portfolio grids instead of `focus-visible:ring-inset`.
