@@ -153,7 +153,7 @@ export function MonitoringHealthTable({
                 <td className="whitespace-nowrap px-4 py-3 text-sm">
                   <Link
                     href={`/experiments/${exp.experimentId}`}
-                    className="font-medium text-indigo-600 hover:text-indigo-900"
+                    className="font-medium text-indigo-600 hover:text-indigo-900 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                     data-testid={`experiment-link-${exp.experimentId}`}
                   >
                     {exp.name}

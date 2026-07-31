@@ -13,6 +13,9 @@ import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
 import type { QueryLogEntry, Experiment } from '@/lib/types';
 import { ExperimentSelector } from '@/components/experiment-selector';
+import { MonitoringHealthTable } from '@/components/monitoring-health-table';
+import { ExperimentPortfolioTable } from '@/components/experiment-portfolio-table';
+import type { PortfolioExperiment } from '@/lib/types';
 
 const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'experimenter' };
 
@@ -265,6 +268,67 @@ describe('Accessibility', () => {
       const nameLink = screen.getByRole('link', { name: 'homepage_recs_v2' });
       expect(nameLink).toHaveClass('focus-visible:ring-2');
       expect(nameLink).toHaveClass('focus-visible:ring-indigo-500');
+    });
+  });
+
+  describe('MonitoringHealthTable', () => {
+    it('experiment name links have focus-visible styling for keyboard accessibility', () => {
+      const mockRunningExperiments: Experiment[] = [
+        {
+          experimentId: 'exp-running-1',
+          name: 'Running Exp 1',
+          description: 'First mock experiment',
+          ownerEmail: 'owner1@streamco.com',
+          type: 'AB',
+          state: 'RUNNING',
+          variants: [],
+          layerId: 'layer-1',
+          hashSalt: 'salt',
+          primaryMetricId: 'metric-1',
+          secondaryMetricIds: [],
+          guardrailConfigs: [],
+          guardrailAction: 'ALERT_ONLY',
+          isCumulativeHoldout: false,
+          createdAt: '2026-01-01T00:00:00Z',
+          startedAt: '2026-01-01T00:00:00Z',
+        },
+      ];
+
+      render(
+        <MonitoringHealthTable
+          experiments={mockRunningExperiments}
+          analysisResults={{}}
+          guardrailStatuses={{}}
+        />,
+      );
+
+      const nameLink = screen.getByRole('link', { name: 'Running Exp 1' });
+      expect(nameLink).toHaveClass('focus-visible:ring-2');
+      expect(nameLink).toHaveClass('focus-visible:ring-indigo-500');
+      expect(nameLink).toHaveClass('focus-visible:ring-offset-2');
+    });
+  });
+
+  describe('ExperimentPortfolioTable', () => {
+    it('experiment name links have focus-visible styling for keyboard accessibility', () => {
+      const mockPortfolioExperiments: PortfolioExperiment[] = [
+        {
+          experimentId: 'exp-portfolio-1',
+          name: 'Portfolio Exp 1',
+          effectSize: 0.1,
+          variance: 0.01,
+          allocatedTrafficPct: 0.5,
+          priorityScore: 0.8,
+          userSegments: ['all'],
+        },
+      ];
+
+      render(<ExperimentPortfolioTable experiments={mockPortfolioExperiments} />);
+
+      const nameLink = screen.getByRole('link', { name: 'Portfolio Exp 1' });
+      expect(nameLink).toHaveClass('focus-visible:ring-2');
+      expect(nameLink).toHaveClass('focus-visible:ring-indigo-500');
+      expect(nameLink).toHaveClass('focus-visible:ring-offset-2');
     });
   });
 

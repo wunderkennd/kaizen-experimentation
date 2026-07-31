@@ -160,7 +160,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <td className="py-3 pl-4 pr-3">
                 <Link
                   href={`/experiments/${exp.experimentId}`}
-                  className="font-medium text-indigo-600 hover:text-indigo-800"
+                  className="font-medium text-indigo-600 hover:text-indigo-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   data-testid={`portfolio-row-name-${exp.experimentId}`}
                 >
                   {exp.name}
