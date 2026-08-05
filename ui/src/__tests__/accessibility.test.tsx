@@ -557,5 +557,22 @@ describe('Accessibility', () => {
       expect(removeButton).toHaveClass('focus-visible:ring-indigo-500');
       expect(removeButton).toHaveClass('focus-visible:ring-offset-1');
     });
+
+    it('clear all button on selected chips has accessibility focus ring classes', () => {
+      render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={['exp-1']}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+          onClearAll={vi.fn()}
+        />,
+      );
+
+      const clearAllButton = screen.getByRole('button', { name: 'Clear all selections' });
+      expect(clearAllButton).toHaveClass('focus-visible:ring-2');
+      expect(clearAllButton).toHaveClass('focus-visible:ring-indigo-500');
+      expect(clearAllButton).toHaveClass('focus-visible:ring-offset-1');
+    });
   });
 });

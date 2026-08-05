@@ -9,6 +9,7 @@ interface ExperimentSelectorProps {
   selectedIds: string[];
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
+  onClearAll?: () => void;
   maxSelections?: number;
 }
 
@@ -17,6 +18,7 @@ function ExperimentSelectorInner({
   selectedIds,
   onSelect,
   onRemove,
+  onClearAll,
   maxSelections = 4,
 }: ExperimentSelectorProps) {
   const [query, setQuery] = useState('');
@@ -60,7 +62,7 @@ function ExperimentSelectorInner({
 
       {/* Selected experiment chips */}
       {selectedExperiments.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2" data-testid="selected-experiments">
+        <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="selected-experiments">
           {selectedExperiments.map((exp) => {
             const stateConfig = STATE_CONFIG[exp.state];
             return (
@@ -80,6 +82,17 @@ function ExperimentSelectorInner({
               </span>
             );
           })}
+          {onClearAll && (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+              data-testid="clear-all-selections"
+              aria-label="Clear all selections"
+            >
+              Clear all
+            </button>
+          )}
         </div>
       )}
 
