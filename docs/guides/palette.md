@@ -80,3 +80,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-07-10 - Standardizing Focus Styles on Sortable Headers
 **Learning:** Table header buttons used for sorting should implement standard visual focus indicators with a clear visual offset rather than tight inset rings. This consistent gap between the focus outline and the button text ensures clear spatial and visual indication for keyboard navigators, matching global navigation and primary button standards.
 **Action:** Always apply `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` to table header sort buttons across both list views and portfolio grids instead of `focus-visible:ring-inset`.
+
+## 2026-07-15 - Multi-Selection Reset Interaction Pattern
+**Learning:** For multi-selection workflows (such as selecting multiple experiments for side-by-side comparison), users find it highly tedious to individually close or remove each selection chip to reset or clear the view. Providing a dedicated, keyboard-accessible "Clear all" button alongside the chips significantly reduces interaction friction and facilitates quick, exploratory comparison flows.
+**Action:** When displaying a list of selected interactive items or chips, always render an adjacent "Clear all" reset button if multiple items are present. Ensure the button is fully navigable and styles its focus state with offset rings for maximum accessibility.
