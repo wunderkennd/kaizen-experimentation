@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, memo } from 'react';
+import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 import type { Experiment } from '@/lib/types';
 import { STATE_CONFIG, TYPE_LABELS } from '@/lib/utils';
 
@@ -24,6 +25,9 @@ function ExperimentSelectorInner({
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useSearchShortcut(inputRef);
 
   // Filter to experiments with results (RUNNING or CONCLUDED)
   const selectableExperiments = experiments.filter(
@@ -109,6 +113,7 @@ function ExperimentSelectorInner({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
+            ref={inputRef}
             id="experiment-search"
             type="text"
             value={query}
@@ -137,6 +142,12 @@ function ExperimentSelectorInner({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          ) : !atLimit ? (
+            <div className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center group-focus-within:hidden group-hover:hidden">
+              <span className="flex h-5 w-5 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[10px] font-medium text-gray-500">
+                /
+              </span>
+            </div>
           ) : null}
         </div>
 

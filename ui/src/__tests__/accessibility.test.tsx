@@ -574,5 +574,40 @@ describe('Accessibility', () => {
       expect(clearAllButton).toHaveClass('focus-visible:ring-indigo-500');
       expect(clearAllButton).toHaveClass('focus-visible:ring-offset-1');
     });
+
+    it('focuses search input on "/" keypress and handles disabled state at selection limit', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={[]}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      expect(input).not.toHaveFocus();
+
+      // Press '/' to focus
+      await user.keyboard('/');
+      expect(input).toHaveFocus();
+
+      // Rerender with max selections (limit of 4 reached)
+      rerender(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={['exp-1', 'exp-2', 'exp-3', 'exp-4']}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+          maxSelections={4}
+        />,
+      );
+
+      // Input should be disabled, and hint "/" badge is not rendered
+      const disabledInput = screen.getByRole('textbox', { name: 'Search experiments' });
+      expect(disabledInput).toBeDisabled();
+      expect(screen.queryByText('/')).not.toBeInTheDocument();
+    });
   });
 });
