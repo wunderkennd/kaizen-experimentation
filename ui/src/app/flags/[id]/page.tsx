@@ -9,6 +9,7 @@ import { RetryableError } from '@/components/retryable-error';
 import { useAuth } from '@/lib/auth-context';
 import { CopyButton } from '@/components/copy-button';
 import { Breadcrumb } from '@/components/breadcrumb';
+import { ROLE_LABELS } from '@/lib/auth';
 
 const FLAG_TYPE_BADGE: Record<FlagType, string> = {
   BOOLEAN: 'bg-blue-100 text-blue-800',
@@ -20,7 +21,7 @@ const FLAG_TYPE_BADGE: Record<FlagType, string> = {
 function FlagDetailContent() {
   const params = useParams();
   const router = useRouter();
-  const { canAtLeast } = useAuth();
+  const { canAtLeast, user } = useAuth();
   const flagId = params.id as string;
 
   const [flag, setFlag] = useState<Flag | null>(null);
@@ -92,7 +93,7 @@ function FlagDetailContent() {
         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${flag.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
           {flag.enabled ? 'Enabled' : 'Disabled'}
         </span>
-        {canAtLeast('experimenter') && (
+        {canAtLeast('experimenter') ? (
           <Link
             href={`/flags/${flag.flagId}/edit`}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none"
@@ -100,6 +101,17 @@ function FlagDetailContent() {
           >
             Edit
           </Link>
+        ) : (
+          <span
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 opacity-50 cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+            title={`Requires Experimenter role (you are ${user ? ROLE_LABELS[user.role] : 'Unknown'})`}
+            data-testid="edit-flag-disabled"
+            tabIndex={0}
+            role="button"
+            aria-disabled="true"
+          >
+            Edit
+          </span>
         )}
       </div>
 
