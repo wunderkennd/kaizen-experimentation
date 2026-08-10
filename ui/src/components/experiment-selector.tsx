@@ -133,6 +133,7 @@ function ExperimentSelectorInner({
               type="button"
               onClick={() => {
                 setQuery('');
+                inputRef.current?.focus();
               }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
               aria-label="Clear search"
