@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import ComparePage from '@/app/compare/page';
+import { ToastProvider } from '@/lib/toast-context';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
@@ -49,7 +50,11 @@ vi.mock('recharts', async () => {
 
 describe('Experiment Comparison Page', () => {
   it('renders page heading and experiment selector', async () => {
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Experiment Comparison' })).toBeInTheDocument();
@@ -59,7 +64,11 @@ describe('Experiment Comparison Page', () => {
   });
 
   it('shows empty state when no experiments selected', async () => {
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
@@ -71,7 +80,11 @@ describe('Experiment Comparison Page', () => {
 
   it('selector shows available experiments (RUNNING/CONCLUDED)', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
@@ -100,7 +113,11 @@ describe('Experiment Comparison Page', () => {
 
   it('selecting experiments fetches and displays results', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
@@ -135,7 +152,11 @@ describe('Experiment Comparison Page', () => {
 
   it('comparison table shows metric results side-by-side', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
@@ -171,7 +192,11 @@ describe('Experiment Comparison Page', () => {
 
   it('chart renders with effect sizes', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
@@ -198,7 +223,11 @@ describe('Experiment Comparison Page', () => {
 
   it('metric alignment matrix shows shared metrics', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
@@ -232,7 +261,11 @@ describe('Experiment Comparison Page', () => {
 
   it('can remove an experiment from comparison', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
@@ -267,7 +300,11 @@ describe('Experiment Comparison Page', () => {
 
   it('can clear all experiments from comparison with one click', async () => {
     const user = userEvent.setup();
-    render(<ComparePage />);
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
