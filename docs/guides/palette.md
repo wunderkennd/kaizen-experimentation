@@ -84,3 +84,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-07-15 - Multi-Selection Reset Interaction Pattern
 **Learning:** For multi-selection workflows (such as selecting multiple experiments for side-by-side comparison), users find it highly tedious to individually close or remove each selection chip to reset or clear the view. Providing a dedicated, keyboard-accessible "Clear all" button alongside the chips significantly reduces interaction friction and facilitates quick, exploratory comparison flows.
 **Action:** When displaying a list of selected interactive items or chips, always render an adjacent "Clear all" reset button if multiple items are present. Ensure the button is fully navigable and styles its focus state with offset rings for maximum accessibility.
+
+## 2026-08-12 - Standard Focus Rings on Form Actions
+**Learning:** Primary form actions (like 'Cancel' and 'Create Metric') are crucial keyboard targets but are easily neglected during manual accessibility checks. Standardizing these with `focus-visible` offset rings prevents keyboard focus loss and ensures consistent interaction feedback across creation workflows, aligning them with global navigation elements.
+**Action:** Always apply `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` to all primary and secondary form-level action buttons.
