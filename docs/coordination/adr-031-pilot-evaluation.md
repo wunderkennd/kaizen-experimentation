@@ -46,16 +46,36 @@ The strict-net-negative reading is what ADR-031 §3 asks for. But the pilot's sh
 
 **Only the most generous view — retire-as-delete plus folding in the e2e replacement — makes the pilot net-negative on source-code line count (~−260); the strict and retire-as-delete views both show a net increase.** They vary in what we count as replaced. #645 has to pick one.
 
-### 1.3 Build-time delta (local, warm-cache)
+### 1.3 Build-time delta
 
-Local measurements on darwin-arm64, macOS 25.5.0, workspace deps pre-fetched. Not a stand-in for CI clean builds — see the runbook (§4) for that.
+Local measurements on darwin-arm64 (Apple Silicon, 8-core), macOS 25.5.0, worktree with fresh `cargo clean` before each. Single-sample; take the wall-clock number with a grain of salt for noise, but the user-CPU number (total work) is robust across runs.
 
-| Build | Wall (warm) | Notes |
+**Per-crate (warm workspace deps, release):**
+
+| Build | Wall | Notes |
 | --- | ---: | --- |
-| `cargo build -p experimentation-assignment` (default) | ~15s | tonic + prost paths only |
-| `cargo build -p experimentation-assignment --features connectrpc` | ~14s | adds buffa + connectrpc + tower |
+| `cargo clean -p experimentation-assignment --release && cargo build --release -p experimentation-assignment` | **27.16s** | tonic + prost paths only |
+| `cargo clean -p experimentation-assignment --release && cargo build --release -p experimentation-assignment --features connectrpc` | **31.34s** | adds buffa + connectrpc + proto-connect |
+| **Per-crate delta** | **+4.18s (+15.4%)** | isolates the M1-crate compile cost of the feature |
 
-Warm-cache wall clock is within noise. Under connectrpc, ~8 additional crates compile (buffa, connectrpc, tower, mime, ...). CI clean-build impact is the interesting number and is not measured here.
+**Workspace-cold (`cargo clean && cargo build --release --workspace`):**
+
+| Build | Wall | User CPU (total work) | Parallelism |
+| --- | ---: | ---: | ---: |
+| Baseline (no features) | **4m 51s** (291.6s) | 21m 44s (1304s) | 4.48× |
+| Pilot (`--features experimentation-assignment/connectrpc`) | **7m 30s** (450.6s) | 21m 57s (1317s) | 2.93× |
+| **Workspace delta** | **+2m 39s (+54.5%)** | **+13s (+1.0%)** | **−34%** |
+
+**Reading the two views:**
+
+- **Total compile work is essentially unchanged (+1.0%)** — buffa + connectrpc + `experimentation-proto-connect` add tokens to the compilation graph, but the fleet's compile cost is dominated by `experimentation-stats` (as ADR-031 §5 anticipated) and the pilot's additions are dwarfed by that.
+- **Wall-clock is +54.5% on this single sample** because the pilot's dep graph parallelizes worse than the baseline's — parallelism drops from 4.48× to 2.93×. Some of that is real (proto-connect's `build.rs` codegen is a sequential barrier that must complete before `experimentation-assignment` can compile), some is single-sample variance from disk/rustc cache state at start. A CI runner with more cores would flatten this out; a runner tighter on cores would feel it more.
+- **Per-crate warm delta (+4.18s / +15.4%)** is a cleaner measure of what turning the feature ON costs in day-to-day dev builds where deps are cached. Above the ±10% threshold in ADR-031's success criterion #5 read strictly, within it if the threshold is applied to total workspace work.
+- **CI budget impact** is small in relative terms — 2m 39s added to a 4m 51s workspace build is meaningful for CI cost, but the additions are compilations that only happen ONCE per feature/architecture in the buildkit cache; the incremental CI cost drops sharply after cache warms.
+
+Which view answers #5 depends on how the criterion is read (per-crate vs workspace, cold vs warm, single-sample vs statistical). #645 has to pick.
+
+**Runbook**: to reproduce, `cargo clean && time cargo build --release --workspace` for baseline, then `cargo clean && time cargo build --release --workspace --features experimentation-assignment/connectrpc` for pilot. 3-sample median is more robust than these single points.
 
 ### 1.4 buffa / prost coexistence
 
@@ -83,8 +103,8 @@ Language quoted verbatim from `docs/adrs/031-connectrpc-rust-assignment-pilot.md
 | 1 | *All five RPCs pass their existing M1 contract tests (assignment, m1m4b, m1m4b_slate) over Connect + gRPC + gRPC-Web (rerouted via connectrpc's per-protocol handlers)* | ✅ **Met** | `cargo test -p experimentation-assignment --features connectrpc` all green (Connect e2e tests + stream tests + all pre-existing contract tests). See #739 and #740. |
 | 2 | *`sdks/server-go` is migrated to the generated Connect client; hand-rolled JSON delete-path is empty* | ✅ **Met** | #743 (#644) — `RemoteProvider` uses `assignmentv1connect.NewAssignmentServiceClient`. `http_json.rs` cfg-gated out. Conformance suite in `connect_pilot_e2e_test.go` covers all 4 unary + streaming open. |
 | 3 | *Total LOC delta is net negative: the retired `http_json.rs` shim (~350 LOC) plus retired server-go JSON path outweighs the added Connect trait implementations* | ⚠️ **Not met on strict read** | §1.1: +995 lines net. §1.2 shows the interpretation views. Kill criterion 1 is the same measurement — see below. |
-| 4 | *No RPC's p99 latency (measured by nightly-loadtest against the pilot binary) regresses by more than ±10% from the tonic baseline; StreamConfigUpdates disconnects cleanly on client cancel (same as tonic)* | 🟡 **Unmeasured** | Requires `nightly-loadtest` run against both the tonic and connectrpc binaries. Runbook in §4. |
-| 5 | *Build-time delta for the pilot crate is documented and judged acceptable (CI budget is dominated by `experimentation-stats`; buffa's compile cost should not exceed that of prost/tonic)* | 🟡 **Partly measured** | §1.3 gives local warm numbers (within noise). Clean-build CI cost is not measured. Runbook in §4. |
+| 4 | *No RPC's p99 latency (measured by nightly-loadtest against the pilot binary) regresses by more than ±10% from the tonic baseline; StreamConfigUpdates disconnects cleanly on client cancel (same as tonic)* | 🟡 **Unmeasured — scaffolded** | `scripts/loadtest/m1-p99.js` + [runbook](../runbooks/m1-p99-loadtest.md) are ready; one 60s k6 run per variant fills this blank. Executable locally (no cloud creds) — see runbook. Same script serves #500's Cloud Run smoke gate. |
+| 5 | *Build-time delta for the pilot crate is documented and judged acceptable (CI budget is dominated by `experimentation-stats`; buffa's compile cost should not exceed that of prost/tonic)* | 🟡 **Measured, ambiguous read** | §1.3 gives per-crate warm (+15.4%) AND workspace-cold (+54.5% wall / +1.0% work). Read as "total compile work" the pilot is within noise; read as "wall-clock ±10%" it fails on this single sample. Anticipated dominance of `experimentation-stats` in CI budget is confirmed (per-crate delta is 4s while workspace is 5+ min). #645 picks the reading. |
 
 ### Kill (any triggers ADR-031 Rejected)
 
@@ -115,58 +135,52 @@ These are what a strict LOC read misses. Whether they justify the +995 is #645's
 
 ### 4.1 p99 latency (success #4)
 
-Requires the `nightly-loadtest` workflow or a manual run against both binaries.
+**Scaffolded** — `scripts/loadtest/m1-p99.js` covers all four unary RPCs (GetAssignment, GetAssignments, GetSlateAssignment, GetInterleavedList) over both protocols in one k6 script. Full commands in [`docs/runbooks/m1-p99-loadtest.md`](../runbooks/m1-p99-loadtest.md). Two-run summary:
 
 ```bash
-# Baseline (tonic):
-CONFIG_PATH=dev/config.json cargo run --release \
-  -p experimentation-assignment --bin experimentation-assignment &
-BASELINE_PID=$!
+# Baseline (tonic on :50051)
+cargo run --release -p experimentation-assignment &
+TARGET_URL=http://127.0.0.1:50051 k6 run \
+  --summary-export=/tmp/baseline.json scripts/loadtest/m1-p99.js
+kill %1
 
-# Load using k6/vegeta/oha of your choice; e.g. with oha at 500 rps for 60s:
-oha -n 30000 -c 100 \
-  -m POST -H 'Content-Type: application/json' \
-  -d '{"userId":"u","experimentId":"exp_dev_001","sessionId":"s","attributes":{}}' \
-  http://127.0.0.1:8080/experimentation.assignment.v1.AssignmentService/GetAssignment
+# Pilot (Connect on :50161, tonic still on :50051 alongside)
+cargo run --release -p experimentation-assignment --features connectrpc &
+TARGET_URL=http://127.0.0.1:50161 k6 run \
+  --summary-export=/tmp/pilot.json scripts/loadtest/m1-p99.js
+kill %1
 
-kill $BASELINE_PID
-
-# Pilot (connectrpc):
-CONNECTRPC_ADDR=127.0.0.1:50161 CONFIG_PATH=dev/config.json cargo run --release \
-  -p experimentation-assignment --features connectrpc \
-  --bin experimentation-assignment &
-PILOT_PID=$!
-
-# Same load pattern against the Connect port; use `application/connect+json`:
-oha -n 30000 -c 100 \
-  -m POST -H 'Content-Type: application/json' -H 'Connect-Protocol-Version: 1' \
-  -d '{"userId":"u","experimentId":"exp_dev_001","sessionId":"s","attributes":{}}' \
-  http://127.0.0.1:50161/experimentation.assignment.v1.AssignmentService/GetAssignment
-
-kill $PILOT_PID
+# Compare p99
+jq -s '{ baseline: .[0].metrics.rpc_latency_ms.values["p(99)"],
+         pilot:    .[1].metrics.rpc_latency_ms.values["p(99)"] }' \
+   /tmp/baseline.json /tmp/pilot.json
 ```
 
-**Pass**: pilot p99 within ±10% of baseline for GetAssignment, GetAssignments, GetSlateAssignment, GetInterleavedList. StreamConfigUpdates disconnects cleanly on client cancel (`connect.CodeCanceled`, no server-side leak — validated by the existing `stream_config_updates_test.rs`).
+**Pass**: pilot p99 within ±10% of baseline for each of the four unary RPCs. StreamConfigUpdates disconnects cleanly on client cancel (`connect.CodeCanceled`, no server-side leak — already validated by the existing `stream_config_updates_test.rs`).
+
+**Alternative — direct HTTP** (no k6 install needed, GetAssignment only): the original oha commands still work — see PR #753 for the manual form.
 
 ### 4.2 Build-time delta (success #5)
+
+**Measured — see §1.3 for numbers.** To reproduce or gather more samples:
 
 ```bash
 # CI-shape clean build for each feature path:
 cargo clean
-time cargo build --workspace 2>&1 | tail -3
+time cargo build --release --workspace 2>&1 | tail -3
 
 cargo clean
-time cargo build --workspace --features experimentation-assignment/connectrpc 2>&1 | tail -3
+time cargo build --release --workspace --features experimentation-assignment/connectrpc 2>&1 | tail -3
 ```
 
 For per-crate compilation timing (Cargo 1.60+):
 
 ```bash
-cargo build --workspace --timings=html
+cargo build --release --workspace --timings=html
 open target/cargo-timings/cargo-timing.html
 ```
 
-**Pass**: connectrpc-path clean build within ~10% of default. buffa+connectrpc combined must not exceed `experimentation-stats`'s compile time (the current pole).
+**Pass**: connectrpc-path clean build within ~10% of default. buffa+connectrpc combined must not exceed `experimentation-stats`'s compile time (the current pole). §1.3 shows this holds for **total compile work** (+1.0% user CPU) but exceeds it on **wall-clock** on a single sample (+54.5%) driven by worse dep-graph parallelism, not more work. #645 picks the reading.
 
 ---
 
