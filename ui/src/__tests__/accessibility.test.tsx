@@ -110,7 +110,7 @@ describe('Accessibility', () => {
       expect(onCancel).toHaveBeenCalledTimes(1);
     });
 
-    it('focuses Cancel button on open', () => {
+    it('focuses Cancel button on open and button has accessibility focus ring classes', () => {
       render(
         <ConfirmDialog
           open={true}
@@ -122,7 +122,11 @@ describe('Accessibility', () => {
         />,
       );
 
-      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }));
+      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+      expect(document.activeElement).toBe(cancelButton);
+      expect(cancelButton).toHaveClass('focus-visible:ring-2');
+      expect(cancelButton).toHaveClass('focus-visible:ring-indigo-500');
+      expect(cancelButton).toHaveClass('focus-visible:ring-offset-2');
     });
 
     it('title and message are linked via aria-labelledby/describedby', () => {
