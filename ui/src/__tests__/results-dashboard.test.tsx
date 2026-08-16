@@ -106,7 +106,7 @@ describe('Results Dashboard - homepage_recs_v2 (experiment 111...)', () => {
     expect(screen.queryByText('Sample Ratio Mismatch Detected')).not.toBeInTheDocument();
   });
 
-  it('CUPED toggle switches between raw and adjusted values', async () => {
+  it('CUPED toggle switches between raw and adjusted values and has proper accessibility attributes', async () => {
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -114,11 +114,15 @@ describe('Results Dashboard - homepage_recs_v2 (experiment 111...)', () => {
       expect(screen.getByText('CUPED Adjustment')).toBeInTheDocument();
     });
 
+    const toggle = screen.getByRole('switch', { name: 'CUPED Adjustment' });
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-label', 'CUPED Adjustment');
+    expect(toggle.className).toContain('focus-visible:ring-2');
+
     // Default: raw values — click_through_rate effect is 0.014 → "+0.0140"
     expect(screen.getByText('+0.0140')).toBeInTheDocument();
 
     // Toggle CUPED on
-    const toggle = screen.getByRole('switch');
     await user.click(toggle);
 
     // CUPED adjusted: click_through_rate effect is 0.013 → "+0.0130"
