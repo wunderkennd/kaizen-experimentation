@@ -108,11 +108,12 @@ describe('VariantForm', () => {
     expect(screen.queryByDisplayValue('extra')).not.toBeInTheDocument();
   });
 
-  it('disables remove button at minimum variant count for AB', () => {
+  it('disables remove button at minimum variant count for AB and shows tooltip', () => {
     render(<VariantForm variants={baseVariants} experimentType="AB" onSave={vi.fn()} />);
     const removeButtons = screen.getAllByText('Remove');
     removeButtons.forEach((btn) => {
       expect(btn).toBeDisabled();
+      expect(btn).toHaveAttribute('title', 'Minimum of 2 variants required');
     });
   });
 
