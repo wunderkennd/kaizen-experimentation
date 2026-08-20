@@ -15,6 +15,7 @@ import type { QueryLogEntry, Experiment } from '@/lib/types';
 import { ExperimentSelector } from '@/components/experiment-selector';
 import { MonitoringHealthTable } from '@/components/monitoring-health-table';
 import { ExperimentPortfolioTable } from '@/components/experiment-portfolio-table';
+import { StartingChecklist } from '@/components/starting-checklist';
 import type { PortfolioExperiment } from '@/lib/types';
 
 const defaultUser: AuthUser = { email: 'test@streamco.com', role: 'experimenter' };
@@ -612,6 +613,19 @@ describe('Accessibility', () => {
       const disabledInput = screen.getByRole('textbox', { name: 'Search experiments' });
       expect(disabledInput).toBeDisabled();
       expect(screen.queryByText('/')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('StartingChecklist', () => {
+    it('has region role and includes screen reader status text for each item', () => {
+      render(<StartingChecklist />);
+
+      const region = screen.getByRole('region', { name: 'Experiment startup progress' });
+      expect(region).toBeInTheDocument();
+
+      const srTexts = screen.getAllByText(/\((Completed|In progress|Pending)\)/);
+      expect(srTexts.length).toBeGreaterThan(0);
+      expect(screen.getByText('(In progress)')).toBeInTheDocument();
     });
   });
 });
