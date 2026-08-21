@@ -1,4 +1,6 @@
 //! Experimentation Analysis Service (M4a) — Statistical inference.
+
+#![allow(clippy::result_large_err)]
 //!
 //! Batch analysis service that reads metric data from Delta Lake,
 //! runs statistical tests via the experimentation-stats crate,
