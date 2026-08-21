@@ -1,4 +1,6 @@
 //! M2 Event Pipeline — gRPC ingestion server.
+
+#![allow(clippy::result_large_err)]
 //!
 //! Crash-only design: no SIGTERM handler, no graceful shutdown.
 //! On restart, the Bloom filter resets (brief dedup gap accepted per design doc).

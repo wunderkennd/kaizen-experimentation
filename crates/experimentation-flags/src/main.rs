@@ -1,4 +1,6 @@
 //! Experimentation Feature Flag Service (M7) — Rust port (ADR-024).
+
+#![allow(clippy::result_large_err)]
 //!
 //! Startup sequence:
 //!   1. Load config from env.

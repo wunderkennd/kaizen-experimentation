@@ -213,15 +213,22 @@ describe('Experiment Detail Page - CONCLUDING experiment', () => {
     mockExperimentId = '66666666-6666-6666-6666-666666666666';
   });
 
-  it('shows concluding progress for CONCLUDING experiment', async () => {
+  it('shows concluding progress for CONCLUDING experiment with proper accessibility attributes', async () => {
     renderDetail();
 
     await waitFor(() => {
       expect(screen.getByText('Concluding Experiment')).toBeInTheDocument();
     });
 
+    expect(screen.getByRole('region', { name: 'Concluding experiment progress' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Concluding progress steps' })).toBeInTheDocument();
+
     expect(screen.getByText('Stopping traffic')).toBeInTheDocument();
     expect(screen.getByText('Running final analysis')).toBeInTheDocument();
     expect(screen.getByText('Generating report')).toBeInTheDocument();
+
+    expect(screen.getByText('(Completed)')).toBeInTheDocument();
+    expect(screen.getByText('(In progress)')).toBeInTheDocument();
+    expect(screen.getByText('(Pending)')).toBeInTheDocument();
   });
 });

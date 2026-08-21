@@ -8,6 +8,8 @@
 //! This crate provides pure functions — no threads, no channels.
 //! The threading model is the responsibility of experimentation-policy.
 
+#![allow(clippy::result_large_err)]
+
 pub mod cold_start;
 pub mod linucb;
 pub mod lp_constraints;

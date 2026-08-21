@@ -1,7 +1,7 @@
 //! Experimentation Management Service (M5) — Rust port (ADR-025).
 //!
 //! Phase 2 implements:
-//!   - TOCTOU-safe lifecycle state machine (DRAFT��STARTING→RUNNING→PAUSED→CONCLUDING→CONCLUDED→ARCHIVED)
+//!   - TOCTOU-safe lifecycle state machine (DRAFT→STARTING→RUNNING→PAUSED→CONCLUDING→CONCLUDED→ARCHIVED)
 //!   - STARTING validators for META, SWITCHBACK, QUASI experiment types (ADR-013, 022, 023)
 //!   - Guardrail Kafka consumer: auto-pause on breach (ADR-008)
 //!   - Bucket reuse allocator with overlap detection (ADR-009)
@@ -17,6 +17,8 @@
 //!   - AnnualizedImpact computation for concluded experiments
 //!   - Decision rule evaluation (Continue/Ship/Stop/Extend)
 //!   - Alpha recommendation engine (priority-weighted Bonferroni)
+
+#![allow(clippy::result_large_err)]
 
 pub mod bucket_reuse;
 pub mod config;
