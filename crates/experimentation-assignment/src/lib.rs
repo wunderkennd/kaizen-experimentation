@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 pub mod bandit_client;
 pub mod config;
 pub mod config_cache;
