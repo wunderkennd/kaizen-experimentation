@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import type { MetricResult, EValueResult } from '@/lib/types';
 import { formatPValue, formatEffect, formatEValue } from '@/lib/utils';
+import { CopyButton } from './copy-button';
 
 interface TreatmentEffectsTableProps {
   metricResults: MetricResult[];
@@ -48,15 +49,23 @@ function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw, eValueR
             return (
               <tr
                 key={m.metricId}
-                className={significant ? `border-l-4 ${useIpw ? 'border-l-amber-500' : 'border-l-green-500'}` : ''}
+                className={`group ${significant ? `border-l-4 ${useIpw ? 'border-l-amber-500' : 'border-l-green-500'}` : ''}`}
               >
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                  {m.metricId}
-                  {useIpw && (
-                    <span className="ml-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                      IPW
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span>{m.metricId}</span>
+                    <CopyButton
+                      value={m.metricId}
+                      label="Copy metric ID"
+                      successMessage="Metric ID copied to clipboard"
+                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    />
+                    {useIpw && (
+                      <span className="ml-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                        IPW
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                   {m.controlMean.toFixed(4)}
