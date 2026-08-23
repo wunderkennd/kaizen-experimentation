@@ -197,6 +197,30 @@ describe('Search Clear Buttons Focus Restoration', () => {
     expect(input).toHaveFocus();
   });
 
+  it('FlagListPage restores focus to search input when empty-state Clear filters is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider initialUser={{ email: 'test@streamco.com', role: 'admin' }}>
+        <ToastProvider>
+          <FlagListPage />
+        </ToastProvider>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search by name, ID, or description...')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Search by name, ID, or description...');
+    await user.type(input, 'nonexistent-flag-xyz');
+
+    const clearFiltersBtn = await screen.findByTestId('clear-filters-empty');
+    await user.click(clearFiltersBtn);
+
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
   it('MetricBrowserPage restores focus to search input when clear search is clicked', async () => {
     const user = userEvent.setup();
     render(
@@ -217,6 +241,30 @@ describe('Search Clear Buttons Focus Restoration', () => {
 
     const clearButton = screen.getByRole('button', { name: 'Clear search' });
     await user.click(clearButton);
+
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
+  it('MetricBrowserPage restores focus to search input when empty-state Clear filters is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider initialUser={{ email: 'test@streamco.com', role: 'admin' }}>
+        <ToastProvider>
+          <MetricBrowserPage />
+        </ToastProvider>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search by name, ID, or description...')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Search by name, ID, or description...');
+    await user.type(input, 'nonexistent-metric-xyz');
+
+    const clearFiltersBtn = await screen.findByTestId('clear-filters-empty');
+    await user.click(clearFiltersBtn);
 
     expect(input).toHaveValue('');
     expect(input).toHaveFocus();

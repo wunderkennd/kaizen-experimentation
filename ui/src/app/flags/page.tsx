@@ -35,6 +35,7 @@ function FlagListContent() {
   const clearFilters = useCallback(() => {
     setSearch('');
     setTypeFilter('');
+    inputRef.current?.focus();
   }, []);
 
   const fetchData = useCallback(() => {
