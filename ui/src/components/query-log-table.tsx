@@ -54,7 +54,7 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
         <button
           onClick={onExport}
           disabled={exporting}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
         >
           {exporting ? (exportPhase ? EXPORT_PHASE_LABELS[exportPhase] : 'Exporting…') : 'Export Notebook'}
         </button>
@@ -91,7 +91,7 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
                     onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
                     aria-expanded={expandedIndex === i}
                     aria-label={`Toggle SQL preview for ${entry.metricId}`}
-                    className="max-w-md truncate text-left font-mono text-xs text-gray-600 hover:text-indigo-600"
+                    className="max-w-md truncate text-left font-mono text-xs text-gray-600 hover:text-indigo-600 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   >
                     {entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}
                   </button>
