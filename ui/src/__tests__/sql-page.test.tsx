@@ -90,7 +90,7 @@ describe('SQL Page', () => {
     expect(screen.getByText('1.8s')).toBeInTheDocument();
   });
 
-  it('expands row to show full SQL text', async () => {
+  it('expands row to show full SQL text and renders accessible copy button', async () => {
     const user = userEvent.setup();
     render(
       <ToastProvider>
@@ -110,6 +110,11 @@ describe('SQL Page', () => {
     const preElements = document.querySelectorAll('pre');
     expect(preElements.length).toBeGreaterThanOrEqual(1);
     expect(preElements[0].textContent).toContain('experiment_id');
+
+    // Should render CopyButton with focus-within accessibility classes
+    const copyButton = screen.getByRole('button', { name: /Copy SQL to clipboard/i });
+    expect(copyButton).toBeInTheDocument();
+    expect(copyButton).toHaveClass('focus-within:opacity-100');
   });
 
   it('shows empty state when no entries', async () => {
