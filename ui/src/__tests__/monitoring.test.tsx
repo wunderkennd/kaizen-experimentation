@@ -121,6 +121,11 @@ describe('Monitoring Page', () => {
     const actionTexts = actions.map((a) => a.textContent);
     expect(actionTexts).toContain('Alert Only');
     expect(actionTexts).toContain('Auto-Paused');
+
+    // Check breach experiment link navigation
+    const breachLink = screen.getAllByTestId('breach-experiment-link-11111111-1111-1111-1111-111111111111')[0];
+    expect(breachLink).toBeInTheDocument();
+    expect(breachLink).toHaveAttribute('href', '/experiments/11111111-1111-1111-1111-111111111111');
   });
 
   it('auto-refresh toggle works', async () => {
