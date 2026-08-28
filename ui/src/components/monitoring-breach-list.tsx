@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { Experiment, GuardrailBreachEvent, GuardrailStatusResult } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
@@ -50,7 +51,13 @@ export function MonitoringBreachList({ experiments, guardrailStatuses }: Monitor
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-semibold text-red-800">
-                {breach.experimentName}
+                <Link
+                  href={`/experiments/${breach.experimentId}`}
+                  className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                  data-testid={`breach-experiment-link-${breach.experimentId}`}
+                >
+                  {breach.experimentName}
+                </Link>
               </p>
               <p className="mt-1 text-sm text-red-700">
                 Metric: <span className="font-medium">{breach.metricId}</span>
