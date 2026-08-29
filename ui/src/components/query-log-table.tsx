@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { QueryLogEntry } from '@/lib/types';
 import type { ExportPhase } from '@/lib/export-notebook';
+import { CopyButton } from '@/components/copy-button';
 
 const SqlHighlighter = dynamic(
   () => import('@/components/sql-highlighter').then(m => ({ default: m.SqlHighlighter })),
@@ -82,9 +83,17 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
           </thead>
           <tbody className="divide-y divide-gray-200">
             {entries.map((entry, i) => (
-              <tr key={`${entry.metricId}-${i}`} className="group">
+              <tr key={`${entry.metricId}-${i}`} className="group hover:bg-gray-50 focus-within:bg-gray-50">
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                  {entry.metricId}
+                  <div className="flex items-center gap-2">
+                    <span>{entry.metricId}</span>
+                    <CopyButton
+                      value={entry.metricId}
+                      label={`Copy metric ID ${entry.metricId}`}
+                      successMessage="Metric ID copied to clipboard"
+                      className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   <button

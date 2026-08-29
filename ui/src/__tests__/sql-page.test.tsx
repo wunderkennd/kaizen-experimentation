@@ -59,7 +59,7 @@ describe('SQL Page', () => {
     expect(screen.getByText('crash_rate')).toBeInTheDocument();
   });
 
-  it('shows metric ID for each entry', async () => {
+  it('shows metric ID for each entry with accessible copy button', async () => {
     render(
       <ToastProvider>
         <SqlPage />
@@ -72,6 +72,10 @@ describe('SQL Page', () => {
 
     expect(screen.getByText('watch_time_per_session')).toBeInTheDocument();
     expect(screen.getByText('crash_rate')).toBeInTheDocument();
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy metric ID click_through_rate' });
+    expect(copyBtn).toBeInTheDocument();
+    expect(copyBtn).toHaveClass('opacity-0');
   });
 
   it('shows formatted duration and row count', async () => {
