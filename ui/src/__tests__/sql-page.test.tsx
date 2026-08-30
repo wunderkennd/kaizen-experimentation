@@ -121,7 +121,7 @@ describe('SQL Page', () => {
     expect(copyButton).toHaveClass('focus-within:opacity-100');
   });
 
-  it('shows empty state when no entries', async () => {
+  it('shows empty state with actionable navigation CTA link when no entries', async () => {
     mockExperimentId = '44444444-4444-4444-4444-444444444444';
     render(
       <ToastProvider>
@@ -132,6 +132,28 @@ describe('SQL Page', () => {
     await waitFor(() => {
       expect(screen.getByText('No query log entries found for this experiment.')).toBeInTheDocument();
     });
+
+    const ctaLink = screen.getByRole('link', { name: /Return to Experiment Details/i });
+    expect(ctaLink).toBeInTheDocument();
+    expect(ctaLink).toHaveAttribute('href', '/experiments/44444444-4444-4444-4444-444444444444');
+    expect(ctaLink).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-indigo-500');
+  });
+
+  it('renders loading spinner in Export Notebook button during export', async () => {
+    const { QueryLogTable } = await import('@/components/query-log-table');
+    render(
+      <ToastProvider>
+        <QueryLogTable
+          entries={[{ experimentId: '111', metricId: 'test_metric', sqlText: 'SELECT 1', rowCount: 10, durationMs: 100 }]}
+          onExport={vi.fn()}
+          exporting={true}
+          exportPhase="fetching"
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByTestId('export-spinner')).toBeInTheDocument();
+    expect(screen.getByText('Fetching data…')).toBeInTheDocument();
   });
 
   it('shows Export Notebook button', async () => {
