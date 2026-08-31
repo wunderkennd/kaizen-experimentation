@@ -202,6 +202,26 @@ describe('Results Dashboard - thumbnail_selection_v1 (experiment 666..., SRM mis
   });
 });
 
+describe('Results Dashboard - bandit experiment with IPW details panel', () => {
+  beforeEach(() => {
+    mockExperimentId = '44444444-4444-4444-4444-444444444444';
+  });
+
+  it('renders IPW details panel with hover-reveal copy button for metric IDs', async () => {
+    render(<ResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'IPW-Adjusted Analysis' })).toBeInTheDocument();
+    });
+
+    const copyButtons = screen.getAllByRole('button', { name: 'Copy metric ID' });
+    expect(copyButtons.length).toBeGreaterThanOrEqual(1);
+    expect(copyButtons[0].className).toContain('opacity-0');
+    expect(copyButtons[0].className).toContain('group-hover:opacity-100');
+    expect(copyButtons[0].className).toContain('focus-within:opacity-100');
+  });
+});
+
 describe('Results Dashboard - error state', () => {
   beforeEach(() => {
     mockExperimentId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
