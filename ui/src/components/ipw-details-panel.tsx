@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import type { MetricResult } from '@/lib/types';
 import { formatEffect, formatPValue } from '@/lib/utils';
+import { CopyButton } from './copy-button';
 
 interface IpwDetailsPanelProps {
   metricResults: MetricResult[];
@@ -39,10 +40,18 @@ function IpwDetailsPanelInner({ metricResults }: IpwDetailsPanelProps) {
               return (
                 <tr
                   key={m.metricId}
-                  className={isSignificant ? 'border-l-4 border-l-amber-500' : ''}
+                  className={`group ${isSignificant ? 'border-l-4 border-l-amber-500' : ''}`}
                 >
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                    {m.metricId}
+                    <div className="flex items-center gap-2">
+                      <span>{m.metricId}</span>
+                      <CopyButton
+                        value={m.metricId}
+                        label="Copy metric ID"
+                        successMessage="Metric ID copied"
+                        className="h-4 w-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                      />
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                     {formatEffect(ipw.effect)}
