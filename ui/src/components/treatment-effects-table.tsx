@@ -49,7 +49,7 @@ function TreatmentEffectsTableInner({ metricResults, showCuped, showIpw, eValueR
             return (
               <tr
                 key={m.metricId}
-                className={`group ${significant ? `border-l-4 ${useIpw ? 'border-l-amber-500' : 'border-l-green-500'}` : ''}`}
+                className={`group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500 ${significant ? `border-l-4 ${useIpw ? 'border-l-amber-500' : 'border-l-green-500'}` : ''}`}
               >
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                   <div className="flex items-center gap-2">
