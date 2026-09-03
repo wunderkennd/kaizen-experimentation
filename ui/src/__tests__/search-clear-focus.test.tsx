@@ -114,6 +114,40 @@ describe('Search Clear Buttons Focus Restoration', () => {
     expect(input).toHaveFocus();
   });
 
+  it('ExperimentFiltersToolbar restores focus to search input when toolbar clear filters is clicked', async () => {
+    const user = userEvent.setup();
+    const clearFiltersMock = vi.fn();
+    const mockFilters = {
+      query: 'test-filter-query',
+      setQuery: vi.fn(),
+      stateFilter: '' as const,
+      setStateFilter: vi.fn(),
+      typeFilter: '' as const,
+      setTypeFilter: vi.fn(),
+      sortField: 'createdAt' as const,
+      sortDir: 'desc' as const,
+      toggleSort: vi.fn(),
+      clearFilters: clearFiltersMock,
+      applyFilters: (exps: Experiment[]) => exps,
+      hasActiveFilters: true,
+    };
+
+    render(
+      <ExperimentFiltersToolbar
+        filters={mockFilters}
+        totalCount={1}
+        filteredCount={1}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: 'Search experiments' });
+    const clearFiltersBtn = screen.getByTestId('clear-filters-toolbar');
+    await user.click(clearFiltersBtn);
+
+    expect(clearFiltersMock).toHaveBeenCalled();
+    expect(input).toHaveFocus();
+  });
+
   it('AuditFilters restores focus to experiment search input when experiment search is cleared', async () => {
     const user = userEvent.setup();
     const onExperimentQueryChangeMock = vi.fn();
@@ -169,6 +203,33 @@ describe('Search Clear Buttons Focus Restoration', () => {
     await user.click(clearButton);
 
     expect(onActorQueryChangeMock).toHaveBeenCalledWith('');
+    expect(input).toHaveFocus();
+  });
+
+  it('AuditFilters restores focus to experiment search input when toolbar clear filters is clicked', async () => {
+    const user = userEvent.setup();
+    const onClearMock = vi.fn();
+
+    render(
+      <AuditFilters
+        experimentQuery="audit-exp-query"
+        onExperimentQueryChange={vi.fn()}
+        actionFilter=""
+        onActionFilterChange={vi.fn()}
+        actorQuery=""
+        onActorQueryChange={vi.fn()}
+        totalCount={10}
+        filteredCount={5}
+        onClear={onClearMock}
+        hasActiveFilters={true}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: 'Search by experiment name' });
+    const clearFiltersBtn = screen.getByTestId('clear-filters-toolbar');
+    await user.click(clearFiltersBtn);
+
+    expect(onClearMock).toHaveBeenCalled();
     expect(input).toHaveFocus();
   });
 

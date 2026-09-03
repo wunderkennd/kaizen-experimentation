@@ -75,7 +75,7 @@ export function ExperimentFiltersToolbar({ filters, totalCount, filteredCount }:
       <select
         value={filters.stateFilter}
         onChange={(e) => filters.setStateFilter(e.target.value as ExperimentState | '')}
-        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
         aria-label="Filter by state"
       >
         <option value="">All States</option>
@@ -88,7 +88,7 @@ export function ExperimentFiltersToolbar({ filters, totalCount, filteredCount }:
       <select
         value={filters.typeFilter}
         onChange={(e) => filters.setTypeFilter(e.target.value as ExperimentType | '')}
-        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
         aria-label="Filter by type"
       >
         <option value="">All Types</option>
@@ -100,7 +100,10 @@ export function ExperimentFiltersToolbar({ filters, totalCount, filteredCount }:
       {/* Clear filters */}
       {filters.hasActiveFilters && (
         <button
-          onClick={filters.clearFilters}
+          onClick={() => {
+            filters.clearFilters();
+            inputRef.current?.focus();
+          }}
           className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           data-testid="clear-filters-toolbar"
         >

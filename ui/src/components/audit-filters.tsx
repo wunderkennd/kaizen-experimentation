@@ -100,7 +100,7 @@ export function AuditFilters({
       <select
         value={actionFilter}
         onChange={(e) => onActionFilterChange(e.target.value as AuditAction | '')}
-        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
         aria-label="Filter by action"
       >
         <option value="">All Actions</option>
@@ -150,7 +150,10 @@ export function AuditFilters({
       {/* Clear filters */}
       {hasActiveFilters && (
         <button
-          onClick={onClear}
+          onClick={() => {
+            onClear();
+            inputRef.current?.focus();
+          }}
           className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           data-testid="clear-filters-toolbar"
         >
