@@ -32,14 +32,9 @@ function SrmBannerInner({ srmResult }: SrmBannerProps) {
           </svg>
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-red-800">
-              Sample Ratio Mismatch Detected
-            </h3>
-            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-              Mismatch Detected
-            </span>
-          </div>
+          <h3 className="font-semibold text-red-800">
+            Sample Ratio Mismatch Detected
+          </h3>
           <p className="mt-1 text-sm text-red-700">
             Chi-squared = {srmResult.chiSquared.toFixed(2)}, p-value = {formatPValue(srmResult.pValue)}.
             Results may be unreliable due to imbalanced traffic allocation.
