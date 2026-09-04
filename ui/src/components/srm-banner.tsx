@@ -32,20 +32,25 @@ function SrmBannerInner({ srmResult }: SrmBannerProps) {
           </svg>
         </div>
         <div>
-          <h3 className="font-semibold text-red-800">
-            Sample Ratio Mismatch Detected
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-red-800">
+              Sample Ratio Mismatch Detected
+            </h3>
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+              Mismatch Detected
+            </span>
+          </div>
           <p className="mt-1 text-sm text-red-700">
             Chi-squared = {srmResult.chiSquared.toFixed(2)}, p-value = {formatPValue(srmResult.pValue)}.
             Results may be unreliable due to imbalanced traffic allocation.
           </p>
           <div className="mt-2 text-sm text-red-700">
-            <table className="text-left">
+            <table className="text-left" aria-label="Sample ratio mismatch observed and expected counts">
               <thead>
                 <tr>
-                  <th className="pr-4 font-medium">Variant</th>
-                  <th className="pr-4 font-medium">Observed</th>
-                  <th className="font-medium">Expected</th>
+                  <th scope="col" className="pr-4 font-medium">Variant</th>
+                  <th scope="col" className="pr-4 font-medium">Observed</th>
+                  <th scope="col" className="font-medium">Expected</th>
                 </tr>
               </thead>
               <tbody>
