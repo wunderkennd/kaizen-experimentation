@@ -5,6 +5,7 @@ import { server } from '@/__mocks__/server';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import MonitoringPage from '@/app/monitoring/page';
 import { AuthProvider } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 
 const MGMT_SVC = '*/experimentation.management.v1.ExperimentManagementService';
 const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
@@ -25,9 +26,11 @@ vi.mock('next/link', () => ({
 
 async function renderAndWait() {
   render(
-    <AuthProvider>
-      <MonitoringPage />
-    </AuthProvider>,
+    <ToastProvider>
+      <AuthProvider>
+        <MonitoringPage />
+      </AuthProvider>
+    </ToastProvider>,
   );
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Monitoring', level: 1 })).toBeInTheDocument();
@@ -126,6 +129,11 @@ describe('Monitoring Page', () => {
     const breachLink = screen.getAllByTestId('breach-experiment-link-11111111-1111-1111-1111-111111111111')[0];
     expect(breachLink).toBeInTheDocument();
     expect(breachLink).toHaveAttribute('href', '/experiments/11111111-1111-1111-1111-111111111111');
+
+    // Check accessible copy buttons for metric IDs
+    const copyButtons = screen.getAllByRole('button', { name: /Copy metric ID/i });
+    expect(copyButtons.length).toBeGreaterThan(0);
+    expect(copyButtons[0]).toHaveClass('opacity-0', 'group-hover:opacity-100', 'focus-within:opacity-100');
   });
 
   it('auto-refresh toggle works', async () => {
