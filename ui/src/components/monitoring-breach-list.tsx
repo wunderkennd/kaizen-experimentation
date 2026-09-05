@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { Experiment, GuardrailBreachEvent, GuardrailStatusResult } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 
 interface MonitoringBreachListProps {
   experiments: Experiment[];
@@ -45,7 +46,7 @@ export function MonitoringBreachList({ experiments, guardrailStatuses }: Monitor
       {allBreaches.map((breach, idx) => (
         <div
           key={`${breach.experimentId}-${breach.metricId}-${breach.detectedAt}-${idx}`}
-          className="rounded-lg border border-red-200 bg-red-50 p-4"
+          className="group rounded-lg border border-red-200 bg-red-50 p-4"
           data-testid="breach-item"
         >
           <div className="flex items-start justify-between">
@@ -59,10 +60,18 @@ export function MonitoringBreachList({ experiments, guardrailStatuses }: Monitor
                   {breach.experimentName}
                 </Link>
               </p>
-              <p className="mt-1 text-sm text-red-700">
-                Metric: <span className="font-medium">{breach.metricId}</span>
-                {' '}(variant: {breach.variantId})
-              </p>
+              <div className="mt-1 flex items-center gap-1.5 text-sm text-red-700">
+                <span>
+                  Metric: <span className="font-medium">{breach.metricId}</span>
+                </span>
+                <CopyButton
+                  value={breach.metricId}
+                  label={`Copy metric ID ${breach.metricId}`}
+                  successMessage="Metric ID copied!"
+                  className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                />
+                <span>(variant: {breach.variantId})</span>
+              </div>
               <p className="mt-1 text-sm text-red-700">
                 Value: <span className="font-medium">{breach.currentValue.toFixed(4)}</span>
                 {' '}vs threshold: <span className="font-medium">{breach.threshold.toFixed(4)}</span>
