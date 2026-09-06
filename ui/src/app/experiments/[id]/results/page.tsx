@@ -248,7 +248,7 @@ export default function ResultsPage() {
           <button
             type="button"
             onClick={fetchData}
-            className="mt-4 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            className="mt-4 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             {isRunning ? 'Check again' : 'Retry'}
           </button>
@@ -363,7 +363,7 @@ export default function ResultsPage() {
               key={tab.key}
               id={`tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
-              className={`whitespace-nowrap border-b-2 pb-3 pt-1 text-sm font-medium transition-colors ${
+              className={`whitespace-nowrap border-b-2 pb-3 pt-1 text-sm font-medium transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                 effectiveTab === tab.key
                   ? 'border-indigo-600 text-indigo-600'
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
