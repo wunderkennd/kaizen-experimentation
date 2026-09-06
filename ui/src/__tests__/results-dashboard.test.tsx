@@ -183,6 +183,19 @@ describe('Results Dashboard - homepage_recs_v2 (experiment 111...)', () => {
 
     expect(screen.getByText('homepage_recs_v2')).toBeInTheDocument();
   });
+
+  it('renders tab navigation buttons with accessible focus-visible ring styles', async () => {
+    render(<ResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    });
+
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+    expect(overviewTab.className).toContain('focus-visible:ring-2');
+    expect(overviewTab.className).toContain('focus-visible:ring-indigo-500');
+    expect(overviewTab.className).toContain('focus-visible:ring-offset-2');
+  });
 });
 
 describe('Results Dashboard - thumbnail_selection_v1 (experiment 666..., SRM mismatch)', () => {
