@@ -10,15 +10,15 @@ vi.mock('@/lib/api', () => ({
 }));
 
 const mockMetrics: MetricDefinition[] = [
-  { metricId: 'metric-1', name: 'Conversion Rate', description: 'CR', type: 'WINDOWED_COUNT' },
-  { metricId: 'metric-2', name: 'Revenue', description: 'Rev', type: 'FILTERED_MEAN' },
-  { metricId: 'metric-3', name: 'Retention Rate', description: 'Ret', type: 'WINDOWED_COUNT' },
+  { metricId: 'metric-1', name: 'Conversion Rate', description: 'CR', type: 'WINDOWED_COUNT', sourceEventType: 'click', lowerIsBetter: false, isQoeMetric: false },
+  { metricId: 'metric-2', name: 'Revenue', description: 'Rev', type: 'FILTERED_MEAN', sourceEventType: 'purchase', lowerIsBetter: false, isQoeMetric: false },
+  { metricId: 'metric-3', name: 'Retention Rate', description: 'Ret', type: 'WINDOWED_COUNT', sourceEventType: 'session', lowerIsBetter: false, isQoeMetric: false },
 ];
 
 describe('OperandPicker', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(api.listMetricDefinitions).mockResolvedValue({ metrics: mockMetrics });
+    vi.mocked(api.listMetricDefinitions).mockResolvedValue({ metrics: mockMetrics, nextPageToken: '' });
   });
 
   it('renders input with keyboard shortcut hint and clear button when query exists', async () => {
