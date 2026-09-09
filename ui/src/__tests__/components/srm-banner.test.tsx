@@ -37,5 +37,14 @@ describe('SrmBanner', () => {
     expect(screen.getByText('600')).toBeInTheDocument();
     expect(screen.getByText('treatment')).toBeInTheDocument();
     expect(screen.getByText('400')).toBeInTheDocument();
+
+    const table = screen.getByRole('table', { name: 'Sample ratio mismatch observed and expected counts' });
+    expect(table).toBeInTheDocument();
+
+    const columnHeaders = screen.getAllByRole('columnheader');
+    expect(columnHeaders).toHaveLength(3);
+    expect(columnHeaders[0]).toHaveTextContent('Variant');
+    expect(columnHeaders[1]).toHaveTextContent('Observed');
+    expect(columnHeaders[2]).toHaveTextContent('Expected');
   });
 });

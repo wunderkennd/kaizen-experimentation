@@ -40,12 +40,12 @@ function SrmBannerInner({ srmResult }: SrmBannerProps) {
             Results may be unreliable due to imbalanced traffic allocation.
           </p>
           <div className="mt-2 text-sm text-red-700">
-            <table className="text-left">
+            <table className="text-left" aria-label="Sample ratio mismatch observed and expected counts">
               <thead>
                 <tr>
-                  <th className="pr-4 font-medium">Variant</th>
-                  <th className="pr-4 font-medium">Observed</th>
-                  <th className="font-medium">Expected</th>
+                  <th scope="col" className="pr-4 font-medium">Variant</th>
+                  <th scope="col" className="pr-4 font-medium">Observed</th>
+                  <th scope="col" className="font-medium">Expected</th>
                 </tr>
               </thead>
               <tbody>
