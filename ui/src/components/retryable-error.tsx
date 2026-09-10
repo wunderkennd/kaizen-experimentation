@@ -11,6 +11,10 @@ interface RetryableErrorProps {
 export function RetryableError({ message, onRetry, context }: RetryableErrorProps) {
   const [retrying, setRetrying] = useState(false);
 
+  /**
+   * Executes the retry callback asynchronously, updating state to show loading
+   * feedback and disabling the button until execution finishes.
+   */
   const handleRetry = async () => {
     setRetrying(true);
     try {
