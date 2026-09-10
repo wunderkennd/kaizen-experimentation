@@ -15,8 +15,8 @@ export function RetryableError({ message, onRetry, context }: RetryableErrorProp
     setRetrying(true);
     try {
       await onRetry();
-    } catch {
-      // Ignore unhandled rejection in onRetry so component resets cleanly
+    } catch (err) {
+      console.error('Retry attempt failed:', err);
     } finally {
       setRetrying(false);
     }
