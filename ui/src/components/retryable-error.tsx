@@ -16,9 +16,10 @@ export function RetryableError({ message, onRetry, context }: RetryableErrorProp
    * feedback and disabling the button until execution finishes.
    */
   const handleRetry = async () => {
+    if (retrying) return;
     setRetrying(true);
     try {
-      await onRetry();
+      await Promise.resolve(onRetry());
     } catch (err) {
       console.error('Retry attempt failed:', err);
     } finally {
