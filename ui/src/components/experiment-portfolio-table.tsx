@@ -100,7 +100,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <button
                 type="button"
                 onClick={() => handleSort('name')}
-                className="group inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                className="group inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 hover:text-gray-700"
                 title={`Sort by ${LABEL_MAP.name}`}
               >
                 {LABEL_MAP.name} <SortIndicator col="name" />
@@ -110,7 +110,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <button
                 type="button"
                 onClick={() => handleSort('effectSize')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 hover:text-gray-700"
                 title={`Sort by ${LABEL_MAP.effectSize}`}
               >
                 {LABEL_MAP.effectSize} <SortIndicator col="effectSize" />
@@ -120,7 +120,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <button
                 type="button"
                 onClick={() => handleSort('variance')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 hover:text-gray-700"
                 title={`Sort by ${LABEL_MAP.variance}`}
               >
                 {LABEL_MAP.variance} <SortIndicator col="variance" />
@@ -130,7 +130,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <button
                 type="button"
                 onClick={() => handleSort('allocatedTrafficPct')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 hover:text-gray-700"
                 title={`Sort by ${LABEL_MAP.allocatedTrafficPct}`}
               >
                 {LABEL_MAP.allocatedTrafficPct} <SortIndicator col="allocatedTrafficPct" />
@@ -140,7 +140,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <button
                 type="button"
                 onClick={() => handleSort('priorityScore')}
-                className="group ml-auto inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:text-gray-700"
+                className="group ml-auto inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 hover:text-gray-700"
                 title={`Sort by ${LABEL_MAP.priorityScore}`}
               >
                 {LABEL_MAP.priorityScore} <SortIndicator col="priorityScore" />
@@ -160,7 +160,7 @@ export function ExperimentPortfolioTable({ experiments }: ExperimentPortfolioTab
               <td className="py-3 pl-4 pr-3">
                 <Link
                   href={`/experiments/${exp.experimentId}`}
-                  className="font-medium text-indigo-600 hover:text-indigo-800"
+                  className="font-medium text-indigo-600 hover:text-indigo-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   data-testid={`portfolio-row-name-${exp.experimentId}`}
                 >
                   {exp.name}

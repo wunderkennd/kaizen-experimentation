@@ -83,8 +83,16 @@ export default function SqlPage() {
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Query Log</h1>
 
       {entries.length === 0 ? (
-        <div className="py-12 text-center">
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
           <p className="text-sm text-gray-500">No query log entries found for this experiment.</p>
+          <div className="mt-4">
+            <Link
+              href={`/experiments/${params.id}`}
+              className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+            >
+              Return to Experiment Details &rarr;
+            </Link>
+          </div>
         </div>
       ) : (
         <QueryLogTable entries={entries} onExport={handleExport} exporting={exporting} exportPhase={exportPhase} />

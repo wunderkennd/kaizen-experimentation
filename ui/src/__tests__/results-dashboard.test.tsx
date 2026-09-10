@@ -106,7 +106,7 @@ describe('Results Dashboard - homepage_recs_v2 (experiment 111...)', () => {
     expect(screen.queryByText('Sample Ratio Mismatch Detected')).not.toBeInTheDocument();
   });
 
-  it('CUPED toggle switches between raw and adjusted values', async () => {
+  it('CUPED toggle switches between raw and adjusted values and has proper accessibility attributes', async () => {
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -114,11 +114,15 @@ describe('Results Dashboard - homepage_recs_v2 (experiment 111...)', () => {
       expect(screen.getByText('CUPED Adjustment')).toBeInTheDocument();
     });
 
+    const toggle = screen.getByRole('switch', { name: 'CUPED Adjustment' });
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-label', 'CUPED Adjustment');
+    expect(toggle.className).toContain('focus-visible:ring-2');
+
     // Default: raw values — click_through_rate effect is 0.014 → "+0.0140"
     expect(screen.getByText('+0.0140')).toBeInTheDocument();
 
     // Toggle CUPED on
-    const toggle = screen.getByRole('switch');
     await user.click(toggle);
 
     // CUPED adjusted: click_through_rate effect is 0.013 → "+0.0130"
@@ -179,6 +183,19 @@ describe('Results Dashboard - homepage_recs_v2 (experiment 111...)', () => {
 
     expect(screen.getByText('homepage_recs_v2')).toBeInTheDocument();
   });
+
+  it('renders tab navigation buttons with accessible focus-visible ring styles', async () => {
+    render(<ResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    });
+
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+    expect(overviewTab.className).toContain('focus-visible:ring-2');
+    expect(overviewTab.className).toContain('focus-visible:ring-indigo-500');
+    expect(overviewTab.className).toContain('focus-visible:ring-offset-2');
+  });
 });
 
 describe('Results Dashboard - thumbnail_selection_v1 (experiment 666..., SRM mismatch)', () => {
@@ -195,6 +212,26 @@ describe('Results Dashboard - thumbnail_selection_v1 (experiment 666..., SRM mis
 
     expect(screen.getByText(/14\.82/)).toBeInTheDocument();
     expect(screen.getByText(/< 0\.001/)).toBeInTheDocument();
+  });
+});
+
+describe('Results Dashboard - bandit experiment with IPW details panel', () => {
+  beforeEach(() => {
+    mockExperimentId = '44444444-4444-4444-4444-444444444444';
+  });
+
+  it('renders IPW details panel with hover-reveal copy button for metric IDs', async () => {
+    render(<ResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'IPW-Adjusted Analysis' })).toBeInTheDocument();
+    });
+
+    const copyButtons = screen.getAllByRole('button', { name: 'Copy metric ID' });
+    expect(copyButtons.length).toBeGreaterThanOrEqual(1);
+    expect(copyButtons[0].className).toContain('opacity-0');
+    expect(copyButtons[0].className).toContain('group-hover:opacity-100');
+    expect(copyButtons[0].className).toContain('focus-within:opacity-100');
   });
 });
 

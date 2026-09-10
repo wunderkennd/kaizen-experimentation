@@ -47,6 +47,7 @@ export function AuditFilters({
   hasActiveFilters,
 }: AuditFiltersProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const actorInputRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(inputRef);
 
   return (
@@ -74,7 +75,10 @@ export function AuditFilters({
         {experimentQuery ? (
           <button
             type="button"
-            onClick={() => onExperimentQueryChange('')}
+            onClick={() => {
+              onExperimentQueryChange('');
+              inputRef.current?.focus();
+            }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
             aria-label="Clear experiment search"
             data-testid="clear-search-button"
@@ -96,7 +100,7 @@ export function AuditFilters({
       <select
         value={actionFilter}
         onChange={(e) => onActionFilterChange(e.target.value as AuditAction | '')}
-        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="rounded-md border border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
         aria-label="Filter by action"
       >
         <option value="">All Actions</option>
@@ -117,6 +121,7 @@ export function AuditFilters({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
+          ref={actorInputRef}
           type="text"
           placeholder="Filter by actor..."
           value={actorQuery}
@@ -127,7 +132,10 @@ export function AuditFilters({
         {actorQuery && (
           <button
             type="button"
-            onClick={() => onActorQueryChange('')}
+            onClick={() => {
+              onActorQueryChange('');
+              actorInputRef.current?.focus();
+            }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
             aria-label="Clear actor search"
             data-testid="clear-actor-search"
@@ -142,7 +150,10 @@ export function AuditFilters({
       {/* Clear filters */}
       {hasActiveFilters && (
         <button
-          onClick={onClear}
+          onClick={() => {
+            onClear();
+            inputRef.current?.focus();
+          }}
           className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           data-testid="clear-filters-toolbar"
         >

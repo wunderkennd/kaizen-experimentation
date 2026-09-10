@@ -35,6 +35,7 @@ function FlagListContent() {
   const clearFilters = useCallback(() => {
     setSearch('');
     setTypeFilter('');
+    inputRef.current?.focus();
   }, []);
 
   const fetchData = useCallback(() => {
@@ -158,7 +159,10 @@ function FlagListContent() {
           {search ? (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => {
+                setSearch('');
+                inputRef.current?.focus();
+              }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
               aria-label="Clear search"
               data-testid="clear-search-button"
@@ -227,7 +231,7 @@ function FlagListContent() {
                   {filtered.map((f) => (
                     <tr key={f.flagId} className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
                       <td className="px-4 py-3">
-                        <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
+                        <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
                           {f.name}
                         </Link>
                       </td>

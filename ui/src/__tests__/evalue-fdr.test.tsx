@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
+import { ToastProvider } from '@/lib/toast-context';
 import { FdrDecisionBadge } from '@/components/fdr-decision-badge';
 import { OptimalAlphaWidget } from '@/components/optimal-alpha-widget';
 import type { MetricResult, EValueResult, OnlineFdrState } from '@/lib/types';
@@ -65,13 +66,29 @@ const FDR_STATE_OVER_BUDGET: OnlineFdrState = {
 // --- Treatment Effects Table: E-value column ---
 
 describe('TreatmentEffectsTable with e-value', () => {
+  it('renders hover-reveal CopyButton for metric ID', () => {
+    render(
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+        />
+      </ToastProvider>,
+    );
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy metric ID' });
+    expect(copyBtn).toBeInTheDocument();
+  });
+
   it('shows e-value and implied p columns when eValueResult is provided', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     expect(screen.getByTestId('evalue-header')).toBeInTheDocument();
@@ -80,10 +97,12 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('does not show e-value column when eValueResult is absent', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+        />
+      </ToastProvider>,
     );
 
     expect(screen.queryByTestId('evalue-header')).not.toBeInTheDocument();
@@ -91,11 +110,13 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('renders e-value cell with formatted value', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     const cell = screen.getByTestId('evalue-cell');
@@ -104,11 +125,13 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('highlights e-value cell in red when null is rejected', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     const cell = screen.getByTestId('evalue-cell');
@@ -118,11 +141,13 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('does not highlight e-value cell when null is not rejected', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_NOT_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_NOT_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     const cell = screen.getByTestId('evalue-cell');
