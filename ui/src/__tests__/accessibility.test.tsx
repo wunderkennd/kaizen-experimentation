@@ -8,6 +8,8 @@ import { NavHeader } from '@/components/nav-header';
 import { QueryLogTable } from '@/components/query-log-table';
 import { ToastProvider } from '@/lib/toast-context';
 import ExperimentListPage from '@/app/page';
+import MetricBrowserPage from '@/app/metrics/page';
+import FlagListPage from '@/app/flags/page';
 import ResultsPage from '@/app/experiments/[id]/results/page';
 import { AuthProvider } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
@@ -613,6 +615,48 @@ describe('Accessibility', () => {
       const disabledInput = screen.getByRole('textbox', { name: 'Search experiments' });
       expect(disabledInput).toBeDisabled();
       expect(screen.queryByText('/')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Filter Select Controls', () => {
+    it('metric browser type filter select has focus-visible ring classes', async () => {
+      render(
+        <AuthProvider initialUser={defaultUser}>
+          <ToastProvider>
+            <MetricBrowserPage />
+          </ToastProvider>
+        </AuthProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('combobox', { name: 'Filter by metric type' })).toBeInTheDocument();
+      });
+
+      const typeFilter = screen.getByRole('combobox', { name: 'Filter by metric type' });
+      expect(typeFilter).toHaveClass('focus-visible:outline-none');
+      expect(typeFilter).toHaveClass('focus-visible:ring-2');
+      expect(typeFilter).toHaveClass('focus-visible:ring-indigo-500');
+      expect(typeFilter).toHaveClass('focus-visible:ring-offset-1');
+    });
+
+    it('flag list type filter select has focus-visible ring classes', async () => {
+      render(
+        <AuthProvider initialUser={defaultUser}>
+          <ToastProvider>
+            <FlagListPage />
+          </ToastProvider>
+        </AuthProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('combobox', { name: 'Filter by flag type' })).toBeInTheDocument();
+      });
+
+      const typeFilter = screen.getByRole('combobox', { name: 'Filter by flag type' });
+      expect(typeFilter).toHaveClass('focus-visible:outline-none');
+      expect(typeFilter).toHaveClass('focus-visible:ring-2');
+      expect(typeFilter).toHaveClass('focus-visible:ring-indigo-500');
+      expect(typeFilter).toHaveClass('focus-visible:ring-offset-1');
     });
   });
 
