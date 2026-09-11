@@ -182,7 +182,7 @@ function FlagListContent() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as FlagType | '')}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
           data-testid="type-filter"
           aria-label="Filter by flag type"
         >
