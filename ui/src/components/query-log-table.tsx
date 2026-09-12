@@ -140,7 +140,7 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
                     <span className="truncate">{entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}</span>
                   </button>
                   {expandedIndex === i && (
-                    <div id={`sql-preview-${i}`}>
+                    <div id={`sql-preview-${i}`} role="region" aria-label={`SQL query for ${entry.metricId}`}>
                       <SqlHighlighter sql={entry.sqlText} />
                     </div>
                   )}
