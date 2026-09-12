@@ -123,6 +123,12 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
                   <button
                     type="button"
                     onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setExpandedIndex(expandedIndex === i ? null : i);
+                      }
+                    }}
                     aria-expanded={expandedIndex === i}
                     aria-controls={`sql-preview-${i}`}
                     aria-label={`Toggle SQL preview for ${entry.metricId}`}
