@@ -121,15 +121,28 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   <button
+                    type="button"
                     onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
                     aria-expanded={expandedIndex === i}
+                    aria-controls={`sql-preview-${i}`}
                     aria-label={`Toggle SQL preview for ${entry.metricId}`}
-                    className="max-w-md truncate text-left font-mono text-xs text-gray-600 hover:text-indigo-600 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                    className="inline-flex items-center gap-1.5 max-w-md text-left font-mono text-xs text-gray-600 hover:text-indigo-600 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   >
-                    {entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}
+                    <svg
+                      className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${expandedIndex === i ? 'rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="truncate">{entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}</span>
                   </button>
                   {expandedIndex === i && (
-                    <SqlHighlighter sql={entry.sqlText} />
+                    <div id={`sql-preview-${i}`} role="region" aria-label={`SQL query for ${entry.metricId}`}>
+                      <SqlHighlighter sql={entry.sqlText} />
+                    </div>
                   )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
