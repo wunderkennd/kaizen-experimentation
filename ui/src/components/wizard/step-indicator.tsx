@@ -7,6 +7,9 @@ interface StepIndicatorProps {
   onStepClick?: (step: number) => void;
 }
 
+/**
+ * StepIndicator displays the multi-step wizard progress with accessible focus navigation.
+ */
 export function StepIndicator({ currentStep, onStepClick }: StepIndicatorProps) {
   return (
     <nav aria-label="Wizard progress" className="mb-8">
