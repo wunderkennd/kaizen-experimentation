@@ -273,6 +273,18 @@ describe('ConstraintStatusTable unit tests', () => {
     expect(screen.getByText('Current Value')).toBeInTheDocument();
     expect(screen.getByText('Limit')).toBeInTheDocument();
   });
+
+  it('renders accessible table semantics with aria-label and scope on column headers', () => {
+    render(<ConstraintStatusTable constraints={constraints} />);
+    const table = screen.getByRole('table', { name: 'LP constraint status summary' });
+    expect(table).toBeInTheDocument();
+
+    const headerCells = table.querySelectorAll('th');
+    expect(headerCells.length).toBe(4);
+    headerCells.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col');
+    });
+  });
 });
 
 describe('Bandit Dashboard - error state', () => {
