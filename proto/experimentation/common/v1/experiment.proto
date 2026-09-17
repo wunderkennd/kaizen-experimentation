@@ -212,6 +212,11 @@ message Experiment {
   // populating MetricResult.equivalence_result. When unset, no equivalence
   // test is performed and the standard superiority test alone is reported.
   EquivalenceTestConfig equivalence_test = 33;
+
+  // Field 34 is claimed as `audience_rule_id` by kaizen-rosetta's audience-v1
+  // fork of this file. Reserved so upstream evolution cannot collide at the
+  // wire level until that linkage is adopted or rejected (#822).
+  reserved 34;
 }
 
 // SyntheticControlMethod selects the SCM algorithm M4a applies (ADR-023).

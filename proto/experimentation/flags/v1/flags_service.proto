@@ -39,6 +39,10 @@ message Flag {
   double rollout_percentage = 7;
   repeated FlagVariant variants = 8;
   string targeting_rule_id = 9;
+
+  // Field 10 is claimed as `audience_rule_id` by kaizen-rosetta's audience-v1
+  // fork of this file. Reserved pending the upstream adoption decision (#822).
+  reserved 10;
 }
 
 message FlagVariant {
