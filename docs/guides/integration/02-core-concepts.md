@@ -173,7 +173,8 @@ Kaizen is built around event ingestion, and events are where privacy mistakes ha
 - **You must hash** identifiers that are sensitive but necessary for bucketing (e.g., hash email before using it as an assignment unit ID; Kaizen will not do the hashing for you).
 - **PII redaction** is the customer's responsibility at emit time. M2 performs structural validation but does not scrub free-form strings.
 
-User deletion flows (GDPR, CCPA, LGPD) are handled through M5's deletion endpoints; Chapter 15 covers the exact procedures.
+> [!IMPORTANT]
+> **The platform has no user-deletion path today.** No Delete/Erase/Purge RPC exists on any service, and no data-TTL or VACUUM job expires event rows — `user_id` flows unhashed into Kafka topics and Delta tables and persists indefinitely. If you have GDPR/CCPA/LGPD erasure obligations, do not send raw user identifiers: hash or pseudonymize the assignment unit ID at emit time so erasure on your side reduces to key destruction. A real deletion path (M5 cascade or pseudonymization-at-ingest) is tracked in [#825](https://github.com/wunderkennd/kaizen-experimentation/issues/825).
 
 > [!WARNING]
 > If you emit a field Kaizen does not expect, M2 may still accept it — but it will show up in downstream tables and may leak into notebooks or exports. Treat event emission like any other privacy-sensitive write: review what you send, and prefer fewer fields.
