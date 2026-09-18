@@ -15,6 +15,8 @@ export function RetryableError({ message, onRetry, context }: RetryableErrorProp
     setRetrying(true);
     try {
       await Promise.resolve(onRetry());
+    } catch (err) {
+      console.error('Retry failed:', err);
     } finally {
       setRetrying(false);
     }

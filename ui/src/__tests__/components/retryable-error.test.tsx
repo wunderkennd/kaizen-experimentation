@@ -47,4 +47,22 @@ describe('RetryableError', () => {
       expect(retryButton).toHaveTextContent('Retry');
     });
   });
+
+  it('resets retrying state even if onRetry rejects with an error', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onRetry = vi.fn().mockRejectedValue(new Error('Retry failed again'));
+
+    render(<RetryableError message="Error" onRetry={onRetry} />);
+
+    const retryButton = screen.getByTestId('retry-button');
+    fireEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(retryButton).not.toBeDisabled();
+      expect(retryButton).toHaveAttribute('aria-busy', 'false');
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith('Retry failed:', expect.any(Error));
+    consoleSpy.mockRestore();
+  });
 });
