@@ -22,6 +22,7 @@ option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
 //     producer bug and fails fast at ingest (assert_finite!).
 //   - Kafka framing (produced by M2): raw prost bytes, key=experiment_id,
 //     header x-event-type=exposure.
+//
 // The wire contract is pinned by
 // crates/experimentation-ingest/tests/external_m2_exposure_contract_test.rs;
 // producer-facing guidance in docs/guides/streaming-integration.md.
