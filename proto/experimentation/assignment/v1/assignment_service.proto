@@ -59,6 +59,11 @@ message GetAssignmentResponse {
   // Block 0 starts at Unix epoch; increments every block_duration.
   // M2 includes this in ExposureEvent.switchback_block_index for M4a analysis.
   int64 block_index = 6;
+  // Whether the assigned variant is the experiment's control (Variant.is_control).
+  // Populated for AB, SWITCHBACK, and META assignments. Always false for
+  // MAB/CONTEXTUAL_BANDIT (arms have no control semantics) and for
+  // ineligible/inactive responses (gate on variant_id != "" before trusting it).
+  bool is_control = 7;
 }
 
 message GetAssignmentsRequest {

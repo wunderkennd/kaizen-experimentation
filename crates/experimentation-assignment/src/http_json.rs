@@ -44,6 +44,7 @@ struct GetAssignmentJsonResponse {
     payload_json: String,
     assignment_probability: f64,
     is_active: bool,
+    is_control: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -168,6 +169,7 @@ async fn handle_get_assignment(
                 payload_json: resp.payload_json,
                 assignment_probability: resp.assignment_probability,
                 is_active: resp.is_active,
+                is_control: resp.is_control,
             };
             let body = serde_json::to_vec(&json_resp).expect("serialize should not fail");
             Ok(json_response(StatusCode::OK, &body))
@@ -208,6 +210,7 @@ async fn handle_get_assignments(
                     payload_json: resp.payload_json,
                     assignment_probability: resp.assignment_probability,
                     is_active: resp.is_active,
+                    is_control: resp.is_control,
                 });
             }
             Err(_) => continue,
@@ -326,11 +329,13 @@ mod tests {
             payload_json: "{}".into(),
             assignment_probability: 0.5,
             is_active: true,
+            is_control: true,
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"experimentId\":\"exp1\""));
         assert!(json.contains("\"variantId\":\"control\""));
         assert!(json.contains("\"isActive\":true"));
+        assert!(json.contains("\"isControl\":true"));
     }
 
     #[test]

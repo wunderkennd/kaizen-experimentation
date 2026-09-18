@@ -152,6 +152,39 @@ func TestLocalProviderFromCache(t *testing.T) {
 	}
 }
 
+func TestLocalProviderIsControl(t *testing.T) {
+	p := NewLocalProvider([]ExperimentConfig{twoVariantConfig})
+	ctx := context.Background()
+
+	sawControl, sawTreatment := false, false
+	for i := 0; i < 200; i++ {
+		a, err := p.GetAssignment(ctx, "exp_ab_test", UserAttributes{UserID: fmt.Sprintf("user_%d", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a == nil {
+			continue
+		}
+		switch a.VariantName {
+		case "control":
+			if !a.IsControl {
+				t.Errorf("control variant must report IsControl=true")
+			}
+			sawControl = true
+		case "treatment":
+			if a.IsControl {
+				t.Errorf("treatment variant must report IsControl=false")
+			}
+			sawTreatment = true
+		default:
+			t.Fatalf("unexpected variant %q", a.VariantName)
+		}
+	}
+	if !sawControl || !sawTreatment {
+		t.Fatalf("200 users must hit both variants (control=%v, treatment=%v)", sawControl, sawTreatment)
+	}
+}
+
 func TestLocalProviderExclusion(t *testing.T) {
 	narrow := ExperimentConfig{
 		ExperimentID:    "exp_narrow",
@@ -289,8 +322,8 @@ func TestLocalProviderGetAllAssignments(t *testing.T) {
 // TestRemoteProviderWithAttributes assertion needs.
 type stubAssignmentServer struct {
 	assignmentv1connect.UnimplementedAssignmentServiceHandler
-	mu             sync.Mutex
-	capturedAttrs  map[string]string
+	mu                  sync.Mutex
+	capturedAttrs       map[string]string
 	capturedAtLeastOnce bool
 }
 

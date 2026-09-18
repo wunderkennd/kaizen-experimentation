@@ -64,6 +64,9 @@ fn assignment_domain_to_connect(
         // Switchback experiments compute a non-zero time-block index that M4a
         // needs for within-block vs cross-block analysis; must not default to 0.
         block_index: d.block_index,
+        // Control flag rides the same bridge; `..Default::default()` below would
+        // silently serve false — keep this explicit (accelerator #26).
+        is_control: d.is_control,
         ..Default::default()
     }
 }

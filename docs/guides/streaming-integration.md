@@ -153,6 +153,37 @@ suites against Redpanda — with no edits to `crates/`, `services/`, or
 code edit to pass against Redpanda, that's a bug in either the swap or the
 client config; surface it before the cloud migration consumes it.
 
+## Exposure emission contract (external producers)
+
+External services that serve experiment variants (first consumer: the
+kaizen-accelerator gateway) report exposures through M2, **never** by writing
+to Kafka directly. The full canonical rules live as doc comments on
+`ExposureEvent` in `proto/experimentation/common/v1/event.proto`; the wire
+contract is pinned by
+`crates/experimentation-ingest/tests/external_m2_exposure_contract_test.rs`.
+Summary for producer authors:
+
+- **Entry point**: M2 `IngestExposure` / `IngestExposureBatch`
+  (`experimentation.pipeline.v1.EventIngestionService`, port 50052). M2
+  validates, dedups, and publishes to the `exposures` topic (raw proto
+  bytes, key = `experiment_id`, header `x-event-type: exposure`).
+- **Required fields**: `event_id`, `experiment_id`, `user_id`, `variant_id`,
+  `timestamp`. Any of them empty/unset → the event is rejected.
+- **Timestamp**: stamp at emission time; must be within ±24h of ingest,
+  `nanos >= 0`. Don't buffer exposures beyond the window — late replays are
+  dropped.
+- **Dedup**: `event_id` is the global dedup identity. Make it unique per
+  logical exposure, and reuse the *same* `event_id` when retrying delivery
+  of that exposure — retries then dedup instead of double-counting.
+- **assignment_probability**: copy `GetAssignmentResponse.assignment_probability`
+  verbatim when you have it; omit the field (0.0) when you don't. Never
+  send NaN/Inf — that is a producer bug and fails fast at ingest.
+- **Control attribution**: `GetAssignmentResponse.is_control` tells you
+  whether the served variant is the experiment's control (gate on
+  `variant_id != ""` before trusting it). It is not part of ExposureEvent —
+  M4a derives control status from experiment config — but producers may use
+  it for their own logging/metrics.
+
 ## Migration checklist for new tooling
 
 When you add new code that touches Kafka or the Schema Registry:

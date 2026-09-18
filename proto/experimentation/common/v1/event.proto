@@ -9,6 +9,23 @@ option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
 
 // ExposureEvent records that a user was assigned and exposed to a variant.
 // Published to the exposures Kafka topic by M2 Event Ingestion.
+//
+// Canonical emission contract (external producers — e.g. the accelerator
+// gateway — submit via M2 `IngestExposure`/`IngestExposureBatch`, never
+// straight to Kafka):
+//   - Required: event_id, experiment_id, user_id, variant_id, timestamp.
+//     Ingest rejects the event if any is empty/unset.
+//   - timestamp must be within ±24h of ingest time, nanos >= 0.
+//   - event_id is the global dedup key (Bloom filter): producers make it
+//     unique per logical exposure, and identical for retries of the same one.
+//   - assignment_probability must be finite when set — NaN/Inf is a
+//     producer bug and fails fast at ingest (assert_finite!).
+//   - Kafka framing (produced by M2): raw prost bytes, key=experiment_id,
+//     header x-event-type=exposure.
+//
+// The wire contract is pinned by
+// crates/experimentation-ingest/tests/external_m2_exposure_contract_test.rs;
+// producer-facing guidance in docs/guides/streaming-integration.md.
 message ExposureEvent {
   string event_id = 1;
   string experiment_id = 2;

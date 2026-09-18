@@ -39,6 +39,10 @@ type Assignment struct {
 	VariantName  string
 	Payload      map[string]any
 	FromCache    bool
+	// IsControl mirrors GetAssignmentResponse.is_control: whether the
+	// assigned variant is the experiment's control. Always false for
+	// bandit arms (no control semantics).
+	IsControl bool
 }
 
 // UserAttributes holds attributes for targeting evaluation.
@@ -143,6 +147,7 @@ func (p *RemoteProvider) GetAssignment(ctx context.Context, experimentID string,
 		VariantName:  data.VariantId,
 		Payload:      payload,
 		FromCache:    false,
+		IsControl:    data.IsControl,
 	}, nil
 }
 
@@ -178,6 +183,7 @@ func (p *RemoteProvider) GetAllAssignments(ctx context.Context, attrs UserAttrib
 			VariantName:  a.VariantId,
 			Payload:      payload,
 			FromCache:    false,
+			IsControl:    a.IsControl,
 		}
 	}
 	return results, nil
@@ -268,6 +274,7 @@ func (p *LocalProvider) GetAssignment(_ context.Context, experimentID string, at
 				VariantName:  v.Name,
 				Payload:      v.Payload,
 				FromCache:    true,
+				IsControl:    v.IsControl,
 			}, nil
 		}
 	}
@@ -279,6 +286,7 @@ func (p *LocalProvider) GetAssignment(_ context.Context, experimentID string, at
 		VariantName:  last.Name,
 		Payload:      last.Payload,
 		FromCache:    true,
+		IsControl:    last.IsControl,
 	}, nil
 }
 
