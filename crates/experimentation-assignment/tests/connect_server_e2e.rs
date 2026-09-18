@@ -97,6 +97,18 @@ async fn connect_get_assignment_round_trip_matches_http_json_contract() {
         resp.get("isActive").and_then(|v| v.as_bool()).is_some(),
         "missing isActive: {resp}",
     );
+    // is_control must ride the Connect bridge too (proto3 JSON omits false,
+    // so absence reads as false). dev config marks "control" as the control.
+    let variant = resp.get("variantId").and_then(|v| v.as_str()).unwrap_or("");
+    let is_control = resp
+        .get("isControl")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    assert_eq!(
+        is_control,
+        variant == "control",
+        "isControl must match the assigned variant across the Connect transport: {resp}"
+    );
 }
 
 #[tokio::test]
