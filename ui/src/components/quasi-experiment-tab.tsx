@@ -10,6 +10,7 @@ import type { SyntheticControlResult, PlaceboResult } from '@/lib/types';
 import { getSyntheticControlResult, RpcError } from '@/lib/api';
 import { formatPValue } from '@/lib/utils';
 import { RetryableError } from '@/components/retryable-error';
+import { CopyButton } from '@/components/copy-button';
 
 interface QuasiExperimentTabProps {
   experimentId: string;
@@ -355,8 +356,22 @@ const DonorWeightTable = memo(function DonorWeightTable({
           </thead>
           <tbody className="divide-y divide-gray-200">
             {sorted.map((d) => (
-              <tr key={d.donorId} className="hover:bg-gray-50">
-                <td className="whitespace-nowrap px-4 py-2 text-sm text-gray-900">{d.donorName}</td>
+              <tr
+                key={d.donorId}
+                className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+              >
+                <td className="whitespace-nowrap px-4 py-2 text-sm text-gray-900">
+                  <div className="flex items-center gap-2">
+                    <span>{d.donorName}</span>
+                    <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                      <CopyButton
+                        value={d.donorId}
+                        label={`Copy donor ID for ${d.donorName}`}
+                        successMessage={`Donor ID for ${d.donorName} copied`}
+                      />
+                    </span>
+                  </div>
+                </td>
                 <td className="whitespace-nowrap px-4 py-2 text-sm font-mono text-gray-700">
                   {d.weight.toFixed(4)}
                 </td>
