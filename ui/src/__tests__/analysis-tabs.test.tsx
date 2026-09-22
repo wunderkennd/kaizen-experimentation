@@ -315,6 +315,37 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
   });
 });
 
+describe('Guardrail Tab', () => {
+  beforeEach(() => {
+    mockExperimentId = '11111111-1111-1111-1111-111111111111';
+  });
+
+  it('renders guardrail breaches table with accessible attributes and copy buttons', async () => {
+    const user = userEvent.setup();
+    render(<ResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Guardrails' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Guardrails' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('table', { name: 'Guardrail breach history summary' })).toBeInTheDocument();
+    });
+
+    const table = screen.getByRole('table', { name: 'Guardrail breach history summary' });
+    expect(table).toBeInTheDocument();
+
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers[0]).toHaveAttribute('scope', 'col');
+
+    const copyButtons = screen.getAllByRole('button', { name: /Copy metric ID/i });
+    expect(copyButtons.length).toBeGreaterThan(0);
+  });
+});
+
 describe('Analysis Tabs - No Data States', () => {
   it('shows empty state for novelty tab when no data', async () => {
     mockExperimentId = '33333333-3333-3333-3333-333333333333';
