@@ -56,12 +56,19 @@ async function fillToReview(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Experiment Creation Wizard', () => {
-  it('renders step indicator with 5 steps', () => {
+  it('renders step indicator with 5 steps and focus-visible styling', () => {
     renderNewPage();
     const nav = screen.getByLabelText('Wizard progress');
     expect(nav).toBeInTheDocument();
     expect(within(nav).getByText('Basics')).toBeInTheDocument();
     expect(within(nav).getByText('Review')).toBeInTheDocument();
+
+    const stepButtons = within(nav).getAllByRole('button');
+    expect(stepButtons.length).toBe(5);
+    stepButtons.forEach((btn) => {
+      expect(btn).toHaveClass('focus-visible:ring-2');
+      expect(btn).toHaveClass('focus-visible:ring-indigo-500');
+    });
   });
 
   it('shows Step 1 (Basics) by default', () => {
