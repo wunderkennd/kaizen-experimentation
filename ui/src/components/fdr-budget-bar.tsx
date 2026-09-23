@@ -58,8 +58,13 @@ function FdrBudgetBarInner({ experimentId }: FdrBudgetBarProps) {
       </div>
 
       {/* Progress bar */}
-      <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-gray-100" role="progressbar"
-        aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}
+      <div
+        className="mb-2 h-2 w-full overflow-hidden rounded-full bg-gray-100"
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        title={`${pct.toFixed(1)}% of initial alpha wealth remaining`}
       >
         <div
           className={`h-full rounded-full transition-all ${barColor}`}
@@ -69,7 +74,7 @@ function FdrBudgetBarInner({ experimentId }: FdrBudgetBarProps) {
 
       {/* Numeric summary */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 text-xs text-gray-500">
-        <span>
+        <span title="Alpha budget available for multi-hypothesis testing under e-LOND">
           Wealth remaining:{' '}
           <span className={`font-medium ${textColor}`}>
             {state.alphaWealth.toFixed(4)}
@@ -77,8 +82,13 @@ function FdrBudgetBarInner({ experimentId }: FdrBudgetBarProps) {
           {' '}/ {state.initialWealth.toFixed(4)} ({pct.toFixed(1)}%)
         </span>
         <span>
-          Tested: {state.numTested} · Rejected: {state.numRejected}
-          {' '}· Est. FDR: {(state.currentFdr * 100).toFixed(1)}%
+          <span title="Total hypotheses tested across the portfolio">Tested: {state.numTested}</span>
+          {' · '}
+          <span title="Total null hypotheses rejected">Rejected: {state.numRejected}</span>
+          {' · '}
+          <span title="Estimated False Discovery Rate based on cumulative rejections">
+            Est. FDR: {(state.currentFdr * 100).toFixed(1)}%
+          </span>
         </span>
       </div>
     </div>
