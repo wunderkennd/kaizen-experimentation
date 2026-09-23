@@ -81,11 +81,11 @@ function FdrBudgetBarInner({ experimentId }: FdrBudgetBarProps) {
           </span>
           {' '}/ {state.initialWealth.toFixed(4)} ({pct.toFixed(1)}%)
         </span>
-        <span>
+        <span className="flex items-center gap-x-1.5">
           <span title="Total hypotheses tested across the portfolio">Tested: {state.numTested}</span>
-          {' · '}
+          <span aria-hidden="true">·</span>
           <span title="Total null hypotheses rejected">Rejected: {state.numRejected}</span>
-          {' · '}
+          <span aria-hidden="true">·</span>
           <span title="Estimated False Discovery Rate based on cumulative rejections">
             Est. FDR: {(state.currentFdr * 100).toFixed(1)}%
           </span>
