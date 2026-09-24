@@ -130,7 +130,7 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {strengthData.map((s) => (
-                <tr key={s.algorithm} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
+                <tr key={s.algorithm} className="hover:bg-gray-50">
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{s.algorithm}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{s.strength.toFixed(3)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
@@ -159,7 +159,7 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {result.positionAnalyses.map((pa) => (
-                  <tr key={pa.position} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
+                  <tr key={pa.position} className="hover:bg-gray-50">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">#{pa.position}</td>
                     {algorithms.map((alg) => {
                       const rate = pa.algorithmEngagementRates[alg] ?? 0;
