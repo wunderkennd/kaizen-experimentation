@@ -120,17 +120,17 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
       <div>
         <h4 className="mb-2 text-sm font-semibold text-gray-900">Bradley-Terry Strength Estimates</h4>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" aria-label="Bradley-Terry algorithm strength estimates">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Algorithm</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Strength</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">95% CI</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Algorithm</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Strength</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">95% CI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {strengthData.map((s) => (
-                <tr key={s.algorithm}>
+                <tr key={s.algorithm} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{s.algorithm}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{s.strength.toFixed(3)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
@@ -148,18 +148,18 @@ export function InterleavingTab({ experimentId }: InterleavingTabProps) {
         <div>
           <h4 className="mb-2 text-sm font-semibold text-gray-900">Position Engagement Rates</h4>
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <table className="min-w-full divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200" aria-label="Position engagement rates summary">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Position</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Position</th>
                   {algorithms.map((alg) => (
-                    <th key={alg} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{alg}</th>
+                    <th key={alg} scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{alg}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {result.positionAnalyses.map((pa) => (
-                  <tr key={pa.position}>
+                  <tr key={pa.position} className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">#{pa.position}</td>
                     {algorithms.map((alg) => {
                       const rate = pa.algorithmEngagementRates[alg] ?? 0;
