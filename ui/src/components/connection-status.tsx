@@ -50,13 +50,19 @@ export function ConnectionStatus() {
   if (!status) return null;
 
   if (status.allHealthy) {
+    const formattedTime = new Date(status.checkedAt).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
     return (
       <span
         tabIndex={0}
+        role="status"
         className={`inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 border border-green-200 cursor-help ${baseFocusClasses}`}
         data-testid="connection-status"
         aria-live="polite"
-        title={`All backend services healthy. Last checked: ${status.checkedAt}`}
+        title={`All backend services healthy. Last checked: ${formattedTime}`}
       >
         <StatusDot color="bg-green-500" />
         Connected
