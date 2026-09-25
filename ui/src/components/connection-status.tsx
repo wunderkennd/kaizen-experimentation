@@ -14,12 +14,17 @@ function StatusDot({ color, pulse }: { color: string; pulse?: boolean }) {
 export function ConnectionStatus() {
   const { status, checking, isMockMode } = useHealthCheck();
 
+  const baseFocusClasses =
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2';
+
   if (isMockMode) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-2.5 py-0.5 text-xs font-medium text-yellow-700 border border-yellow-200"
+        tabIndex={0}
+        className={`inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-2.5 py-0.5 text-xs font-medium text-yellow-700 border border-yellow-200 cursor-help ${baseFocusClasses}`}
         data-testid="connection-status"
         aria-live="polite"
+        title="Running in mock API mode (MSW)"
       >
         <StatusDot color="bg-yellow-400" />
         Mock
@@ -30,9 +35,11 @@ export function ConnectionStatus() {
   if (!status && checking) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-500 border border-gray-200"
+        tabIndex={0}
+        className={`inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-500 border border-gray-200 cursor-help ${baseFocusClasses}`}
         data-testid="connection-status"
         aria-live="polite"
+        title="Checking backend service health..."
       >
         <StatusDot color="bg-gray-400" pulse />
         Checking...
@@ -45,10 +52,11 @@ export function ConnectionStatus() {
   if (status.allHealthy) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 border border-green-200"
+        tabIndex={0}
+        className={`inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 border border-green-200 cursor-help ${baseFocusClasses}`}
         data-testid="connection-status"
         aria-live="polite"
-        title={`Last checked: ${status.checkedAt}`}
+        title={`All backend services healthy. Last checked: ${status.checkedAt}`}
       >
         <StatusDot color="bg-green-500" />
         Connected
@@ -63,10 +71,11 @@ export function ConnectionStatus() {
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 border border-red-200"
+      tabIndex={0}
+      className={`inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 border border-red-200 cursor-help ${baseFocusClasses}`}
       data-testid="connection-status"
       aria-live="polite"
-      title={unhealthyNames}
+      title={`Disconnected services: ${unhealthyNames}`}
     >
       <StatusDot color="bg-red-500" />
       Disconnected
