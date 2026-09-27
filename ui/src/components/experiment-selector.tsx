@@ -118,10 +118,6 @@ function ExperimentSelectorInner({
             ref={inputRef}
             id="experiment-search"
             type="text"
-            role="combobox"
-            aria-expanded={isOpen && !atLimit}
-            aria-controls="experiment-dropdown-list"
-            aria-autocomplete="list"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
