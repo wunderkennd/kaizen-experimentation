@@ -108,7 +108,12 @@ describe('SQL Page', () => {
 
     // Click the SQL preview toggle button for the first entry
     const sqlPreviews = screen.getAllByRole('button', { name: /Toggle SQL preview/i });
+    expect(sqlPreviews[0]).toHaveAttribute('aria-controls', 'sql-preview-0');
+    expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'false');
+
     await user.click(sqlPreviews[0]);
+
+    expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'true');
 
     // Should show the full SQL in a <pre> block
     const preElements = document.querySelectorAll('pre');
@@ -119,6 +124,31 @@ describe('SQL Page', () => {
     const copyButton = screen.getByRole('button', { name: /Copy SQL to clipboard/i });
     expect(copyButton).toBeInTheDocument();
     expect(copyButton).toHaveClass('focus-within:opacity-100');
+  });
+
+  it('toggles SQL preview row expansion using keyboard Space or Enter key', async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <SqlPage />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('click_through_rate')).toBeInTheDocument();
+    });
+
+    const sqlPreviews = screen.getAllByRole('button', { name: /Toggle SQL preview/i });
+    expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'false');
+
+    sqlPreviews[0].focus();
+    await user.keyboard('{Enter}');
+
+    expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'true');
+    expect(document.querySelector('#sql-preview-0')).toBeInTheDocument();
+
+    await user.keyboard(' ');
+    expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows empty state with actionable navigation CTA link when no entries', async () => {
