@@ -89,13 +89,13 @@ export function VariantsStep() {
         </table>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span
+        <div
           role="status"
           aria-live="polite"
           className={`text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}
         >
           Total traffic: {formatPercent(trafficSum)}
-        </span>
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
