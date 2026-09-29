@@ -1,13 +1,14 @@
 'use client';
 
 import { useWizard } from '../wizard-context';
-import { validateJsonPayload } from '@/lib/validation';
+import { validateJsonPayload, getMinVariants } from '@/lib/validation';
 import { formatPercent } from '@/lib/utils';
 
 export function VariantsStep() {
   const { state, dispatch } = useWizard();
-  const { variants } = state;
+  const { variants, type } = state;
 
+  const minVariants = getMinVariants(type);
   const trafficSum = variants.reduce((acc, v) => acc + v.trafficFraction, 0);
   const trafficSumValid = Math.abs(trafficSum - 1.0) < 1e-9;
 
@@ -74,9 +75,9 @@ export function VariantsStep() {
                   <button
                     type="button"
                     onClick={() => dispatch({ type: 'REMOVE_VARIANT', index: i })}
-                    disabled={variants.length <= 2}
+                    disabled={variants.length <= minVariants}
                     aria-label={`Remove variant ${v.name || i + 1}`}
-                    title={variants.length <= 2 ? 'Minimum of 2 variants required' : undefined}
+                    title={variants.length <= minVariants ? `Minimum of ${minVariants} variant${minVariants > 1 ? 's' : ''} required` : undefined}
                     className="rounded-sm text-sm text-red-600 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:text-gray-400"
                   >
                     Remove
