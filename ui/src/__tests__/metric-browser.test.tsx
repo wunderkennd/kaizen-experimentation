@@ -245,4 +245,17 @@ describe('Metric Browser Page', () => {
     expect(screen.queryByTestId('no-filter-matches')).not.toBeInTheDocument();
   });
 
+  it('has accessible table semantics', async () => {
+    await renderAndWait();
+
+    const table = screen.getByRole('table', { name: 'Metric definitions summary' });
+    expect(table).toBeInTheDocument();
+
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.length).toBe(6);
+    headers.forEach((header) => {
+      expect(header).toHaveAttribute('scope', 'col');
+    });
+  });
+
 });
