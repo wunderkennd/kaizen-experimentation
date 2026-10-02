@@ -106,7 +106,6 @@ jobs:
     timeout-minutes: 45
     env:
       SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -133,13 +132,11 @@ jobs:
 
       - name: Ensure sccache is working
         run: |
-          if ! sccache --start-server 2>/dev/null; then
-            echo "::warning::sccache server failed to start; disabling RUSTC_WRAPPER"
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          elif ! echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
-            echo "::warning::sccache cannot wrap rustc; disabling RUSTC_WRAPPER"
+          if sccache --start-server 2>/dev/null && echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
+            echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          else
+            echo "::warning::sccache server failed to start or wrap rustc; disabling RUSTC_WRAPPER"
             sccache --stop-server 2>/dev/null || true
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
       - name: Clippy (all features, excluding gpu)
@@ -165,7 +162,6 @@ jobs:
     timeout-minutes: 30
     env:
       SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -190,13 +186,11 @@ jobs:
 
       - name: Ensure sccache is working
         run: |
-          if ! sccache --start-server 2>/dev/null; then
-            echo "::warning::sccache server failed to start; disabling RUSTC_WRAPPER"
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          elif ! echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
-            echo "::warning::sccache cannot wrap rustc; disabling RUSTC_WRAPPER"
+          if sccache --start-server 2>/dev/null && echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
+            echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          else
+            echo "::warning::sccache server failed to start or wrap rustc; disabling RUSTC_WRAPPER"
             sccache --stop-server 2>/dev/null || true
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
       - name: Property tests (stats)
@@ -217,7 +211,6 @@ jobs:
     timeout-minutes: 30
     env:
       SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -244,13 +237,11 @@ jobs:
 
       - name: Ensure sccache is working
         run: |
-          if ! sccache --start-server 2>/dev/null; then
-            echo "::warning::sccache server failed to start; disabling RUSTC_WRAPPER"
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          elif ! echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
-            echo "::warning::sccache cannot wrap rustc; disabling RUSTC_WRAPPER"
+          if sccache --start-server 2>/dev/null && echo 'fn main(){}' | RUSTC_WRAPPER=sccache rustc --edition 2021 - -o /dev/null 2>/dev/null; then
+            echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          else
+            echo "::warning::sccache server failed to start or wrap rustc; disabling RUSTC_WRAPPER"
             sccache --stop-server 2>/dev/null || true
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
           fi
 
       - name: WASM build
