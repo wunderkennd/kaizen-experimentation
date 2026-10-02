@@ -67,7 +67,7 @@ describe('Search Clear Buttons Focus Restoration', () => {
       />
     );
 
-    const input = screen.getByRole('textbox', { name: 'Search experiments' });
+    const input = screen.getByRole('combobox', { name: 'Search experiments' });
     await user.type(input, 'test-query');
     expect(input).toHaveValue('test-query');
 

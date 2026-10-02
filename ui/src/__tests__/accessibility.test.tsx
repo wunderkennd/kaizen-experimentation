@@ -492,7 +492,7 @@ describe('Accessibility', () => {
       const label = screen.getByText(/Select experiments to compare/);
       expect(label).toHaveAttribute('for', 'experiment-search');
 
-      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      const input = screen.getByRole('combobox', { name: 'Search experiments' });
       expect(input).toHaveAttribute('id', 'experiment-search');
     });
 
@@ -506,7 +506,7 @@ describe('Accessibility', () => {
         />,
       );
 
-      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      const input = screen.getByRole('combobox', { name: 'Search experiments' });
       expect(input).toHaveClass('focus-visible:ring-2');
       expect(input).toHaveClass('focus-visible:ring-indigo-500');
       expect(input).toHaveClass('focus-visible:ring-offset-2');
@@ -525,7 +525,7 @@ describe('Accessibility', () => {
         />,
       );
 
-      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      const input = screen.getByRole('combobox', { name: 'Search experiments' });
       await user.click(input);
       await user.keyboard('Running');
 
@@ -549,7 +549,32 @@ describe('Accessibility', () => {
       expect(onSelect).toHaveBeenCalledWith('exp-1');
     });
 
-    it('close button on selected chip has accessibility focus ring classes', () => {
+    it('combobox search input has ARIA attributes and closes on Escape key', async () => {
+      const user = userEvent.setup();
+      render(
+        <ExperimentSelector
+          experiments={mockExperiments}
+          selectedIds={[]}
+          onSelect={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      const combobox = screen.getByRole('combobox', { name: 'Search experiments' });
+      expect(combobox).toHaveAttribute('aria-expanded', 'false');
+      expect(combobox).toHaveAttribute('aria-controls', 'experiment-dropdown-list');
+      expect(combobox).toHaveAttribute('aria-autocomplete', 'list');
+
+      await user.click(combobox);
+      expect(combobox).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+      await user.keyboard('{Escape}');
+      expect(combobox).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('close button on selected chip renders SVG cross icon and has accessibility focus ring classes', () => {
       render(
         <ExperimentSelector
           experiments={mockExperiments}
@@ -563,6 +588,10 @@ describe('Accessibility', () => {
       expect(removeButton).toHaveClass('focus-visible:ring-2');
       expect(removeButton).toHaveClass('focus-visible:ring-indigo-500');
       expect(removeButton).toHaveClass('focus-visible:ring-offset-1');
+
+      const svgIcon = removeButton.querySelector('svg');
+      expect(svgIcon).toBeInTheDocument();
+      expect(svgIcon).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('clear all button on selected chips has accessibility focus ring classes', () => {
@@ -593,7 +622,7 @@ describe('Accessibility', () => {
         />,
       );
 
-      const input = screen.getByRole('textbox', { name: 'Search experiments' });
+      const input = screen.getByRole('combobox', { name: 'Search experiments' });
       expect(input).not.toHaveFocus();
 
       // Press '/' to focus
@@ -612,7 +641,7 @@ describe('Accessibility', () => {
       );
 
       // Input should be disabled, and hint "/" badge is not rendered
-      const disabledInput = screen.getByRole('textbox', { name: 'Search experiments' });
+      const disabledInput = screen.getByRole('combobox', { name: 'Search experiments' });
       expect(disabledInput).toBeDisabled();
       expect(screen.queryByText('/')).not.toBeInTheDocument();
     });
