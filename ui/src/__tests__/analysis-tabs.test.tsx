@@ -271,7 +271,7 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     expect(screen.getByText('Significant difference detected between algorithms.')).toBeInTheDocument();
   });
 
-  it('shows Bradley-Terry strength estimates', async () => {
+  it('shows Bradley-Terry strength estimates with accessible table semantics', async () => {
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -282,7 +282,13 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     await user.click(screen.getByRole('tab', { name: 'Interleaving' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Bradley-Terry Strength Estimates')).toBeInTheDocument();
+      expect(screen.getByRole('table', { name: 'Bradley-Terry algorithm strength estimates' })).toBeInTheDocument();
+    });
+
+    const strengthTable = screen.getByRole('table', { name: 'Bradley-Terry algorithm strength estimates' });
+    const headers = strengthTable.querySelectorAll('th');
+    headers.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col');
     });
 
     // Algorithm names appear in both the strengths table and position header
@@ -292,7 +298,7 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     expect(screen.getByText('0.550')).toBeInTheDocument();
   });
 
-  it('shows position engagement rates table', async () => {
+  it('shows position engagement rates table with accessible table semantics', async () => {
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -303,7 +309,13 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     await user.click(screen.getByRole('tab', { name: 'Interleaving' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Position Engagement Rates')).toBeInTheDocument();
+      expect(screen.getByRole('table', { name: 'Position engagement rates summary' })).toBeInTheDocument();
+    });
+
+    const positionTable = screen.getByRole('table', { name: 'Position engagement rates summary' });
+    const headers = positionTable.querySelectorAll('th');
+    headers.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col');
     });
 
     // Position #1
