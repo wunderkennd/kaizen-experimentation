@@ -88,4 +88,23 @@ describe('ConnectionStatus', () => {
     const badge = screen.getByTestId('connection-status');
     expect(badge.getAttribute('aria-live')).toBe('polite');
   });
+
+  it('is keyboard focusable with tabIndex=0 and focus visible styling', () => {
+    const healthyStatus: HealthStatus = {
+      services: [{ name: 'Management', url: '/api', healthy: true, latencyMs: 12 }],
+      allHealthy: true,
+      checkedAt: '2026-03-12T00:00:00Z',
+    };
+    mockUseHealthCheck.mockReturnValue({
+      status: healthyStatus,
+      checking: false,
+      isMockMode: false,
+    });
+
+    render(<ConnectionStatus />);
+    const badge = screen.getByTestId('connection-status');
+    expect(badge).toHaveAttribute('tabindex', '0');
+    expect(badge.className).toContain('focus-visible:ring-2');
+    expect(badge.className).toContain('cursor-help');
+  });
 });
