@@ -81,9 +81,7 @@ function ExperimentSelectorInner({
                   className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                   aria-label={`Remove ${exp.name}`}
                 >
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  x
                 </button>
               </span>
             );
@@ -118,21 +116,12 @@ function ExperimentSelectorInner({
             ref={inputRef}
             id="experiment-search"
             type="text"
-            role="combobox"
-            aria-expanded={isOpen}
-            aria-controls="experiment-dropdown-list"
-            aria-autocomplete="list"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsOpen(false);
-              }
-            }}
             placeholder={atLimit ? `Maximum ${maxSelections} experiments selected` : 'Search experiments by name or owner...'}
             disabled={atLimit}
             className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-10 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -165,7 +154,6 @@ function ExperimentSelectorInner({
 
         {isOpen && !atLimit && (
           <ul
-            id="experiment-dropdown-list"
             className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"
             role="listbox"
             data-testid="experiment-dropdown"
