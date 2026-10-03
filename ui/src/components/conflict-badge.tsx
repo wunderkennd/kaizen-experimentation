@@ -24,7 +24,10 @@ function findConflictingSegments(
   return Array.from(shared);
 }
 
-/** Highlights experiments that share user segments with other active experiments. */
+/**
+ * Highlights experiments that share user segments with other active experiments.
+ * Keyboard accessible with clear focus ring and screen-reader descriptive ARIA label.
+ */
 export function ConflictBadge({ experiment, allExperiments }: ConflictBadgeProps) {
   const conflicts = findConflictingSegments(experiment, allExperiments);
 
