@@ -24,20 +24,25 @@ function findConflictingSegments(
   return Array.from(shared);
 }
 
-/** Highlights experiments that share user segments with other active experiments. */
+/**
+ * Highlights experiments that share user segments with other active experiments.
+ * Keyboard accessible with clear focus ring and screen-reader descriptive ARIA label.
+ */
 export function ConflictBadge({ experiment, allExperiments }: ConflictBadgeProps) {
   const conflicts = findConflictingSegments(experiment, allExperiments);
 
   if (conflicts.length === 0) return null;
 
   return (
-    <span
-      className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+    <button
+      type="button"
+      className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
       title={`Shares segments with other experiments: ${conflicts.join(', ')}`}
       data-testid="conflict-badge"
-      aria-label={`Segment conflict: ${conflicts.join(', ')}`}
+      aria-label={`Segment conflict: shared segments (${conflicts.join(', ')}) with other active experiments`}
     >
-      ⚠ {conflicts.length} shared {conflicts.length === 1 ? 'segment' : 'segments'}
-    </span>
+      <span aria-hidden="true" className="mr-1">⚠</span>
+      {conflicts.length} shared {conflicts.length === 1 ? 'segment' : 'segments'}
+    </button>
   );
 }

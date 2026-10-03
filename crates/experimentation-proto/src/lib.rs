@@ -3,7 +3,7 @@
 //! This crate contains the Rust types generated from the proto/ directory.
 //! Do NOT manually edit generated code — modify the .proto files instead.
 
-#![allow(clippy::result_large_err)]
+#![allow(clippy::result_large_err, clippy::double_must_use)]
 
 pub mod experimentation {
     pub mod common {
