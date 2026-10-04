@@ -1,9 +1,17 @@
 # ADR-031: ConnectRPC (Rust) Pilot on M1 Assignment Service
 
-**Status**: Accepted
+**Status**: Accepted and Implemented (pilot evaluated 2026-10-04 in #645; fleet-wide adoption proposed in [ADR-032](032-connectrpc-rust-fleet.md))
 **Date**: 2026-06-22 (proposed); 2026-06-23 (accepted via #634 — pilot approved; fleet-wide adoption remains gated on the success criteria below)
 **Deciders**: Agent-1 (M1 Assignment), Agent-0 (cross-cutting RPC / coordination), SDK maintainers
 **Cluster**: — (cross-cutting RPC infrastructure; scoped revisit of ADR-010)
+
+> **Pilot outcome (2026-10-04, #645).** The owner accepted the pilot and chose
+> fleet-wide adoption. Success criteria 1–2 met; criterion 3 (net-negative LOC)
+> missed on a strict count (+995) and accepted as first-adopter cost under the
+> **retire-as-delete** accounting rule (+209); p99 (criterion 4) and the 0.7→0.9
+> upgrade (kill criterion 2) carry forward as gates G1/G2 in ADR-032; build-time
+> delta (criterion 5) judged acceptable and re-measured on CI as G3. ADR-010
+> remains authoritative until ADR-032 is accepted.
 
 ---
 
