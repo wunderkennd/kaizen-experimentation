@@ -86,10 +86,12 @@ Add a daily M3 job that drops expired partitions (`DELETE WHERE date_partition <
 | --- | --- |
 | `exposures`, `metric_events`, `qoe_events` | 90 days |
 | `reward_events` | 180 days (bandit replay) |
-| `metric_summaries`, `interleaving_scores`, `mlrate_features`, `user_trajectories` | 365 days |
+| `metric_summaries`, `interleaving_scores` | 365 days |
 | Aggregate-only tables (`daily_treatment_effects`, `content_consumption`, `experiment_level_metrics`) | no TTL (no unit IDs) |
 
 Raw-event TTL limits recomputing metrics from raw events for experiments longer than 90 days. Per-user daily aggregates in `metric_summaries` (365 days) still cover them.
+
+The job is opt-in (`M3_RETENTION_ENABLED=true`) because it deletes data, and it refuses any TTL below 7 days so a mistyped override can't wipe recent partitions. Two unit-level stores sit outside this first cut and get TTLs once their layout is pinned down: `mlrate_features`, which is written by CTAS with no DDL under `delta/`, and `user_trajectories`, which is defined in `sql/migrations/010` with Postgres types despite its "Delta" comment.
 
 ### 5. Data written before rollout
 
@@ -151,7 +153,7 @@ message ForgetUnitResponse {
 
 ### Rollout
 
-1. Ship the retention job (independent).
+1. Ship the retention job (independent). Its first cut lands with this ADR as `services/metrics/internal/jobs/retention.go`, disabled by default.
 2. Ship the vault and `Pseudonymizer` behind `M2_PSEUDONYMIZE_UNITS=shadow`, which computes pseudonyms and records latency metrics but publishes raw values. Then switch to `enforce`.
 3. Ship `ForgetUnit` + `unit_forgotten` + the M2 consumer, with an M5 → M2 contract test.
 4. Update `docs/guides/integration/02-core-concepts.md` §2.6 and add the erasure runbook, then close #825.
