@@ -1,4 +1,5 @@
 #![allow(clippy::result_large_err)]
+#![allow(clippy::double_must_use)]
 
 use std::path::Path;
 use std::sync::Arc;
