@@ -4,6 +4,7 @@
 //! Do NOT manually edit generated code — modify the .proto files instead.
 
 #![allow(clippy::result_large_err)]
+#![allow(clippy::double_must_use)]
 
 pub mod experimentation {
     pub mod common {
