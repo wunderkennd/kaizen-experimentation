@@ -1,4 +1,4 @@
-# ADR-032: Unit-ID Pseudonymization at Ingest with Per-Unit Key Erasure
+# ADR-033: Unit-ID Pseudonymization at Ingest with Per-Unit Key Erasure
 
 **Status**: Proposed
 **Date**: 2026-10-04

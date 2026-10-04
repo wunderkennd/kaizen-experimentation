@@ -114,7 +114,7 @@ func main() {
 	recalConsumer := recalconsumer.NewConsumer(brokers, recalJob, cfgStore)
 	recalConsumer.Start(ctx)
 	defer recalConsumer.Close()
-	// ADR-032 §4: daily data-TTL job for unit-level Delta tables. Opt-in because
+	// ADR-033 §4: daily data-TTL job for unit-level Delta tables. Opt-in because
 	// it deletes data; per-table TTLs via M3_RETENTION_TTL_OVERRIDES ("exposures=120,...").
 	if os.Getenv("M3_RETENTION_ENABLED") == "true" {
 		policies, err := jobs.ApplyRetentionOverrides(jobs.DefaultRetentionPolicies(), os.Getenv("M3_RETENTION_TTL_OVERRIDES"))

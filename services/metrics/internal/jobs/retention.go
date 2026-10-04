@@ -17,7 +17,7 @@ import (
 // against a mistyped override (e.g. "9" for "90") silently deleting recent data.
 const MinRetentionTTLDays = 7
 
-// RetentionPolicy is the data TTL for one Delta table (ADR-032 §4).
+// RetentionPolicy is the data TTL for one Delta table (ADR-033 §4).
 //
 // Delta's logRetentionDuration / deletedFileRetentionDuration only govern the
 // transaction log and tombstoned files; this policy is what actually expires
@@ -33,7 +33,7 @@ type RetentionPolicy struct {
 	TTLDays           int
 }
 
-// DefaultRetentionPolicies returns the ADR-032 defaults for every Delta table
+// DefaultRetentionPolicies returns the ADR-033 defaults for every Delta table
 // in delta/delta_lake_tables.sql that stores unit IDs. Aggregate-only tables
 // (daily_treatment_effects, content_consumption) carry no unit IDs and have no TTL.
 func DefaultRetentionPolicies() []RetentionPolicy {
@@ -132,7 +132,7 @@ type RetentionResult struct {
 	CompletedAt time.Time
 }
 
-// RetentionJob expires unit-level Delta rows past their data TTL (ADR-032 §4).
+// RetentionJob expires unit-level Delta rows past their data TTL (ADR-033 §4).
 // It is the backstop that bounds data lifetime independently of erasure.
 //
 // Statements are logged via slog, not query_log: query_log rows are keyed by
