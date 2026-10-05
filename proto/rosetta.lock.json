@@ -1,0 +1,8 @@
+{
+  "repository": "wunderkennd/kaizen-rosetta",
+  "commit": "91c78e5e9212b0001bb37e139662bade03e6f3e5",
+  "paths": [
+    "experimentation",
+    "kaizen/audience/v1"
+  ]
+}

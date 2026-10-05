@@ -49,6 +49,16 @@ pub mod experimentation {
     }
 }
 
+// Audience v1 contracts (kaizen-rosetta), referenced by Experiment, Flag and
+// the management service's AudienceRule RPCs (#822).
+pub mod kaizen {
+    pub mod audience {
+        pub mod v1 {
+            tonic::include_proto!("kaizen.audience.v1");
+        }
+    }
+}
+
 // Convenience re-exports
 pub use experimentation::common::v1 as common;
 pub use experimentation::pipeline::v1 as pipeline;

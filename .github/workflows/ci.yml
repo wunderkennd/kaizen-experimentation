@@ -64,6 +64,13 @@ jobs:
           buf_api_token: ${{ secrets.BUF_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      # proto/experimentation + proto/kaizen/audience are vendored from
+      # kaizen-rosetta (pin: proto/rosetta.lock.json). Red here means someone
+      # edited them in this repo: make the change in rosetta, bump the pin,
+      # and run `just sync-rosetta-protos`.
+      - name: Check vendored rosetta protos
+        run: scripts/sync_rosetta_protos.sh --check
+
       - name: Lint proto
         run: cd proto && buf lint
 

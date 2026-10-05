@@ -18,6 +18,11 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
+use experimentation_proto::experimentation::management::v1::{
+    CreateAudienceRuleRequest, GetAudienceRuleRequest, ListAudienceRulesRequest,
+    ListAudienceRulesResponse,
+};
+use experimentation_proto::kaizen::audience::v1::AudienceRule;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -276,8 +281,22 @@ impl IntoProto for chrono::DateTime<chrono::Utc> {
 // Helper: validate common experiment fields at creation
 // ---------------------------------------------------------------------------
 
+/// `audience_rule_id` arrives with the contracts vendored from kaizen-rosetta
+/// (#822), but no service evaluates audience rules yet and the store has no
+/// column for it. Reject it rather than silently drop a targeting constraint.
+#[allow(clippy::result_large_err)]
+pub(crate) fn reject_audience_rule(exp: &Experiment) -> Result<(), Status> {
+    if !exp.audience_rule_id.is_empty() {
+        return Err(Status::invalid_argument(
+            "audience_rule_id is not supported yet; use targeting_rule_id (#822)",
+        ));
+    }
+    Ok(())
+}
+
 #[allow(clippy::result_large_err)]
 fn validate_create(exp: &Experiment) -> Result<(), Status> {
+    reject_audience_rule(exp)?;
     if exp.name.trim().is_empty() {
         return Err(Status::invalid_argument("name is required"));
     }
@@ -510,6 +529,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         if exp.experiment_id.is_empty() {
             return Err(Status::invalid_argument("experiment_id is required"));
         }
+        reject_audience_rule(&exp)?;
 
         let id = Uuid::parse_str(&exp.experiment_id)
             .map_err(|_| Status::invalid_argument("invalid experiment_id UUID"))?;
@@ -1435,6 +1455,34 @@ impl ExperimentManagementService for ManagementServiceHandler {
         Err(Status::unimplemented("CreateTargetingRule not yet implemented"))
     }
 
+    // --- Audience v1 (kaizen-rosetta contract, #822) ---
+    // Audience rules are not stored or evaluated yet; these RPCs exist only
+    // because the management contract is vendored from rosetta.
+
+    async fn create_audience_rule(
+        &self,
+        _request: Request<CreateAudienceRuleRequest>,
+    ) -> Result<Response<AudienceRule>, Status> {
+        // stub-allow: tracked-in #822
+        Err(Status::unimplemented("CreateAudienceRule not yet implemented (#822)"))
+    }
+
+    async fn get_audience_rule(
+        &self,
+        _request: Request<GetAudienceRuleRequest>,
+    ) -> Result<Response<AudienceRule>, Status> {
+        // stub-allow: tracked-in #822
+        Err(Status::unimplemented("GetAudienceRule not yet implemented (#822)"))
+    }
+
+    async fn list_audience_rules(
+        &self,
+        _request: Request<ListAudienceRulesRequest>,
+    ) -> Result<Response<ListAudienceRulesResponse>, Status> {
+        // stub-allow: tracked-in #822
+        Err(Status::unimplemented("ListAudienceRules not yet implemented (#822)"))
+    }
+
     // --- Surrogate ---
 
     async fn create_surrogate_model(
@@ -1941,6 +1989,23 @@ fn extract_guardrail_ids(type_config: &serde_json::Value) -> Vec<String> {
 mod tests {
     use super::*;
     use validators::metricql::ValidateContext;
+
+    // ── reject_audience_rule (#822) ──────────────────────────────────────────
+
+    #[test]
+    fn reject_audience_rule_allows_empty() {
+        assert!(reject_audience_rule(&Experiment::default()).is_ok());
+    }
+
+    #[test]
+    fn reject_audience_rule_rejects_non_empty() {
+        let exp = Experiment {
+            audience_rule_id: "rule-1".to_string(),
+            ..Default::default()
+        };
+        let err = reject_audience_rule(&exp).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
 
     // ── line_col_from_byte_offset ────────────────────────────────────────────
 

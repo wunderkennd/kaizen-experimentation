@@ -20,21 +20,24 @@ const (
 // procedurePermissions maps each RPC procedure to the minimum role required.
 var procedurePermissions = map[string]Role{
 	// Read-only operations — viewer
-	managementv1connect.ExperimentManagementServiceGetExperimentProcedure:             RoleViewer,
-	managementv1connect.ExperimentManagementServiceListExperimentsProcedure:            RoleViewer,
-	managementv1connect.ExperimentManagementServiceGetMetricDefinitionProcedure:        RoleViewer,
-	managementv1connect.ExperimentManagementServiceListMetricDefinitionsProcedure:      RoleViewer,
-	managementv1connect.ExperimentManagementServiceGetLayerProcedure:                   RoleViewer,
-	managementv1connect.ExperimentManagementServiceGetLayerAllocationsProcedure:        RoleViewer,
-	managementv1connect.ExperimentManagementServiceListSurrogateModelsProcedure:        RoleViewer,
-	managementv1connect.ExperimentManagementServiceGetSurrogateCalibrationProcedure:    RoleViewer,
-	managementv1connect.ExperimentManagementServiceGetPortfolioAllocationProcedure:     RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetExperimentProcedure:           RoleViewer,
+	managementv1connect.ExperimentManagementServiceListExperimentsProcedure:         RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetMetricDefinitionProcedure:     RoleViewer,
+	managementv1connect.ExperimentManagementServiceListMetricDefinitionsProcedure:   RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetLayerProcedure:                RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetLayerAllocationsProcedure:     RoleViewer,
+	managementv1connect.ExperimentManagementServiceListSurrogateModelsProcedure:     RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetSurrogateCalibrationProcedure: RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetPortfolioAllocationProcedure:  RoleViewer,
+	managementv1connect.ExperimentManagementServiceGetAudienceRuleProcedure:         RoleViewer,
+	managementv1connect.ExperimentManagementServiceListAudienceRulesProcedure:       RoleViewer,
 
 	// Analyst operations
 	managementv1connect.ExperimentManagementServiceCreateMetricDefinitionProcedure:        RoleAnalyst,
-	managementv1connect.ExperimentManagementServiceCreateTargetingRuleProcedure:            RoleAnalyst,
-	managementv1connect.ExperimentManagementServiceCreateSurrogateModelProcedure:           RoleAnalyst,
-	managementv1connect.ExperimentManagementServiceTriggerSurrogateRecalibrationProcedure:  RoleAnalyst,
+	managementv1connect.ExperimentManagementServiceCreateTargetingRuleProcedure:           RoleAnalyst,
+	managementv1connect.ExperimentManagementServiceCreateAudienceRuleProcedure:            RoleAnalyst,
+	managementv1connect.ExperimentManagementServiceCreateSurrogateModelProcedure:          RoleAnalyst,
+	managementv1connect.ExperimentManagementServiceTriggerSurrogateRecalibrationProcedure: RoleAnalyst,
 
 	// Experimenter operations
 	managementv1connect.ExperimentManagementServiceCreateExperimentProcedure:   RoleExperimenter,

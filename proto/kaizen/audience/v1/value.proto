@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package kaizen.audience.v1;
+
+import "buf/validate/validate.proto";
+
+// AudienceValue carries one typed scalar used by audience contracts.
+message AudienceValue {
+  oneof kind {
+    option (buf.validate.oneof).required = true;
+
+    string string_value = 1 [(buf.validate.field).string.max_bytes = 512];
+    bool bool_value = 2;
+    int64 int64_value = 3;
+    double double_value = 4 [(buf.validate.field).double.finite = true];
+  }
+}

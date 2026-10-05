@@ -31,6 +31,13 @@ func ValidateCreateExperiment(exp *commonv1.Experiment) *connect.Error {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("type is required"))
 	}
 
+	// audience_rule_id arrives with the contracts vendored from kaizen-rosetta
+	// (#822), but no service evaluates audience rules yet. Reject it rather
+	// than store a targeting constraint that would be silently ignored.
+	if exp.GetAudienceRuleId() != "" {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("audience_rule_id is not supported yet; use targeting_rule_id (#822)"))
+	}
+
 	if err := validateVariants(exp); err != nil {
 		return err
 	}

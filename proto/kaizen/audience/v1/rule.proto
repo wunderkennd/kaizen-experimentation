@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package kaizen.audience.v1;
+
+import "buf/validate/validate.proto";
+import "kaizen/audience/v1/expression.proto";
+
+// AudienceRule is one immutable revision of a named audience rule.
+message AudienceRule {
+  string rule_id = 1 [(buf.validate.field).required = true];
+  uint64 revision = 2 [(buf.validate.field).uint64.gte = 1];
+  string name = 3;
+  string description = 4;
+  AudienceExpression expression = 5 [(buf.validate.field).required = true];
+  string content_fingerprint = 6 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.pattern = "^[0-9a-f]{64}$"
+  ];
+  string registry_version = 7 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.max_bytes = 64
+  ];
+}

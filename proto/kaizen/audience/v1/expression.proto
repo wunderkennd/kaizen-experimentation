@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package kaizen.audience.v1;
+
+import "buf/validate/validate.proto";
+import "kaizen/audience/v1/operator.proto";
+import "kaizen/audience/v1/value.proto";
+
+// AudiencePredicate compares one registered attribute with typed operands.
+message AudiencePredicate {
+  string attribute_key = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      max_bytes: 64
+      pattern: "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    }
+  ];
+  AudienceOperator operator = 2 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+  repeated AudienceValue values = 3 [(buf.validate.field).repeated.max_items = 100];
+}
+
+// AllExpression matches when every child expression matches.
+message AllExpression {
+  repeated AudienceExpression expressions = 1 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// AnyExpression matches when at least one child expression matches.
+message AnyExpression {
+  repeated AudienceExpression expressions = 1 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// NotExpression negates its required child expression.
+message NotExpression {
+  AudienceExpression expression = 1 [(buf.validate.field).required = true];
+}
+
+// AudienceExpression is one node in a recursive audience expression tree.
+message AudienceExpression {
+  oneof node {
+    option (buf.validate.oneof).required = true;
+
+    AudiencePredicate predicate = 1;
+    AllExpression all = 2;
+    AnyExpression any = 3;
+    NotExpression not = 4;
+  }
+}

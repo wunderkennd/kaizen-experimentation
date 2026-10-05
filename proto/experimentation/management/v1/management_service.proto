@@ -2,13 +2,14 @@ syntax = "proto3";
 
 package experimentation.management.v1;
 
-import "google/protobuf/empty.proto";
 import "experimentation/common/v1/experiment.proto";
-import "experimentation/common/v1/metric.proto";
 import "experimentation/common/v1/layer.proto";
-import "experimentation/common/v1/targeting.proto";
-import "experimentation/common/v1/surrogate.proto";
+import "experimentation/common/v1/metric.proto";
 import "experimentation/common/v1/metricql_diagnostic.proto";
+import "experimentation/common/v1/surrogate.proto";
+import "experimentation/common/v1/targeting.proto";
+import "google/protobuf/empty.proto";
+import "kaizen/audience/v1/rule.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/management/v1;managementv1";
 
@@ -67,6 +68,11 @@ service ExperimentManagementService {
   // Targeting rules.
   rpc CreateTargetingRule(CreateTargetingRuleRequest) returns (experimentation.common.v1.TargetingRule);
 
+  // Audience v1 rules.
+  rpc CreateAudienceRule(CreateAudienceRuleRequest) returns (kaizen.audience.v1.AudienceRule);
+  rpc GetAudienceRule(GetAudienceRuleRequest) returns (kaizen.audience.v1.AudienceRule);
+  rpc ListAudienceRules(ListAudienceRulesRequest) returns (ListAudienceRulesResponse);
+
   // Surrogate model management.
   rpc CreateSurrogateModel(CreateSurrogateModelRequest) returns (experimentation.common.v1.SurrogateModelConfig);
   rpc ListSurrogateModels(ListSurrogateModelsRequest) returns (ListSurrogateModelsResponse);
@@ -118,9 +124,15 @@ message ConfigUpdateEvent {
 }
 
 // --- Experiment CRUD ---
-message CreateExperimentRequest { experimentation.common.v1.Experiment experiment = 1; }
-message GetExperimentRequest { string experiment_id = 1; }
-message UpdateExperimentRequest { experimentation.common.v1.Experiment experiment = 1; }
+message CreateExperimentRequest {
+  experimentation.common.v1.Experiment experiment = 1;
+}
+message GetExperimentRequest {
+  string experiment_id = 1;
+}
+message UpdateExperimentRequest {
+  experimentation.common.v1.Experiment experiment = 1;
+}
 message ListExperimentsRequest {
   int32 page_size = 1;
   string page_token = 2;
@@ -134,20 +146,32 @@ message ListExperimentsResponse {
 }
 
 // --- Lifecycle ---
-message StartExperimentRequest { string experiment_id = 1; }
-message ConcludeExperimentRequest { string experiment_id = 1; }
-message ArchiveExperimentRequest { string experiment_id = 1; }
+message StartExperimentRequest {
+  string experiment_id = 1;
+}
+message ConcludeExperimentRequest {
+  string experiment_id = 1;
+}
+message ArchiveExperimentRequest {
+  string experiment_id = 1;
+}
 message PauseExperimentRequest {
   string experiment_id = 1;
   string reason = 2;
   // Whether this is an auto-pause triggered by guardrail breach.
   bool is_guardrail_auto_pause = 3;
 }
-message ResumeExperimentRequest { string experiment_id = 1; }
+message ResumeExperimentRequest {
+  string experiment_id = 1;
+}
 
 // --- Metric ---
-message CreateMetricDefinitionRequest { experimentation.common.v1.MetricDefinition metric = 1; }
-message GetMetricDefinitionRequest { string metric_id = 1; }
+message CreateMetricDefinitionRequest {
+  experimentation.common.v1.MetricDefinition metric = 1;
+}
+message GetMetricDefinitionRequest {
+  string metric_id = 1;
+}
 message ListMetricDefinitionsRequest {
   int32 page_size = 1;
   string page_token = 2;
@@ -238,23 +262,60 @@ message ValidateMetricqlResponse {
 }
 
 // --- Layer ---
-message CreateLayerRequest { experimentation.common.v1.Layer layer = 1; }
-message GetLayerRequest { string layer_id = 1; }
-message GetLayerAllocationsRequest { string layer_id = 1; bool include_released = 2; }
-message GetLayerAllocationsResponse { repeated experimentation.common.v1.LayerAllocation allocations = 1; }
+message CreateLayerRequest {
+  experimentation.common.v1.Layer layer = 1;
+}
+message GetLayerRequest {
+  string layer_id = 1;
+}
+message GetLayerAllocationsRequest {
+  string layer_id = 1;
+  bool include_released = 2;
+}
+message GetLayerAllocationsResponse {
+  repeated experimentation.common.v1.LayerAllocation allocations = 1;
+}
 
 // --- Targeting ---
-message CreateTargetingRuleRequest { experimentation.common.v1.TargetingRule rule = 1; }
+message CreateTargetingRuleRequest {
+  experimentation.common.v1.TargetingRule rule = 1;
+}
+
+// --- Audience v1 ---
+message CreateAudienceRuleRequest {
+  kaizen.audience.v1.AudienceRule rule = 1;
+}
+message GetAudienceRuleRequest {
+  string rule_id = 1;
+  uint64 revision = 2;
+}
+message ListAudienceRulesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+message ListAudienceRulesResponse {
+  repeated kaizen.audience.v1.AudienceRule rules = 1;
+  string next_page_token = 2;
+}
 
 // --- Surrogate ---
-message CreateSurrogateModelRequest { experimentation.common.v1.SurrogateModelConfig model = 1; }
-message ListSurrogateModelsRequest { int32 page_size = 1; string page_token = 2; }
+message CreateSurrogateModelRequest {
+  experimentation.common.v1.SurrogateModelConfig model = 1;
+}
+message ListSurrogateModelsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
 message ListSurrogateModelsResponse {
   repeated experimentation.common.v1.SurrogateModelConfig models = 1;
   string next_page_token = 2;
 }
-message GetSurrogateCalibrationRequest { string model_id = 1; }
-message TriggerSurrogateRecalibrationRequest { string model_id = 1; }
+message GetSurrogateCalibrationRequest {
+  string model_id = 1;
+}
+message TriggerSurrogateRecalibrationRequest {
+  string model_id = 1;
+}
 
 // --- Portfolio Optimization (ADR-019) ---
 
