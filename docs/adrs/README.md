@@ -57,6 +57,7 @@ First instance: [#634](https://github.com/wunderkennd/kaizen-experimentation/iss
 | [030](030-shadow-experiment-mode.md) | Shadow mode flag on experiments — run candidate variants on production traffic without user exposure | **Proposed** | M1, M4a, M4b, M5, M6 |
 | [031](031-connectrpc-rust-assignment-pilot.md) | ConnectRPC (Rust) pilot on M1 Assignment — scoped revisit of ADR-010's "tonic for Rust" | **Accepted and Implemented** | M1, SDKs, proto codegen |
 | [032](032-connectrpc-rust-fleet.md) | ConnectRPC for all Rust services — supersedes ADR-010's "tonic for Rust" half | **Proposed** | M1, M2, M4a, M4b, M5, M7, M6 BFF, SDKs |
+| [033](033-unit-pseudonymization-and-erasure.md) | Unit-ID pseudonymization at ingest with per-unit key erasure (crypto-shredding) + Delta data-TTL retention | **Proposed** | M2, M3, M5 |
 
 ## Proposed ADR Clusters
 

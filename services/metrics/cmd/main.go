@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -113,6 +114,16 @@ func main() {
 	recalConsumer := recalconsumer.NewConsumer(brokers, recalJob, cfgStore)
 	recalConsumer.Start(ctx)
 	defer recalConsumer.Close()
+	// ADR-033 §4: daily data-TTL job for unit-level Delta tables. Opt-in because
+	// it deletes data; per-table TTLs via M3_RETENTION_TTL_OVERRIDES ("exposures=120,...").
+	if os.Getenv("M3_RETENTION_ENABLED") == "true" {
+		policies, err := jobs.ApplyRetentionOverrides(jobs.DefaultRetentionPolicies(), os.Getenv("M3_RETENTION_TTL_OVERRIDES"))
+		if err != nil { slog.Error("invalid retention overrides", "error", err); os.Exit(1) }
+		retentionJob, err := jobs.NewRetentionJob(executor, policies)
+		if err != nil { slog.Error("invalid retention policy", "error", err); os.Exit(1) }
+		retentionJob.Start(ctx, 24*time.Hour)
+		slog.Info("retention job enabled", "tables", len(policies))
+	}
 	// Start Prometheus metrics HTTP server on a separate port.
 	metricsPort := os.Getenv("METRICS_PORT")
 	if metricsPort == "" { metricsPort = "50059" } // Prometheus scrape endpoint — must differ from main PORT (50056) and Prometheus server (9090)
