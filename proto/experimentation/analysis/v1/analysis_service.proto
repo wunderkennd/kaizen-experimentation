@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package experimentation.analysis.v1;
 
-import "google/protobuf/timestamp.proto";
 import "experimentation/common/v1/experiment.proto";
 import "experimentation/common/v1/lifecycle.proto";
 import "experimentation/common/v1/surrogate.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/analysis/v1;analysisv1";
 
@@ -62,12 +62,24 @@ message RunAnalysisRequest {
   // the config message is defined in experimentation/common/v1/experiment.proto.
   experimentation.common.v1.EquivalenceTestConfig equivalence_test = 6;
 }
-message GetAnalysisResultRequest { string experiment_id = 1; }
-message GetInterleavingAnalysisRequest { string experiment_id = 1; }
-message GetNoveltyAnalysisRequest { string experiment_id = 1; }
-message GetInterferenceAnalysisRequest { string experiment_id = 1; }
-message GetSyntheticControlAnalysisRequest { string experiment_id = 1; }
-message GetSwitchbackAnalysisRequest { string experiment_id = 1; }
+message GetAnalysisResultRequest {
+  string experiment_id = 1;
+}
+message GetInterleavingAnalysisRequest {
+  string experiment_id = 1;
+}
+message GetNoveltyAnalysisRequest {
+  string experiment_id = 1;
+}
+message GetInterferenceAnalysisRequest {
+  string experiment_id = 1;
+}
+message GetSyntheticControlAnalysisRequest {
+  string experiment_id = 1;
+}
+message GetSwitchbackAnalysisRequest {
+  string experiment_id = 1;
+}
 
 // MetricResult contains the treatment effect estimate for one metric, one variant.
 message MetricResult {

@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package experimentation.assignment.v1;
 
+import "experimentation/common/v1/bandit.proto";
 import "experimentation/common/v1/experiment.proto";
 import "experimentation/common/v1/interleaving.proto";
-import "experimentation/common/v1/bandit.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/assignment/v1;assignmentv1";
 

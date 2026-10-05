@@ -88,7 +88,9 @@ message CreateColdStartBanditResponse {
   string content_id = 2;
 }
 
-message ExportAffinityScoresRequest { string experiment_id = 1; }
+message ExportAffinityScoresRequest {
+  string experiment_id = 1;
+}
 message ExportAffinityScoresResponse {
   string content_id = 1;
   // Per-segment affinity scores: which user segments respond best.
@@ -119,7 +121,9 @@ message SlateAssignmentResponse {
   double joint_probability = 3;
 }
 
-message GetPolicySnapshotRequest { string experiment_id = 1; }
+message GetPolicySnapshotRequest {
+  string experiment_id = 1;
+}
 message RollbackPolicyRequest {
   string experiment_id = 1;
   // Snapshot timestamp to rollback to. Must exist in RocksDB.

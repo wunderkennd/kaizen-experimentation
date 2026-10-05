@@ -108,6 +108,8 @@ fn domain_to_proto(f: &Flag) -> ProtoFlag {
             .targeting_rule_id
             .map(|u| u.to_string())
             .unwrap_or_default(),
+        // Audience rules are not supported yet (#822); validate_flag rejects them.
+        audience_rule_id: String::new(),
         variants: f
             .variants
             .iter()
@@ -171,6 +173,14 @@ fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
 
 #[allow(clippy::result_large_err)]
 fn validate_flag(pb: &ProtoFlag) -> Result<(), Status> {
+    // audience_rule_id arrives with the contracts vendored from kaizen-rosetta
+    // (#822), but M7 does not evaluate audience rules and the store has no
+    // column for it. Reject it rather than silently drop a targeting constraint.
+    if !pb.audience_rule_id.is_empty() {
+        return Err(Status::invalid_argument(
+            "audience_rule_id is not supported yet; use targeting_rule_id (#822)",
+        ));
+    }
     if pb.name.trim().is_empty() {
         return Err(Status::invalid_argument("name is required"));
     }

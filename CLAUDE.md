@@ -61,7 +61,7 @@ Hash parity across SDKs is enforced by `test-vectors/hash_vectors.json` and veri
 
 ## Critical Rules
 
-- **Schema-first**: All interfaces defined in Protobuf. Run `buf lint` and `buf breaking` before committing proto changes.
+- **Schema-first**: All interfaces defined in Protobuf. `proto/experimentation/` and `proto/kaizen/audience/` are vendored from [kaizen-rosetta](https://github.com/wunderkennd/kaizen-rosetta) at the commit pinned in `proto/rosetta.lock.json` — make proto changes in rosetta, bump the pin, then `just sync-rosetta-protos`; CI fails if the vendored files drift. Run `buf lint` and `buf breaking` before committing proto changes.
 - **Fail-fast**: Every floating-point path uses `assert_finite!()` from experimentation-core.
 - **No statistical computation in Go or TypeScript.** All math lives in experimentation-stats (Rust).
 - **TypeScript is UI only.** M6 never performs metric computation, bandit evaluation, or statistical analysis.
@@ -231,7 +231,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |
 | Multiclaude config | `.multiclaude/config.json` |
-| Proto schema | `proto/experimentation/` (subdirs: assignment, analysis, bandit, flags, management, metrics, pipeline, common) |
+| Proto schema | `proto/experimentation/` (subdirs: assignment, analysis, bandit, flags, management, metrics, pipeline, common) + `proto/kaizen/audience/v1/` — vendored from kaizen-rosetta, pin in `proto/rosetta.lock.json`; `proto/third_party/` = protovalidate for protoc (Rust) only |
 | SQL migrations | `sql/migrations/` |
 | Test vectors (hash parity) | `test-vectors/hash_vectors.json` |
 | Phase 5 plan & changelog | `docs/coordination/phase5-implementation-plan.md`, `docs/coordination/CHANGELOG-phase5.md` |

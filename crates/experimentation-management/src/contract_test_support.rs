@@ -10,6 +10,11 @@ use std::sync::{Arc, RwLock};
 
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
+use experimentation_proto::experimentation::management::v1::{
+    CreateAudienceRuleRequest, GetAudienceRuleRequest, ListAudienceRulesRequest,
+    ListAudienceRulesResponse,
+};
+use experimentation_proto::kaizen::audience::v1::AudienceRule;
 use uuid::Uuid;
 
 use experimentation_proto::experimentation::common::v1::{
@@ -271,6 +276,7 @@ impl ManagementServiceHandler {
 
     #[allow(clippy::result_large_err)]
     fn validate_create(exp: &Experiment) -> Result<(), Status> {
+        crate::grpc::reject_audience_rule(exp)?;
         if exp.name.is_empty() {
             return Err(Status::invalid_argument("experiment.name is required"));
         }
@@ -641,6 +647,31 @@ impl ExperimentManagementService for ManagementServiceHandler {
             .ok_or_else(|| Status::invalid_argument("rule is required"))?;
         rule.rule_id = Uuid::new_v4().to_string();
         Ok(Response::new(rule))
+    }
+
+    // --- Audience v1 (kaizen-rosetta contract, #822) ---
+    // Audience rules are not stored or evaluated yet; these RPCs exist only
+    // because the management contract is vendored from rosetta.
+
+    async fn create_audience_rule(
+        &self,
+        _request: Request<CreateAudienceRuleRequest>,
+    ) -> Result<Response<AudienceRule>, Status> {
+        Err(Status::unimplemented("CreateAudienceRule not yet implemented (#822)"))
+    }
+
+    async fn get_audience_rule(
+        &self,
+        _request: Request<GetAudienceRuleRequest>,
+    ) -> Result<Response<AudienceRule>, Status> {
+        Err(Status::unimplemented("GetAudienceRule not yet implemented (#822)"))
+    }
+
+    async fn list_audience_rules(
+        &self,
+        _request: Request<ListAudienceRulesRequest>,
+    ) -> Result<Response<ListAudienceRulesResponse>, Status> {
+        Err(Status::unimplemented("ListAudienceRules not yet implemented (#822)"))
     }
 
     async fn create_surrogate_model(

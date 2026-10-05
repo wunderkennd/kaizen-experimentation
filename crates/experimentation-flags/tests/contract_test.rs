@@ -50,6 +50,7 @@ fn flag_binary_roundtrip_all_fields() {
         enabled: true,
         rollout_percentage: 0.5,
         targeting_rule_id: String::new(),
+        audience_rule_id: String::new(),
         variants: vec![],
     };
 
@@ -74,6 +75,7 @@ fn flag_binary_roundtrip_with_variants() {
         enabled: true,
         rollout_percentage: 1.0,
         targeting_rule_id: String::new(),
+        audience_rule_id: String::new(),
         variants: vec![
             FlagVariant {
                 variant_id: "v1-id".to_string(),
@@ -113,6 +115,7 @@ fn flag_zero_values_roundtrip() {
         enabled: false,        // zero value — omitted in binary
         rollout_percentage: 0.0, // zero value — omitted in binary
         targeting_rule_id: String::new(),
+        audience_rule_id: String::new(),
         variants: vec![],
     };
 
@@ -155,6 +158,7 @@ fn all_flag_types_roundtrip() {
             enabled: false,
             rollout_percentage: 0.0,
             targeting_rule_id: String::new(),
+            audience_rule_id: String::new(),
             variants: vec![],
         };
         let decoded = flag_proto_roundtrip(&flag);
@@ -205,6 +209,7 @@ fn list_flags_response_roundtrip() {
             enabled: false,
             rollout_percentage: 0.0,
             targeting_rule_id: String::new(),
+            audience_rule_id: String::new(),
             variants: vec![],
         }],
         next_page_token: String::new(),

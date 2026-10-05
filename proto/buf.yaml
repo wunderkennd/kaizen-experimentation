@@ -2,6 +2,14 @@ version: v2
 modules:
   - path: .
     name: buf.build/experimentation/platform
+    # Rust-only copy of protovalidate for protoc/tonic-build; buf resolves
+    # buf/validate from the BSR dep below instead.
+    excludes:
+      - third_party
+# experimentation/** and kaizen/audience/v1/** are vendored from kaizen-rosetta
+# (see rosetta.lock.json); kaizen/audience imports protovalidate.
+deps:
+  - buf.build/bufbuild/protovalidate
 lint:
   use:
     - STANDARD
@@ -9,6 +17,8 @@ lint:
     - RPC_RESPONSE_STANDARD_NAME
     - RPC_REQUEST_RESPONSE_UNIQUE
     - IMPORT_USED
+    # Matches kaizen-rosetta's lint config (kaizen/audience/v1 relies on it).
+    - ENUM_VALUE_PREFIX
   enum_zero_value_suffix: _UNSPECIFIED
   rpc_allow_same_request_response: false
   rpc_allow_google_protobuf_empty_requests: true
@@ -22,3 +32,10 @@ breaking:
   # ADR-027: EquivalenceTestConfig consolidated into common/v1 (no wire consumers existed); see issue #423
   ignore:
     - experimentation/analysis/v1/analysis_service.proto
+  # #822: Experiment field 34 and Flag field 10 were reserved while rosetta's
+  # audience linkage was undecided; adopting rosetta's files fills them with
+  # audience_rule_id. Safe to drop once this lands on main.
+  ignore_only:
+    RESERVED_MESSAGE_NO_DELETE:
+      - experimentation/common/v1/experiment.proto
+      - experimentation/flags/v1/flags_service.proto
