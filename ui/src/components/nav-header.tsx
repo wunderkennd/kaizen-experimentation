@@ -44,6 +44,14 @@ export function NavHeader() {
             Metrics
           </Link>
           <Link
+            href="/compare"
+            className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/compare') ? 'text-indigo-600' : 'text-gray-600'}`}
+            aria-current={pathname.startsWith('/compare') ? 'page' : undefined}
+            data-testid="nav-compare"
+          >
+            Compare
+          </Link>
+          <Link
             href="/audit"
             className={`rounded-sm text-sm font-medium transition-colors hover:text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${pathname.startsWith('/audit') ? 'text-indigo-600' : 'text-gray-600'}`}
             aria-current={pathname.startsWith('/audit') ? 'page' : undefined}
