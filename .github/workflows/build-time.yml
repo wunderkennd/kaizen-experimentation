@@ -1,11 +1,23 @@
 name: Build time
 
-# ADR-032 gate G3: cold workspace build wall clock, default vs the
-# `connectrpc` feature, 3 samples each on fresh GitHub-hosted runners.
-# Every sample is its own job, so no target/, sccache or registry cache is
-# shared between samples. Dependency download (`cargo fetch`) is excluded from
-# the timed step; only compilation is measured.
+# ADR-032 gate G3: cold workspace build wall clock without and with the
+# connectrpc stack, 3 samples on fresh GitHub-hosted runners.
 #
+# Each sample job builds BOTH variants back to back on the same runner
+# (`cargo clean` between, order alternating by sample) and reports the paired
+# delta. Hosted runners draw different CPUs, which moved a single variant's
+# cold build by up to ±25% in the first run of this workflow; pairing on one
+# machine cancels that out.
+#
+# Variants:
+#   baseline:   tonic/prost only — the workspace minus
+#               `experimentation-proto-connect`, no `connectrpc` feature.
+#               (`--workspace` alone already compiles buffa + connectrpc,
+#               because the pilot codegen crate is a workspace member.)
+#   connectrpc: the whole workspace with
+#               `--features experimentation-assignment/connectrpc`.
+#
+# Dependency download (`cargo fetch`) is excluded; only compilation is timed.
 # Runs when this file changes on a PR, and on demand (workflow_dispatch) for
 # re-measuring after a connectrpc/buffa upgrade (ADR-032 §6) or while a
 # service migration doubles up the codegen paths.
@@ -29,17 +41,16 @@ defaults:
 
 jobs:
   sample:
-    name: ${{ matrix.profile }} / ${{ matrix.variant }} / ${{ matrix.sample }}
+    name: ${{ matrix.profile }} / ${{ matrix.sample }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        # dev:     `cargo test --workspace --no-run`, the shape of CI's Rust job.
-        # release: `cargo build --release --workspace`, the shape of the
-        #          ADR-031 pilot's laptop measurement (+54.5% wall clock).
+        # dev:     `cargo test --no-run`, the shape of CI's Rust job.
+        # release: `cargo build --release`, the shape of the ADR-031 pilot's
+        #          laptop measurement (+54.5% wall clock, single sample).
         profile: [dev, release]
-        variant: [default, connectrpc]
         sample: [1, 2, 3]
     env:
       CARGO_INCREMENTAL: "0"
@@ -58,39 +69,53 @@ jobs:
       - name: Fetch dependencies (not timed)
         run: cargo fetch --locked
 
-      - name: Timed cold build
-        id: build
+      - name: Timed cold builds (paired)
         run: |
-          features=()
-          if [ "${{ matrix.variant }}" = connectrpc ]; then
-            features=(--features experimentation-assignment/connectrpc)
-          fi
           if [ "${{ matrix.profile }}" = dev ]; then
-            cmd=(cargo test --workspace --no-run --locked --timings "${features[@]}")
+            base=(cargo test --no-run --locked)
           else
-            cmd=(cargo build --release --workspace --locked --timings "${features[@]}")
+            base=(cargo build --release --locked)
           fi
-          echo "running: ${cmd[*]}"
-          start=$(date +%s.%N)
-          /usr/bin/time -f '%U %S' -o cpu.txt "${cmd[@]}"
-          end=$(date +%s.%N)
-          read -r user sys < cpu.txt
-          wall=$(echo "$end - $start" | bc)
-          cpu=$(echo "$user + $sys" | bc)
-          jq -n --arg profile "${{ matrix.profile }}" --arg variant "${{ matrix.variant }}" \
-            --argjson sample ${{ matrix.sample }} --argjson wall "$wall" --argjson cpu "$cpu" \
-            --argjson cores "$(nproc)" \
-            '{profile: $profile, variant: $variant, sample: $sample, wall_s: $wall, cpu_s: $cpu, cores: $cores}' \
-            > sample.json
+          order=(baseline connectrpc)
+          if [ $(( ${{ matrix.sample }} % 2 )) -eq 0 ]; then order=(connectrpc baseline); fi
+
+          for variant in "${order[@]}"; do
+            if [ "$variant" = baseline ]; then
+              cmd=("${base[@]}" --workspace --exclude experimentation-proto-connect)
+            else
+              cmd=("${base[@]}" --workspace --features experimentation-assignment/connectrpc)
+            fi
+            cargo clean
+            echo "running: ${cmd[*]}"
+            start=$(date +%s.%N)
+            /usr/bin/time -f '%U %S' -o cpu.txt "${cmd[@]}" --timings
+            end=$(date +%s.%N)
+            read -r user sys < cpu.txt
+            jq -n --arg variant "$variant" \
+              --argjson wall "$(echo "$end - $start" | bc)" --argjson cpu "$(echo "$user + $sys" | bc)" \
+              '{variant: $variant, wall_s: $wall, cpu_s: $cpu}' > "$variant.json"
+            mkdir -p "timings/$variant"
+            cp target/cargo-timings/cargo-timing.html "timings/$variant/"
+          done
+
+          jq -n --arg profile "${{ matrix.profile }}" --argjson sample ${{ matrix.sample }} \
+            --arg cpu_model "$(lscpu | sed -n 's/^Model name: *//p')" --argjson cores "$(nproc)" \
+            --arg order "${order[*]}" \
+            --slurpfile b baseline.json --slurpfile c connectrpc.json \
+            '{profile: $profile, sample: $sample, cpu_model: $cpu_model, cores: $cores, order: $order,
+              baseline: $b[0], connectrpc: $c[0],
+              wall_delta_pct: (($c[0].wall_s - $b[0].wall_s) / $b[0].wall_s * 100),
+              cpu_delta_pct: (($c[0].cpu_s - $b[0].cpu_s) / $b[0].cpu_s * 100)}' > sample.json
           cat sample.json
-          echo "${{ matrix.profile }} / ${{ matrix.variant }} / ${{ matrix.sample }}: wall ${wall}s, cpu ${cpu}s on $(nproc) cores" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"\(.profile) / \(.sample) on \(.cpu_model): baseline \(.baseline.wall_s)s, connectrpc \(.connectrpc.wall_s)s, Δ wall \(.wall_delta_pct)%, Δ CPU \(.cpu_delta_pct)%"' \
+            sample.json >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: build-time-${{ matrix.profile }}-${{ matrix.variant }}-${{ matrix.sample }}
+          name: build-time-${{ matrix.profile }}-${{ matrix.sample }}
           path: |
             sample.json
-            target/cargo-timings/cargo-timing.html
+            timings/
           retention-days: 30
 
   summary:
@@ -102,29 +127,26 @@ jobs:
         with:
           pattern: build-time-*
           path: samples
-      - name: Median per profile and variant
+      - name: Median paired delta per profile
         run: |
           jq -s '
-            def med: if length == 0 then null else .[(length / 2 | floor)] end;
-            group_by(.profile) | map(
-              . as $p
-              | ($p | map(select(.variant == "default")) | map(.wall_s) | sort) as $dw
-              | ($p | map(select(.variant == "connectrpc")) | map(.wall_s) | sort) as $cw
-              | ($p | map(select(.variant == "default")) | map(.cpu_s) | sort) as $dc
-              | ($p | map(select(.variant == "connectrpc")) | map(.cpu_s) | sort) as $cc
-              | {profile: $p[0].profile,
-                 samples: ($p | map({variant, sample, wall_s, cpu_s})),
-                 default_wall_median_s: ($dw | med), connectrpc_wall_median_s: ($cw | med),
-                 wall_delta_pct: (if ($dw | med) and ($cw | med) then ((($cw | med) - ($dw | med)) / ($dw | med) * 100) else null end),
-                 default_cpu_median_s: ($dc | med), connectrpc_cpu_median_s: ($cc | med),
-                 cpu_delta_pct: (if ($dc | med) and ($cc | med) then ((($cc | med) - ($dc | med)) / ($dc | med) * 100) else null end)}
-            )' samples/*/sample.json | tee summary.json
+            def med: if length == 0 then null else sort | .[(length / 2 | floor)] end;
+            group_by(.profile) | map({
+              profile: .[0].profile,
+              samples: map({sample, cpu_model, order, baseline_wall_s: .baseline.wall_s,
+                            connectrpc_wall_s: .connectrpc.wall_s, wall_delta_pct, cpu_delta_pct}),
+              median_wall_delta_pct: (map(.wall_delta_pct) | med),
+              median_cpu_delta_pct: (map(.cpu_delta_pct) | med),
+              median_baseline_wall_s: (map(.baseline.wall_s) | med),
+              median_connectrpc_wall_s: (map(.connectrpc.wall_s) | med)
+            })' samples/*/sample.json | tee summary.json
           {
-            echo "## Cold build, median of 3 (ADR-032 G3: fails above +25% wall clock)"
+            echo "## Cold build, paired on one runner per sample (ADR-032 G3: fails above +25% wall clock)"
             echo
-            echo "| Profile | Default wall | connectrpc wall | Δ wall | Default CPU | connectrpc CPU | Δ CPU |"
-            echo "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"
-            jq -r '.[] | "| \(.profile) | \(.default_wall_median_s // "n/a")s | \(.connectrpc_wall_median_s // "n/a")s | \(.wall_delta_pct // "n/a" | if type == "number" then (. * 10 | round / 10 | tostring) + "%" else . end) | \(.default_cpu_median_s // "n/a")s | \(.connectrpc_cpu_median_s // "n/a")s | \(.cpu_delta_pct // "n/a" | if type == "number" then (. * 10 | round / 10 | tostring) + "%" else . end) |"' summary.json
+            echo "| Profile | Baseline wall (median) | connectrpc wall (median) | Median paired Δ wall | Median paired Δ CPU |"
+            echo "| --- | ---: | ---: | ---: | ---: |"
+            jq -r 'def pct: if type == "number" then ((. * 10 | round) / 10 | tostring) + "%" else "n/a" end;
+              .[] | "| \(.profile) | \(.median_baseline_wall_s)s | \(.median_connectrpc_wall_s)s | \(.median_wall_delta_pct | pct) | \(.median_cpu_delta_pct | pct) |"' summary.json
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
