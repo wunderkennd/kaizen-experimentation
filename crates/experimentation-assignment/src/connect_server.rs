@@ -179,7 +179,8 @@ impl connect_pb::AssignmentService for ConnectAssignment {
 
         Ok(connectrpc::Response::new(connect_pb::GetInterleavedListResponse {
             merged_list: resp.merged_list,
-            provenance: resp.provenance,
+            // buffa 0.9 map fields use a foldhash hasher, not std's RandomState.
+            provenance: resp.provenance.into_iter().collect(),
             ..Default::default()
         }))
     }
