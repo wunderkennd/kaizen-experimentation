@@ -17,13 +17,16 @@ lint:
     - RPC_RESPONSE_STANDARD_NAME
     - RPC_REQUEST_RESPONSE_UNIQUE
     - IMPORT_USED
-    # Matches kaizen-rosetta's lint config (kaizen/audience/v1 relies on it).
-    - ENUM_VALUE_PREFIX
   enum_zero_value_suffix: _UNSPECIFIED
   rpc_allow_same_request_response: false
   rpc_allow_google_protobuf_empty_requests: true
   rpc_allow_google_protobuf_empty_responses: false
   service_suffix: Service
+  # kaizen/audience/v1 is vendored from kaizen-rosetta, whose lint config
+  # waives ENUM_VALUE_PREFIX; keep the rule for experimentation's own files.
+  ignore_only:
+    ENUM_VALUE_PREFIX:
+      - kaizen/audience
 breaking:
   use:
     - FILE

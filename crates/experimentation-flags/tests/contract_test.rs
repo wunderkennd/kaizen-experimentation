@@ -98,6 +98,22 @@ fn flag_binary_roundtrip_with_variants() {
     assert_eq!(decoded.variants[1].traffic_fraction, 0.5);
 }
 
+#[test]
+fn flag_audience_rule_id_roundtrip() {
+    // Flag.audience_rule_id = 10 comes from kaizen-rosetta's audience v1
+    // contract (#822); it must survive the wire even though M7 rejects it on
+    // write today.
+    let flag = ProtoFlag {
+        name: "audience_gated".to_string(),
+        r#type: FlagType::Boolean as i32,
+        default_value: "false".to_string(),
+        audience_rule_id: "rule-1".to_string(),
+        ..Default::default()
+    };
+    let decoded = flag_proto_roundtrip(&flag);
+    assert_eq!(decoded.audience_rule_id, "rule-1");
+}
+
 // ---------------------------------------------------------------------------
 // 2. Proto3 zero-value handling
 //    Proto3 omits zero values in binary encoding. Both sides must agree.

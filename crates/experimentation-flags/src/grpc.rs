@@ -815,3 +815,36 @@ pub async fn serve(config: FlagsConfig, store: FlagStore, audit: Option<Arc<Audi
         .await
         .map_err(|e| format!("gRPC server error: {e}"))
 }
+
+#[cfg(test)]
+mod audience_tests {
+    use super::*;
+
+    fn valid_flag() -> ProtoFlag {
+        ProtoFlag {
+            name: "dark_mode".to_string(),
+            r#type: FlagType::Boolean as i32,
+            default_value: "false".to_string(),
+            rollout_percentage: 0.5,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn validate_flag_accepts_empty_audience_rule_id() {
+        assert!(validate_flag(&valid_flag()).is_ok());
+    }
+
+    #[test]
+    fn validate_flag_rejects_audience_rule_id() {
+        // #822: M7 doesn't store or evaluate audience rules yet, so a flag that
+        // names one must fail loudly instead of losing the constraint.
+        let flag = ProtoFlag {
+            audience_rule_id: "rule-1".to_string(),
+            ..valid_flag()
+        };
+        let err = validate_flag(&flag).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("audience_rule_id"));
+    }
+}

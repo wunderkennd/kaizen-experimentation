@@ -1990,6 +1990,23 @@ mod tests {
     use super::*;
     use validators::metricql::ValidateContext;
 
+    // ── reject_audience_rule (#822) ──────────────────────────────────────────
+
+    #[test]
+    fn reject_audience_rule_allows_empty() {
+        assert!(reject_audience_rule(&Experiment::default()).is_ok());
+    }
+
+    #[test]
+    fn reject_audience_rule_rejects_non_empty() {
+        let exp = Experiment {
+            audience_rule_id: "rule-1".to_string(),
+            ..Default::default()
+        };
+        let err = reject_audience_rule(&exp).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
     // ── line_col_from_byte_offset ────────────────────────────────────────────
 
     #[test]
