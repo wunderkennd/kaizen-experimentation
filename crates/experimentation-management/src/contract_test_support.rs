@@ -657,6 +657,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         _request: Request<CreateAudienceRuleRequest>,
     ) -> Result<Response<AudienceRule>, Status> {
+        // stub-allow: tracked-in #822
         Err(Status::unimplemented("CreateAudienceRule not yet implemented (#822)"))
     }
 
@@ -664,6 +665,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         _request: Request<GetAudienceRuleRequest>,
     ) -> Result<Response<AudienceRule>, Status> {
+        // stub-allow: tracked-in #822
         Err(Status::unimplemented("GetAudienceRule not yet implemented (#822)"))
     }
 
@@ -671,6 +673,7 @@ impl ExperimentManagementService for ManagementServiceHandler {
         &self,
         _request: Request<ListAudienceRulesRequest>,
     ) -> Result<Response<ListAudienceRulesResponse>, Status> {
+        // stub-allow: tracked-in #822
         Err(Status::unimplemented("ListAudienceRules not yet implemented (#822)"))
     }
 
