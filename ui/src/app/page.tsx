@@ -28,13 +28,14 @@ function SortableHeader({
   const isActive = currentField === field;
   return (
     <th
+      scope="col"
       className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
       aria-sort={isActive ? (currentDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button
         type="button"
         onClick={() => onToggle(field)}
-        className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 outline-none rounded-sm"
+        className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
         title={`Sort by ${label}`}
       >
         {label}
@@ -158,7 +159,7 @@ export default function ExperimentListPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" aria-label="Experiments summary">
             <thead className="bg-gray-50">
               <tr>
                 <SortableHeader
@@ -168,7 +169,7 @@ export default function ExperimentListPage() {
                   currentDir={filters.sortDir}
                   onToggle={filters.toggleSort}
                 />
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   Owner
                 </th>
                 <SortableHeader
@@ -192,7 +193,7 @@ export default function ExperimentListPage() {
                   currentDir={filters.sortDir}
                   onToggle={filters.toggleSort}
                 />
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   Results
                 </th>
               </tr>

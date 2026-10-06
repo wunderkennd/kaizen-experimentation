@@ -307,6 +307,7 @@ function MetricBrowserContent() {
   const clearFilters = useCallback(() => {
     setSearch('');
     setTypeFilter('');
+    inputRef.current?.focus();
   }, []);
 
   const fetchData = useCallback(() => {
@@ -434,7 +435,10 @@ function MetricBrowserContent() {
           {search ? (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => {
+                setSearch('');
+                inputRef.current?.focus();
+              }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
               aria-label="Clear search"
               data-testid="clear-search-button"
@@ -454,7 +458,7 @@ function MetricBrowserContent() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as MetricType | '')}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
           data-testid="type-filter"
           aria-label="Filter by metric type"
         >
@@ -487,15 +491,15 @@ function MetricBrowserContent() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200" aria-label="Metric definitions summary">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Metric ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Source Event</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Direction</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Metric ID</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Source Event</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Direction</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { QueryLogEntry } from '@/lib/types';
 import type { ExportPhase } from '@/lib/export-notebook';
+import { CopyButton } from '@/components/copy-button';
 
 const SqlHighlighter = dynamic(
   () => import('@/components/sql-highlighter').then(m => ({ default: m.SqlHighlighter })),
@@ -54,8 +55,32 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
         <button
           onClick={onExport}
           disabled={exporting}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
         >
+          {exporting && (
+            <svg
+              className="h-4 w-4 animate-spin text-gray-600"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              data-testid="export-spinner"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          )}
           {exporting ? (exportPhase ? EXPORT_PHASE_LABELS[exportPhase] : 'Exporting…') : 'Export Notebook'}
         </button>
       </div>
@@ -82,16 +107,24 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
           </thead>
           <tbody className="divide-y divide-gray-200">
             {entries.map((entry, i) => (
-              <tr key={`${entry.metricId}-${i}`} className="group">
+              <tr key={`${entry.metricId}-${i}`} className="group hover:bg-gray-50 focus-within:bg-gray-50">
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                  {entry.metricId}
+                  <div className="flex items-center gap-2">
+                    <span>{entry.metricId}</span>
+                    <CopyButton
+                      value={entry.metricId}
+                      label={`Copy metric ID ${entry.metricId}`}
+                      successMessage="Metric ID copied to clipboard"
+                      className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   <button
                     onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
                     aria-expanded={expandedIndex === i}
                     aria-label={`Toggle SQL preview for ${entry.metricId}`}
-                    className="max-w-md truncate text-left font-mono text-xs text-gray-600 hover:text-indigo-600"
+                    className="max-w-md truncate text-left font-mono text-xs text-gray-600 hover:text-indigo-600 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   >
                     {entry.sqlText.slice(0, 100)}{entry.sqlText.length > 100 ? '…' : ''}
                   </button>

@@ -172,6 +172,54 @@ async fn inactive_experiment_returns_is_active_false() {
     );
 }
 
+#[tokio::test]
+async fn is_control_reflects_assigned_variant() {
+    let json = r#"{
+        "experiments": [{
+            "experiment_id": "ctrl_flag_exp",
+            "state": "RUNNING",
+            "hash_salt": "ctrl_flag_salt",
+            "layer_id": "layer_default",
+            "variants": [
+                { "variant_id": "control", "traffic_fraction": 0.5, "is_control": true, "payload_json": "{}" },
+                { "variant_id": "treatment", "traffic_fraction": 0.5, "is_control": false, "payload_json": "{}" }
+            ],
+            "allocation": { "start_bucket": 0, "end_bucket": 9999 }
+        }],
+        "layers": [{ "layer_id": "layer_default", "total_buckets": 10000 }]
+    }"#;
+
+    let config = Config::from_json(json).unwrap();
+    let svc = AssignmentServiceImpl::from_config(Arc::new(config));
+
+    let mut saw_control = false;
+    let mut saw_treatment = false;
+    for i in 0..200 {
+        let resp = svc
+            .assign("ctrl_flag_exp", &format!("user_{i}"), "", &no_attrs())
+            .await
+            .unwrap();
+        match resp.variant_id.as_str() {
+            "control" => {
+                assert!(resp.is_control, "control variant must report is_control=true");
+                saw_control = true;
+            }
+            "treatment" => {
+                assert!(
+                    !resp.is_control,
+                    "treatment variant must report is_control=false"
+                );
+                saw_treatment = true;
+            }
+            other => panic!("unexpected variant: {other}"),
+        }
+    }
+    assert!(
+        saw_control && saw_treatment,
+        "200 users must hit both variants (control={saw_control}, treatment={saw_treatment})"
+    );
+}
+
 // ── M1.4 Tests (targeting rules) ──
 
 #[tokio::test]

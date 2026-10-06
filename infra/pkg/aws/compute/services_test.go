@@ -312,12 +312,14 @@ func TestAllSpecsHaveRequiredFields(t *testing.T) {
 		}
 		// Container health checks exist only where the runtime image can
 		// execute them: m5 (alpine) and m6 (node:alpine) carry busybox
-		// wget. Distroless/debian-slim images have no shell and no
-		// grpc_health_probe, so a declared check would fail every probe
-		// and the circuit breaker would kill healthy rollouts.
-		canProbe := map[string]bool{"m5": true, "m6": true}
+		// wget; m1 and m7 bundle /bin/grpc_health_probe in their debian
+		// runtime and register grpc.health.v1 via tonic-health (#755).
+		// Other distroless/debian-slim images still ship neither a shell
+		// nor grpc_health_probe, so a declared check would fail every
+		// probe and the circuit breaker would kill healthy rollouts.
+		canProbe := map[string]bool{"m1": true, "m5": true, "m6": true, "m7": true}
 		if canProbe[s.key] && len(s.healthCmd) == 0 {
-			t.Errorf("spec %q should declare a healthCmd (image has wget)", s.key)
+			t.Errorf("spec %q should declare a healthCmd (image has probe)", s.key)
 		}
 		if !canProbe[s.key] && len(s.healthCmd) != 0 {
 			t.Errorf("spec %q declares healthCmd its image cannot run", s.key)

@@ -173,7 +173,7 @@ function WizardOrchestrator({ onSubmit }: ExperimentFormProps) {
           <button
             type="button"
             onClick={goBack}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             Back
           </button>
@@ -182,7 +182,7 @@ function WizardOrchestrator({ onSubmit }: ExperimentFormProps) {
           <button
             type="button"
             onClick={goNext}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             Next
           </button>
@@ -190,7 +190,7 @@ function WizardOrchestrator({ onSubmit }: ExperimentFormProps) {
           <button
             type="submit"
             disabled={state.submitting}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
           >
             {state.submitting && (
               <svg

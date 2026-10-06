@@ -28,7 +28,7 @@ export function SqlHighlighter({
         value={sql}
         label={copyLabel ?? (isSql ? 'Copy SQL to clipboard' : 'Copy to clipboard')}
         successMessage={copySuccessMessage ?? (isSql ? 'SQL copied to clipboard' : 'Copied to clipboard')}
-        className="absolute right-2 top-4 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+        className="absolute right-2 top-4 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 group-focus-within:opacity-100"
       />
       <Highlight theme={themes.github} code={sql} language={language}>
         {({ style, tokens, getLineProps, getTokenProps }) => (

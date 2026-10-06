@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { TreatmentEffectsTable } from '@/components/treatment-effects-table';
+import { ToastProvider } from '@/lib/toast-context';
 import { FdrDecisionBadge } from '@/components/fdr-decision-badge';
 import { OptimalAlphaWidget } from '@/components/optimal-alpha-widget';
+import { FdrBudgetBar } from '@/components/fdr-budget-bar';
 import type { MetricResult, EValueResult, OnlineFdrState } from '@/lib/types';
 
 // --- Fixtures ---
@@ -65,13 +67,29 @@ const FDR_STATE_OVER_BUDGET: OnlineFdrState = {
 // --- Treatment Effects Table: E-value column ---
 
 describe('TreatmentEffectsTable with e-value', () => {
+  it('renders hover-reveal CopyButton for metric ID', () => {
+    render(
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+        />
+      </ToastProvider>,
+    );
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy metric ID' });
+    expect(copyBtn).toBeInTheDocument();
+  });
+
   it('shows e-value and implied p columns when eValueResult is provided', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     expect(screen.getByTestId('evalue-header')).toBeInTheDocument();
@@ -80,10 +98,12 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('does not show e-value column when eValueResult is absent', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+        />
+      </ToastProvider>,
     );
 
     expect(screen.queryByTestId('evalue-header')).not.toBeInTheDocument();
@@ -91,11 +111,13 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('renders e-value cell with formatted value', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     const cell = screen.getByTestId('evalue-cell');
@@ -104,11 +126,13 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('highlights e-value cell in red when null is rejected', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     const cell = screen.getByTestId('evalue-cell');
@@ -118,11 +142,13 @@ describe('TreatmentEffectsTable with e-value', () => {
 
   it('does not highlight e-value cell when null is not rejected', () => {
     render(
-      <TreatmentEffectsTable
-        metricResults={METRIC_RESULTS}
-        showCuped={false}
-        eValueResult={E_VALUE_NOT_REJECTING}
-      />,
+      <ToastProvider>
+        <TreatmentEffectsTable
+          metricResults={METRIC_RESULTS}
+          showCuped={false}
+          eValueResult={E_VALUE_NOT_REJECTING}
+        />
+      </ToastProvider>,
     );
 
     const cell = screen.getByTestId('evalue-cell');
@@ -188,6 +214,26 @@ describe('FdrDecisionBadge', () => {
   });
 });
 
+// --- FDR Budget Bar ---
+
+describe('FdrBudgetBar', () => {
+  it('renders tooltips on progressbar and numeric summary fields', async () => {
+    render(<FdrBudgetBar experimentId="11111111-1111-1111-1111-111111111111" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('fdr-budget-bar')).toBeInTheDocument();
+    });
+
+    const progressbar = screen.getByRole('progressbar');
+    expect(progressbar).toHaveAttribute('title', '64.0% of initial alpha wealth remaining');
+
+    expect(screen.getByTitle('Alpha budget available for multi-hypothesis testing under e-LOND')).toBeInTheDocument();
+    expect(screen.getByTitle('Total hypotheses tested across the portfolio')).toBeInTheDocument();
+    expect(screen.getByTitle('Total null hypotheses rejected')).toBeInTheDocument();
+    expect(screen.getByTitle('Estimated False Discovery Rate based on cumulative rejections')).toBeInTheDocument();
+  });
+});
+
 // --- Optimal Alpha Widget ---
 
 vi.mock('@/lib/api', async () => {
@@ -197,6 +243,15 @@ vi.mock('@/lib/api', async () => {
     getOptimalAlpha: vi.fn().mockResolvedValue({
       optimalAlpha: 0.10,
       expectedPortfolioFdr: 0.042,
+      computedAt: '2026-03-24T10:00:00Z',
+    }),
+    getOnlineFdrState: vi.fn().mockResolvedValue({
+      experimentId: '11111111-1111-1111-1111-111111111111',
+      alphaWealth: 0.032,
+      initialWealth: 0.05,
+      numTested: 15,
+      numRejected: 3,
+      currentFdr: 0.04,
       computedAt: '2026-03-24T10:00:00Z',
     }),
   };

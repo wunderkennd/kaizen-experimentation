@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import type { Experiment, AnalysisResult, MetricResult } from '@/lib/types';
 import { formatEffect, formatPValue, formatDate, STATE_CONFIG, TYPE_LABELS } from '@/lib/utils';
+import { CopyButton } from './copy-button';
 
 interface ComparisonEntry {
   experiment: Experiment;
@@ -158,7 +159,17 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Primary Metric</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm text-gray-600 font-mono">
-                    {e.experiment.primaryMetricId}
+                    <div className="group flex items-center gap-2">
+                      <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                        {e.experiment.primaryMetricId}
+                      </code>
+                      <CopyButton
+                        value={e.experiment.primaryMetricId}
+                        label="Copy primary metric ID"
+                        successMessage="Primary metric ID copied"
+                        className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                      />
+                    </div>
                   </td>
                 ))}
               </tr>
@@ -239,8 +250,20 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {allMetricIds.map((metricId) => (
-                <tr key={metricId}>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 font-mono">{metricId}</td>
+                <tr key={metricId} className="group">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900 font-mono">
+                    <div className="flex items-center gap-2">
+                      <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                        {metricId}
+                      </code>
+                      <CopyButton
+                        value={metricId}
+                        label="Copy metric ID"
+                        successMessage="Metric ID copied"
+                        className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                      />
+                    </div>
+                  </td>
                   {entries.map((e) => {
                     const hasMetric = e.analysisResult.metricResults.some((m) => m.metricId === metricId);
                     return (

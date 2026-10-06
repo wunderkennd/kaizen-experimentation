@@ -339,7 +339,7 @@ export default function NewMetricPage() {
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               data-testid="metric-cancel-button"
             >
               Cancel
@@ -347,7 +347,7 @@ export default function NewMetricPage() {
             <button
               type="submit"
               disabled={state.submitting || !formValid}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               data-testid="metric-submit-button"
             >
               {state.submitting ? 'Creating…' : 'Create Metric'}

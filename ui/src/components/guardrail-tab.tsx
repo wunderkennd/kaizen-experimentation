@@ -5,6 +5,7 @@ import type { GuardrailStatusResult } from '@/lib/types';
 import { getGuardrailStatus } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { RetryableError } from '@/components/retryable-error';
+import { CopyButton } from '@/components/copy-button';
 
 interface GuardrailTabProps {
   experimentId: string;
@@ -84,21 +85,24 @@ export function GuardrailTab({ experimentId }: GuardrailTabProps) {
 
       {/* Breach history table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200" aria-label="Guardrail breach history summary">
           <thead>
             <tr className="bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Time</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Metric</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Variant</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Value</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Threshold</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Consecutive</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Action</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Time</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Metric</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Variant</th>
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Value</th>
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Threshold</th>
+              <th scope="col" className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Consecutive</th>
+              <th scope="col" className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
             {result.breaches.map((breach, idx) => (
-              <tr key={`${breach.metricId}-${breach.detectedAt}-${idx}`}>
+              <tr
+                key={`${breach.metricId}-${breach.detectedAt}-${idx}`}
+                className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500"
+              >
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                   {formatDate(breach.detectedAt)}
                   <span className="ml-1 text-xs text-gray-400">
@@ -106,7 +110,15 @@ export function GuardrailTab({ experimentId }: GuardrailTabProps) {
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                  {breach.metricId}
+                  <div className="flex items-center gap-2">
+                    <span>{breach.metricId}</span>
+                    <CopyButton
+                      value={breach.metricId}
+                      label={`Copy metric ID ${breach.metricId}`}
+                      successMessage="Metric ID copied!"
+                      className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                    />
+                  </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                   {breach.variantId}

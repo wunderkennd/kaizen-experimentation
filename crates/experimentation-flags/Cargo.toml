@@ -18,6 +18,7 @@ experimentation-proto = { path = "../experimentation-proto" }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tonic-web = { workspace = true }
+tonic-health = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }

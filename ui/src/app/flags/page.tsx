@@ -35,6 +35,7 @@ function FlagListContent() {
   const clearFilters = useCallback(() => {
     setSearch('');
     setTypeFilter('');
+    inputRef.current?.focus();
   }, []);
 
   const fetchData = useCallback(() => {
@@ -158,7 +159,10 @@ function FlagListContent() {
           {search ? (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => {
+                setSearch('');
+                inputRef.current?.focus();
+              }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
               aria-label="Clear search"
               data-testid="clear-search-button"
@@ -178,7 +182,7 @@ function FlagListContent() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as FlagType | '')}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
           data-testid="type-filter"
           aria-label="Filter by flag type"
         >
@@ -211,23 +215,23 @@ function FlagListContent() {
             </div>
           ) : (
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200" aria-label="Feature flags summary">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flag ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rollout %</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Variants</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flag ID</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Default</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enabled</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Rollout %</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Variants</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filtered.map((f) => (
                     <tr key={f.flagId} className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500" data-testid={`flag-row-${f.flagId}`}>
                       <td className="px-4 py-3">
-                        <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800">
+                        <Link href={`/flags/${f.flagId}`} className="font-medium text-indigo-600 hover:text-indigo-800 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
                           {f.name}
                         </Link>
                       </td>

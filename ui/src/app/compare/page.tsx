@@ -85,6 +85,10 @@ export default function ComparePage() {
     setSelectedIds((prev) => prev.filter((sid) => sid !== id));
   }, []);
 
+  const handleClearAll = useCallback(() => {
+    setSelectedIds([]);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
@@ -115,6 +119,7 @@ export default function ComparePage() {
         selectedIds={selectedIds}
         onSelect={handleSelect}
         onRemove={handleRemove}
+        onClearAll={handleClearAll}
       />
 
       {/* Empty state */}

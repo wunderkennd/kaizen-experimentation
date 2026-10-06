@@ -61,7 +61,7 @@ Hash parity across SDKs is enforced by `test-vectors/hash_vectors.json` and veri
 
 ## Critical Rules
 
-- **Schema-first**: All interfaces defined in Protobuf. Run `buf lint` and `buf breaking` before committing proto changes.
+- **Schema-first**: All interfaces defined in Protobuf. `proto/experimentation/` and `proto/kaizen/audience/` are vendored from [kaizen-rosetta](https://github.com/wunderkennd/kaizen-rosetta) at the commit pinned in `proto/rosetta.lock.json` — make proto changes in rosetta, bump the pin, then `just sync-rosetta-protos`; CI fails if the vendored files drift. Run `buf lint` and `buf breaking` before committing proto changes.
 - **Fail-fast**: Every floating-point path uses `assert_finite!()` from experimentation-core.
 - **No statistical computation in Go or TypeScript.** All math lives in experimentation-stats (Rust).
 - **TypeScript is UI only.** M6 never performs metric computation, bandit evaluation, or statistical analysis.
@@ -90,13 +90,15 @@ See `docs/coordination/phase5-implementation-plan.md` and `docs/coordination/CHA
 
 ## Active Work (Post-Phase 5)
 
-**New ADRs (026–030 Proposed; 031 Accepted)**:
+**New ADRs (026–030, 032–033 Proposed; 031 Accepted and Implemented)**:
 - **ADR-026** (`docs/adrs/026-custom-metrics-layer.md`) — Custom metrics definition layer (composite / derived / joined metrics beyond the six built-in types). Impact: M5, M3, M4a. **Phase 1 implemented** (Rust M5 + M6 UI + M3 topo-order scheduling — FILTERED_MEAN, COMPOSITE, WINDOWED_COUNT; #552, #555, #475 — M3 dependency ordering via Kahn's algorithm with `metric_computation_status` table). **Phase 2 #435 implemented**: M3 MetricQL parser/compiler in `services/metrics/internal/metricql/` (lexer + recursive-descent parser + AST + semantic analyzer + DFS cycle detector + Spark SQL codegen; proto field `metricql_expression`; migration 013; integrated with #475 topo-order via @metric_ref operand extraction; symmetric upstream-failure gate). **Phases 2–3 complete**: #436 (M5 expression validation + M6 expression editor) closed 2026-05-30; #437 (CUSTOM migration + deprecation) closed 2026-06-02 — see the Phase 3 operator runbook.
 - **ADR-027** (`docs/adrs/027-tost-equivalence-testing.md`) — Two One-Sided Tests for proving equivalence (infra migrations, refactor validation). Impact: M4a, M5, M6. Core impl landed (#443); see `crates/experimentation-stats/src/tost.rs`.
 - **ADR-028** (`docs/adrs/028-m4b-shadow-inference.md`) — M4b shadow inference path for bandit policy promotion (dedicated shadow core, column-family isolation). Impact: M4b, M4a, M5, M6.
 - **ADR-029** (`docs/adrs/029-cross-modal-score-calibration.md`) — Cross-modal score calibration for heterogeneous slates (unified NEV scale across video, manga, commerce). Introduces a new `experimentation-calibration` Rust crate owned by Agent-4 and opens cluster **G — Personalization Orchestration**. Impact: M4a, M4b, M5, Personalization service.
 - **ADR-030** (`docs/adrs/030-shadow-experiment-mode.md`) — Shadow mode flag on experiments — run candidate variants on production traffic without user exposure. Impact: M1, M4a, M4b, M5, M6.
-- **ADR-031** (`docs/adrs/031-connectrpc-rust-assignment-pilot.md`) — **Accepted** (2026-06-23, #634): ConnectRPC (Rust) pilot on M1 Assignment via the Tower-based `connectrpc` runtime — a scoped revisit of ADR-010's "Connect for Go, tonic for Rust" split; fleet-wide adoption gated on the pilot's success criteria. Impact: M1, SDKs.
+- **ADR-031** (`docs/adrs/031-connectrpc-rust-assignment-pilot.md`) — **Accepted and Implemented** (accepted 2026-06-23, #634; pilot evaluated 2026-10-04, #645): ConnectRPC (Rust) pilot on M1 Assignment via the Tower-based `connectrpc` runtime — a scoped revisit of ADR-010's "Connect for Go, tonic for Rust" split; fleet-wide adoption proposed in ADR-032. Impact: M1, SDKs.
+- **ADR-032** (`docs/adrs/032-connectrpc-rust-fleet.md`) — **Proposed** (2026-10-04, from the #645 pilot decision): ConnectRPC for every Rust service, superseding ADR-010's "tonic for Rust" half. Gated on M1 p99, a connectrpc/buffa 0.9 upgrade, and CI build time; rollout M1 → M7 → M4a → M4b → M2 ingest → M5 Rust, then tonic/prost removal. Impact: all Rust services, M6 BFF, SDKs.
+- **ADR-033** (`docs/adrs/033-unit-pseudonymization-and-erasure.md`) — **Proposed** (2026-10-04, #825): user erasure via unit-ID pseudonymization at M2 ingest with a per-unit secret vault (crypto-shredding; M5 `ForgetUnit` → `unit_forgotten` → M2 deletes the secret), plus an opt-in M3 Delta data-TTL retention job (`services/metrics/internal/jobs/retention.go`, `M3_RETENTION_ENABLED`). Impact: M2, M3, M5.
 
 **Infrastructure sprint (Pulumi + Go on AWS)**: `infra/` contains Pulumi stacks (`Pulumi.{dev,staging,prod}.yaml`) and a full Go test suite (`fullstack_test.go`). Sprint I.0 (all 13 modules) and I.1/I.2 (wiring + hardening) merged; ECR repos exist for all 9 Kaizen services.
 
@@ -210,7 +212,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | --- | --- |
 | This file (agent context) | `CLAUDE.md` (repo root) |
 | Design document | `docs/design/design_doc_v7.0.md` |
-| ADRs (001–031) | `docs/adrs/` |
+| ADRs (001–033) | `docs/adrs/` |
 | ADR index | `docs/adrs/README.md` |
 | **Agent registry (canonical identity)** | `docs/agents/registry/` — OKF v0.1 bundle; validate with `just check-registry` |
 | Agent definitions (modules) | `.multiclaude/agents/agent-N-*.md` (view of the registry; generated under #682) |
@@ -229,7 +231,7 @@ gh issue view 42 --json body -q '.body' | multiclaude worker create "$(cat -)"
 | Claude Code settings | `.claude/settings.json` |
 | PR triage subagent | `.claude/agents/pr-triage.md` |
 | Multiclaude config | `.multiclaude/config.json` |
-| Proto schema | `proto/experimentation/` (subdirs: assignment, analysis, bandit, flags, management, metrics, pipeline, common) |
+| Proto schema | `proto/experimentation/` (subdirs: assignment, analysis, bandit, flags, management, metrics, pipeline, common) + `proto/kaizen/audience/v1/` — vendored from kaizen-rosetta, pin in `proto/rosetta.lock.json`; `proto/third_party/` = protovalidate for protoc (Rust) only |
 | SQL migrations | `sql/migrations/` |
 | Test vectors (hash parity) | `test-vectors/hash_vectors.json` |
 | Phase 5 plan & changelog | `docs/coordination/phase5-implementation-plan.md`, `docs/coordination/CHANGELOG-phase5.md` |

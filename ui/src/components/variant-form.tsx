@@ -161,7 +161,7 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     aria-required="true"
                     aria-invalid={!!getError(i, 'name')}
                     aria-describedby={getError(i, 'name') ? `variant-${i}-name-error` : undefined}
-                    className={`w-full rounded border px-2 py-1 text-sm ${
+                    className={`w-full rounded border px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       getError(i, 'name') ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
@@ -181,7 +181,7 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     aria-label={`Variant ${i + 1} traffic`}
                     aria-invalid={!!getError(i, 'trafficFraction')}
                     aria-describedby={getError(i, 'trafficFraction') ? `variant-${i}-traffic-error` : undefined}
-                    className={`w-24 rounded border px-2 py-1 text-sm ${
+                    className={`w-24 rounded border px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       getError(i, 'trafficFraction') ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
@@ -196,6 +196,7 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     checked={v.isControl}
                     onChange={() => updateVariant(i, 'isControl', true)}
                     aria-label={`Set ${v.name || `variant ${i + 1}`} as control`}
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -207,7 +208,7 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     aria-invalid={!!getError(i, 'payloadJson')}
                     aria-describedby={getError(i, 'payloadJson') ? `variant-${i}-payload-error` : undefined}
                     rows={2}
-                    className={`w-full rounded border px-2 py-1 font-mono text-xs ${
+                    className={`w-full rounded border px-2 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       getError(i, 'payloadJson') ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
@@ -221,7 +222,8 @@ export function VariantForm({ variants: initialVariants, experimentType, onSave 
                     onClick={() => removeVariant(i)}
                     disabled={variants.length <= minVariants}
                     aria-label={`Remove variant ${v.name || i + 1}`}
-                    className="text-sm text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-gray-400"
+                    title={variants.length <= minVariants ? `Minimum of ${minVariants} variant${minVariants > 1 ? 's' : ''} required` : undefined}
+                    className="rounded-sm text-sm text-red-600 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:text-gray-400"
                   >
                     Remove
                   </button>

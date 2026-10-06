@@ -316,7 +316,8 @@ describe('Quasi-Experiment Tab — market_expansion_synthetic_control', () => {
     expect(screen.getByText('Cumulative Treatment Effect')).toBeInTheDocument();
   });
 
-  it('shows donor weights table with top donor', async () => {
+  it('shows donor weights table with top donor and copy button', async () => {
+    const writeTextSpy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -333,6 +334,13 @@ describe('Quasi-Experiment Tab — market_expansion_synthetic_control', () => {
     // Seattle Metro appears in donor table and placebo grid
     expect(screen.getAllByText('Seattle Metro').length).toBeGreaterThan(0);
     expect(screen.getByText('0.4200')).toBeInTheDocument();
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy donor ID for Seattle Metro' });
+    expect(copyBtn).toBeInTheDocument();
+
+    await user.click(copyBtn);
+    expect(writeTextSpy).toHaveBeenCalledWith('donor-seattle');
+    writeTextSpy.mockRestore();
   });
 
   it('shows placebo small-multiples grid', async () => {

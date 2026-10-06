@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package kaizen.audience.v1;
+
+import "buf/validate/validate.proto";
+import "kaizen/audience/v1/operator.proto";
+
+// AudienceEvaluationDecision is the result of evaluating an audience rule.
+enum AudienceEvaluationDecision {
+  AUDIENCE_EVALUATION_DECISION_UNSPECIFIED = 0;
+  AUDIENCE_EVALUATION_DECISION_MATCH = 1;
+  AUDIENCE_EVALUATION_DECISION_NO_MATCH = 2;
+  AUDIENCE_EVALUATION_DECISION_INVALID = 3;
+}
+
+// AudienceEvaluationReasonCode explains a decision without exposing values.
+enum AudienceEvaluationReasonCode {
+  AUDIENCE_EVALUATION_REASON_CODE_UNSPECIFIED = 0;
+  AUDIENCE_EVALUATION_REASON_CODE_MISSING_ATTRIBUTE = 1;
+  AUDIENCE_EVALUATION_REASON_CODE_TYPE_MISMATCH = 2;
+  AUDIENCE_EVALUATION_REASON_CODE_INVALID_ARITY = 3;
+  AUDIENCE_EVALUATION_REASON_CODE_UNREGISTERED_ATTRIBUTE = 4;
+  AUDIENCE_EVALUATION_REASON_CODE_DISALLOWED_OPERATOR = 5;
+  AUDIENCE_EVALUATION_REASON_CODE_INVALID_REGEX = 6;
+  AUDIENCE_EVALUATION_REASON_CODE_LIMIT_EXCEEDED = 7;
+  AUDIENCE_EVALUATION_REASON_CODE_LEGACY_CONVERSION_FAILURE = 8;
+  AUDIENCE_EVALUATION_REASON_CODE_INVALID_CONTEXT = 9;
+}
+
+// AudienceEvaluationTraceEntry records a value-redacted expression outcome.
+message AudienceEvaluationTraceEntry {
+  string expression_path = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.pattern = "^\\$(\\.(all|any)\\[(0|[1-9][0-9]*)\\]|\\.not)*$"
+  ];
+  string attribute_key = 2 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string = {
+      max_bytes: 64
+      pattern: "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    }
+  ];
+  AudienceOperator operator = 3 [(buf.validate.field).enum.defined_only = true];
+  AudienceEvaluationDecision decision = 4 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+  AudienceEvaluationReasonCode reason_code = 5 [(buf.validate.field).enum.defined_only = true];
+}
+
+// AudienceEvaluation reports a rule decision and optional value-redacted trace.
+message AudienceEvaluation {
+  string rule_id = 1 [(buf.validate.field).required = true];
+  uint64 revision = 2 [(buf.validate.field).uint64.gte = 1];
+  string content_fingerprint = 3 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.pattern = "^[0-9a-f]{64}$"
+  ];
+  AudienceEvaluationDecision decision = 4 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+  repeated AudienceEvaluationReasonCode reason_codes = 5 [(buf.validate.field).repeated = {
+    unique: true
+    items: {
+      enum: {
+        defined_only: true
+        not_in: 0
+      }
+    }
+  }];
+  repeated AudienceEvaluationTraceEntry trace = 6;
+}

@@ -108,6 +108,8 @@ fn domain_to_proto(f: &Flag) -> ProtoFlag {
             .targeting_rule_id
             .map(|u| u.to_string())
             .unwrap_or_default(),
+        // Audience rules are not supported yet (#822); validate_flag rejects them.
+        audience_rule_id: String::new(),
         variants: f
             .variants
             .iter()
@@ -171,6 +173,14 @@ fn proto_to_domain(pb: &ProtoFlag) -> Result<Flag, Status> {
 
 #[allow(clippy::result_large_err)]
 fn validate_flag(pb: &ProtoFlag) -> Result<(), Status> {
+    // audience_rule_id arrives with the contracts vendored from kaizen-rosetta
+    // (#822), but M7 does not evaluate audience rules and the store has no
+    // column for it. Reject it rather than silently drop a targeting constraint.
+    if !pb.audience_rule_id.is_empty() {
+        return Err(Status::invalid_argument(
+            "audience_rule_id is not supported yet; use targeting_rule_id (#822)",
+        ));
+    }
     if pb.name.trim().is_empty() {
         return Err(Status::invalid_argument("name is required"));
     }
@@ -778,12 +788,63 @@ pub async fn serve(config: FlagsConfig, store: FlagStore, audit: Option<Arc<Audi
 
     let svc = FeatureFlagServiceServer::new(handler);
 
+    // grpc.health.v1: mark SERVING once the store connected and handler is
+    // built (checked above with `.await`). Reconciler + Kafka are optional
+    // background tasks; treating them as gates would keep M7 NOT_SERVING for
+    // the many deploys that run without M5_ADDR.
+    //
+    // Note: tonic_health::server::health_reporter() initializes the empty
+    // service name "" (the overall server status) to Serving by default (see
+    // tonic-health 0.12.3 server.rs:44), so `grpc_health_probe -addr=:50057`
+    // and the ALB gRPC health check — both of which query with service="" —
+    // resolve to SERVING out of the box. set_serving::<T>() below adds
+    // per-service reporting for consumers that want to check the named
+    // FeatureFlagService specifically.
+    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<FeatureFlagServiceServer<FlagsServiceHandler>>()
+        .await;
+
     info!(%addr, "feature flag gRPC server starting (tonic-web enabled)");
 
     tonic::transport::Server::builder()
         .accept_http1(true)
+        .add_service(health_service)
         .add_service(tonic_web::enable(svc))
         .serve(addr)
         .await
         .map_err(|e| format!("gRPC server error: {e}"))
+}
+
+#[cfg(test)]
+mod audience_tests {
+    use super::*;
+
+    fn valid_flag() -> ProtoFlag {
+        ProtoFlag {
+            name: "dark_mode".to_string(),
+            r#type: FlagType::Boolean as i32,
+            default_value: "false".to_string(),
+            rollout_percentage: 0.5,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn validate_flag_accepts_empty_audience_rule_id() {
+        assert!(validate_flag(&valid_flag()).is_ok());
+    }
+
+    #[test]
+    fn validate_flag_rejects_audience_rule_id() {
+        // #822: M7 doesn't store or evaluate audience rules yet, so a flag that
+        // names one must fail loudly instead of losing the constraint.
+        let flag = ProtoFlag {
+            audience_rule_id: "rule-1".to_string(),
+            ..valid_flag()
+        };
+        let err = validate_flag(&flag).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("audience_rule_id"));
+    }
 }

@@ -59,7 +59,7 @@ describe('SQL Page', () => {
     expect(screen.getByText('crash_rate')).toBeInTheDocument();
   });
 
-  it('shows metric ID for each entry', async () => {
+  it('shows metric ID for each entry with accessible copy button', async () => {
     render(
       <ToastProvider>
         <SqlPage />
@@ -72,6 +72,10 @@ describe('SQL Page', () => {
 
     expect(screen.getByText('watch_time_per_session')).toBeInTheDocument();
     expect(screen.getByText('crash_rate')).toBeInTheDocument();
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy metric ID click_through_rate' });
+    expect(copyBtn).toBeInTheDocument();
+    expect(copyBtn).toHaveClass('opacity-0');
   });
 
   it('shows formatted duration and row count', async () => {
@@ -90,7 +94,7 @@ describe('SQL Page', () => {
     expect(screen.getByText('1.8s')).toBeInTheDocument();
   });
 
-  it('expands row to show full SQL text', async () => {
+  it('expands row to show full SQL text and renders accessible copy button', async () => {
     const user = userEvent.setup();
     render(
       <ToastProvider>
@@ -110,9 +114,14 @@ describe('SQL Page', () => {
     const preElements = document.querySelectorAll('pre');
     expect(preElements.length).toBeGreaterThanOrEqual(1);
     expect(preElements[0].textContent).toContain('experiment_id');
+
+    // Should render CopyButton with focus-within accessibility classes
+    const copyButton = screen.getByRole('button', { name: /Copy SQL to clipboard/i });
+    expect(copyButton).toBeInTheDocument();
+    expect(copyButton).toHaveClass('focus-within:opacity-100');
   });
 
-  it('shows empty state when no entries', async () => {
+  it('shows empty state with actionable navigation CTA link when no entries', async () => {
     mockExperimentId = '44444444-4444-4444-4444-444444444444';
     render(
       <ToastProvider>
@@ -123,6 +132,28 @@ describe('SQL Page', () => {
     await waitFor(() => {
       expect(screen.getByText('No query log entries found for this experiment.')).toBeInTheDocument();
     });
+
+    const ctaLink = screen.getByRole('link', { name: /Return to Experiment Details/i });
+    expect(ctaLink).toBeInTheDocument();
+    expect(ctaLink).toHaveAttribute('href', '/experiments/44444444-4444-4444-4444-444444444444');
+    expect(ctaLink).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-indigo-500');
+  });
+
+  it('renders loading spinner in Export Notebook button during export', async () => {
+    const { QueryLogTable } = await import('@/components/query-log-table');
+    render(
+      <ToastProvider>
+        <QueryLogTable
+          entries={[{ experimentId: '111', metricId: 'test_metric', sqlText: 'SELECT 1', rowCount: 10, durationMs: 100 }]}
+          onExport={vi.fn()}
+          exporting={true}
+          exportPhase="fetching"
+        />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByTestId('export-spinner')).toBeInTheDocument();
+    expect(screen.getByText('Fetching data…')).toBeInTheDocument();
   });
 
   it('shows Export Notebook button', async () => {

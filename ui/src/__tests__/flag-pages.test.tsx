@@ -58,7 +58,7 @@ describe('Flag List Page', () => {
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
-  it('renders flag list with all seed flags', async () => {
+  it('renders flag list with all seed flags and accessible table semantics', async () => {
     await renderAndWait();
 
     expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
@@ -66,6 +66,15 @@ describe('Flag List Page', () => {
     expect(screen.getByText('upcoming_feature')).toBeInTheDocument();
     expect(screen.getByText('player_config_override')).toBeInTheDocument();
     expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+
+    const table = screen.getByRole('table', { name: 'Feature flags summary' });
+    expect(table).toBeInTheDocument();
+
+    const columnHeaders = within(table).getAllByRole('columnheader');
+    expect(columnHeaders).toHaveLength(7);
+    columnHeaders.forEach((header) => {
+      expect(header).toHaveAttribute('scope', 'col');
+    });
   });
 
   it('shows empty state when no flags', async () => {
@@ -455,10 +464,18 @@ describe('Create Flag Page', () => {
     });
   });
 
-  it('has cancel link back to /flags', () => {
+  it('has cancel link back to /flags and focus-visible styling on action buttons', () => {
     customRender(<CreateFlagPage />);
-    const cancelLink = screen.getByText('Cancel').closest('a');
+    const submitBtn = screen.getByTestId('create-submit');
+    expect(submitBtn).toHaveClass('focus-visible:ring-2');
+    expect(submitBtn).toHaveClass('focus-visible:ring-indigo-500');
+    expect(submitBtn).toHaveClass('focus-visible:ring-offset-2');
+
+    const cancelLink = screen.getByTestId('create-cancel');
     expect(cancelLink).toHaveAttribute('href', '/flags');
+    expect(cancelLink).toHaveClass('focus-visible:ring-2');
+    expect(cancelLink).toHaveClass('focus-visible:ring-indigo-500');
+    expect(cancelLink).toHaveClass('focus-visible:ring-offset-2');
   });
 
   it('renders all flag type options', () => {
@@ -564,9 +581,17 @@ describe('Edit Flag Page', () => {
     expect(screen.getByTestId('back-link')).toHaveAttribute('href', '/flags/flag-bool-rollout');
   });
 
-  it('has cancel link to flag detail page', async () => {
+  it('has cancel link to flag detail page and focus-visible styling on action buttons', async () => {
     await renderAndWait();
-    const cancelLink = screen.getByText('Cancel').closest('a');
+    const submitBtn = screen.getByTestId('edit-submit');
+    expect(submitBtn).toHaveClass('focus-visible:ring-2');
+    expect(submitBtn).toHaveClass('focus-visible:ring-indigo-500');
+    expect(submitBtn).toHaveClass('focus-visible:ring-offset-2');
+
+    const cancelLink = screen.getByTestId('edit-cancel');
     expect(cancelLink).toHaveAttribute('href', '/flags/flag-bool-rollout');
+    expect(cancelLink).toHaveClass('focus-visible:ring-2');
+    expect(cancelLink).toHaveClass('focus-visible:ring-indigo-500');
+    expect(cancelLink).toHaveClass('focus-visible:ring-offset-2');
   });
 });

@@ -77,6 +77,18 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 **Learning:** Standardizing secondary navigation (breadcrumbs) and interaction patterns (disabled buttons vs. hiding) across all primary sections significantly reduces user disorientation and cognitive load. Providing explicit feedback on restricted actions (e.g., tooltips on disabled buttons) is more helpful than removing elements, as it clarifies permission boundaries without changing the UI layout.
 **Action:** Ensure all primary list and detail pages include breadcrumbs starting from the platform root. Use disabled states with role-requirement tooltips for permission-gated actions instead of hiding them.
 
+## 2026-07-10 - Standardizing Focus Styles on Sortable Headers
+**Learning:** Table header buttons used for sorting should implement standard visual focus indicators with a clear visual offset rather than tight inset rings. This consistent gap between the focus outline and the button text ensures clear spatial and visual indication for keyboard navigators, matching global navigation and primary button standards.
+**Action:** Always apply `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` to table header sort buttons across both list views and portfolio grids instead of `focus-visible:ring-inset`.
+
+## 2026-07-15 - Multi-Selection Reset Interaction Pattern
+**Learning:** For multi-selection workflows (such as selecting multiple experiments for side-by-side comparison), users find it highly tedious to individually close or remove each selection chip to reset or clear the view. Providing a dedicated, keyboard-accessible "Clear all" button alongside the chips significantly reduces interaction friction and facilitates quick, exploratory comparison flows.
+**Action:** When displaying a list of selected interactive items or chips, always render an adjacent "Clear all" reset button if multiple items are present. Ensure the button is fully navigable and styles its focus state with offset rings for maximum accessibility.
+
+## 2026-08-12 - Standard Focus Rings on Form Actions
+**Learning:** Primary form actions (like 'Cancel' and 'Create Metric') are crucial keyboard targets but are easily neglected during manual accessibility checks. Standardizing these with `focus-visible` offset rings prevents keyboard focus loss and ensures consistent interaction feedback across creation workflows, aligning them with global navigation elements.
+**Action:** Always apply `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` to all primary and secondary form-level action buttons.
+
 ## 2026-07-10 - Unified Keyboard Focus Indicators on CopyButton
 **Learning:** Utility buttons like `CopyButton` are highly interactive and frequent across dense layouts. Using standard focus indicators (`focus:outline-none focus:ring-2`) can cause confusing ring highlights during mouse clicks, while completely ignoring them is an accessibility blocker. Applying the `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` pattern ensures keyboard navigators receive standard, clear spatial visual cues, while keeping the interface pristine and ring-free during normal mouse usage.
 **Action:** Always utilize `focus-visible` states rather than standard `focus` rings on discrete utility buttons to ensure accessibility without introducing visual noise on click interactions.

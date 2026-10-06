@@ -28,6 +28,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 tonic = { workspace = true }
 tonic-web = { workspace = true }
+tonic-health = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -38,8 +39,8 @@ anyhow = { workspace = true }
 hyper = { version = "1.0", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
-connectrpc = { version = "0.7", default-features = false, features = ["server"], optional = true }
-buffa = { version = "0.7", features = ["json"], optional = true }
+connectrpc = { workspace = true, features = ["server", "json"], optional = true }
+buffa = { workspace = true, features = ["json"], optional = true }
 tower = { version = "0.5", optional = true }
 
 [features]

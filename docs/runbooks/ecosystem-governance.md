@@ -68,7 +68,9 @@ Check-run contexts from reusable workflows are two-segment —
    permissions: { contents: read, pull-requests: read }
    concurrency:
      group: review-gate-${{ github.event.pull_request.number }}
-     cancel-in-progress: true
+     # queue, don't cancel: cancelled runs of a REQUIRED check wedge PRs
+     # (kaizen-experimentation #763/#764)
+     cancel-in-progress: false
    jobs:
      gate:
        name: Review gate

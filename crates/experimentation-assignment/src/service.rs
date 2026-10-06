@@ -212,6 +212,7 @@ impl AssignmentServiceImpl {
             payload_json: variant.payload_json.clone(),
             assignment_probability: variant.traffic_fraction,
             is_active: true,
+            is_control: variant.is_control,
             ..Default::default()
         })
     }
@@ -377,6 +378,7 @@ impl AssignmentServiceImpl {
             assignment_probability: 1.0,
             is_active: true,
             block_index,
+            is_control: variant.is_control,
         })
     }
 
@@ -431,6 +433,9 @@ impl AssignmentServiceImpl {
                         assignment_probability: two_level_prob,
                         is_active: true,
                         block_index: 0,
+                        // META: the arm is served within the AB-selected variant,
+                        // so control status reflects that variant's flag.
+                        is_control: variant.is_control,
                     });
                 }
                 Err(e) => {
@@ -470,6 +475,9 @@ impl AssignmentServiceImpl {
             assignment_probability: two_level_prob,
             is_active: true,
             block_index: 0,
+            // META fallback: same variant-level control semantics as the
+            // M4b-backed path above.
+            is_control: variant.is_control,
         })
     }
 

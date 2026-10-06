@@ -315,8 +315,9 @@ impl HeartbeatSessionizer {
             if gap < Duration::zero() {
                 // Out-of-order arrival within the same session — drop.
                 self.dropped_out_of_order = self.dropped_out_of_order.saturating_add(1);
+                // Raw user_id is PII and stays out of tracing output (#825);
+                // device_id + content_id are enough to correlate a session.
                 warn!(
-                    user_id = %hb.user_id,
                     device_id = %hb.device_id,
                     content_id = %hb.content_id,
                     gap_ms = gap.num_milliseconds(),
@@ -329,7 +330,7 @@ impl HeartbeatSessionizer {
                 let state = self.sessions.remove(&key).expect("just checked present");
                 emitted = Some(state.finalize(&key));
                 debug!(
-                    user_id = %key.user_id,
+                    device_id = %key.device_id,
                     content_id = %key.content_id,
                     gap_ms = gap.num_milliseconds(),
                     "session gap exceeded; emitting QoEEvent"

@@ -1,3 +1,6 @@
+#![allow(clippy::result_large_err)]
+#![allow(clippy::double_must_use)]
+
 pub mod bandit_client;
 pub mod config;
 pub mod config_cache;

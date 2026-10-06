@@ -54,10 +54,11 @@ describe('Provider Health Page', () => {
     expect(screen.getByText(/catalog coverage, gini concentration/i)).toBeInTheDocument();
   });
 
-  it('renders provider dropdown with all provider options', async () => {
+  it('renders provider dropdown with all provider options and focus-visible styling', async () => {
     await renderAndWait();
     const select = screen.getByTestId('provider-filter');
     expect(select).toBeInTheDocument();
+    expect(select).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-indigo-500', 'focus-visible:ring-offset-2');
 
     // Should have "All providers" + one option per unique provider
     const uniqueProviders = SEED_PROVIDER_HEALTH.providers;
