@@ -21,13 +21,15 @@ describe('TypeBadge', () => {
   ];
 
   experimentTypes.forEach((type) => {
-    it(`renders correct label and title tooltip for ${type}`, () => {
+    it(`renders correct label, title tooltip, and accessibility attributes for ${type}`, () => {
       render(<TypeBadge type={type} />);
 
       const badge = screen.getByTestId('type-badge');
       expect(badge).toBeInTheDocument();
       expect(badge).toHaveTextContent(TYPE_LABELS[type]);
       expect(badge).toHaveAttribute('title', TYPE_DESCRIPTIONS[type]);
+      expect(badge).toHaveAttribute('aria-label', `${TYPE_LABELS[type]}: ${TYPE_DESCRIPTIONS[type]}`);
+      expect(badge).toHaveAttribute('tabIndex', '0');
       expect(badge).toHaveAttribute('data-type', type);
       expect(badge).toHaveClass('cursor-help');
     });
