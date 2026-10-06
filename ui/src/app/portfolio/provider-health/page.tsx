@@ -57,17 +57,23 @@ export default function ProviderHealthPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const selectRef = useRef<HTMLSelectElement>(null);
+  // Monotonic request id: a response is applied only if no newer request started after it,
+  // so a slow earlier fetch cannot overwrite the data for the provider selected later.
+  const requestSeq = useRef(0);
 
   const fetchData = useCallback(async (providerId?: string) => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     try {
       const data = await getProviderHealth(providerId || undefined);
+      if (seq !== requestSeq.current) return;
       setResult(data);
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setError(err instanceof Error ? err.message : 'Failed to load provider health data.');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, []);
 
