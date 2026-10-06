@@ -124,7 +124,7 @@ export function QueryLogTable({ entries, onExport, exporting, exportPhase }: Que
                     type="button"
                     onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
                     aria-expanded={expandedIndex === i}
-                    aria-controls={`sql-preview-${i}`}
+                    aria-controls={expandedIndex === i ? `sql-preview-${i}` : undefined}
                     aria-label={`Toggle SQL preview for ${entry.metricId}`}
                     className="inline-flex items-center gap-1.5 max-w-md text-left font-mono text-xs text-gray-600 hover:text-indigo-600 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   >
