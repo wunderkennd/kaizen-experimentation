@@ -1,22 +1,18 @@
-//! ADR-031 pilot — in-process round-trip tests for the unary RPCs on
-//! `AssignmentService` over Connect/JSON.
+//! In-process round-trip tests for the unary RPCs on `AssignmentService`
+//! over Connect/JSON — what browsers, the M6 BFF and the hand-rolled SDKs send.
 //!
-//! Binds the ConnectRPC server on 127.0.0.1:0, POSTs Connect/JSON to
+//! Binds the production app on 127.0.0.1:0, POSTs Connect/JSON to
 //! `/experimentation.assignment.v1.AssignmentService/{method}`, and asserts
-//! the JSON shape matches the tonic/http_json contract for each method that
-//! has one. `GetInterleavedList` had no hand-rolled JSON path before this
-//! PR — the round-trip test here closes that coverage gap (#642).
-
-#![cfg(feature = "connectrpc")]
+//! the JSON shape matches the contract the retired http_json shim served
+//! (ADR-031 #642, ADR-032 step 0). gRPC coverage lives in `grpc_wire_test.rs`.
 
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
 use experimentation_assignment::config::Config;
-use experimentation_assignment::connect_server::ConnectAssignment;
+use experimentation_assignment::connect_server;
 use experimentation_assignment::service::AssignmentServiceImpl;
-use experimentation_proto_connect::experimentation::assignment::v1::AssignmentServiceExt;
 
 async fn start_connect_server() -> (SocketAddr, Arc<AssignmentServiceImpl>) {
     let path = if Path::new("dev/config.json").exists() {
@@ -28,15 +24,13 @@ async fn start_connect_server() -> (SocketAddr, Arc<AssignmentServiceImpl>) {
     };
     let config = Config::from_file(path).expect("dev/config.json should parse");
     let svc = Arc::new(AssignmentServiceImpl::from_config(Arc::new(config)));
-    let connect_svc = Arc::new(ConnectAssignment::new(svc.clone()));
-    let router = connect_svc.register(connectrpc::Router::new());
+    let (app, _health) = connect_server::app(svc.clone());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let bound = connectrpc::Server::from_listener(listener);
 
     tokio::spawn(async move {
-        let _ = bound.serve(router).await;
+        let _ = axum::serve(listener, app).await;
     });
 
     (addr, svc)
@@ -221,3 +215,104 @@ async fn connect_get_slate_assignment_returns_ordered_slate() {
 // tests/stream_config_updates_test.rs; cross-transport wire-level
 // validation (Connect binary framing, gRPC-Web) lands with #644's
 // server-go client + conformance run.
+
+/// Raw request helper for the non-RPC cases below (preflight, unknown path).
+async fn raw_request(
+    addr: SocketAddr,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+) -> hyper::Response<hyper::body::Incoming> {
+    use http_body_util::Full;
+    use hyper::body::Bytes;
+    use hyper_util::rt::TokioIo;
+
+    let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let (mut sender, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
+        .await
+        .unwrap();
+    tokio::spawn(async move {
+        let _ = conn.await;
+    });
+    let mut req = hyper::Request::builder()
+        .method(method)
+        .uri(path)
+        .header("host", format!("127.0.0.1:{}", addr.port()));
+    for (k, v) in headers {
+        req = req.header(*k, *v);
+    }
+    sender
+        .send_request(req.body(Full::new(Bytes::new())).unwrap())
+        .await
+        .unwrap()
+}
+
+/// Browsers send a preflight before a cross-origin `application/json` POST;
+/// the retired http_json shim answered it, so the Connect listener must too.
+#[tokio::test]
+async fn cors_preflight_allows_connect_json_from_any_origin() {
+    let (addr, _svc) = start_connect_server().await;
+    let resp = raw_request(
+        addr,
+        "OPTIONS",
+        "/experimentation.assignment.v1.AssignmentService/GetAssignment",
+        &[
+            ("origin", "https://app.example.com"),
+            ("access-control-request-method", "POST"),
+            (
+                "access-control-request-headers",
+                "content-type,connect-protocol-version",
+            ),
+        ],
+    )
+    .await;
+
+    assert!(
+        resp.status().is_success(),
+        "preflight status {}",
+        resp.status()
+    );
+    let h = resp.headers();
+    assert_eq!(h["access-control-allow-origin"], "*");
+    let methods = h["access-control-allow-methods"].to_str().unwrap();
+    assert!(methods.contains("POST"), "allow-methods: {methods}");
+    let allowed = h["access-control-allow-headers"]
+        .to_str()
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(allowed.contains("content-type"), "allow-headers: {allowed}");
+    assert!(
+        allowed.contains("connect-protocol-version"),
+        "allow-headers: {allowed}"
+    );
+}
+
+#[tokio::test]
+async fn cors_header_on_rpc_response() {
+    let (addr, _svc) = start_connect_server().await;
+    let resp = raw_request(
+        addr,
+        "POST",
+        "/experimentation.assignment.v1.AssignmentService/GetAssignments",
+        &[
+            ("origin", "https://app.example.com"),
+            ("content-type", "application/json"),
+        ],
+    )
+    .await;
+    // Empty body decodes as an empty request; only the CORS header matters here.
+    assert_eq!(resp.headers()["access-control-allow-origin"], "*");
+}
+
+#[tokio::test]
+async fn unknown_method_path_returns_404() {
+    let (addr, _svc) = start_connect_server().await;
+    let resp = raw_request(
+        addr,
+        "POST",
+        "/experimentation.assignment.v1.AssignmentService/NoSuchMethod",
+        &[("content-type", "application/json")],
+    )
+    .await;
+    assert_eq!(resp.status().as_u16(), 404);
+}

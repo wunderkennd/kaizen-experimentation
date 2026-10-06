@@ -10,10 +10,10 @@
 // experimentation.go, is retired in #644).
 //
 // Opt-in: runs only when KAIZEN_M1_CONNECT_URL is set. To run locally, start
-// the M1 pilot binary with --features connectrpc, then:
+// M1 (Connect is its only listener since ADR-032), then:
 //
-//	CONNECTRPC_ADDR=127.0.0.1:50161 \
-//	  cargo run -p experimentation-assignment --features connectrpc --bin experimentation-assignment
+//	GRPC_ADDR=127.0.0.1:50161 \
+//	  cargo run -p experimentation-assignment --bin experimentation-assignment
 //	KAIZEN_M1_CONNECT_URL=http://127.0.0.1:50161 go test ./sdks/server-go/...
 package experimentation_test
 

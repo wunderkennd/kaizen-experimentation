@@ -714,7 +714,7 @@ run-all: _check-infra
     echo ""
     echo "============================================"
     echo "  All services starting. Ports:"
-    echo "    M1  Assignment:   localhost:50051 (gRPC) / localhost:8080 (HTTP)"
+    echo "    M1  Assignment:   localhost:50051 (Connect + gRPC + gRPC-Web)"
     echo "    M2  Pipeline:     localhost:50052"
     echo "    M2  Orchestration:localhost:50058"
     echo "    M3  Metrics:      localhost:50056"

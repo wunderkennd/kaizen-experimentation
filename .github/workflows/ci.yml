@@ -162,7 +162,7 @@ jobs:
       - name: Hash determinism vectors
         run: cargo test --package experimentation-hash -- hash_vectors
 
-  # Opt-in feature trees (simd proptests, ADR-031 connectrpc pilot). These
+  # Opt-in feature trees (simd proptests). These
   # build feature resolutions the core job never produces, so they gain
   # nothing from its target/ cache — sccache covers the shared dependencies.
   rust-features:
@@ -208,10 +208,6 @@ jobs:
 
       - name: Property tests (stats)
         run: cargo test --package experimentation-stats --features simd
-        timeout-minutes: 15
-
-      - name: ADR-031 pilot — assignment connectrpc feature
-        run: cargo test --package experimentation-assignment --features connectrpc
         timeout-minutes: 15
 
   # wasm32 is a different compilation target entirely — nothing in target/

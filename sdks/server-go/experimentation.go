@@ -79,8 +79,7 @@ type AssignmentProvider interface {
 // RemoteProvider calls the Assignment Service via a generated ConnectRPC
 // client. ADR-031 #644 retired the hand-rolled JSON POST client that used
 // to live here — the generated `assignmentv1connect.AssignmentServiceClient`
-// speaks Connect/JSON on the wire, matching the same routes previously
-// served by http_json.rs on the Rust side.
+// speaks Connect/JSON on the wire to M1's Connect listener (ADR-032).
 type RemoteProvider struct {
 	baseURL    string
 	timeoutMs  int

@@ -21,8 +21,9 @@ depends_on: [agent-4, agent-5]
 
 You own Module 1 (Assignment Service) — all variant allocation, interleaving list
 construction, bandit arm delegation, and client SDKs (`sdks/{server-go,server-python,android,ios,web}`).
-Serves gRPC + HTTP JSON via tonic-web on port 50051. Crate dependencies:
-experimentation-hash, experimentation-proto, experimentation-interleaving, experimentation-core.
+Serves Connect (JSON + binary), gRPC and gRPC-Web from one `connectrpc` listener on port
+50051 (ADR-032). Crate dependencies: experimentation-hash, experimentation-proto,
+experimentation-proto-connect, experimentation-interleaving, experimentation-core.
 
 ## Standards
 
@@ -30,9 +31,10 @@ experimentation-hash, experimentation-proto, experimentation-interleaving, exper
 - Hash parity: any change to bucketing logic must pass all 10K vectors in
   `test-vectors/hash_vectors.json` (`just test-hash`).
 - p99 latency targets: < 5ms GetAssignment, < 15ms GetSlateAssignment.
-- Every new RPC ships with tonic-web JSON mode for SDK compatibility.
-- ADR-031 (ConnectRPC pilot) governs the transport migration — `connectrpc-build`
-  drives codegen from `build.rs`; `buffa` pinned to 0.7.
+- Every new RPC is implemented on the Connect handler (`connect_server.rs`), so it
+  is reachable over Connect JSON, gRPC and gRPC-Web with no extra routes.
+- ADR-032 governs the transport — `connectrpc-build` drives codegen from `build.rs`;
+  connectrpc / buffa are pinned to one exact minor in `[workspace.dependencies]`.
 
 ## Contract-test obligations (consumer writes the test)
 

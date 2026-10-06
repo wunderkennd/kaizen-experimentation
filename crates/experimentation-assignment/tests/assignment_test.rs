@@ -5,9 +5,7 @@ use std::time::Duration;
 
 use experimentation_assignment::config::Config;
 use experimentation_assignment::service::AssignmentServiceImpl;
-use experimentation_proto::experimentation::assignment::v1::{
-    assignment_service_server::AssignmentService, GetAssignmentsRequest, RankedList,
-};
+use experimentation_proto::experimentation::assignment::v1::RankedList;
 use experimentation_proto::experimentation::bandit::v1::bandit_policy_service_server::{
     BanditPolicyService, BanditPolicyServiceServer,
 };
@@ -1947,36 +1945,22 @@ async fn holdout_priority_excludes_layer_experiments() {
     }
     let user_id = holdout_user.expect("should find a user in holdout allocation within 200 tries");
 
-    let req = tonic::Request::new(GetAssignmentsRequest {
-        user_id: user_id.clone(),
-        session_id: String::new(),
-        attributes: HashMap::new(),
-    });
-    let resp = svc.get_assignments(req).await.unwrap().into_inner();
+    let assignments = svc.assign_batch(&user_id, "", &HashMap::new()).await;
 
     // User should get the holdout assignment.
-    let holdout_assignment = resp
-        .assignments
-        .iter()
-        .find(|a| a.experiment_id == "holdout_exp");
+    let holdout_assignment = assignments.iter().find(|a| a.experiment_id == "holdout_exp");
     assert!(holdout_assignment.is_some(), "holdout assignment missing");
     assert_eq!(holdout_assignment.unwrap().variant_id, "holdout");
 
     // User should NOT get the AB experiment in the same layer.
-    let ab_assignment = resp
-        .assignments
-        .iter()
-        .find(|a| a.experiment_id == "ab_exp");
+    let ab_assignment = assignments.iter().find(|a| a.experiment_id == "ab_exp");
     assert!(
         ab_assignment.is_none(),
         "AB experiment in same layer should be excluded for holdout user"
     );
 
     // User should still get the experiment in a different layer.
-    let other_assignment = resp
-        .assignments
-        .iter()
-        .find(|a| a.experiment_id == "other_layer_exp");
+    let other_assignment = assignments.iter().find(|a| a.experiment_id == "other_layer_exp");
     assert!(
         other_assignment.is_some(),
         "experiment in different layer should not be excluded"
@@ -2001,18 +1985,10 @@ async fn holdout_user_outside_allocation_gets_regular() {
     let user_id =
         non_holdout_user.expect("should find a user outside holdout allocation within 200 tries");
 
-    let req = tonic::Request::new(GetAssignmentsRequest {
-        user_id: user_id.clone(),
-        session_id: String::new(),
-        attributes: HashMap::new(),
-    });
-    let resp = svc.get_assignments(req).await.unwrap().into_inner();
+    let assignments = svc.assign_batch(&user_id, "", &HashMap::new()).await;
 
     // Holdout assignment should exist but with empty variant (not in allocation).
-    let holdout_assignment = resp
-        .assignments
-        .iter()
-        .find(|a| a.experiment_id == "holdout_exp");
+    let holdout_assignment = assignments.iter().find(|a| a.experiment_id == "holdout_exp");
     assert!(holdout_assignment.is_some());
     assert!(
         holdout_assignment.unwrap().variant_id.is_empty(),
@@ -2020,10 +1996,7 @@ async fn holdout_user_outside_allocation_gets_regular() {
     );
 
     // AB experiment should be present (holdout didn't claim the layer).
-    let ab_assignment = resp
-        .assignments
-        .iter()
-        .find(|a| a.experiment_id == "ab_exp");
+    let ab_assignment = assignments.iter().find(|a| a.experiment_id == "ab_exp");
     assert!(
         ab_assignment.is_some(),
         "AB experiment should be included when user is outside holdout"
@@ -2047,18 +2020,10 @@ async fn holdout_different_layer_no_exclusion() {
     }
     let user_id = holdout_user.expect("should find a holdout user");
 
-    let req = tonic::Request::new(GetAssignmentsRequest {
-        user_id: user_id.clone(),
-        session_id: String::new(),
-        attributes: HashMap::new(),
-    });
-    let resp = svc.get_assignments(req).await.unwrap().into_inner();
+    let assignments = svc.assign_batch(&user_id, "", &HashMap::new()).await;
 
     // other_layer_exp is in layer_other — should NOT be excluded.
-    let other_assignment = resp
-        .assignments
-        .iter()
-        .find(|a| a.experiment_id == "other_layer_exp");
+    let other_assignment = assignments.iter().find(|a| a.experiment_id == "other_layer_exp");
     assert!(
         other_assignment.is_some(),
         "holdout in layer_shared must not block experiments in layer_other"
