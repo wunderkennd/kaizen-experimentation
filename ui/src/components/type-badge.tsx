@@ -7,6 +7,9 @@ interface TypeBadgeProps {
   type: ExperimentType;
 }
 
+/**
+ * TypeBadge renders a badge for experiment types with descriptive tooltips.
+ */
 export function TypeBadge({ type }: TypeBadgeProps) {
   const label = TYPE_LABELS[type] || type;
   const description = TYPE_DESCRIPTIONS[type];
