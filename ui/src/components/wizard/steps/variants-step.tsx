@@ -95,6 +95,7 @@ export function VariantsStep() {
           className={`text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}
         >
           Total traffic: {formatPercent(trafficSum)}
+          {!trafficSumValid && ' (must equal 100%)'}
         </div>
         <div className="flex gap-2">
           <button

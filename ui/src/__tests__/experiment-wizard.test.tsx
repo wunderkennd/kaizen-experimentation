@@ -210,4 +210,28 @@ describe('Experiment Creation Wizard', () => {
     expect(trafficInputs[2]).toHaveValue(0.334);
     expect(screen.getByText('Total traffic: 100.0%')).toBeInTheDocument();
   });
+
+  it('announces when the traffic total no longer sums to 100%', async () => {
+    const user = userEvent.setup();
+    renderNewPage();
+
+    await fillBasicsAndAdvance(user); // Step 1 -> 2
+    await user.click(screen.getByRole('button', { name: 'Next' })); // Step 2 -> 3 (Variants)
+
+    const status = screen.getByText('Total traffic: 100.0%');
+    expect(status).toHaveAttribute('role', 'status');
+
+    // Defaults are 0.5 / 0.5; dropping one to 0.3 makes the total invalid
+    const trafficInputs = screen.getAllByRole('spinbutton', { name: /traffic/i });
+    await user.clear(trafficInputs[0]);
+    await user.type(trafficInputs[0], '0.3');
+
+    expect(status).toHaveTextContent('Total traffic: 80.0% (must equal 100%)');
+    expect(status).toHaveClass('text-red-700');
+
+    await user.clear(trafficInputs[0]);
+    await user.type(trafficInputs[0], '0.5');
+    expect(status).toHaveTextContent('Total traffic: 100.0%');
+    expect(status).not.toHaveTextContent('must equal');
+  });
 });
