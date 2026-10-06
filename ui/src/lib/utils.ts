@@ -75,6 +75,21 @@ export const TYPE_LABELS: Record<ExperimentType, string> = {
   META: 'Meta Experiment',
 };
 
+export const TYPE_DESCRIPTIONS: Record<ExperimentType, string> = {
+  AB: 'Standard A/B hypothesis test comparing control and treatment variants.',
+  MULTIVARIATE: 'Multi-variable factorial experiment evaluating multiple simultaneous changes.',
+  INTERLEAVING: 'Blended ranking design comparing item preferences within a single list.',
+  SESSION_LEVEL: 'Randomization and measurement aggregated at user session level.',
+  PLAYBACK_QOE: 'Video streaming Quality of Experience experiment evaluating buffering and bitrate.',
+  MAB: 'Multi-Armed Bandit dynamically allocating traffic to optimal variants.',
+  CONTEXTUAL_BANDIT: 'Contextual bandit personalizing allocations using user and request context.',
+  CUMULATIVE_HOLDOUT: 'Long-term holdout measuring compound impacts across release cycles.',
+  SLATE: 'Slate bandit optimizing entire ordered sets or recommendation layouts.',
+  SWITCHBACK: 'Time-based cluster switchback design isolating network spillover effects.',
+  QUASI_EXPERIMENT: 'Observational design using synthetic controls or difference-in-differences.',
+  META: 'Meta-analysis aggregating effect estimates across multiple related experiments.',
+};
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
     year: 'numeric',
