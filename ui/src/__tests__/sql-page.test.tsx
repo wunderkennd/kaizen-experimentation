@@ -108,14 +108,12 @@ describe('SQL Page', () => {
 
     // Click the SQL preview toggle button for the first entry
     const sqlPreviews = screen.getAllByRole('button', { name: /Toggle SQL preview/i });
-    // Collapsed: the preview region is not mounted, so no aria-controls target is declared.
-    expect(sqlPreviews[0]).not.toHaveAttribute('aria-controls');
+    expect(sqlPreviews[0]).toHaveAttribute('aria-controls', 'sql-preview-0');
     expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'false');
 
     await user.click(sqlPreviews[0]);
 
     expect(sqlPreviews[0]).toHaveAttribute('aria-expanded', 'true');
-    expect(sqlPreviews[0]).toHaveAttribute('aria-controls', 'sql-preview-0');
 
     // Should show the full SQL in a <pre> block
     const preElements = document.querySelectorAll('pre');
