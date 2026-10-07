@@ -10,15 +10,11 @@ use std::sync::Arc;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tokio::sync::broadcast;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::StreamExt;
-use tonic::{Request, Response, Status};
+use tonic::Status;
 
 use experimentation_proto::experimentation::assignment::v1::{
-    assignment_service_server::AssignmentService, ConfigUpdate, GetAssignmentRequest,
-    GetAssignmentResponse, GetAssignmentsRequest, GetAssignmentsResponse,
-    GetSlateAssignmentRequest, GetSlateAssignmentResponse, SlotProbability,
-    GetInterleavedListRequest, GetInterleavedListResponse, RankedList, StreamConfigUpdatesRequest,
+    ConfigUpdate, GetAssignmentResponse, GetInterleavedListResponse, GetSlateAssignmentResponse,
+    RankedList, SlotProbability,
 };
 
 use crate::bandit_client::{self, GrpcBanditClient};
@@ -122,14 +118,14 @@ impl AssignmentServiceImpl {
         }
 
         // 3. Evaluate targeting rule — user must match to be eligible.
-        if let Some(ref rule) = exp.targeting_rule {
-            if !targeting::evaluate(rule, attributes) {
-                return Ok(GetAssignmentResponse {
-                    experiment_id: experiment_id.to_string(),
-                    is_active: true,
-                    ..Default::default()
-                });
-            }
+        if let Some(ref rule) = exp.targeting_rule
+            && !targeting::evaluate(rule, attributes)
+        {
+            return Ok(GetAssignmentResponse {
+                experiment_id: experiment_id.to_string(),
+                is_active: true,
+                ..Default::default()
+            });
         }
 
         // 4. Get layer total_buckets.
@@ -841,91 +837,5 @@ impl AssignmentServiceImpl {
         }
 
         assignments
-    }
-}
-
-#[tonic::async_trait]
-impl AssignmentService for AssignmentServiceImpl {
-    async fn get_assignment(
-        &self,
-        request: Request<GetAssignmentRequest>,
-    ) -> Result<Response<GetAssignmentResponse>, Status> {
-        let req = request.into_inner();
-        let resp = self
-            .assign(
-                &req.experiment_id,
-                &req.user_id,
-                &req.session_id,
-                &req.attributes,
-            )
-            .await?;
-        Ok(Response::new(resp))
-    }
-
-    async fn get_assignments(
-        &self,
-        request: Request<GetAssignmentsRequest>,
-    ) -> Result<Response<GetAssignmentsResponse>, Status> {
-        let req = request.into_inner();
-        let assignments = self
-            .assign_batch(&req.user_id, &req.session_id, &req.attributes)
-            .await;
-        Ok(Response::new(GetAssignmentsResponse { assignments }))
-    }
-
-    async fn get_interleaved_list(
-        &self,
-        request: Request<GetInterleavedListRequest>,
-    ) -> Result<Response<GetInterleavedListResponse>, Status> {
-        let req = request.into_inner();
-        let resp = self.interleave(&req.experiment_id, &req.user_id, &req.algorithm_lists)?;
-        Ok(Response::new(resp))
-    }
-
-    type StreamConfigUpdatesStream = std::pin::Pin<
-        Box<dyn tokio_stream::Stream<Item = Result<ConfigUpdate, Status>> + Send + 'static>,
-    >;
-
-    // tonic::Status is ~176 bytes; the codebase's convention is to allow this
-    // per-method rather than box it (parity with `assign`, `assign_slate`, etc.).
-    #[allow(clippy::result_large_err)]
-    async fn stream_config_updates(
-        &self,
-        _request: Request<StreamConfigUpdatesRequest>,
-    ) -> Result<Response<Self::StreamConfigUpdatesStream>, Status> {
-        // ADR-031 #643 — tonic streaming baseline. Subscribes to the shared
-        // broadcast source so the Connect bridge sees identical events in
-        // the same order. `last_known_version` from the request is ignored
-        // until M5 integration adds replay semantics — for now every
-        // subscriber sees events from the moment they connect.
-        let rx = self.subscribe_config_updates();
-        let stream = BroadcastStream::new(rx).map(|r| match r {
-            Ok(update) => Ok(update),
-            Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
-                // Convert the broadcast lag to a `DataLoss` status; the M5
-                // client uses this signal to reconnect with the last version
-                // it successfully processed.
-                Err(Status::data_loss(format!(
-                    "config update stream lagged, skipped {n} messages — reconnect with last_known_version",
-                )))
-            }
-        });
-        Ok(Response::new(Box::pin(stream)))
-    }
-
-    async fn get_slate_assignment(
-        &self,
-        request: Request<GetSlateAssignmentRequest>,
-    ) -> Result<Response<GetSlateAssignmentResponse>, Status> {
-        let req = request.into_inner();
-        let resp = self
-            .assign_slate(
-                &req.experiment_id,
-                &req.user_id,
-                req.candidate_item_ids,
-                &req.attributes,
-            )
-            .await?;
-        Ok(Response::new(resp))
     }
 }

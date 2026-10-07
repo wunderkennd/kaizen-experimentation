@@ -2,8 +2,10 @@
 //
 // Two use-cases share this script:
 //   1. ADR-032 gate G1 (ADR-031 §4.1) pilot vs baseline comparison — same script, runs
-//      pointed at ports 50051 (tonic) and 50061 (Connect). Compare p99 to
-//      confirm the pilot stays within ±10% of the tonic baseline.
+//      pointed at a tonic build and a Connect build. Compare p99 to confirm
+//      Connect stays within ±10% of tonic. Main serves only Connect (on
+//      50051) since the default flip; see docs/runbooks/m1-p99-loadtest.md
+//      for building the tonic baseline from the pre-flip commit.
 //   2. #500 M1/M7 Cloud Run smoke test — one 60s run against the deployed
 //      M1 URL, asserting p99 < 5ms per the SLA.
 //
@@ -21,11 +23,11 @@
 //                  of the built-in dev/config.json defaults.
 //
 // Run examples:
-//   # Local tonic baseline (dev)
+//   # Local gRPC (dev)
 //   TARGET_URL=http://127.0.0.1:50051 k6 run scripts/loadtest/m1-p99.js
 //
-//   # Local Connect pilot (dev, --features connectrpc)
-//   TARGET_URL=http://127.0.0.1:50061 PROTOCOL=connect k6 run scripts/loadtest/m1-p99.js
+//   # Local Connect JSON (dev, same listener)
+//   TARGET_URL=http://127.0.0.1:50051 PROTOCOL=connect k6 run scripts/loadtest/m1-p99.js
 //
 //   # Cloud Run smoke (#500)
 //   TARGET_URL=https://m1-assignment.kaizen.dev DURATION=60s P99_TARGET_MS=5 \

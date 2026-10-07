@@ -505,7 +505,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
- "axum-core",
+ "axum-core 0.4.5",
  "bytes",
  "futures-util",
  "http",
@@ -514,7 +514,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "itoa",
- "matchit",
+ "matchit 0.7.3",
  "memchr",
  "mime",
  "percent-encoding",
@@ -530,6 +530,34 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
+dependencies = [
+ "axum-core 0.5.6",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "itoa",
+ "matchit 0.8.4",
+ "memchr",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
+ "serde_core",
+ "sync_wrapper",
+ "tokio",
+ "tower 0.5.3",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -551,6 +579,24 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-core"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c78f31d7b1291f7ee735c1c6780ccde7785daae9a9206026862dab7d8792d1"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "sync_wrapper",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -1090,9 +1136,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "457cfa540c62e1b0b05db676cc9a9129162ad94d3a3eec6f2d19706c53acae7d"
 dependencies = [
  "async-trait",
+ "axum 0.8.9",
  "base64",
  "buffa",
  "bytes",
+ "flate2",
  "futures",
  "http",
  "http-body",
@@ -1112,6 +1160,7 @@ dependencies = [
  "tower-http 0.6.11",
  "tracing",
  "wasm-bindgen-futures",
+ "zstd",
 ]
 
 [[package]]
@@ -1141,6 +1190,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "connectrpc-health"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d20fc0ce78972ca7473b961953a8d57f5fd5943b184c65c971a96305f28bbebb"
+dependencies = [
+ "buffa",
+ "connectrpc",
+ "futures",
+ "http-body",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -2007,8 +2072,9 @@ name = "experimentation-assignment"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "buffa",
+ "axum 0.8.9",
  "connectrpc",
+ "connectrpc-health",
  "criterion",
  "experimentation-bandit",
  "experimentation-core",
@@ -2028,8 +2094,7 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tonic-health",
- "tonic-web",
- "tower 0.5.3",
+ "tower-http 0.6.11",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2071,7 +2136,7 @@ name = "experimentation-flags"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "axum",
+ "axum 0.7.9",
  "base64",
  "chrono",
  "experimentation-core",
@@ -2318,6 +2383,7 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -3528,6 +3594,12 @@ name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
+
+[[package]]
+name = "matchit"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "matrixmultiply"
@@ -5739,7 +5811,7 @@ checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
 dependencies = [
  "async-stream",
  "async-trait",
- "axum",
+ "axum 0.7.9",
  "base64",
  "bytes",
  "h2",
@@ -6995,6 +7067,12 @@ dependencies = [
  "num_enum",
  "thiserror 1.0.69",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
 
 [[package]]
 name = "zmij"

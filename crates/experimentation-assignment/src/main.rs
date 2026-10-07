@@ -4,18 +4,15 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use axum::serve::ListenerExt;
 use tokio_util::sync::CancellationToken;
 
 use experimentation_assignment::bandit_client::GrpcBanditClient;
 use experimentation_assignment::config::Config;
 use experimentation_assignment::config_cache::ConfigCache;
-#[cfg(feature = "connectrpc")]
-use experimentation_assignment::connect_server::ConnectAssignment;
-#[cfg(not(feature = "connectrpc"))]
-use experimentation_assignment::http_json;
+use experimentation_assignment::connect_server;
 use experimentation_assignment::service::AssignmentServiceImpl;
 use experimentation_assignment::stream_client::StreamClient;
-use experimentation_proto::experimentation::assignment::v1::assignment_service_server::AssignmentServiceServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,14 +20,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_path =
         std::env::var("CONFIG_PATH").unwrap_or_else(|_| "dev/config.json".to_string());
-    let grpc_addr = std::env::var("GRPC_ADDR")
+    // One listener serves Connect (JSON + binary), gRPC and gRPC-Web (ADR-032).
+    // The variable keeps its pre-flip name so existing deployments need no
+    // change; HTTP_ADDR and CONNECTRPC_ADDR are gone with their listeners.
+    let addr: std::net::SocketAddr = std::env::var("GRPC_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
-        .parse()?;
-    // http_addr is unused under `--features connectrpc` (see below); annotate
-    // the type so inference doesn't collapse to `()` when the shim spawn is
-    // cfg'd out.
-    let http_addr: std::net::SocketAddr = std::env::var("HTTP_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
 
     let config = Config::from_file(Path::new(&config_path))?;
@@ -78,78 +72,62 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let svc = Arc::new(AssignmentServiceImpl::new(handle, bandit_client));
 
-    // Spawn JSON HTTP server for SDK access — default build only. Under the
-    // `connectrpc` feature, the ConnectRPC listener below serves the same
-    // routes over `application/connect+json` (ADR-031 #644 retire).
-    #[cfg(not(feature = "connectrpc"))]
-    {
-        let http_svc = svc.clone();
-        tokio::spawn(async move {
-            if let Err(e) = http_json::serve(http_addr, http_svc).await {
-                tracing::error!(error = %e, "JSON HTTP server failed");
-            }
-        });
-    }
-    #[cfg(feature = "connectrpc")]
-    let _ = http_addr; // http_addr is only bound by the shim; silence the warning.
+    // grpc.health.v1 rides the same listener, so `grpc_health_probe -addr=:50051`
+    // (ECS HEALTHCHECK) and load-balancer gRPC checks keep working; both the
+    // whole server ("") and AssignmentService start SERVING, as with
+    // tonic-health. M5 stream and M4b client are optional/best-effort (both
+    // spawned above with warnings on failure), so "config loaded, service
+    // assembled" IS the honest ready state.
+    let (app, health) = connect_server::app(svc);
 
-    // ADR-031 pilot: ConnectRPC listener (Connect + gRPC + gRPC-Web on one
-    // port). When the feature is on, this REPLACES the hand-rolled http_json
-    // shim — its `application/connect+json` handler covers the same 3 unary
-    // routes plus GetInterleavedList and StreamConfigUpdates (#644).
-    //
-    // NOTE: this listener is fire-and-forget and does NOT participate in graceful
-    // shutdown — on ctrl+c the runtime drops it without draining in-flight requests.
-    // Acceptable for the pilot; wiring it to `shutdown` (CancellationToken) is
-    // deferred to production hardening (post-pilot).
-    #[cfg(feature = "connectrpc")]
-    {
-        use experimentation_proto_connect::experimentation::assignment::v1::AssignmentServiceExt;
+    let signal = async move {
+        shutdown_signal().await;
+        tracing::info!("shutdown signal received");
+        // Report NOT_SERVING first so probes stop routing here while
+        // in-flight requests drain.
+        health.shutdown();
+        shutdown.cancel();
+    };
 
-        let connect_addr: std::net::SocketAddr = std::env::var("CONNECTRPC_ADDR")
-            .unwrap_or_else(|_| "0.0.0.0:50061".to_string())
-            .parse()?;
-        let connect_svc = Arc::new(ConnectAssignment::new(svc.clone()));
-        let router = connect_svc.register(connectrpc::Router::new());
-        tokio::spawn(async move {
-            tracing::info!(%connect_addr, "starting ConnectRPC pilot listener (ADR-031)");
-            if let Err(e) = connectrpc::Server::new(router).serve(connect_addr).await {
-                tracing::error!(error = %e, "ConnectRPC pilot server failed");
-            }
-        });
-    }
+    // axum::serve speaks HTTP/1.1 and h2c (gRPC needs HTTP/2 prior knowledge)
+    // on one port; hyper's HTTP/2 defaults match the 1 MiB windows the tonic
+    // server set by hand.
+    let listener = tokio::net::TcpListener::bind(addr).await?.tap_io(|tcp| {
+        if let Err(e) = tcp.set_nodelay(true) {
+            tracing::warn!(error = %e, "failed to set TCP_NODELAY");
+        }
+    });
 
-    // grpc.health.v1: register + mark SERVING right before bind. M5 stream and
-    // M4b client are optional/best-effort (both spawned above with warnings on
-    // failure), so "config loaded, service assembled" IS the honest ready
-    // state — no fake NOT_SERVING→SERVING gate for deps we don't require.
-    //
-    // Note: tonic_health::server::health_reporter() initializes the empty
-    // service name "" (the overall server status) to Serving by default (see
-    // tonic-health 0.12.3 server.rs:44), so `grpc_health_probe -addr=:50051`
-    // and the ALB gRPC health check — both of which query with service="" —
-    // resolve to SERVING out of the box. set_serving::<T>() below adds
-    // per-service reporting for consumers that want to check the named
-    // AssignmentService specifically.
-    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
-    health_reporter
-        .set_serving::<AssignmentServiceServer<AssignmentServiceImpl>>()
-        .await;
-
-    tracing::info!(%grpc_addr, "starting gRPC server");
-    tonic::transport::Server::builder()
-        .tcp_nodelay(true)
-        .concurrency_limit_per_connection(256)
-        .initial_connection_window_size(1024 * 1024)
-        .initial_stream_window_size(1024 * 1024)
-        .add_service(health_service)
-        .add_service(AssignmentServiceServer::from_arc(svc))
-        .serve_with_shutdown(grpc_addr, async move {
-            tokio::signal::ctrl_c().await.ok();
-            tracing::info!("shutdown signal received");
-            shutdown.cancel();
-        })
+    tracing::info!(%addr, "starting Connect + gRPC + gRPC-Web server");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(signal)
         .await?;
 
     Ok(())
+}
+
+/// Resolves on ctrl+c, or SIGTERM (what ECS and Cloud Run send on stop).
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.ok();
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "SIGTERM handler unavailable; ctrl+c only");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }

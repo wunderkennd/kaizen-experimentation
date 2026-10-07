@@ -9,7 +9,7 @@ Same script, different environment variables.
 
 ## Script
 
-`scripts/loadtest/m1-p99.js` — k6, ~230 lines. Handles both gRPC (tonic on 50051, or the connectrpc listener on 50061 with `PROTOCOL=grpc`) and Connect JSON (connectrpc listener on 50061, or Cloud Run over HTTPS) via the `PROTOCOL` env var (auto-detected from the URL). Steady state, constant VUs, single 60 s stage. p99 threshold configurable via `P99_TARGET_MS`.
+`scripts/loadtest/m1-p99.js` — k6, ~230 lines. Handles both gRPC and Connect JSON via the `PROTOCOL` env var (auto-detected from the URL: dev ports 5005x mean gRPC, anything else Connect). Since the ADR-032 default flip, M1 serves both protocols on one listener (50051 in dev, 8080 on Cloud Run). Steady state, constant VUs, single 60 s stage. p99 threshold configurable via `P99_TARGET_MS`.
 
 Latency is k6's built-in per-request metric for the protocol: `grpc_req_duration` on gRPC, `http_req_duration` on Connect. Each request is tagged with its RPC name, so `--summary-export` carries a p99 per RPC (`grpc_req_duration{rpc:GetAssignment}` and so on) as well as the overall `{scenario:steady}` series.
 
@@ -26,23 +26,32 @@ local SLA threshold doesn't fail the run; the comparison between runs is the gat
 
 ## Running: local (ADR-032 G1 comparison)
 
-Dev-config-only path; no cloud creds needed. Compare like with like:
+Dev-config-only path; no cloud creds needed. Main no longer builds a tonic M1:
+the default flip (ADR-032 step 0) deleted it. To compare against tonic, build
+the baseline from `db507c3`, the last commit before the flip, where the
+default build is tonic and `--features connectrpc` adds the pilot listener on
+:50061. To compare the current server against an earlier Connect build, run
+both on :50051 with `PROTOCOL=grpc` and `PROTOCOL=connect`.
+
+Compare like with like:
 
 | Run | Binary | Target | What it isolates |
 | --- | --- | --- | --- |
-| tonic gRPC (baseline) | default build | `http://127.0.0.1:50051`, `PROTOCOL=grpc` | — |
-| connectrpc gRPC | `--features connectrpc` | `http://127.0.0.1:50061`, `PROTOCOL=grpc` | server stack only (same wire protocol, same k6 client) |
-| connectrpc Connect JSON | `--features connectrpc` | `http://127.0.0.1:50061`, `PROTOCOL=connect` | what browsers and SDKs actually send |
+| tonic gRPC (baseline) | `db507c3`, default build | `http://127.0.0.1:50051`, `PROTOCOL=grpc` | — |
+| connectrpc gRPC | `db507c3` with `--features connectrpc` (pilot listener) or current main | `http://127.0.0.1:50061` (pilot) / `:50051` (main), `PROTOCOL=grpc` | server stack only (same wire protocol, same k6 client) |
+| connectrpc Connect JSON | same as above | same as above, `PROTOCOL=connect` | what browsers and SDKs actually send |
 
 The Connect JSON run uses k6's HTTP client and the gRPC runs use k6's gRPC
 client, so the JSON row compares protocols as well as servers. G1 is decided
 on the gRPC-to-gRPC row; the JSON row shows the client-facing number.
 
 ```bash
-cargo build --release -p experimentation-assignment
-cp target/release/experimentation-assignment /tmp/m1-tonic
-cargo build --release -p experimentation-assignment --features connectrpc
-cp target/release/experimentation-assignment /tmp/m1-connect
+# Pre-flip commit: tonic by default, the pilot listener behind a feature.
+git worktree add /tmp/m1-preflip db507c3
+(cd /tmp/m1-preflip && cargo build --release -p experimentation-assignment \
+  && cp target/release/experimentation-assignment /tmp/m1-tonic \
+  && cargo build --release -p experimentation-assignment --features connectrpc \
+  && cp target/release/experimentation-assignment /tmp/m1-connect)
 
 # Pin the server and k6 to different cores so they don't steal from each other.
 CONFIG_PATH=$PWD/dev/config.json taskset -c 0,1 /tmp/m1-tonic &

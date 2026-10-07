@@ -41,8 +41,9 @@ func NewM1Assignment(
 			EnvVars: []compute.EnvVar{
 				{Name: "ENVIRONMENT", Value: pulumi.String(cfg.Environment)},
 				{Name: "RUST_LOG", Value: pulumi.String("info")},
-				{Name: "GRPC_ADDR", Value: pulumi.String("0.0.0.0:50051")},
-				{Name: "HTTP_ADDR", Value: pulumi.String("0.0.0.0:8080")},
+				// M1's one listener (Connect + gRPC + gRPC-Web, ADR-032) must
+				// bind the port Cloud Run routes to.
+				{Name: "GRPC_ADDR", Value: pulumi.String("0.0.0.0:8080")},
 				{Name: "KAFKA_BOOTSTRAP_BROKERS", Value: stages.Stream.BootstrapBrokers},
 				{Name: "M4B_ADDR", Value: m4bEndpoint},
 			},

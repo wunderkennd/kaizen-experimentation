@@ -1509,7 +1509,7 @@ The `just setup` command:
 
 | Service | Default Port | Protocol | Notes |
 |---------|-------------|----------|-------|
-| M1 Assignment | `:50051` (gRPC) / `:8080` (HTTP JSON) | ConnectRPC | HTTP JSON is used by all SDK RemoteProviders |
+| M1 Assignment | `:50051` | ConnectRPC | One listener serves Connect JSON (SDK RemoteProviders), gRPC and gRPC-Web; configure via `GRPC_ADDR` |
 | M2 Pipeline | `:50052` | ConnectRPC | Configure via `PORT` env var |
 | M3 Metrics | `:50056` / `:50059` (Prometheus) | ConnectRPC | |
 | M4a Analysis | `:50053` | ConnectRPC | Configure via `ANALYSIS_GRPC_ADDR` |

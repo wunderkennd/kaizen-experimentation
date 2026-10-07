@@ -1,14 +1,12 @@
-//! ADR-031 pilot — ConnectRPC server adapter for M1 `AssignmentService`.
+//! M1 `AssignmentService` over ConnectRPC — the service's only listener since
+//! ADR-032 step 0. One port serves Connect (JSON + binary), gRPC and gRPC-Web,
+//! plus `grpc.health.v1`.
 //!
-//! Bridges buffa request/response views to the existing
-//! [`AssignmentServiceImpl`] domain methods. #641 shipped `GetAssignment`
-//! end-to-end; #642 extends the same bridge to `GetAssignments`,
-//! `GetSlateAssignment`, and `GetInterleavedList` (the three remaining unary
-//! RPCs). `StreamConfigUpdates` (server-streaming) is wired in this PR (#643).
-//!
-//! Every bridge is a thin field-copy delegating to a pub domain method on
-//! `AssignmentServiceImpl` — the `assert_finite!` invariants live inside
-//! those domain methods and pass through untouched.
+//! The handlers bridge buffa request/response views to the prost-typed domain
+//! methods on [`AssignmentServiceImpl`] (ADR-031 #641–#643). Per ADR-032 §3 the
+//! bridge is a migration step: it goes away when the domain moves to buffa
+//! types. Every bridge is a thin field-copy, so the `assert_finite!`
+//! invariants inside those domain methods pass through untouched.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,8 +17,46 @@ use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 use tokio_stream::StreamExt;
 
 use crate::service::AssignmentServiceImpl;
+use connect_pb::{AssignmentServiceExt, ASSIGNMENT_SERVICE_SERVICE_NAME};
 
-pub struct ConnectAssignment {
+/// Build the app the binary serves: `AssignmentService` plus
+/// `grpc.health.v1.Health`, behind a CORS layer. The returned checker starts
+/// SERVING for both the whole server ("") and `AssignmentService`; call
+/// `shutdown()` on it to report NOT_SERVING while draining.
+pub fn app(
+    inner: Arc<AssignmentServiceImpl>,
+) -> (axum::Router, Arc<connectrpc_health::StaticChecker>) {
+    let router = Arc::new(ConnectAssignment::new(inner)).register(connectrpc::Router::new());
+    let (router, health) =
+        connectrpc_health::install_static(router, [ASSIGNMENT_SERVICE_SERVICE_NAME]);
+    (router.into_axum_router().layer(cors()), health)
+}
+
+/// Browsers call M1 directly from other origins (web SDK `RemoteProvider`
+/// against `assign.kaizen.{domain}`). Same `*` origin the retired http_json
+/// shim allowed, widened to the headers Connect and gRPC-Web clients send and
+/// the trailers they must read.
+fn cors() -> tower_http::cors::CorsLayer {
+    use axum::http::{HeaderName, Method};
+    use tower_http::cors::{Any, CorsLayer};
+
+    CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            HeaderName::from_static("content-type"),
+            HeaderName::from_static("connect-protocol-version"),
+            HeaderName::from_static("connect-timeout-ms"),
+            HeaderName::from_static("grpc-timeout"),
+            HeaderName::from_static("x-grpc-web"),
+            HeaderName::from_static("x-user-agent"),
+        ])
+        .expose_headers([
+            HeaderName::from_static("grpc-status"),
+            HeaderName::from_static("grpc-message"),
+            HeaderName::from_static("grpc-status-details-bin"),
+        ])
+}pub struct ConnectAssignment {
     inner: Arc<AssignmentServiceImpl>,
 }
 

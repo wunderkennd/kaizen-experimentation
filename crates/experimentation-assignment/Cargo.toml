@@ -1,7 +1,10 @@
 [package]
 name = "experimentation-assignment"
 version.workspace = true
-edition.workspace = true
+# ADR-032 §5: connectrpc/buffa need edition 2024 / MSRV 1.88; each service
+# crate moves off the workspace default (2021 / 1.80) as it migrates.
+edition = "2024"
+rust-version = "1.88"
 
 [lib]
 name = "experimentation_assignment"
@@ -20,15 +23,14 @@ experimentation-core = { path = "../experimentation-core" }
 experimentation-proto = { path = "../experimentation-proto" }
 experimentation-hash = { path = "../experimentation-hash" }
 experimentation-interleaving = { path = "../experimentation-interleaving" }
-# ADR-031 pilot — buffa+Connect codegen for assignment/v1. Optional, gated by the
-# `connectrpc` feature. Default build is unchanged (tonic gRPC + http_json).
-experimentation-proto-connect = { path = "../experimentation-proto-connect", optional = true }
+# ADR-032 step 0 — M1 serves Connect + gRPC + gRPC-Web from one connectrpc
+# listener. Handlers still bridge buffa <-> the prost domain types; tonic stays
+# only for the outbound M4b / M5 clients until those migrate.
+experimentation-proto-connect = { path = "../experimentation-proto-connect" }
 tokio = { workspace = true }
 # `sync` enables BroadcastStream, used by StreamConfigUpdates (ADR-031 #643).
 tokio-stream = { workspace = true, features = ["sync"] }
 tonic = { workspace = true }
-tonic-web = { workspace = true }
-tonic-health = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -36,24 +38,15 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-hyper = { version = "1.0", features = ["server", "http1"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
-http-body-util = "0.1"
-connectrpc = { workspace = true, features = ["server", "json"], optional = true }
-buffa = { workspace = true, features = ["json"], optional = true }
-tower = { version = "0.5", optional = true }
-
-[features]
-default = []
-# ADR-031 pilot: enable the parallel ConnectRPC server path. With this feature
-# active, the binary additionally serves Connect/gRPC/gRPC-Web from one listener
-# alongside the default tonic gRPC + http_json stack. Tonic stays the default.
-connectrpc = [
-    "dep:experimentation-proto-connect",
-    "dep:connectrpc",
-    "dep:buffa",
-    "dep:tower",
-]
+# `json` is required: without it connectrpc 0.9 builds fine but answers
+# Connect JSON (browsers, the M6 BFF, every SDK) with 415 at runtime.
+connectrpc = { workspace = true, features = ["server", "json", "axum"] }
+connectrpc-health = { workspace = true }
+# Hosting: axum::serve (HTTP/1.1 + h2c) so a CORS layer can wrap the Connect
+# service; connectrpc::Server takes no tower layers. Browser SDK callers need
+# the CORS answers the retired http_json shim used to send.
+axum = { version = "0.8", default-features = false, features = ["http1", "http2", "tokio"] }
+tower-http = { version = "0.6", features = ["cors"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -61,3 +54,8 @@ experimentation-bandit = { path = "../experimentation-bandit" }
 tokio-stream = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
+hyper = { version = "1.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+# gRPC-interop tests drive the Connect listener with a tonic client.
+tonic-health = { workspace = true }

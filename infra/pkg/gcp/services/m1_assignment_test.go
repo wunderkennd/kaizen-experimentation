@@ -57,6 +57,20 @@ func TestM1Assignment_Wiring(t *testing.T) {
 	if port := c["ports"].ObjectValue()["containerPort"]; port.NumberValue() != 8080 {
 		t.Errorf("containerPort = %v, want 8080", port)
 	}
+	// ADR-032: M1 serves everything from GRPC_ADDR; it must match containerPort.
+	env := map[string]string{}
+	for _, e := range c["envs"].ArrayValue() {
+		kv := e.ObjectValue()
+		if v := kv["value"]; v.IsString() {
+			env[kv["name"].StringValue()] = v.StringValue()
+		}
+	}
+	if got := env["GRPC_ADDR"]; got != "0.0.0.0:8080" {
+		t.Errorf("GRPC_ADDR = %q, want 0.0.0.0:8080 (the containerPort)", got)
+	}
+	if _, ok := env["HTTP_ADDR"]; ok {
+		t.Error("HTTP_ADDR is set, but M1 no longer has a separate HTTP listener")
+	}
 	if img := c["image"].StringValue(); !strings.Contains(img, "assignment") {
 		t.Errorf("image = %q, want substring \"assignment\"", img)
 	}
