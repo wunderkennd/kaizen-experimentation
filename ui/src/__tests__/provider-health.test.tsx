@@ -143,6 +143,47 @@ describe('Provider Health Page', () => {
     });
   });
 
+  it('shows clear filter button in empty state when provider selected and restores focus on click', async () => {
+    const user = userEvent.setup();
+    const targetProviderId = SEED_PROVIDER_HEALTH.providers[0].providerId;
+
+    server.use(
+      http.post(`${METRICS_SVC}/GetProviderHealth`, async ({ request }) => {
+        const body = (await request.json()) as { providerId?: string };
+        if (body.providerId === targetProviderId) {
+          return HttpResponse.json({ ...SEED_PROVIDER_HEALTH, series: [] });
+        }
+        return HttpResponse.json(SEED_PROVIDER_HEALTH);
+      }),
+    );
+
+    render(<ProviderHealthPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Provider Health', level: 1 })).toBeInTheDocument();
+    });
+
+    // Select provider with no data
+    const select = screen.getByTestId('provider-filter');
+    await user.selectOptions(select, targetProviderId);
+
+    // Verify empty state with clear filter button appears
+    await waitFor(() => {
+      expect(screen.getByText(/no data available/i)).toBeInTheDocument();
+      expect(screen.getByTestId('clear-provider-filter')).toBeInTheDocument();
+    });
+
+    // Click clear filter button
+    const clearButton = screen.getByTestId('clear-provider-filter');
+    await user.click(clearButton);
+
+    // Verify filter was cleared, charts were restored, and select element gained focus
+    await waitFor(() => {
+      expect(screen.queryByTestId('clear-provider-filter')).not.toBeInTheDocument();
+      expect(screen.getAllByTestId('chart-component')).toHaveLength(3);
+      expect(select).toHaveFocus();
+    });
+  });
+
   it('displays computed-at timestamp', async () => {
     await renderAndWait();
     expect(screen.getByTestId('computed-at')).toBeInTheDocument();
@@ -152,5 +193,47 @@ describe('Provider Health Page', () => {
     await renderAndWait();
     const portfolioLink = screen.getByRole('link', { name: 'Portfolio' });
     expect(portfolioLink).toHaveAttribute('href', '/portfolio');
+  });
+
+  it('ignores a late response from a superseded provider request', async () => {
+    const user = userEvent.setup();
+    const [slowProvider, fastProvider] = SEED_PROVIDER_HEALTH.providers;
+    let releaseSlow!: () => void;
+    const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve; });
+
+    server.use(
+      http.post(`${METRICS_SVC}/GetProviderHealth`, async ({ request }) => {
+        const body = (await request.json()) as { providerId?: string };
+        if (body.providerId === slowProvider.providerId) {
+          await slowGate; // held until the test releases it
+          return HttpResponse.json(SEED_PROVIDER_HEALTH);
+        }
+        if (body.providerId === fastProvider.providerId) {
+          return HttpResponse.json({ ...SEED_PROVIDER_HEALTH, series: [] });
+        }
+        return HttpResponse.json(SEED_PROVIDER_HEALTH);
+      }),
+    );
+
+    render(<ProviderHealthPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Provider Health', level: 1 })).toBeInTheDocument();
+    });
+
+    const select = screen.getByTestId('provider-filter');
+    await user.selectOptions(select, slowProvider.providerId);
+    await user.selectOptions(select, fastProvider.providerId);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('clear-provider-filter')).toBeInTheDocument();
+    });
+
+    // The earlier (slow) request now resolves with full data; it must not replace the newer result
+    releaseSlow();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(screen.getByTestId('clear-provider-filter')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('chart-component')).toHaveLength(0);
+    expect(select).toHaveValue(fastProvider.providerId);
   });
 });

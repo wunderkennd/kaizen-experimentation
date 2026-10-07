@@ -80,4 +80,13 @@ describe('CopyButton', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(testValue);
   });
+
+  it('applies standard accessibility focus indicator classes', () => {
+    renderWithProviders(<CopyButton value={testValue} />);
+    const button = screen.getByRole('button');
+    expect(button).toHaveClass('focus-visible:outline-none');
+    expect(button).toHaveClass('focus-visible:ring-2');
+    expect(button).toHaveClass('focus-visible:ring-indigo-500');
+    expect(button).toHaveClass('focus-visible:ring-offset-2');
+  });
 });

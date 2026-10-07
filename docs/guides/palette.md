@@ -88,3 +88,7 @@ Critical UX and accessibility learnings from the Experimentation Platform.
 ## 2026-08-12 - Standard Focus Rings on Form Actions
 **Learning:** Primary form actions (like 'Cancel' and 'Create Metric') are crucial keyboard targets but are easily neglected during manual accessibility checks. Standardizing these with `focus-visible` offset rings prevents keyboard focus loss and ensures consistent interaction feedback across creation workflows, aligning them with global navigation elements.
 **Action:** Always apply `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` to all primary and secondary form-level action buttons.
+
+## 2026-07-10 - Unified Keyboard Focus Indicators on CopyButton
+**Learning:** Utility buttons like `CopyButton` are highly interactive and frequent across dense layouts. Using standard focus indicators (`focus:outline-none focus:ring-2`) can cause confusing ring highlights during mouse clicks, while completely ignoring them is an accessibility blocker. Applying the `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2` pattern ensures keyboard navigators receive standard, clear spatial visual cues, while keeping the interface pristine and ring-free during normal mouse usage.
+**Action:** Always utilize `focus-visible` states rather than standard `focus` rings on discrete utility buttons to ensure accessibility without introducing visual noise on click interactions.
