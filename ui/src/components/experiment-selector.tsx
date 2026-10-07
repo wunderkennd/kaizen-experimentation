@@ -81,7 +81,9 @@ function ExperimentSelectorInner({
                   className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                   aria-label={`Remove ${exp.name}`}
                 >
-                  x
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </span>
             );
@@ -101,7 +103,19 @@ function ExperimentSelectorInner({
       )}
 
       {/* Search dropdown */}
-      <div ref={containerRef} className="relative">
+      <div
+        ref={containerRef}
+        className="relative"
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape' || !isOpen) return;
+          // Close the list from the input or a focused option and keep focus in the input.
+          // Stop propagation so the global search-shortcut hook does not also blur the input;
+          // a second Escape (list already closed) still reaches it and leaves the search.
+          e.stopPropagation();
+          inputRef.current?.focus();
+          setIsOpen(false);
+        }}
+      >
         <div className="group relative w-full">
           <svg
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
