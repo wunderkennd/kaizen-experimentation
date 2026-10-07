@@ -79,7 +79,7 @@ export const TYPE_DESCRIPTIONS: Record<ExperimentType, string> = {
   AB: 'Standard A/B hypothesis test comparing control and treatment variants.',
   MULTIVARIATE: 'Multi-variable factorial experiment evaluating multiple simultaneous changes.',
   INTERLEAVING: 'Blended ranking design comparing item preferences within a single list.',
-  SESSION_LEVEL: 'Session-scoped experiment: analysis uses session-clustered errors; variants stay fixed per user unless cross-session variation is enabled.',
+  SESSION_LEVEL: 'Session-level experiment randomizing users per session unless cross-session persistence is enabled.',
   PLAYBACK_QOE: 'Video streaming Quality of Experience experiment evaluating buffering and bitrate.',
   MAB: 'Multi-Armed Bandit dynamically allocating traffic to optimal variants.',
   CONTEXTUAL_BANDIT: 'Contextual bandit personalizing allocations using user and request context.',
@@ -87,7 +87,7 @@ export const TYPE_DESCRIPTIONS: Record<ExperimentType, string> = {
   SLATE: 'Slate bandit optimizing entire ordered sets or recommendation layouts.',
   SWITCHBACK: 'Time-based cluster switchback design isolating network spillover effects.',
   QUASI_EXPERIMENT: 'Observational design using synthetic controls or difference-in-differences.',
-  META: 'Meta-experiment randomizing users over bandit objective configurations to compare their business outcomes.',
+  META: 'Meta-experiment randomizing users over bandit objective configurations per ADR-013.',
 };
 
 export function formatDate(iso: string): string {
