@@ -2,11 +2,12 @@ syntax = "proto3";
 
 package experimentation.common.v1;
 
-import "google/protobuf/duration.proto";
-import "google/protobuf/timestamp.proto";
+import "experimentation/common/v1/bandit.proto";
 import "experimentation/common/v1/interleaving.proto";
 import "experimentation/common/v1/lifecycle.proto";
-import "experimentation/common/v1/bandit.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "kaizen/audience/v1/rule.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/common/v1;commonv1";
 
@@ -213,10 +214,9 @@ message Experiment {
   // test is performed and the standard superiority test alone is reported.
   EquivalenceTestConfig equivalence_test = 33;
 
-  // Field 34 is claimed as `audience_rule_id` by kaizen-rosetta's audience-v1
-  // fork of this file. Reserved so upstream evolution cannot collide at the
-  // wire level until that linkage is adopted or rejected (#822).
-  reserved 34;
+  // Audience v1 eligibility. Mutually exclusive with targeting_rule_id;
+  // runtime validation enforces this during the additive migration.
+  string audience_rule_id = 34;
 }
 
 // SyntheticControlMethod selects the SCM algorithm M4a applies (ADR-023).

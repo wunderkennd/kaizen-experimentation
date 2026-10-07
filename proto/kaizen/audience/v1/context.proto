@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package kaizen.audience.v1;
+
+import "buf/validate/validate.proto";
+import "kaizen/audience/v1/value.proto";
+
+// AudienceAttributeProvenance records how an attribute entered a context.
+enum AudienceAttributeProvenance {
+  AUDIENCE_ATTRIBUTE_PROVENANCE_UNSPECIFIED = 0;
+  AUDIENCE_ATTRIBUTE_PROVENANCE_OBSERVED = 1;
+  AUDIENCE_ATTRIBUTE_PROVENANCE_SYNTHETIC = 2;
+  AUDIENCE_ATTRIBUTE_PROVENANCE_DEFAULT = 3;
+  AUDIENCE_ATTRIBUTE_PROVENANCE_OVERLAY = 4;
+}
+
+// AudienceAttribute pairs a typed value with its provenance.
+message AudienceAttribute {
+  AudienceValue value = 1 [(buf.validate.field).required = true];
+  AudienceAttributeProvenance provenance = 2 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+}
+
+// AudienceContext is the versioned set of attributes supplied for evaluation.
+message AudienceContext {
+  map<string, AudienceAttribute> attributes = 1 [(buf.validate.field).map = {
+    keys: {
+      string: {
+        max_bytes: 64
+        pattern: "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+      }
+    }
+  }];
+  string registry_version = 2 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.max_bytes = 64
+  ];
+}

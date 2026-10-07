@@ -4,6 +4,7 @@
 //! Do NOT manually edit generated code — modify the .proto files instead.
 
 #![allow(clippy::result_large_err)]
+#![allow(clippy::double_must_use)]
 
 pub mod experimentation {
     pub mod common {
@@ -44,6 +45,16 @@ pub mod experimentation {
     pub mod flags {
         pub mod v1 {
             tonic::include_proto!("experimentation.flags.v1");
+        }
+    }
+}
+
+// Audience v1 contracts (kaizen-rosetta), referenced by Experiment, Flag and
+// the management service's AudienceRule RPCs (#822).
+pub mod kaizen {
+    pub mod audience {
+        pub mod v1 {
+            tonic::include_proto!("kaizen.audience.v1");
         }
     }
 }

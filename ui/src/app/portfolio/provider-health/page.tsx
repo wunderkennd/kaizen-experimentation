@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { getProviderHealth } from '@/lib/api';
@@ -56,17 +56,24 @@ export default function ProviderHealthPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string>('');
+  const selectRef = useRef<HTMLSelectElement>(null);
+  // Monotonic request id: a response is applied only if no newer request started after it,
+  // so a slow earlier fetch cannot overwrite the data for the provider selected later.
+  const requestSeq = useRef(0);
 
   const fetchData = useCallback(async (providerId?: string) => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     try {
       const data = await getProviderHealth(providerId || undefined);
+      if (seq !== requestSeq.current) return;
       setResult(data);
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setError(err instanceof Error ? err.message : 'Failed to load provider health data.');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, []);
 
@@ -118,6 +125,7 @@ export default function ProviderHealthPage() {
             Provider
           </label>
           <select
+            ref={selectRef}
             id="provider-select"
             value={selectedProvider}
             onChange={handleProviderChange}
@@ -151,6 +159,21 @@ export default function ProviderHealthPage() {
       {series.length === 0 && !loading ? (
         <div className="rounded-lg border border-gray-200 bg-white py-16 text-center">
           <p className="text-sm text-gray-500">No data available for the selected provider.</p>
+          {selectedProvider && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProvider('');
+                fetchData();
+                // Restore focus to the provider filter select element
+                selectRef.current?.focus();
+              }}
+              className="mt-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              data-testid="clear-provider-filter"
+            >
+              Clear filter
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-6">

@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package kaizen.audience.v1;
+
+import "buf/validate/validate.proto";
+import "kaizen/audience/v1/operator.proto";
+
+// AudienceValueType identifies the scalar type registered for an attribute.
+enum AudienceValueType {
+  AUDIENCE_VALUE_TYPE_UNSPECIFIED = 0;
+  AUDIENCE_VALUE_TYPE_STRING = 1;
+  AUDIENCE_VALUE_TYPE_BOOL = 2;
+  AUDIENCE_VALUE_TYPE_INT64 = 3;
+  AUDIENCE_VALUE_TYPE_DOUBLE = 4;
+}
+
+// AudienceNormalization identifies canonicalization required before evaluation.
+enum AudienceNormalization {
+  AUDIENCE_NORMALIZATION_UNSPECIFIED = 0;
+  AUDIENCE_NORMALIZATION_NONE = 1;
+  AUDIENCE_NORMALIZATION_LOWERCASE = 2;
+  AUDIENCE_NORMALIZATION_UPPERCASE = 3;
+  AUDIENCE_NORMALIZATION_BCP47 = 4;
+}
+
+// AudienceSensitivity classifies whether diagnostics may expose raw values.
+enum AudienceSensitivity {
+  AUDIENCE_SENSITIVITY_UNSPECIFIED = 0;
+  AUDIENCE_SENSITIVITY_NON_SENSITIVE = 1;
+  AUDIENCE_SENSITIVITY_SENSITIVE = 2;
+}
+
+// AudienceAttributeDefinition declares one canonical audience attribute.
+message AudienceAttributeDefinition {
+  string key = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      max_bytes: 64
+      pattern: "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    }
+  ];
+  AudienceValueType value_type = 2 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+  repeated AudienceOperator allowed_operators = 3 [(buf.validate.field).repeated = {
+    min_items: 1
+    unique: true
+    items: {
+      enum: {
+        defined_only: true
+        not_in: 0
+      }
+    }
+  }];
+  AudienceNormalization normalization = 4 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+  AudienceSensitivity sensitivity = 5 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+  string owner = 6 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string = {
+      max_bytes: 64
+      pattern: "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    }
+  ];
+  string description = 7 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.max_bytes = 512
+  ];
+}
+
+// AudienceAttributeRegistry is the versioned catalog of approved attributes.
+message AudienceAttributeRegistry {
+  option (buf.validate.message).cel = {
+    id: "audience_attribute_registry.unique_keys"
+    message: "definition keys must be unique"
+    expression: "this.definitions.map(definition, definition.key).unique()"
+  };
+
+  string version = 1 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).string.max_bytes = 64
+  ];
+  repeated AudienceAttributeDefinition definitions = 2 [(buf.validate.field).repeated.min_items = 1];
+}

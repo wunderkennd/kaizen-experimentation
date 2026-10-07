@@ -4,4 +4,6 @@
 //! so the pilot can introduce buffa to the workspace without rippling through the
 //! existing 56-file / 225-site prost usage.
 
+#![allow(clippy::double_must_use)]
+
 connectrpc::include_generated!();

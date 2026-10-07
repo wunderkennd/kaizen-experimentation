@@ -22,17 +22,47 @@ service EventIngestionService {
   rpc IngestModelRetrainingEvent(IngestModelRetrainingEventRequest) returns (IngestModelRetrainingEventResponse);
 }
 
-message IngestExposureRequest { experimentation.common.v1.ExposureEvent event = 1; }
-message IngestExposureResponse { bool accepted = 1; }
-message IngestExposureBatchRequest { repeated experimentation.common.v1.ExposureEvent events = 1; }
-message IngestMetricEventRequest { experimentation.common.v1.MetricEvent event = 1; }
-message IngestMetricEventResponse { bool accepted = 1; }
-message IngestMetricEventBatchRequest { repeated experimentation.common.v1.MetricEvent events = 1; }
-message IngestRewardEventRequest { experimentation.common.v1.RewardEvent event = 1; }
-message IngestRewardEventResponse { bool accepted = 1; }
-message IngestQoEEventRequest { experimentation.common.v1.QoEEvent event = 1; }
-message IngestQoEEventResponse { bool accepted = 1; }
-message IngestQoEEventBatchRequest { repeated experimentation.common.v1.QoEEvent events = 1; }
-message IngestBatchResponse { int32 accepted_count = 1; int32 duplicate_count = 2; int32 invalid_count = 3; }
-message IngestModelRetrainingEventRequest { experimentation.common.v1.ModelRetrainingEvent event = 1; }
-message IngestModelRetrainingEventResponse { bool accepted = 1; }
+message IngestExposureRequest {
+  experimentation.common.v1.ExposureEvent event = 1;
+}
+message IngestExposureResponse {
+  bool accepted = 1;
+}
+message IngestExposureBatchRequest {
+  repeated experimentation.common.v1.ExposureEvent events = 1;
+}
+message IngestMetricEventRequest {
+  experimentation.common.v1.MetricEvent event = 1;
+}
+message IngestMetricEventResponse {
+  bool accepted = 1;
+}
+message IngestMetricEventBatchRequest {
+  repeated experimentation.common.v1.MetricEvent events = 1;
+}
+message IngestRewardEventRequest {
+  experimentation.common.v1.RewardEvent event = 1;
+}
+message IngestRewardEventResponse {
+  bool accepted = 1;
+}
+message IngestQoEEventRequest {
+  experimentation.common.v1.QoEEvent event = 1;
+}
+message IngestQoEEventResponse {
+  bool accepted = 1;
+}
+message IngestQoEEventBatchRequest {
+  repeated experimentation.common.v1.QoEEvent events = 1;
+}
+message IngestBatchResponse {
+  int32 accepted_count = 1;
+  int32 duplicate_count = 2;
+  int32 invalid_count = 3;
+}
+message IngestModelRetrainingEventRequest {
+  experimentation.common.v1.ModelRetrainingEvent event = 1;
+}
+message IngestModelRetrainingEventResponse {
+  bool accepted = 1;
+}

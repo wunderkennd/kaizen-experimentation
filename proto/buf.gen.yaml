@@ -9,6 +9,9 @@ plugins:
   - remote: buf.build/protocolbuffers/go
     out: gen/go
     opt: paths=source_relative
+    # kaizen/audience/v1 (vendored from rosetta) imports buf/validate; generate
+    # it alongside so gen/go stays self-contained (WKTs are still excluded).
+    include_imports: true
   - remote: buf.build/connectrpc/go
     out: gen/go
     opt: paths=source_relative

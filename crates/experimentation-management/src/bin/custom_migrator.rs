@@ -2326,6 +2326,24 @@ mod tests {
         ) -> Result<Response<experimentation_proto::experimentation::common::v1::TargetingRule>, Status> {
             unimplemented!("MockM5 stub: create_targeting_rule")
         }
+        async fn create_audience_rule(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::CreateAudienceRuleRequest>,
+        ) -> Result<Response<experimentation_proto::kaizen::audience::v1::AudienceRule>, Status> {
+            unimplemented!("MockM5 stub: create_audience_rule")
+        }
+        async fn get_audience_rule(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::GetAudienceRuleRequest>,
+        ) -> Result<Response<experimentation_proto::kaizen::audience::v1::AudienceRule>, Status> {
+            unimplemented!("MockM5 stub: get_audience_rule")
+        }
+        async fn list_audience_rules(
+            &self,
+            _r: Request<experimentation_proto::experimentation::management::v1::ListAudienceRulesRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListAudienceRulesResponse>, Status> {
+            unimplemented!("MockM5 stub: list_audience_rules")
+        }
         async fn create_surrogate_model(
             &self,
             _r: Request<experimentation_proto::experimentation::management::v1::CreateSurrogateModelRequest>,
@@ -2516,6 +2534,24 @@ mod tests {
             r: Request<experimentation_proto::experimentation::management::v1::CreateTargetingRuleRequest>,
         ) -> Result<Response<experimentation_proto::experimentation::common::v1::TargetingRule>, Status> {
             self.0.create_targeting_rule(r).await
+        }
+        async fn create_audience_rule(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::CreateAudienceRuleRequest>,
+        ) -> Result<Response<experimentation_proto::kaizen::audience::v1::AudienceRule>, Status> {
+            self.0.create_audience_rule(r).await
+        }
+        async fn get_audience_rule(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::GetAudienceRuleRequest>,
+        ) -> Result<Response<experimentation_proto::kaizen::audience::v1::AudienceRule>, Status> {
+            self.0.get_audience_rule(r).await
+        }
+        async fn list_audience_rules(
+            &self,
+            r: Request<experimentation_proto::experimentation::management::v1::ListAudienceRulesRequest>,
+        ) -> Result<Response<experimentation_proto::experimentation::management::v1::ListAudienceRulesResponse>, Status> {
+            self.0.list_audience_rules(r).await
         }
         async fn create_surrogate_model(
             &self,

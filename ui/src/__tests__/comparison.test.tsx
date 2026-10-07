@@ -2,10 +2,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import ComparePage from '@/app/compare/page';
+import { NavHeader } from '@/components/nav-header';
+import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/lib/toast-context';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
+  usePathname: () => '/compare',
   useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -367,5 +370,19 @@ describe('Experiment Comparison Page', () => {
     // With the list closed, Escape falls through to the search-shortcut hook and leaves the input
     await user.keyboard('{Escape}');
     expect(searchInput).not.toHaveFocus();
+  });
+
+  it('renders Compare link in NavHeader with proper testid and focus styles', () => {
+    render(
+      <AuthProvider>
+        <NavHeader />
+      </AuthProvider>
+    );
+
+    const compareLink = screen.getByTestId('nav-compare');
+    expect(compareLink).toBeInTheDocument();
+    expect(compareLink).toHaveAttribute('href', '/compare');
+    expect(compareLink).toHaveTextContent('Compare');
+    expect(compareLink).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-indigo-500', 'focus-visible:ring-offset-2');
   });
 });

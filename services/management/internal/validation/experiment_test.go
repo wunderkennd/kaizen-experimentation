@@ -47,6 +47,11 @@ func TestValidateCreateExperiment(t *testing.T) {
 			wantCode: connect.CodeInvalidArgument,
 		},
 		{
+			name:     "audience_rule_id not supported yet (#822)",
+			modify:   func(e *commonv1.Experiment) { e.AudienceRuleId = "rule-1" },
+			wantCode: connect.CodeInvalidArgument,
+		},
+		{
 			name:     "missing owner_email",
 			modify:   func(e *commonv1.Experiment) { e.OwnerEmail = "" },
 			wantCode: connect.CodeInvalidArgument,

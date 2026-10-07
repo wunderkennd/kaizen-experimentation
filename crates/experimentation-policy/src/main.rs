@@ -1,6 +1,7 @@
 //! Experimentation Policy Service (M4b) — Bandit arm selection.
 
 #![allow(clippy::result_large_err)]
+#![allow(clippy::double_must_use)]
 //!
 //! Architecture: LMAX-inspired single-threaded core (ADR-002).
 //! - Thread 1 (tokio): gRPC server sends SelectArmRequests via channel
