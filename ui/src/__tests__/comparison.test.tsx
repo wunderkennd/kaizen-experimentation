@@ -339,4 +339,33 @@ describe('Experiment Comparison Page', () => {
 
     expect(screen.getByText('No experiments selected')).toBeInTheDocument();
   });
+
+  it('Escape closes the dropdown from a focused option and returns focus to the search input', async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByTestId('experiment-search');
+    await user.click(searchInput);
+    await waitFor(() => { expect(screen.getByTestId('experiment-dropdown')).toBeInTheDocument(); });
+
+    // Tab moves focus from the input onto the first option; Escape must still close the list
+    await user.tab();
+    expect(screen.getAllByRole('option')[0]).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('experiment-dropdown')).not.toBeInTheDocument();
+    expect(searchInput).toHaveFocus();
+
+    // With the list closed, Escape falls through to the search-shortcut hook and leaves the input
+    await user.keyboard('{Escape}');
+    expect(searchInput).not.toHaveFocus();
+  });
 });

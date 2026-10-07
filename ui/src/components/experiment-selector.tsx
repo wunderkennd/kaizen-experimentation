@@ -103,7 +103,19 @@ function ExperimentSelectorInner({
       )}
 
       {/* Search dropdown */}
-      <div ref={containerRef} className="relative">
+      <div
+        ref={containerRef}
+        className="relative"
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape' || !isOpen) return;
+          // Close the list from the input or a focused option and keep focus in the input.
+          // Stop propagation so the global search-shortcut hook does not also blur the input;
+          // a second Escape (list already closed) still reaches it and leaves the search.
+          e.stopPropagation();
+          inputRef.current?.focus();
+          setIsOpen(false);
+        }}
+      >
         <div className="group relative w-full">
           <svg
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
@@ -124,11 +136,6 @@ function ExperimentSelectorInner({
               setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsOpen(false);
-              }
-            }}
             placeholder={atLimit ? `Maximum ${maxSelections} experiments selected` : 'Search experiments by name or owner...'}
             disabled={atLimit}
             className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-10 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -161,7 +168,6 @@ function ExperimentSelectorInner({
 
         {isOpen && !atLimit && (
           <ul
-            id="experiment-dropdown-list"
             className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"
             role="listbox"
             data-testid="experiment-dropdown"
