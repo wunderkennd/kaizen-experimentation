@@ -1510,6 +1510,21 @@ impl BanditPolicyService for MockBanditService {
 }
 
 /// Start a mock M4b server on a random port, return the address.
+/// Client for tests asserting the live M4b path. The production 10ms
+/// SelectArm deadline can expire on the first call over a fresh h2c
+/// connection on a loaded CI runner, which silently routes the test through
+/// the uniform-random fallback; the timeout path has its own tests.
+async fn success_path_bandit_client(
+    addr: std::net::SocketAddr,
+) -> experimentation_assignment::bandit_client::GrpcBanditClient {
+    experimentation_assignment::bandit_client::GrpcBanditClient::connect_with_timeout(
+        &format!("http://{addr}"),
+        Duration::from_secs(1),
+    )
+    .await
+    .unwrap()
+}
+
 async fn start_mock_m4b(
     delay: Option<Duration>,
     arm_id: &str,
@@ -1548,11 +1563,7 @@ async fn bandit_grpc_client_success() {
     // Start mock M4b that returns arm_hero with 0.7 probability.
     let (addr, _captured) = start_mock_m4b(None, "arm_hero", 0.7).await;
 
-    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
-        "http://{addr}"
-    ))
-    .await
-    .unwrap();
+    let client = success_path_bandit_client(addr).await;
 
     // Build service with MAB experiment config that has arm_hero.
     let json = r#"{
@@ -1655,11 +1666,7 @@ async fn bandit_contextual_features_forwarded() {
     // Start mock M4b that captures context features.
     let (addr, captured) = start_mock_m4b(None, "arm_a", 0.6).await;
 
-    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
-        "http://{addr}"
-    ))
-    .await
-    .unwrap();
+    let client = success_path_bandit_client(addr).await;
 
     let json = r#"{
         "experiments": [{
@@ -1781,11 +1788,7 @@ async fn cold_start_experiment_assignment() {
     // the existing SelectArm path (it's a CONTEXTUAL_BANDIT type).
     let (addr, captured) = start_mock_m4b(None, "arm_prominent", 0.6).await;
 
-    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
-        "http://{addr}"
-    ))
-    .await
-    .unwrap();
+    let client = success_path_bandit_client(addr).await;
 
     let config = Config::from_json(DEV_CONFIG).unwrap();
     let svc = AssignmentServiceImpl::new(
@@ -2392,11 +2395,7 @@ async fn slate_grpc_forwarding_success() {
     // Start mock M4b that supports SelectSlate.
     let (addr, _captured) = start_mock_m4b(None, "arm_hero", 0.6).await;
 
-    let client = experimentation_assignment::bandit_client::GrpcBanditClient::connect(&format!(
-        "http://{addr}"
-    ))
-    .await
-    .unwrap();
+    let client = success_path_bandit_client(addr).await;
 
     let json = slate_experiment_json("live_slate", "RUNNING", 3);
     let config = Config::from_json(&json).unwrap();
