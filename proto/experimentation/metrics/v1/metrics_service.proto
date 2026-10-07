@@ -42,8 +42,12 @@ service MetricComputationService {
   rpc PromoteShadowResult(PromoteShadowResultRequest) returns (PromoteShadowResultResponse);
 }
 
-message ComputeMetricsRequest { string experiment_id = 1; }
-message ComputeGuardrailMetricsRequest { string experiment_id = 1; }
+message ComputeMetricsRequest {
+  string experiment_id = 1;
+}
+message ComputeGuardrailMetricsRequest {
+  string experiment_id = 1;
+}
 message ComputeMetricsResponse {
   string experiment_id = 1;
   int32 metrics_computed = 2;

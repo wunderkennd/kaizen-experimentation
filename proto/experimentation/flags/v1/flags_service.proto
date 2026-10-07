@@ -3,6 +3,7 @@ syntax = "proto3";
 package experimentation.flags.v1;
 
 import "experimentation/common/v1/experiment.proto";
+import "kaizen/audience/v1/context.proto";
 
 option go_package = "github.com/org/experimentation/gen/go/flags/v1;flagsv1";
 
@@ -39,6 +40,9 @@ message Flag {
   double rollout_percentage = 7;
   repeated FlagVariant variants = 8;
   string targeting_rule_id = 9;
+  // Audience v1 eligibility. Mutually exclusive with targeting_rule_id;
+  // runtime validation enforces this during the additive migration.
+  string audience_rule_id = 10;
 }
 
 message FlagVariant {
@@ -47,16 +51,29 @@ message FlagVariant {
   double traffic_fraction = 3;
 }
 
-message CreateFlagRequest { Flag flag = 1; }
-message GetFlagRequest { string flag_id = 1; }
-message UpdateFlagRequest { Flag flag = 1; }
-message ListFlagsRequest { int32 page_size = 1; string page_token = 2; }
-message ListFlagsResponse { repeated Flag flags = 1; string next_page_token = 2; }
+message CreateFlagRequest {
+  Flag flag = 1;
+}
+message GetFlagRequest {
+  string flag_id = 1;
+}
+message UpdateFlagRequest {
+  Flag flag = 1;
+}
+message ListFlagsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+message ListFlagsResponse {
+  repeated Flag flags = 1;
+  string next_page_token = 2;
+}
 
 message EvaluateFlagRequest {
   string flag_id = 1;
   string user_id = 2;
   map<string, string> attributes = 3;
+  kaizen.audience.v1.AudienceContext audience_context = 4;
 }
 message EvaluateFlagResponse {
   string flag_id = 1;
@@ -67,8 +84,11 @@ message EvaluateFlagResponse {
 message EvaluateFlagsRequest {
   string user_id = 1;
   map<string, string> attributes = 2;
+  kaizen.audience.v1.AudienceContext audience_context = 3;
 }
-message EvaluateFlagsResponse { repeated EvaluateFlagResponse evaluations = 1; }
+message EvaluateFlagsResponse {
+  repeated EvaluateFlagResponse evaluations = 1;
+}
 
 message PromoteToExperimentRequest {
   string flag_id = 1;

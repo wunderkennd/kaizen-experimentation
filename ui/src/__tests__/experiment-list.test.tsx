@@ -36,6 +36,16 @@ async function renderAndWait(user: AuthUser = defaultUser) {
 }
 
 describe('Experiment List Page', () => {
+  it('implements accessible table semantics', async () => {
+    await renderAndWait();
+
+    const table = screen.getByRole('table', { name: 'Experiments summary' });
+    expect(table).toBeInTheDocument();
+
+    const columnHeaders = within(table).getAllByRole('columnheader');
+    expect(columnHeaders.length).toBe(6);
+  });
+
   it('renders all seed experiments including CONCLUDED and ARCHIVED', async () => {
     await renderAndWait();
 

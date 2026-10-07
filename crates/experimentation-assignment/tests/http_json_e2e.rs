@@ -118,6 +118,13 @@ async fn e2e_get_assignment_returns_active_assignment() {
     // Must have a non-empty variant
     let variant = json["variantId"].as_str().unwrap();
     assert!(variant == "control" || variant == "treatment", "unexpected variant: {variant}");
+    // isControl mirrors the assigned variant's config flag (dev config marks
+    // "control" as is_control=true, "treatment" as false).
+    assert_eq!(
+        json["isControl"],
+        variant == "control",
+        "isControl must match the assigned variant, got {json}"
+    );
 }
 
 #[tokio::test]

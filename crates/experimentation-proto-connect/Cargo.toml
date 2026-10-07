@@ -1,7 +1,7 @@
 [package]
 name = "experimentation-proto-connect"
 version.workspace = true
-# NOTE (ADR-031): connectrpc/buffa 0.7 require edition 2024 / MSRV 1.88, so this
+# NOTE (ADR-031): connectrpc/buffa require edition 2024 / MSRV 1.88, so this
 # pilot crate intentionally diverges from the workspace defaults (edition 2021 /
 # rust 1.80). Scoped to this optional pilot crate; the workspace MSRV is unchanged.
 edition = "2024"
@@ -11,14 +11,14 @@ repository.workspace = true
 description = "ADR-031 pilot: buffa + Connect codegen for the assignment/v1 package. Kept separate from the prost/tonic experimentation-proto crate."
 
 [dependencies]
-buffa = { version = "0.7", features = ["json"] }
-buffa-types = { version = "0.7", features = ["json"] }
-connectrpc = { version = "0.7", default-features = false, features = ["server"] }
+buffa = { workspace = true, features = ["json"] }
+buffa-types = { workspace = true, features = ["json"] }
+connectrpc = { workspace = true, features = ["server", "json"] }
 http-body = "1"
 serde = { workspace = true }
 
 [build-dependencies]
-connectrpc-build = "0.7"
+connectrpc-build = { workspace = true }
 walkdir = "2"
 
 [features]

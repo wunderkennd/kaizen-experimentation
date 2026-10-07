@@ -4,6 +4,7 @@
 //! can import the handler and configuration types.
 
 #![allow(clippy::result_large_err)]
+#![allow(clippy::double_must_use)]
 
 pub mod config;
 pub mod delta_reader;

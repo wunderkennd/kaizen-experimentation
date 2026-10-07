@@ -58,7 +58,7 @@ describe('Flag List Page', () => {
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
-  it('renders flag list with all seed flags', async () => {
+  it('renders flag list with all seed flags and accessible table semantics', async () => {
     await renderAndWait();
 
     expect(screen.getByText('dark_mode_rollout')).toBeInTheDocument();
@@ -66,6 +66,15 @@ describe('Flag List Page', () => {
     expect(screen.getByText('upcoming_feature')).toBeInTheDocument();
     expect(screen.getByText('player_config_override')).toBeInTheDocument();
     expect(screen.getByTestId('flag-count')).toHaveTextContent('4');
+
+    const table = screen.getByRole('table', { name: 'Feature flags summary' });
+    expect(table).toBeInTheDocument();
+
+    const columnHeaders = within(table).getAllByRole('columnheader');
+    expect(columnHeaders).toHaveLength(7);
+    columnHeaders.forEach((header) => {
+      expect(header).toHaveAttribute('scope', 'col');
+    });
   });
 
   it('shows empty state when no flags', async () => {

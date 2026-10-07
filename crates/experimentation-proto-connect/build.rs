@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     connectrpc_build::Config::new()
         .files(&protos)
-        .includes(&[proto_root])
+        .includes(&[proto_root, &format!("{proto_root}/third_party")])
         .include_file("_connectrpc.rs")
         .compile()?;
 

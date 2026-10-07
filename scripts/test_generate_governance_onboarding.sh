@@ -35,6 +35,8 @@ check "kaizen-recsys has README.md" "[ -f '$OUT/kaizen-recsys/README.md' ]"
 echo "=== generated content ==="
 check "callers reference owner-qualified reusable @main" \
   "grep -q 'uses: wunderkennd/kaizen-experimentation/.github/workflows/_review-gate.yml@main' '$OUT/kaizen-recsys/.github/workflows/review-gate.yml'"
+check "review-gate caller queues, never cancels (required-check wedging, #763/#764)" \
+  "grep -q 'cancel-in-progress: false' '$OUT/kaizen-recsys/.github/workflows/review-gate.yml' && ! grep -q 'cancel-in-progress: true' '$OUT/kaizen-recsys/.github/workflows/review-gate.yml'"
 check "no pull_request_review_thread trigger (validator rejects it; comments may mention it)" \
   "! grep -rqE '^[[:space:]]*pull_request_review_thread:' '$OUT'"
 check "all generated workflows parse as YAML" \

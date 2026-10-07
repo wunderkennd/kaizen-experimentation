@@ -1,13 +1,14 @@
 'use client';
 
 import { useWizard } from '../wizard-context';
-import { validateJsonPayload } from '@/lib/validation';
+import { validateJsonPayload, getMinVariants } from '@/lib/validation';
 import { formatPercent } from '@/lib/utils';
 
 export function VariantsStep() {
   const { state, dispatch } = useWizard();
-  const { variants } = state;
+  const { variants, type } = state;
 
+  const minVariants = getMinVariants(type);
   const trafficSum = variants.reduce((acc, v) => acc + v.trafficFraction, 0);
   const trafficSumValid = Math.abs(trafficSum - 1.0) < 1e-9;
 
@@ -34,7 +35,7 @@ export function VariantsStep() {
                     value={v.name}
                     onChange={(e) => dispatch({ type: 'UPDATE_VARIANT', index: i, field: 'name', value: e.target.value })}
                     aria-label={`Variant ${i + 1} name`}
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -46,7 +47,7 @@ export function VariantsStep() {
                     value={v.trafficFraction}
                     onChange={(e) => dispatch({ type: 'UPDATE_VARIANT', index: i, field: 'trafficFraction', value: parseFloat(e.target.value) || 0 })}
                     aria-label={`Variant ${i + 1} traffic`}
-                    className="w-24 rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="w-24 rounded border border-gray-300 px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </td>
                 <td className="px-4 py-2 text-center">
@@ -56,6 +57,7 @@ export function VariantsStep() {
                     checked={v.isControl}
                     onChange={() => dispatch({ type: 'UPDATE_VARIANT', index: i, field: 'isControl', value: true })}
                     aria-label={`Set ${v.name || `variant ${i + 1}`} as control`}
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -64,7 +66,7 @@ export function VariantsStep() {
                     onChange={(e) => dispatch({ type: 'UPDATE_VARIANT', index: i, field: 'payloadJson', value: e.target.value })}
                     aria-label={`Variant ${i + 1} payload`}
                     rows={1}
-                    className={`w-full rounded border px-2 py-1 font-mono text-xs ${
+                    className={`w-full rounded border px-2 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       !validateJsonPayload(v.payloadJson) ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
@@ -73,8 +75,10 @@ export function VariantsStep() {
                   <button
                     type="button"
                     onClick={() => dispatch({ type: 'REMOVE_VARIANT', index: i })}
-                    disabled={variants.length <= 2}
-                    className="text-sm text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-gray-400"
+                    disabled={variants.length <= minVariants}
+                    aria-label={`Remove variant ${v.name || i + 1}`}
+                    title={variants.length <= minVariants ? `Minimum of ${minVariants} variant${minVariants > 1 ? 's' : ''} required` : undefined}
+                    className="rounded-sm text-sm text-red-600 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:text-gray-400"
                   >
                     Remove
                   </button>
@@ -85,14 +89,19 @@ export function VariantsStep() {
         </table>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className={`text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}>
+        <div
+          role="status"
+          aria-live="polite"
+          className={`text-sm font-medium ${trafficSumValid ? 'text-green-700' : 'text-red-700'}`}
+        >
           Total traffic: {formatPercent(trafficSum)}
-        </span>
+          {!trafficSumValid && ' (must equal 100%)'}
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => dispatch({ type: 'DISTRIBUTE_VARIANTS' })}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             aria-label="Distribute traffic evenly across all variants"
           >
             Distribute Evenly
@@ -100,7 +109,7 @@ export function VariantsStep() {
           <button
             type="button"
             onClick={() => dispatch({ type: 'ADD_VARIANT' })}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             Add Variant
           </button>

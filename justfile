@@ -102,13 +102,24 @@ codegen: _codegen-check codegen-go codegen-ts
 codegen-go:
     @echo "  Generating Go stubs..."
     mkdir -p {{ gen_go_dir }}
-    cd {{ proto_dir }} && {{ buf }} generate --template buf.gen.yaml --path experimentation
+    cd {{ proto_dir }} && {{ buf }} generate --template buf.gen.yaml --path experimentation --path kaizen
 
 # Generate TypeScript ConnectRPC stubs
 codegen-ts:
     @echo "  Generating TypeScript stubs..."
     mkdir -p {{ gen_ts_dir }}
-    cd {{ proto_dir }} && {{ buf }} generate --template buf.gen.yaml --path experimentation
+    cd {{ proto_dir }} && {{ buf }} generate --template buf.gen.yaml --path experimentation --path kaizen
+
+# Re-vendor proto/experimentation + proto/kaizen/audience from kaizen-rosetta at
+# the commit pinned in proto/rosetta.lock.json (bump the pin first). Rosetta is
+# the source of truth: change protos there, never in this repo.
+# ROSETTA_REPO=/path/to/kaizen-rosetta reuses a local checkout.
+sync-rosetta-protos:
+    scripts/sync_rosetta_protos.sh
+
+# Fail if the vendored protos differ from the pinned kaizen-rosetta commit
+check-rosetta-protos:
+    scripts/sync_rosetta_protos.sh --check
 
 # Lint proto schemas and check for breaking changes
 lint-proto:

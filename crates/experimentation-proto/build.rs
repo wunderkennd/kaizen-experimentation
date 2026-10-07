@@ -1,12 +1,16 @@
 //! Build script: compile .proto files into Rust types via tonic-build.
-//! Proto source directory: ../../proto/
+//! Proto source directory: ../../proto/ (vendored from kaizen-rosetta; see
+//! proto/rosetta.lock.json). `proto/third_party` holds import-only
+//! dependencies (protovalidate) and is on the include path, not compiled.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_root = "../../proto";
+    let third_party = "../../proto/third_party";
 
-    // Collect all .proto files
+    // Collect all .proto files except import-only third-party deps
     let protos: Vec<String> = walkdir::WalkDir::new(proto_root)
         .into_iter()
+        .filter_entry(|e| e.path() != std::path::Path::new(third_party))
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "proto"))
         .map(|e| e.path().display().to_string())
@@ -22,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .build_server(true)
         .build_client(true)
-        .compile_protos(&protos, &[proto_root])?;
+        .compile_protos(&protos, &[proto_root, third_party])?;
 
     Ok(())
 }

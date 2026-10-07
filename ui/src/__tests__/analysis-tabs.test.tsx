@@ -271,7 +271,7 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     expect(screen.getByText('Significant difference detected between algorithms.')).toBeInTheDocument();
   });
 
-  it('shows Bradley-Terry strength estimates', async () => {
+  it('shows Bradley-Terry strength estimates with accessible table semantics', async () => {
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -282,7 +282,13 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     await user.click(screen.getByRole('tab', { name: 'Interleaving' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Bradley-Terry Strength Estimates')).toBeInTheDocument();
+      expect(screen.getByRole('table', { name: 'Bradley-Terry algorithm strength estimates' })).toBeInTheDocument();
+    });
+
+    const strengthTable = screen.getByRole('table', { name: 'Bradley-Terry algorithm strength estimates' });
+    const headers = strengthTable.querySelectorAll('th');
+    headers.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col');
     });
 
     // Algorithm names appear in both the strengths table and position header
@@ -292,7 +298,7 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     expect(screen.getByText('0.550')).toBeInTheDocument();
   });
 
-  it('shows position engagement rates table', async () => {
+  it('shows position engagement rates table with accessible table semantics', async () => {
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -303,7 +309,13 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     await user.click(screen.getByRole('tab', { name: 'Interleaving' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Position Engagement Rates')).toBeInTheDocument();
+      expect(screen.getByRole('table', { name: 'Position engagement rates summary' })).toBeInTheDocument();
+    });
+
+    const positionTable = screen.getByRole('table', { name: 'Position engagement rates summary' });
+    const headers = positionTable.querySelectorAll('th');
+    headers.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col');
     });
 
     // Position #1
@@ -312,6 +324,37 @@ describe('Interleaving Tab - search_ranking_interleave', () => {
     expect(screen.getByText('31.0%')).toBeInTheDocument();
     // semantic position 1 rate = 38.0%
     expect(screen.getByText('38.0%')).toBeInTheDocument();
+  });
+});
+
+describe('Guardrail Tab', () => {
+  beforeEach(() => {
+    mockExperimentId = '11111111-1111-1111-1111-111111111111';
+  });
+
+  it('renders guardrail breaches table with accessible attributes and copy buttons', async () => {
+    const user = userEvent.setup();
+    render(<ResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Guardrails' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Guardrails' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('table', { name: 'Guardrail breach history summary' })).toBeInTheDocument();
+    });
+
+    const table = screen.getByRole('table', { name: 'Guardrail breach history summary' });
+    expect(table).toBeInTheDocument();
+
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers[0]).toHaveAttribute('scope', 'col');
+
+    const copyButtons = screen.getAllByRole('button', { name: /Copy metric ID/i });
+    expect(copyButtons.length).toBeGreaterThan(0);
   });
 });
 
