@@ -1,9 +1,10 @@
 module github.com/org/experimentation-platform/services
 
-go 1.25.0
+go 1.26.0
 
 require (
 	connectrpc.com/connect v1.17.0
+	connectrpc.com/connect/v2 v2.0.0 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.0
 	github.com/org/experimentation/gen/go v0.0.0
