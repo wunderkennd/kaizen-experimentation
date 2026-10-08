@@ -13,8 +13,11 @@ export function TypeBadge({ type }: TypeBadgeProps) {
 
   return (
     <span
-      className="inline-flex cursor-help items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20"
+      tabIndex={0}
+      role="note"
+      className="inline-flex cursor-help items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
       title={description}
+      aria-label={`${label}: ${description}`}
       data-testid="type-badge"
       data-type={type}
     >

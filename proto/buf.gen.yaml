@@ -6,13 +6,14 @@ managed:
       value: github.com/org/experimentation/gen/go
 plugins:
   # Go (connect-go for services, protobuf for messages)
-  - remote: buf.build/protocolbuffers/go
+  # Pin plugins to v1 line to avoid breaking changes / floating to v2
+  - remote: buf.build/protocolbuffers/go:v1.34.1
     out: gen/go
     opt: paths=source_relative
     # kaizen/audience/v1 (vendored from rosetta) imports buf/validate; generate
     # it alongside so gen/go stays self-contained (WKTs are still excluded).
     include_imports: true
-  - remote: buf.build/connectrpc/go
+  - remote: buf.build/connectrpc/go:v1.17.0
     out: gen/go
     opt: paths=source_relative
 

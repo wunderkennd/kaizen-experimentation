@@ -59,6 +59,19 @@ const (
 	MetricComputationServicePromoteShadowResultProcedure = "/experimentation.metrics.v1.MetricComputationService/PromoteShadowResult"
 )
 
+// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
+var (
+	metricComputationServiceServiceDescriptor                         = v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService")
+	metricComputationServiceComputeMetricsMethodDescriptor            = metricComputationServiceServiceDescriptor.Methods().ByName("ComputeMetrics")
+	metricComputationServiceComputeGuardrailMetricsMethodDescriptor   = metricComputationServiceServiceDescriptor.Methods().ByName("ComputeGuardrailMetrics")
+	metricComputationServiceExportNotebookMethodDescriptor            = metricComputationServiceServiceDescriptor.Methods().ByName("ExportNotebook")
+	metricComputationServiceGetQueryLogMethodDescriptor               = metricComputationServiceServiceDescriptor.Methods().ByName("GetQueryLog")
+	metricComputationServiceCompileMetricqlPreviewMethodDescriptor    = metricComputationServiceServiceDescriptor.Methods().ByName("CompileMetricqlPreview")
+	metricComputationServiceScheduleShadowComputationMethodDescriptor = metricComputationServiceServiceDescriptor.Methods().ByName("ScheduleShadowComputation")
+	metricComputationServiceGetShadowResultsMethodDescriptor          = metricComputationServiceServiceDescriptor.Methods().ByName("GetShadowResults")
+	metricComputationServicePromoteShadowResultMethodDescriptor       = metricComputationServiceServiceDescriptor.Methods().ByName("PromoteShadowResult")
+)
+
 // MetricComputationServiceClient is a client for the
 // experimentation.metrics.v1.MetricComputationService service.
 type MetricComputationServiceClient interface {
@@ -99,54 +112,53 @@ type MetricComputationServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewMetricComputationServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) MetricComputationServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
-	metricComputationServiceMethods := v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods()
 	return &metricComputationServiceClient{
 		computeMetrics: connect.NewClient[v1.ComputeMetricsRequest, v1.ComputeMetricsResponse](
 			httpClient,
 			baseURL+MetricComputationServiceComputeMetricsProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("ComputeMetrics")),
+			connect.WithSchema(metricComputationServiceComputeMetricsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		computeGuardrailMetrics: connect.NewClient[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse](
 			httpClient,
 			baseURL+MetricComputationServiceComputeGuardrailMetricsProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("ComputeGuardrailMetrics")),
+			connect.WithSchema(metricComputationServiceComputeGuardrailMetricsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		exportNotebook: connect.NewClient[v1.ExportNotebookRequest, v1.ExportNotebookResponse](
 			httpClient,
 			baseURL+MetricComputationServiceExportNotebookProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("ExportNotebook")),
+			connect.WithSchema(metricComputationServiceExportNotebookMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getQueryLog: connect.NewClient[v1.GetQueryLogRequest, v1.GetQueryLogResponse](
 			httpClient,
 			baseURL+MetricComputationServiceGetQueryLogProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
+			connect.WithSchema(metricComputationServiceGetQueryLogMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		compileMetricqlPreview: connect.NewClient[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse](
 			httpClient,
 			baseURL+MetricComputationServiceCompileMetricqlPreviewProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
+			connect.WithSchema(metricComputationServiceCompileMetricqlPreviewMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		scheduleShadowComputation: connect.NewClient[v1.ScheduleShadowComputationRequest, v1.ScheduleShadowComputationResponse](
 			httpClient,
 			baseURL+MetricComputationServiceScheduleShadowComputationProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("ScheduleShadowComputation")),
+			connect.WithSchema(metricComputationServiceScheduleShadowComputationMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getShadowResults: connect.NewClient[v1.GetShadowResultsRequest, v1.GetShadowResultsResponse](
 			httpClient,
 			baseURL+MetricComputationServiceGetShadowResultsProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("GetShadowResults")),
+			connect.WithSchema(metricComputationServiceGetShadowResultsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		promoteShadowResult: connect.NewClient[v1.PromoteShadowResultRequest, v1.PromoteShadowResultResponse](
 			httpClient,
 			baseURL+MetricComputationServicePromoteShadowResultProcedure,
-			connect.WithSchema(metricComputationServiceMethods.ByName("PromoteShadowResult")),
+			connect.WithSchema(metricComputationServicePromoteShadowResultMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -244,53 +256,52 @@ type MetricComputationServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	metricComputationServiceMethods := v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods()
 	metricComputationServiceComputeMetricsHandler := connect.NewUnaryHandler(
 		MetricComputationServiceComputeMetricsProcedure,
 		svc.ComputeMetrics,
-		connect.WithSchema(metricComputationServiceMethods.ByName("ComputeMetrics")),
+		connect.WithSchema(metricComputationServiceComputeMetricsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServiceComputeGuardrailMetricsHandler := connect.NewUnaryHandler(
 		MetricComputationServiceComputeGuardrailMetricsProcedure,
 		svc.ComputeGuardrailMetrics,
-		connect.WithSchema(metricComputationServiceMethods.ByName("ComputeGuardrailMetrics")),
+		connect.WithSchema(metricComputationServiceComputeGuardrailMetricsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServiceExportNotebookHandler := connect.NewUnaryHandler(
 		MetricComputationServiceExportNotebookProcedure,
 		svc.ExportNotebook,
-		connect.WithSchema(metricComputationServiceMethods.ByName("ExportNotebook")),
+		connect.WithSchema(metricComputationServiceExportNotebookMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServiceGetQueryLogHandler := connect.NewUnaryHandler(
 		MetricComputationServiceGetQueryLogProcedure,
 		svc.GetQueryLog,
-		connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
+		connect.WithSchema(metricComputationServiceGetQueryLogMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServiceCompileMetricqlPreviewHandler := connect.NewUnaryHandler(
 		MetricComputationServiceCompileMetricqlPreviewProcedure,
 		svc.CompileMetricqlPreview,
-		connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
+		connect.WithSchema(metricComputationServiceCompileMetricqlPreviewMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServiceScheduleShadowComputationHandler := connect.NewUnaryHandler(
 		MetricComputationServiceScheduleShadowComputationProcedure,
 		svc.ScheduleShadowComputation,
-		connect.WithSchema(metricComputationServiceMethods.ByName("ScheduleShadowComputation")),
+		connect.WithSchema(metricComputationServiceScheduleShadowComputationMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServiceGetShadowResultsHandler := connect.NewUnaryHandler(
 		MetricComputationServiceGetShadowResultsProcedure,
 		svc.GetShadowResults,
-		connect.WithSchema(metricComputationServiceMethods.ByName("GetShadowResults")),
+		connect.WithSchema(metricComputationServiceGetShadowResultsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	metricComputationServicePromoteShadowResultHandler := connect.NewUnaryHandler(
 		MetricComputationServicePromoteShadowResultProcedure,
 		svc.PromoteShadowResult,
-		connect.WithSchema(metricComputationServiceMethods.ByName("PromoteShadowResult")),
+		connect.WithSchema(metricComputationServicePromoteShadowResultMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/experimentation.metrics.v1.MetricComputationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
