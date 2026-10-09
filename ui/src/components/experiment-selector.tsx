@@ -56,6 +56,7 @@ function ExperimentSelectorInner({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+
   const atLimit = selectedIds.length >= maxSelections;
 
   return (
@@ -79,9 +80,9 @@ function ExperimentSelectorInner({
                   type="button"
                   onClick={() => {
                     onRemove(exp.experimentId);
-                    setTimeout(() => {
+                    if (selectedIds.length === 1) {
                       inputRef.current?.focus();
-                    }, 0);
+                    }
                   }}
                   className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                   aria-label={`Remove ${exp.name}`}
@@ -98,9 +99,7 @@ function ExperimentSelectorInner({
               type="button"
               onClick={() => {
                 onClearAll();
-                setTimeout(() => {
-                  inputRef.current?.focus();
-                }, 0);
+                inputRef.current?.focus();
               }}
               className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
               data-testid="clear-all-selections"
