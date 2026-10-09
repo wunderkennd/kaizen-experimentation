@@ -78,6 +78,47 @@ describe('Search Clear Buttons Focus Restoration', () => {
     expect(input).toHaveFocus();
   });
 
+  it('ExperimentSelector restores focus to search input when Clear all selections is clicked', async () => {
+    const user = userEvent.setup();
+    const onClearAllMock = vi.fn();
+    render(
+      <ExperimentSelector
+        experiments={mockExperiments}
+        selectedIds={['exp-1']}
+        onSelect={vi.fn()}
+        onRemove={vi.fn()}
+        onClearAll={onClearAllMock}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: 'Search experiments' });
+    const clearAllButton = screen.getByRole('button', { name: 'Clear all selections' });
+    await user.click(clearAllButton);
+
+    expect(onClearAllMock).toHaveBeenCalled();
+    expect(input).toHaveFocus();
+  });
+
+  it('ExperimentSelector restores focus to search input when removing the last selected experiment chip', async () => {
+    const user = userEvent.setup();
+    const onRemoveMock = vi.fn();
+    render(
+      <ExperimentSelector
+        experiments={mockExperiments}
+        selectedIds={['exp-1']}
+        onSelect={vi.fn()}
+        onRemove={onRemoveMock}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: 'Search experiments' });
+    const removeChipBtn = screen.getByRole('button', { name: 'Remove Running Exp 1' });
+    await user.click(removeChipBtn);
+
+    expect(onRemoveMock).toHaveBeenCalledWith('exp-1');
+    expect(input).toHaveFocus();
+  });
+
   it('ExperimentFiltersToolbar restores focus to search input when clear search is clicked', async () => {
     const user = userEvent.setup();
     const setQueryMock = vi.fn();
