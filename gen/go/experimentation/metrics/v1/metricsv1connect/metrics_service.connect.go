@@ -5,121 +5,71 @@
 package metricsv1connect
 
 import (
-	connect "connectrpc.com/connect/v2"
+	connect "connectrpc.com/connect"
 	context "context"
+	errors "errors"
 	v1 "github.com/org/experimentation/gen/go/experimentation/metrics/v1"
-	sync "sync"
+	http "net/http"
+	strings "strings"
 )
+
+// This is a compile-time assertion to ensure that this generated file and the connect package are
+// compatible. If you get a compiler error that this constant is not defined, this code was
+// generated with a version of connect newer than the one compiled into your binary. You can fix the
+// problem by either regenerating this code with an older version of connect or updating the connect
+// version compiled into your binary.
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// MetricComputationServiceName is the fully-qualified name of the MetricComputationService service.
 	MetricComputationServiceName = "experimentation.metrics.v1.MetricComputationService"
 )
 
-// These constants are the procedure names of the RPCs defined in this package. They're exposed at
-// runtime as Spec.Procedure and as the final two segments of the HTTP route.
+// These constants are the fully-qualified names of the RPCs defined in this package. They're
+// exposed at runtime as Spec.Procedure and as the final two segments of the HTTP route.
 //
 // Note that these are different from the fully-qualified method names used by
 // google.golang.org/protobuf/reflect/protoreflect. To convert from these constants to
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// MetricComputationServiceComputeMetricsProcedure is the procedure name of the
+	// MetricComputationServiceComputeMetricsProcedure is the fully-qualified name of the
 	// MetricComputationService's ComputeMetrics RPC.
 	MetricComputationServiceComputeMetricsProcedure = "/experimentation.metrics.v1.MetricComputationService/ComputeMetrics"
-	// MetricComputationServiceComputeGuardrailMetricsProcedure is the procedure name of the
+	// MetricComputationServiceComputeGuardrailMetricsProcedure is the fully-qualified name of the
 	// MetricComputationService's ComputeGuardrailMetrics RPC.
 	MetricComputationServiceComputeGuardrailMetricsProcedure = "/experimentation.metrics.v1.MetricComputationService/ComputeGuardrailMetrics"
-	// MetricComputationServiceExportNotebookProcedure is the procedure name of the
+	// MetricComputationServiceExportNotebookProcedure is the fully-qualified name of the
 	// MetricComputationService's ExportNotebook RPC.
 	MetricComputationServiceExportNotebookProcedure = "/experimentation.metrics.v1.MetricComputationService/ExportNotebook"
-	// MetricComputationServiceGetQueryLogProcedure is the procedure name of the
+	// MetricComputationServiceGetQueryLogProcedure is the fully-qualified name of the
 	// MetricComputationService's GetQueryLog RPC.
 	MetricComputationServiceGetQueryLogProcedure = "/experimentation.metrics.v1.MetricComputationService/GetQueryLog"
-	// MetricComputationServiceCompileMetricqlPreviewProcedure is the procedure name of the
+	// MetricComputationServiceCompileMetricqlPreviewProcedure is the fully-qualified name of the
 	// MetricComputationService's CompileMetricqlPreview RPC.
 	MetricComputationServiceCompileMetricqlPreviewProcedure = "/experimentation.metrics.v1.MetricComputationService/CompileMetricqlPreview"
-	// MetricComputationServiceScheduleShadowComputationProcedure is the procedure name of the
+	// MetricComputationServiceScheduleShadowComputationProcedure is the fully-qualified name of the
 	// MetricComputationService's ScheduleShadowComputation RPC.
 	MetricComputationServiceScheduleShadowComputationProcedure = "/experimentation.metrics.v1.MetricComputationService/ScheduleShadowComputation"
-	// MetricComputationServiceGetShadowResultsProcedure is the procedure name of the
+	// MetricComputationServiceGetShadowResultsProcedure is the fully-qualified name of the
 	// MetricComputationService's GetShadowResults RPC.
 	MetricComputationServiceGetShadowResultsProcedure = "/experimentation.metrics.v1.MetricComputationService/GetShadowResults"
-	// MetricComputationServicePromoteShadowResultProcedure is the procedure name of the
+	// MetricComputationServicePromoteShadowResultProcedure is the fully-qualified name of the
 	// MetricComputationService's PromoteShadowResult RPC.
 	MetricComputationServicePromoteShadowResultProcedure = "/experimentation.metrics.v1.MetricComputationService/PromoteShadowResult"
-)
-
-var (
-	metricComputationServiceComputeMetricsSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("ComputeMetrics"),
-			Procedure:  MetricComputationServiceComputeMetricsProcedure,
-		}
-	})
-	metricComputationServiceComputeGuardrailMetricsSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("ComputeGuardrailMetrics"),
-			Procedure:  MetricComputationServiceComputeGuardrailMetricsProcedure,
-		}
-	})
-	metricComputationServiceExportNotebookSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("ExportNotebook"),
-			Procedure:  MetricComputationServiceExportNotebookProcedure,
-		}
-	})
-	metricComputationServiceGetQueryLogSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("GetQueryLog"),
-			Procedure:  MetricComputationServiceGetQueryLogProcedure,
-		}
-	})
-	metricComputationServiceCompileMetricqlPreviewSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("CompileMetricqlPreview"),
-			Procedure:  MetricComputationServiceCompileMetricqlPreviewProcedure,
-		}
-	})
-	metricComputationServiceScheduleShadowComputationSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("ScheduleShadowComputation"),
-			Procedure:  MetricComputationServiceScheduleShadowComputationProcedure,
-		}
-	})
-	metricComputationServiceGetShadowResultsSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("GetShadowResults"),
-			Procedure:  MetricComputationServiceGetShadowResultsProcedure,
-		}
-	})
-	metricComputationServicePromoteShadowResultSpec = sync.OnceValue(func() connect.Spec {
-		return connect.Spec{
-			StreamType: connect.StreamTypeUnary,
-			Schema:     v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods().ByName("PromoteShadowResult"),
-			Procedure:  MetricComputationServicePromoteShadowResultProcedure,
-		}
-	})
 )
 
 // MetricComputationServiceClient is a client for the
 // experimentation.metrics.v1.MetricComputationService service.
 type MetricComputationServiceClient interface {
 	// Trigger metric computation for an experiment.
-	ComputeMetrics(context.Context, *v1.ComputeMetricsRequest) (*v1.ComputeMetricsResponse, error)
+	ComputeMetrics(context.Context, *connect.Request[v1.ComputeMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error)
 	// Trigger guardrail metric computation (hourly schedule).
-	ComputeGuardrailMetrics(context.Context, *v1.ComputeGuardrailMetricsRequest) (*v1.ComputeMetricsResponse, error)
+	ComputeGuardrailMetrics(context.Context, *connect.Request[v1.ComputeGuardrailMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error)
 	// Generate a Jupyter/Databricks notebook for an experiment's analysis.
-	ExportNotebook(context.Context, *v1.ExportNotebookRequest) (*v1.ExportNotebookResponse, error)
+	ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error)
 	// Get the SQL query used for a specific metric computation.
-	GetQueryLog(context.Context, *v1.GetQueryLogRequest) (*v1.GetQueryLogResponse, error)
+	GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error)
 	// CompileMetricqlPreview -- dry-run compile a MetricQL expression to its
 	// Spark SQL equivalent without persisting or executing. Used by the M6
 	// editor's preview pane (ADR-026 Phase 2 / #436).
@@ -127,36 +77,148 @@ type MetricComputationServiceClient interface {
 	// KnownMetricIDs is derived server-side from the experiment's current
 	// metric set -- clients do NOT pass it, to prevent autocomplete-time
 	// info leakage about other experiments' metrics.
-	CompileMetricqlPreview(context.Context, *v1.CompileMetricqlPreviewRequest) (*v1.CompileMetricqlPreviewResponse, error)
+	CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error)
 	// ADR-026 Phase 3 #437: shadow-run pipeline for CUSTOM-metric migration.
 	// The migration tool (custom_migrator) submits a candidate definition;
 	// M3 runs it alongside the original during the standard nightly pass, the
 	// differ records per-tuple equivalence, and PromoteShadowResult enforces
 	// the 7-consecutive-days-within-tolerance gate before M5 accepts the
 	// migration.
-	ScheduleShadowComputation(context.Context, *v1.ScheduleShadowComputationRequest) (*v1.ScheduleShadowComputationResponse, error)
-	GetShadowResults(context.Context, *v1.GetShadowResultsRequest) (*v1.GetShadowResultsResponse, error)
-	PromoteShadowResult(context.Context, *v1.PromoteShadowResultRequest) (*v1.PromoteShadowResultResponse, error)
+	ScheduleShadowComputation(context.Context, *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error)
+	GetShadowResults(context.Context, *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error)
+	PromoteShadowResult(context.Context, *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error)
 }
 
 // NewMetricComputationServiceClient constructs a client for the
-// experimentation.metrics.v1.MetricComputationService service. Multiple service clients may share a
-// single connect.Client.
-func NewMetricComputationServiceClient(client *connect.Client) MetricComputationServiceClient {
-	return &metricComputationServiceClient{client: client}
+// experimentation.metrics.v1.MetricComputationService service. By default, it uses the Connect
+// protocol with the binary Protobuf Codec, asks for gzipped responses, and sends uncompressed
+// requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC() or
+// connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewMetricComputationServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) MetricComputationServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	metricComputationServiceMethods := v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods()
+	return &metricComputationServiceClient{
+		computeMetrics: connect.NewClient[v1.ComputeMetricsRequest, v1.ComputeMetricsResponse](
+			httpClient,
+			baseURL+MetricComputationServiceComputeMetricsProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("ComputeMetrics")),
+			connect.WithClientOptions(opts...),
+		),
+		computeGuardrailMetrics: connect.NewClient[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse](
+			httpClient,
+			baseURL+MetricComputationServiceComputeGuardrailMetricsProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("ComputeGuardrailMetrics")),
+			connect.WithClientOptions(opts...),
+		),
+		exportNotebook: connect.NewClient[v1.ExportNotebookRequest, v1.ExportNotebookResponse](
+			httpClient,
+			baseURL+MetricComputationServiceExportNotebookProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("ExportNotebook")),
+			connect.WithClientOptions(opts...),
+		),
+		getQueryLog: connect.NewClient[v1.GetQueryLogRequest, v1.GetQueryLogResponse](
+			httpClient,
+			baseURL+MetricComputationServiceGetQueryLogProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
+			connect.WithClientOptions(opts...),
+		),
+		compileMetricqlPreview: connect.NewClient[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse](
+			httpClient,
+			baseURL+MetricComputationServiceCompileMetricqlPreviewProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
+			connect.WithClientOptions(opts...),
+		),
+		scheduleShadowComputation: connect.NewClient[v1.ScheduleShadowComputationRequest, v1.ScheduleShadowComputationResponse](
+			httpClient,
+			baseURL+MetricComputationServiceScheduleShadowComputationProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("ScheduleShadowComputation")),
+			connect.WithClientOptions(opts...),
+		),
+		getShadowResults: connect.NewClient[v1.GetShadowResultsRequest, v1.GetShadowResultsResponse](
+			httpClient,
+			baseURL+MetricComputationServiceGetShadowResultsProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("GetShadowResults")),
+			connect.WithClientOptions(opts...),
+		),
+		promoteShadowResult: connect.NewClient[v1.PromoteShadowResultRequest, v1.PromoteShadowResultResponse](
+			httpClient,
+			baseURL+MetricComputationServicePromoteShadowResultProcedure,
+			connect.WithSchema(metricComputationServiceMethods.ByName("PromoteShadowResult")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// metricComputationServiceClient implements MetricComputationServiceClient.
+type metricComputationServiceClient struct {
+	computeMetrics            *connect.Client[v1.ComputeMetricsRequest, v1.ComputeMetricsResponse]
+	computeGuardrailMetrics   *connect.Client[v1.ComputeGuardrailMetricsRequest, v1.ComputeMetricsResponse]
+	exportNotebook            *connect.Client[v1.ExportNotebookRequest, v1.ExportNotebookResponse]
+	getQueryLog               *connect.Client[v1.GetQueryLogRequest, v1.GetQueryLogResponse]
+	compileMetricqlPreview    *connect.Client[v1.CompileMetricqlPreviewRequest, v1.CompileMetricqlPreviewResponse]
+	scheduleShadowComputation *connect.Client[v1.ScheduleShadowComputationRequest, v1.ScheduleShadowComputationResponse]
+	getShadowResults          *connect.Client[v1.GetShadowResultsRequest, v1.GetShadowResultsResponse]
+	promoteShadowResult       *connect.Client[v1.PromoteShadowResultRequest, v1.PromoteShadowResultResponse]
+}
+
+// ComputeMetrics calls experimentation.metrics.v1.MetricComputationService.ComputeMetrics.
+func (c *metricComputationServiceClient) ComputeMetrics(ctx context.Context, req *connect.Request[v1.ComputeMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error) {
+	return c.computeMetrics.CallUnary(ctx, req)
+}
+
+// ComputeGuardrailMetrics calls
+// experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics.
+func (c *metricComputationServiceClient) ComputeGuardrailMetrics(ctx context.Context, req *connect.Request[v1.ComputeGuardrailMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error) {
+	return c.computeGuardrailMetrics.CallUnary(ctx, req)
+}
+
+// ExportNotebook calls experimentation.metrics.v1.MetricComputationService.ExportNotebook.
+func (c *metricComputationServiceClient) ExportNotebook(ctx context.Context, req *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error) {
+	return c.exportNotebook.CallUnary(ctx, req)
+}
+
+// GetQueryLog calls experimentation.metrics.v1.MetricComputationService.GetQueryLog.
+func (c *metricComputationServiceClient) GetQueryLog(ctx context.Context, req *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error) {
+	return c.getQueryLog.CallUnary(ctx, req)
+}
+
+// CompileMetricqlPreview calls
+// experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview.
+func (c *metricComputationServiceClient) CompileMetricqlPreview(ctx context.Context, req *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error) {
+	return c.compileMetricqlPreview.CallUnary(ctx, req)
+}
+
+// ScheduleShadowComputation calls
+// experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation.
+func (c *metricComputationServiceClient) ScheduleShadowComputation(ctx context.Context, req *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error) {
+	return c.scheduleShadowComputation.CallUnary(ctx, req)
+}
+
+// GetShadowResults calls experimentation.metrics.v1.MetricComputationService.GetShadowResults.
+func (c *metricComputationServiceClient) GetShadowResults(ctx context.Context, req *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error) {
+	return c.getShadowResults.CallUnary(ctx, req)
+}
+
+// PromoteShadowResult calls
+// experimentation.metrics.v1.MetricComputationService.PromoteShadowResult.
+func (c *metricComputationServiceClient) PromoteShadowResult(ctx context.Context, req *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error) {
+	return c.promoteShadowResult.CallUnary(ctx, req)
 }
 
 // MetricComputationServiceHandler is an implementation of the
 // experimentation.metrics.v1.MetricComputationService service.
 type MetricComputationServiceHandler interface {
 	// Trigger metric computation for an experiment.
-	ComputeMetrics(context.Context, *v1.ComputeMetricsRequest) (*v1.ComputeMetricsResponse, error)
+	ComputeMetrics(context.Context, *connect.Request[v1.ComputeMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error)
 	// Trigger guardrail metric computation (hourly schedule).
-	ComputeGuardrailMetrics(context.Context, *v1.ComputeGuardrailMetricsRequest) (*v1.ComputeMetricsResponse, error)
+	ComputeGuardrailMetrics(context.Context, *connect.Request[v1.ComputeGuardrailMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error)
 	// Generate a Jupyter/Databricks notebook for an experiment's analysis.
-	ExportNotebook(context.Context, *v1.ExportNotebookRequest) (*v1.ExportNotebookResponse, error)
+	ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error)
 	// Get the SQL query used for a specific metric computation.
-	GetQueryLog(context.Context, *v1.GetQueryLogRequest) (*v1.GetQueryLogResponse, error)
+	GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error)
 	// CompileMetricqlPreview -- dry-run compile a MetricQL expression to its
 	// Spark SQL equivalent without persisting or executing. Used by the M6
 	// editor's preview pane (ADR-026 Phase 2 / #436).
@@ -164,233 +226,128 @@ type MetricComputationServiceHandler interface {
 	// KnownMetricIDs is derived server-side from the experiment's current
 	// metric set -- clients do NOT pass it, to prevent autocomplete-time
 	// info leakage about other experiments' metrics.
-	CompileMetricqlPreview(context.Context, *v1.CompileMetricqlPreviewRequest) (*v1.CompileMetricqlPreviewResponse, error)
+	CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error)
 	// ADR-026 Phase 3 #437: shadow-run pipeline for CUSTOM-metric migration.
 	// The migration tool (custom_migrator) submits a candidate definition;
 	// M3 runs it alongside the original during the standard nightly pass, the
 	// differ records per-tuple equivalence, and PromoteShadowResult enforces
 	// the 7-consecutive-days-within-tolerance gate before M5 accepts the
 	// migration.
-	ScheduleShadowComputation(context.Context, *v1.ScheduleShadowComputationRequest) (*v1.ScheduleShadowComputationResponse, error)
-	GetShadowResults(context.Context, *v1.GetShadowResultsRequest) (*v1.GetShadowResultsResponse, error)
-	PromoteShadowResult(context.Context, *v1.PromoteShadowResultRequest) (*v1.PromoteShadowResultResponse, error)
+	ScheduleShadowComputation(context.Context, *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error)
+	GetShadowResults(context.Context, *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error)
+	PromoteShadowResult(context.Context, *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error)
 }
 
-// RegisterMetricComputationServiceHandler registers svc as the
-// experimentation.metrics.v1.MetricComputationService implementation on server.
-func RegisterMetricComputationServiceHandler(server *connect.Server, svc MetricComputationServiceHandler) {
-	adapter := metricComputationServiceHandler{svc: svc}
-	server.Register(
-		connect.Method{Spec: metricComputationServiceComputeMetricsSpec(), Handler: adapter.computeMetrics},
-		connect.Method{Spec: metricComputationServiceComputeGuardrailMetricsSpec(), Handler: adapter.computeGuardrailMetrics},
-		connect.Method{Spec: metricComputationServiceExportNotebookSpec(), Handler: adapter.exportNotebook},
-		connect.Method{Spec: metricComputationServiceGetQueryLogSpec(), Handler: adapter.getQueryLog},
-		connect.Method{Spec: metricComputationServiceCompileMetricqlPreviewSpec(), Handler: adapter.compileMetricqlPreview},
-		connect.Method{Spec: metricComputationServiceScheduleShadowComputationSpec(), Handler: adapter.scheduleShadowComputation},
-		connect.Method{Spec: metricComputationServiceGetShadowResultsSpec(), Handler: adapter.getShadowResults},
-		connect.Method{Spec: metricComputationServicePromoteShadowResultSpec(), Handler: adapter.promoteShadowResult},
+// NewMetricComputationServiceHandler builds an HTTP handler from the service implementation. It
+// returns the path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewMetricComputationServiceHandler(svc MetricComputationServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	metricComputationServiceMethods := v1.File_experimentation_metrics_v1_metrics_service_proto.Services().ByName("MetricComputationService").Methods()
+	metricComputationServiceComputeMetricsHandler := connect.NewUnaryHandler(
+		MetricComputationServiceComputeMetricsProcedure,
+		svc.ComputeMetrics,
+		connect.WithSchema(metricComputationServiceMethods.ByName("ComputeMetrics")),
+		connect.WithHandlerOptions(opts...),
 	)
+	metricComputationServiceComputeGuardrailMetricsHandler := connect.NewUnaryHandler(
+		MetricComputationServiceComputeGuardrailMetricsProcedure,
+		svc.ComputeGuardrailMetrics,
+		connect.WithSchema(metricComputationServiceMethods.ByName("ComputeGuardrailMetrics")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServiceExportNotebookHandler := connect.NewUnaryHandler(
+		MetricComputationServiceExportNotebookProcedure,
+		svc.ExportNotebook,
+		connect.WithSchema(metricComputationServiceMethods.ByName("ExportNotebook")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServiceGetQueryLogHandler := connect.NewUnaryHandler(
+		MetricComputationServiceGetQueryLogProcedure,
+		svc.GetQueryLog,
+		connect.WithSchema(metricComputationServiceMethods.ByName("GetQueryLog")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServiceCompileMetricqlPreviewHandler := connect.NewUnaryHandler(
+		MetricComputationServiceCompileMetricqlPreviewProcedure,
+		svc.CompileMetricqlPreview,
+		connect.WithSchema(metricComputationServiceMethods.ByName("CompileMetricqlPreview")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServiceScheduleShadowComputationHandler := connect.NewUnaryHandler(
+		MetricComputationServiceScheduleShadowComputationProcedure,
+		svc.ScheduleShadowComputation,
+		connect.WithSchema(metricComputationServiceMethods.ByName("ScheduleShadowComputation")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServiceGetShadowResultsHandler := connect.NewUnaryHandler(
+		MetricComputationServiceGetShadowResultsProcedure,
+		svc.GetShadowResults,
+		connect.WithSchema(metricComputationServiceMethods.ByName("GetShadowResults")),
+		connect.WithHandlerOptions(opts...),
+	)
+	metricComputationServicePromoteShadowResultHandler := connect.NewUnaryHandler(
+		MetricComputationServicePromoteShadowResultProcedure,
+		svc.PromoteShadowResult,
+		connect.WithSchema(metricComputationServiceMethods.ByName("PromoteShadowResult")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/experimentation.metrics.v1.MetricComputationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case MetricComputationServiceComputeMetricsProcedure:
+			metricComputationServiceComputeMetricsHandler.ServeHTTP(w, r)
+		case MetricComputationServiceComputeGuardrailMetricsProcedure:
+			metricComputationServiceComputeGuardrailMetricsHandler.ServeHTTP(w, r)
+		case MetricComputationServiceExportNotebookProcedure:
+			metricComputationServiceExportNotebookHandler.ServeHTTP(w, r)
+		case MetricComputationServiceGetQueryLogProcedure:
+			metricComputationServiceGetQueryLogHandler.ServeHTTP(w, r)
+		case MetricComputationServiceCompileMetricqlPreviewProcedure:
+			metricComputationServiceCompileMetricqlPreviewHandler.ServeHTTP(w, r)
+		case MetricComputationServiceScheduleShadowComputationProcedure:
+			metricComputationServiceScheduleShadowComputationHandler.ServeHTTP(w, r)
+		case MetricComputationServiceGetShadowResultsProcedure:
+			metricComputationServiceGetShadowResultsHandler.ServeHTTP(w, r)
+		case MetricComputationServicePromoteShadowResultProcedure:
+			metricComputationServicePromoteShadowResultHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 }
 
 // UnimplementedMetricComputationServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedMetricComputationServiceHandler struct{}
 
-func (UnimplementedMetricComputationServiceHandler) ComputeMetrics(context.Context, *v1.ComputeMetricsRequest) (*v1.ComputeMetricsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.ComputeMetrics is not implemented")
+func (UnimplementedMetricComputationServiceHandler) ComputeMetrics(context.Context, *connect.Request[v1.ComputeMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.ComputeMetrics is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) ComputeGuardrailMetrics(context.Context, *v1.ComputeGuardrailMetricsRequest) (*v1.ComputeMetricsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics is not implemented")
+func (UnimplementedMetricComputationServiceHandler) ComputeGuardrailMetrics(context.Context, *connect.Request[v1.ComputeGuardrailMetricsRequest]) (*connect.Response[v1.ComputeMetricsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.ComputeGuardrailMetrics is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) ExportNotebook(context.Context, *v1.ExportNotebookRequest) (*v1.ExportNotebookResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.ExportNotebook is not implemented")
+func (UnimplementedMetricComputationServiceHandler) ExportNotebook(context.Context, *connect.Request[v1.ExportNotebookRequest]) (*connect.Response[v1.ExportNotebookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.ExportNotebook is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) GetQueryLog(context.Context, *v1.GetQueryLogRequest) (*v1.GetQueryLogResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.GetQueryLog is not implemented")
+func (UnimplementedMetricComputationServiceHandler) GetQueryLog(context.Context, *connect.Request[v1.GetQueryLogRequest]) (*connect.Response[v1.GetQueryLogResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.GetQueryLog is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) CompileMetricqlPreview(context.Context, *v1.CompileMetricqlPreviewRequest) (*v1.CompileMetricqlPreviewResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview is not implemented")
+func (UnimplementedMetricComputationServiceHandler) CompileMetricqlPreview(context.Context, *connect.Request[v1.CompileMetricqlPreviewRequest]) (*connect.Response[v1.CompileMetricqlPreviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.CompileMetricqlPreview is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) ScheduleShadowComputation(context.Context, *v1.ScheduleShadowComputationRequest) (*v1.ScheduleShadowComputationResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation is not implemented")
+func (UnimplementedMetricComputationServiceHandler) ScheduleShadowComputation(context.Context, *connect.Request[v1.ScheduleShadowComputationRequest]) (*connect.Response[v1.ScheduleShadowComputationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.ScheduleShadowComputation is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) GetShadowResults(context.Context, *v1.GetShadowResultsRequest) (*v1.GetShadowResultsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.GetShadowResults is not implemented")
+func (UnimplementedMetricComputationServiceHandler) GetShadowResults(context.Context, *connect.Request[v1.GetShadowResultsRequest]) (*connect.Response[v1.GetShadowResultsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.GetShadowResults is not implemented"))
 }
 
-func (UnimplementedMetricComputationServiceHandler) PromoteShadowResult(context.Context, *v1.PromoteShadowResultRequest) (*v1.PromoteShadowResultResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, "experimentation.metrics.v1.MetricComputationService.PromoteShadowResult is not implemented")
-}
-
-type metricComputationServiceClient struct {
-	client *connect.Client
-}
-
-func (c *metricComputationServiceClient) ComputeMetrics(ctx context.Context, req *v1.ComputeMetricsRequest) (*v1.ComputeMetricsResponse, error) {
-	var res v1.ComputeMetricsResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceComputeMetricsSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) ComputeGuardrailMetrics(ctx context.Context, req *v1.ComputeGuardrailMetricsRequest) (*v1.ComputeMetricsResponse, error) {
-	var res v1.ComputeMetricsResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceComputeGuardrailMetricsSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) ExportNotebook(ctx context.Context, req *v1.ExportNotebookRequest) (*v1.ExportNotebookResponse, error) {
-	var res v1.ExportNotebookResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceExportNotebookSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) GetQueryLog(ctx context.Context, req *v1.GetQueryLogRequest) (*v1.GetQueryLogResponse, error) {
-	var res v1.GetQueryLogResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceGetQueryLogSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) CompileMetricqlPreview(ctx context.Context, req *v1.CompileMetricqlPreviewRequest) (*v1.CompileMetricqlPreviewResponse, error) {
-	var res v1.CompileMetricqlPreviewResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceCompileMetricqlPreviewSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) ScheduleShadowComputation(ctx context.Context, req *v1.ScheduleShadowComputationRequest) (*v1.ScheduleShadowComputationResponse, error) {
-	var res v1.ScheduleShadowComputationResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceScheduleShadowComputationSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) GetShadowResults(ctx context.Context, req *v1.GetShadowResultsRequest) (*v1.GetShadowResultsResponse, error) {
-	var res v1.GetShadowResultsResponse
-	if err := c.client.CallUnary(ctx, metricComputationServiceGetShadowResultsSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-func (c *metricComputationServiceClient) PromoteShadowResult(ctx context.Context, req *v1.PromoteShadowResultRequest) (*v1.PromoteShadowResultResponse, error) {
-	var res v1.PromoteShadowResultResponse
-	if err := c.client.CallUnary(ctx, metricComputationServicePromoteShadowResultSpec(), req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-type metricComputationServiceHandler struct {
-	svc MetricComputationServiceHandler
-}
-
-func (h metricComputationServiceHandler) computeMetrics(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ComputeMetricsRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ComputeMetrics(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) computeGuardrailMetrics(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ComputeGuardrailMetricsRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ComputeGuardrailMetrics(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) exportNotebook(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ExportNotebookRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ExportNotebook(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) getQueryLog(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.GetQueryLogRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.GetQueryLog(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) compileMetricqlPreview(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.CompileMetricqlPreviewRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.CompileMetricqlPreview(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) scheduleShadowComputation(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.ScheduleShadowComputationRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.ScheduleShadowComputation(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) getShadowResults(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.GetShadowResultsRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.GetShadowResults(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
-}
-
-func (h metricComputationServiceHandler) promoteShadowResult(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
-	var req v1.PromoteShadowResultRequest
-	if err := stream.Receive(&req); err != nil {
-		return err
-	}
-	res, err := h.svc.PromoteShadowResult(ctx, &req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(res)
+func (UnimplementedMetricComputationServiceHandler) PromoteShadowResult(context.Context, *connect.Request[v1.PromoteShadowResultRequest]) (*connect.Response[v1.PromoteShadowResultResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("experimentation.metrics.v1.MetricComputationService.PromoteShadowResult is not implemented"))
 }

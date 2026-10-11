@@ -1,6 +1,6 @@
 module github.com/org/experimentation-platform/services
 
-go 1.26.0
+go 1.25.0
 
 require (
 	connectrpc.com/connect v1.17.0
@@ -16,7 +16,6 @@ require (
 )
 
 require (
-	connectrpc.com/connect/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
