@@ -6,6 +6,8 @@ import { ExperimentFiltersToolbar } from '@/components/experiment-filters';
 import { AuditFilters } from '@/components/audit-filters';
 import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/lib/toast-context';
+import ExperimentListPage from '@/app/page';
+import AuditLogPage from '@/app/audit/page';
 import FlagListPage from '@/app/flags/page';
 import MetricBrowserPage from '@/app/metrics/page';
 import type { Experiment } from '@/lib/types';
@@ -323,6 +325,54 @@ describe('Search Clear Buttons Focus Restoration', () => {
 
     const input = screen.getByPlaceholderText('Search by name, ID, or description...');
     await user.type(input, 'nonexistent-metric-xyz');
+
+    const clearFiltersBtn = await screen.findByTestId('clear-filters-empty');
+    await user.click(clearFiltersBtn);
+
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
+  it('ExperimentListPage restores focus to search input when empty-state Clear filters is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider initialUser={{ email: 'test@streamco.com', role: 'admin' }}>
+        <ToastProvider>
+          <ExperimentListPage />
+        </ToastProvider>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search experiments...')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Search experiments...');
+    await user.type(input, 'nonexistent-experiment-xyz');
+
+    const clearFiltersBtn = await screen.findByTestId('clear-filters-empty');
+    await user.click(clearFiltersBtn);
+
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
+  it('AuditLogPage restores focus to search input when empty-state Clear filters is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider initialUser={{ email: 'test@streamco.com', role: 'admin' }}>
+        <ToastProvider>
+          <AuditLogPage />
+        </ToastProvider>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search by experiment...')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Search by experiment...');
+    await user.type(input, 'nonexistent-audit-exp-xyz');
 
     const clearFiltersBtn = await screen.findByTestId('clear-filters-empty');
     await user.click(clearFiltersBtn);
