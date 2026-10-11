@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import type { Experiment } from '@/lib/types';
 import { listExperiments } from '@/lib/api';
@@ -84,6 +84,13 @@ export default function ExperimentListPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const handleClearFilters = useCallback(() => {
+    filters.clearFilters();
+    searchInputRef.current?.focus();
+  }, [filters]);
+
   const filtered = filters.applyFilters(experiments);
 
   return (
@@ -144,13 +151,14 @@ export default function ExperimentListPage() {
         filters={filters}
         totalCount={experiments.length}
         filteredCount={filtered.length}
+        searchInputRef={searchInputRef}
       />
 
       {filtered.length === 0 ? (
         <div className="py-12 text-center" data-testid="no-filter-matches">
           <p className="text-sm text-gray-500">No experiments match your filters.</p>
           <button
-            onClick={filters.clearFilters}
+            onClick={handleClearFilters}
             className="mt-2 rounded-sm text-sm text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             data-testid="clear-filters-empty"
           >

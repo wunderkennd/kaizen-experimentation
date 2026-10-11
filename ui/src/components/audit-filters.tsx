@@ -32,6 +32,7 @@ interface AuditFiltersProps {
   filteredCount: number;
   onClear: () => void;
   hasActiveFilters: boolean;
+  searchInputRef?: React.RefObject<HTMLInputElement>;
 }
 
 export function AuditFilters({
@@ -45,8 +46,10 @@ export function AuditFilters({
   filteredCount,
   onClear,
   hasActiveFilters,
+  searchInputRef,
 }: AuditFiltersProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const internalInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = searchInputRef || internalInputRef;
   const actorInputRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(inputRef);
 

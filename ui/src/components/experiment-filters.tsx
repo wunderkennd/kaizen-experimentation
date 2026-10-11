@@ -10,6 +10,7 @@ interface ExperimentFiltersProps {
   filters: Filters;
   totalCount: number;
   filteredCount: number;
+  searchInputRef?: React.RefObject<HTMLInputElement>;
 }
 
 const ALL_STATES: ExperimentState[] = [
@@ -21,8 +22,9 @@ const ALL_TYPES: ExperimentType[] = [
   'MAB', 'CONTEXTUAL_BANDIT', 'CUMULATIVE_HOLDOUT',
 ];
 
-export function ExperimentFiltersToolbar({ filters, totalCount, filteredCount }: ExperimentFiltersProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+export function ExperimentFiltersToolbar({ filters, totalCount, filteredCount, searchInputRef }: ExperimentFiltersProps) {
+  const internalInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = searchInputRef || internalInputRef;
   useSearchShortcut(inputRef);
 
   return (

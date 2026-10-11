@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { AuditLogEntry, AuditAction } from '@/lib/types';
 import { listAuditLog } from '@/lib/api';
 import { AuditLogTable } from '@/components/audit-log-table';
@@ -19,6 +19,7 @@ export default function AuditLogPage() {
   const [experimentQuery, setExperimentQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<AuditAction | ''>('');
   const [actorQuery, setActorQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -56,11 +57,12 @@ export default function AuditLogPage() {
 
   const hasActiveFilters = experimentQuery !== '' || actionFilter !== '' || actorQuery !== '';
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setExperimentQuery('');
     setActionFilter('');
     setActorQuery('');
-  };
+    searchInputRef.current?.focus();
+  }, []);
 
   // Client-side filtering
   const filtered = entries.filter((entry) => {
@@ -109,6 +111,7 @@ export default function AuditLogPage() {
             filteredCount={filtered.length}
             onClear={clearFilters}
             hasActiveFilters={hasActiveFilters}
+            searchInputRef={searchInputRef}
           />
 
           {filtered.length === 0 ? (
