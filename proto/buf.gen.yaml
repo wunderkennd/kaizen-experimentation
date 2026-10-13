@@ -12,7 +12,13 @@ plugins:
     # kaizen/audience/v1 (vendored from rosetta) imports buf/validate; generate
     # it alongside so gen/go stays self-contained (WKTs are still excluded).
     include_imports: true
-  - remote: buf.build/connectrpc/go
+  # Pinned to the connect-go v1 line: services/ and sdks/server-go run on
+  # connectrpc.com/connect v1.17.0, and unpinned buf.build/connectrpc/go now
+  # floats to protoc-gen-connect-go v2, whose stubs import
+  # connectrpc.com/connect/v2 (and drag the go directive to 1.26.0). That
+  # fails the module-mode tidy check and breaks the v1 handler wiring. Bump
+  # this pin together with the connect runtime in both go.mod files.
+  - remote: buf.build/connectrpc/go:v1.17.0
     out: gen/go
     opt: paths=source_relative
 
