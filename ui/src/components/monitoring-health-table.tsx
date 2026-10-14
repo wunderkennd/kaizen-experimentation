@@ -112,28 +112,32 @@ export function MonitoringHealthTable({
 
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-gray-200" data-testid="health-table">
+      <table
+        className="min-w-full divide-y divide-gray-200"
+        data-testid="health-table"
+        aria-label="Running experiments health summary"
+      >
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Name
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Owner
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Type
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Days Running
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Primary Metric
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Guardrails
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               SRM Check
             </th>
           </tr>
