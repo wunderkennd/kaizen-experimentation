@@ -51,11 +51,14 @@ const ANALYSIS_SVC = '*/experimentation.analysis.v1.AnalysisService';
 // AdaptiveNBadge
 // ---------------------------------------------------------------------------
 describe('AdaptiveNBadge', () => {
-  it('renders FAVORABLE badge for experiment with favorable zone', async () => {
+  it('renders FAVORABLE badge for experiment with favorable zone with accessibility attributes', async () => {
     render(<AdaptiveNBadge experimentId="11111111-1111-1111-1111-111111111111" />);
     const badge = await screen.findByTestId('adaptive-n-badge');
     expect(badge).toHaveAttribute('data-zone', 'FAVORABLE');
     expect(badge).toHaveTextContent('Favorable');
+    expect(badge).toHaveAttribute('tabIndex', '0');
+    expect(badge).toHaveAttribute('role', 'note');
+    expect(badge).toHaveAttribute('aria-label', expect.stringContaining('Adaptive N zone Favorable:'));
   });
 
   it('renders PROMISING badge for second seed experiment', async () => {
@@ -63,6 +66,9 @@ describe('AdaptiveNBadge', () => {
     const badge = await screen.findByTestId('adaptive-n-badge');
     expect(badge).toHaveAttribute('data-zone', 'PROMISING');
     expect(badge).toHaveTextContent('Promising');
+    expect(badge).toHaveAttribute('tabIndex', '0');
+    expect(badge).toHaveAttribute('role', 'note');
+    expect(badge).toHaveAttribute('aria-label', expect.stringContaining('Adaptive N zone Promising:'));
   });
 
   it('renders nothing when server returns 404', async () => {
