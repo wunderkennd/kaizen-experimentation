@@ -56,6 +56,7 @@ export function AdaptiveNBadge({ experimentId }: AdaptiveNBadgeProps) {
   if (!result) return null;
 
   const cfg = ZONE_CONFIG[result.zone];
+  const recText = result.recommendedN != null ? `. Recommended N: ${result.recommendedN.toLocaleString()}` : '';
 
   return (
     <span
@@ -63,7 +64,7 @@ export function AdaptiveNBadge({ experimentId }: AdaptiveNBadgeProps) {
       tabIndex={0}
       role="note"
       title={cfg.title}
-      aria-label={`Adaptive N zone ${cfg.label}: ${cfg.title}`}
+      aria-label={`Adaptive N zone ${cfg.label}: ${cfg.title}${recText}`}
       data-testid="adaptive-n-badge"
       data-zone={result.zone}
     >
