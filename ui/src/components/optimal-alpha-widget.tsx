@@ -56,7 +56,7 @@ function OptimalAlphaWidgetInner({ experimentId, currentAlpha }: OptimalAlphaWid
   return (
     <div
       tabIndex={0}
-      role="note"
+      role="region"
       aria-label={ariaLabel}
       className={`rounded-lg border px-4 py-3 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${borderColor}`}
       data-testid="optimal-alpha-widget"
@@ -97,7 +97,7 @@ function OptimalAlphaWidgetInner({ experimentId, currentAlpha }: OptimalAlphaWid
       <dl className="mt-2 flex gap-4 text-xs text-gray-500">
         <div>
           <dt className="font-medium text-gray-400">
-            <abbr title="Expected False Discovery Rate across portfolio">Expected FDR</abbr>
+            <abbr title="Expected False Discovery Rate across portfolio" className="no-underline">Expected FDR</abbr>
           </dt>
           <dd>{(rec.expectedPortfolioFdr * 100).toFixed(1)}%</dd>
         </div>

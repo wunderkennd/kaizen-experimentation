@@ -325,7 +325,7 @@ describe('OptimalAlphaWidget', () => {
       expect(screen.getByTestId('optimal-alpha-widget')).toBeInTheDocument();
     });
 
-    const widget = screen.getByRole('note');
+    const widget = screen.getByRole('region');
     expect(widget).toBeInTheDocument();
     expect(widget).toHaveAttribute('tabIndex', '0');
     expect(widget).toHaveAttribute(
