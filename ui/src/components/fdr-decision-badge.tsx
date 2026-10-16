@@ -55,8 +55,11 @@ function FdrDecisionBadgeInner({ eValueResult, fdrState }: FdrDecisionBadgeProps
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.text}`}
+      tabIndex={0}
+      role="note"
+      className={`inline-flex cursor-help items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.text} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1`}
       title={cfg.title}
+      aria-label={`${cfg.label}: ${cfg.title}`}
       data-testid="fdr-decision-badge"
       data-decision={decision}
     >
