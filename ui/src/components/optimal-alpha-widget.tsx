@@ -41,9 +41,24 @@ function OptimalAlphaWidgetInner({ experimentId, currentAlpha }: OptimalAlphaWid
     ? 'border-amber-200 bg-amber-50'
     : 'border-gray-200 bg-white';
 
+  const statusSummary = isRelaxed
+    ? 'Relaxation suggested'
+    : isStricter
+    ? 'Stricter threshold suggested'
+    : 'Aligned';
+
+  const ariaLabel = `Optimal Alpha Recommendation: recommended ${rec.optimalAlpha.toFixed(
+    3,
+  )}, current ${currentAlpha.toFixed(3)}. Status: ${statusSummary}. Expected portfolio FDR: ${(
+    rec.expectedPortfolioFdr * 100
+  ).toFixed(1)}%.`;
+
   return (
     <div
-      className={`rounded-lg border px-4 py-3 ${borderColor}`}
+      tabIndex={0}
+      role="region"
+      aria-label={ariaLabel}
+      className={`rounded-lg border px-4 py-3 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${borderColor}`}
       data-testid="optimal-alpha-widget"
     >
       <div className="mb-1 flex items-center justify-between">
@@ -81,7 +96,9 @@ function OptimalAlphaWidgetInner({ experimentId, currentAlpha }: OptimalAlphaWid
 
       <dl className="mt-2 flex gap-4 text-xs text-gray-500">
         <div>
-          <dt className="font-medium text-gray-400">Expected FDR</dt>
+          <dt className="font-medium text-gray-400">
+            <abbr title="Expected False Discovery Rate across portfolio" className="no-underline">Expected FDR</abbr>
+          </dt>
           <dd>{(rec.expectedPortfolioFdr * 100).toFixed(1)}%</dd>
         </div>
       </dl>

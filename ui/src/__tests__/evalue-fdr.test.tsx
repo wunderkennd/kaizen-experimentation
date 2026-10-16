@@ -312,4 +312,30 @@ describe('OptimalAlphaWidget', () => {
       expect(screen.getByText('4.2%')).toBeInTheDocument();
     });
   });
+
+  it('implements keyboard accessibility and ARIA attributes', async () => {
+    render(
+      <OptimalAlphaWidget
+        experimentId="11111111-1111-1111-1111-111111111111"
+        currentAlpha={0.05}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('optimal-alpha-widget')).toBeInTheDocument();
+    });
+
+    const widget = screen.getByRole('region');
+    expect(widget).toBeInTheDocument();
+    expect(widget).toHaveAttribute('tabIndex', '0');
+    expect(widget).toHaveAttribute(
+      'aria-label',
+      'Optimal Alpha Recommendation: recommended 0.100, current 0.050. Status: Relaxation suggested. Expected portfolio FDR: 4.2%.',
+    );
+    expect(widget.className).toContain('focus-visible:ring-2');
+
+    expect(
+      screen.getByTitle('Expected False Discovery Rate across portfolio'),
+    ).toBeInTheDocument();
+  });
 });
