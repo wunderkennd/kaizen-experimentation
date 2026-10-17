@@ -54,7 +54,8 @@ function EValueGaugeInner({ eValueResult }: EValueGaugeProps) {
 
   return (
     <div
-      className="flex flex-col items-center rounded-lg border border-gray-200 bg-white px-4 py-3"
+      role="note"
+      className="flex flex-col items-center rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-help"
       data-testid="e-value-gauge"
       aria-label={`E-value gauge: ${eValue.toFixed(2)}, ${label}`}
     >
