@@ -5,6 +5,7 @@ import { ToastProvider } from '@/lib/toast-context';
 import { FdrDecisionBadge } from '@/components/fdr-decision-badge';
 import { OptimalAlphaWidget } from '@/components/optimal-alpha-widget';
 import { FdrBudgetBar } from '@/components/fdr-budget-bar';
+import { EValueGauge } from '@/components/e-value-gauge';
 import type { MetricResult, EValueResult, OnlineFdrState } from '@/lib/types';
 
 // --- Fixtures ---
@@ -158,6 +159,23 @@ describe('TreatmentEffectsTable with e-value', () => {
 });
 
 // --- FDR Decision Badge ---
+
+// --- E-Value Gauge ---
+
+describe('EValueGauge', () => {
+  it('renders with accessibility attribute role="note"', () => {
+    render(<EValueGauge eValueResult={E_VALUE_REJECTING} />);
+
+    const gauge = screen.getByTestId('e-value-gauge');
+    expect(gauge).toBeInTheDocument();
+    expect(gauge).toHaveAttribute('role', 'note');
+    expect(gauge).not.toHaveAttribute('tabIndex');
+    expect(gauge).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('E-value gauge: 25.00, Null Rejected'),
+    );
+  });
+});
 
 describe('FdrDecisionBadge', () => {
   it('shows PASS when e-value rejects and FDR is under control', () => {

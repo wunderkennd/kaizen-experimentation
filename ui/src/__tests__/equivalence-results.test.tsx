@@ -92,12 +92,18 @@ describe('deriveEquivalenceStatus', () => {
 });
 
 describe('EquivalenceResultBadge', () => {
-  it('renders a green Equivalent badge', () => {
+  it('renders a green Equivalent badge with accessibility attributes', () => {
     render(<EquivalenceResultBadge result={EQUIVALENT} />);
     const badge = screen.getByTestId('equivalence-result-badge');
     expect(badge).toHaveAttribute('data-status', 'EQUIVALENT');
     expect(badge).toHaveTextContent('Equivalent');
     expect(badge.className).toContain('bg-green-100');
+    expect(badge).toHaveAttribute('role', 'note');
+    expect(badge).not.toHaveAttribute('tabIndex');
+    expect(badge).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('Equivalence status: Equivalent.'),
+    );
   });
 
   it('renders a yellow Inconclusive badge', () => {

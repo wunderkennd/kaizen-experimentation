@@ -60,7 +60,9 @@ function EquivalenceResultBadgeInner({ result }: EquivalenceResultBadgeProps) {
   if (!result) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700"
+        role="note"
+        aria-label="Equivalence status: Equivalence Pending. Awaiting equivalence test computation."
+        className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 cursor-help"
         title="Awaiting equivalence test computation."
         data-testid="equivalence-result-badge"
         data-status="PENDING"
@@ -76,7 +78,9 @@ function EquivalenceResultBadgeInner({ result }: EquivalenceResultBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.text}`}
+      role="note"
+      aria-label={`Equivalence status: ${cfg.label}. ${cfg.title}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.text} cursor-help`}
       title={cfg.title}
       data-testid="equivalence-result-badge"
       data-status={status}
