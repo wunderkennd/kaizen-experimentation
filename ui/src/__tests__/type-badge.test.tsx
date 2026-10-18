@@ -29,11 +29,10 @@ describe('TypeBadge', () => {
       expect(badge).toHaveTextContent(TYPE_LABELS[type]);
       expect(badge).toHaveAttribute('title', TYPE_DESCRIPTIONS[type]);
       expect(badge).toHaveAttribute('data-type', type);
-      expect(badge).toHaveAttribute('tabIndex', '0');
+      expect(badge).not.toHaveAttribute('tabIndex');
       expect(badge).toHaveAttribute('role', 'note');
       expect(badge).toHaveAttribute('aria-label', `${TYPE_LABELS[type]}: ${TYPE_DESCRIPTIONS[type]}`);
       expect(badge).toHaveClass('cursor-help');
-      expect(badge).toHaveClass('focus-visible:ring-2');
     });
   });
 });
