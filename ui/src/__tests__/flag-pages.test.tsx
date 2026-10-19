@@ -311,11 +311,20 @@ describe('Flag Detail Page', () => {
     });
   });
 
-  it('renders variants table for multi-variant flag', async () => {
+  it('renders variants table for multi-variant flag with accessible table semantics', async () => {
     mockFlagId = 'flag-string-ab';
     customRender(<FlagDetailPage />);
     await waitFor(() => {
       expect(screen.getByTestId('flag-name')).toHaveTextContent('checkout_flow_variant');
+    });
+
+    const table = screen.getByRole('table', { name: 'Feature flag variants summary' });
+    expect(table).toBeInTheDocument();
+
+    const columnHeaders = within(table).getAllByRole('columnheader');
+    expect(columnHeaders).toHaveLength(3);
+    columnHeaders.forEach((header) => {
+      expect(header).toHaveAttribute('scope', 'col');
     });
 
     const ctrlRow = screen.getByTestId('variant-row-v-ctrl');
