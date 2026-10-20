@@ -296,6 +296,12 @@ describe('Flag Detail Page', () => {
     expect(screen.getByText('false')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getByTestId('rollout-bar')).toBeInTheDocument();
+
+    const progressbar = screen.getByRole('progressbar', { name: 'Rollout percentage' });
+    expect(progressbar).toBeInTheDocument();
+    expect(progressbar).toHaveAttribute('aria-valuenow', '50');
+    expect(progressbar).toHaveAttribute('aria-valuemin', '0');
+    expect(progressbar).toHaveAttribute('aria-valuemax', '100');
   });
 
   it('renders targeting rule when present', async () => {

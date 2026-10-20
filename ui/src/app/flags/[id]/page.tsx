@@ -149,9 +149,17 @@ function FlagDetailContent() {
             <dt className="font-medium text-gray-500">Rollout Percentage</dt>
             <dd className="text-gray-900">
               <div className="flex items-center gap-2">
-                <div className="h-2 w-32 rounded-full bg-gray-200">
+                <div
+                  className="h-2 w-32 overflow-hidden rounded-full bg-gray-200"
+                  role="progressbar"
+                  aria-valuenow={Number(rolloutPct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Rollout percentage"
+                  title={`${rolloutPct}% rollout`}
+                >
                   <div
-                    className="h-2 rounded-full bg-indigo-600"
+                    className="h-2 rounded-full bg-indigo-600 transition-all"
                     style={{ width: `${rolloutPct}%` }}
                     data-testid="rollout-bar"
                   />
