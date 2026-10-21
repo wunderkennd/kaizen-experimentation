@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface RetryableErrorProps {
   message: string;
@@ -10,6 +10,13 @@ interface RetryableErrorProps {
 
 export function RetryableError({ message, onRetry, context }: RetryableErrorProps) {
   const [retrying, setRetrying] = useState(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -18,7 +25,9 @@ export function RetryableError({ message, onRetry, context }: RetryableErrorProp
     } catch {
       // Swallowed to prevent unhandled rejections; state reset handles UI recovery
     } finally {
-      setRetrying(false);
+      if (isMounted.current) {
+        setRetrying(false);
+      }
     }
   };
 
