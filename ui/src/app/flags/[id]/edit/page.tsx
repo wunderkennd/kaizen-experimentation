@@ -149,7 +149,7 @@ function EditFlagContent() {
             aria-required="true"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
             data-testid="edit-flag-name"
           />
         </div>
@@ -161,7 +161,7 @@ function EditFlagContent() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
             data-testid="edit-flag-desc"
           />
         </div>
@@ -172,7 +172,7 @@ function EditFlagContent() {
             id="flag-type"
             value={type}
             onChange={(e) => handleTypeChange(e.target.value as FlagType)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
             data-testid="edit-flag-type"
           >
             {FLAG_TYPES.map((t) => (
@@ -188,7 +188,7 @@ function EditFlagContent() {
               id="flag-default"
               value={defaultValue}
               onChange={(e) => setDefaultValue(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
               data-testid="edit-flag-default"
             >
               <option value="true">true</option>
@@ -201,7 +201,7 @@ function EditFlagContent() {
               value={defaultValue}
               onChange={(e) => setDefaultValue(e.target.value)}
               placeholder={type === 'JSON' ? '{ "key": "value" }' : ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
               data-testid="edit-flag-default"
             />
           )}

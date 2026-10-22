@@ -108,7 +108,7 @@ function CreateFlagContent() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. dark_mode_rollout"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
             data-testid="flag-name-input"
           />
         </div>
@@ -120,7 +120,7 @@ function CreateFlagContent() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
             data-testid="flag-desc-input"
           />
         </div>
@@ -131,7 +131,7 @@ function CreateFlagContent() {
             id="flag-type"
             value={type}
             onChange={(e) => handleTypeChange(e.target.value as FlagType)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
             data-testid="flag-type-select"
           >
             {FLAG_TYPES.map((t) => (
@@ -147,7 +147,7 @@ function CreateFlagContent() {
               id="flag-default"
               value={defaultValue}
               onChange={(e) => setDefaultValue(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
               data-testid="flag-default-input"
             >
               <option value="true">true</option>
@@ -160,7 +160,7 @@ function CreateFlagContent() {
               value={defaultValue}
               onChange={(e) => setDefaultValue(e.target.value)}
               placeholder={type === 'JSON' ? '{ "key": "value" }' : ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
               data-testid="flag-default-input"
             />
           )}

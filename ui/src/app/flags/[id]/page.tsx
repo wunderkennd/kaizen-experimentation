@@ -255,7 +255,7 @@ function FlagDetailContent() {
                     id="exp-type"
                     value={expType}
                     onChange={(e) => setExpType(e.target.value as ExperimentType)}
-                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                     data-testid="promote-exp-type"
                   >
                     <option value="AB">A/B</option>
@@ -274,7 +274,7 @@ function FlagDetailContent() {
                     value={primaryMetricId}
                     onChange={(e) => setPrimaryMetricId(e.target.value)}
                     placeholder="e.g. click_through_rate"
-                    className="rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                     data-testid="promote-metric-id"
                   />
                 </div>
