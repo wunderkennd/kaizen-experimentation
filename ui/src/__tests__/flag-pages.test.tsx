@@ -346,14 +346,21 @@ describe('Flag Detail Page', () => {
     expect(screen.getByTestId('promote-button')).toBeInTheDocument();
   });
 
-  it('shows promote form when button clicked', async () => {
+  it('shows promote form when button clicked with focus-visible styling on inputs and selects', async () => {
     await renderAndWait();
     const user = userEvent.setup();
 
     await user.click(screen.getByTestId('promote-button'));
     expect(screen.getByTestId('promote-form')).toBeInTheDocument();
-    expect(screen.getByTestId('promote-exp-type')).toBeInTheDocument();
-    expect(screen.getByTestId('promote-metric-id')).toBeInTheDocument();
+
+    const promoteTypeSelect = screen.getByTestId('promote-exp-type');
+    expect(promoteTypeSelect).toHaveClass('focus-visible:ring-2');
+    expect(promoteTypeSelect).toHaveClass('focus-visible:ring-indigo-500');
+
+    const promoteMetricInput = screen.getByTestId('promote-metric-id');
+    expect(promoteMetricInput).toHaveClass('focus-visible:ring-2');
+    expect(promoteMetricInput).toHaveClass('focus-visible:ring-indigo-500');
+
     expect(screen.getByTestId('promote-submit')).toBeInTheDocument();
   });
 
@@ -479,7 +486,7 @@ describe('Create Flag Page', () => {
     });
   });
 
-  it('has cancel link back to /flags and focus-visible styling on action buttons', () => {
+  it('has cancel link back to /flags and focus-visible styling on action buttons and form controls', () => {
     customRender(<CreateFlagPage />);
     const submitBtn = screen.getByTestId('create-submit');
     expect(submitBtn).toHaveClass('focus-visible:ring-2');
@@ -491,6 +498,18 @@ describe('Create Flag Page', () => {
     expect(cancelLink).toHaveClass('focus-visible:ring-2');
     expect(cancelLink).toHaveClass('focus-visible:ring-indigo-500');
     expect(cancelLink).toHaveClass('focus-visible:ring-offset-2');
+
+    const nameInput = screen.getByTestId('flag-name-input');
+    expect(nameInput).toHaveClass('focus-visible:ring-2');
+    expect(nameInput).toHaveClass('focus-visible:ring-indigo-500');
+
+    const descInput = screen.getByTestId('flag-desc-input');
+    expect(descInput).toHaveClass('focus-visible:ring-2');
+    expect(descInput).toHaveClass('focus-visible:ring-indigo-500');
+
+    const typeSelect = screen.getByTestId('flag-type-select');
+    expect(typeSelect).toHaveClass('focus-visible:ring-2');
+    expect(typeSelect).toHaveClass('focus-visible:ring-indigo-500');
   });
 
   it('renders all flag type options', () => {
@@ -596,7 +615,7 @@ describe('Edit Flag Page', () => {
     expect(screen.getByTestId('back-link')).toHaveAttribute('href', '/flags/flag-bool-rollout');
   });
 
-  it('has cancel link to flag detail page and focus-visible styling on action buttons', async () => {
+  it('has cancel link to flag detail page and focus-visible styling on action buttons and form controls', async () => {
     await renderAndWait();
     const submitBtn = screen.getByTestId('edit-submit');
     expect(submitBtn).toHaveClass('focus-visible:ring-2');
@@ -608,5 +627,17 @@ describe('Edit Flag Page', () => {
     expect(cancelLink).toHaveClass('focus-visible:ring-2');
     expect(cancelLink).toHaveClass('focus-visible:ring-indigo-500');
     expect(cancelLink).toHaveClass('focus-visible:ring-offset-2');
+
+    const nameInput = screen.getByTestId('edit-flag-name');
+    expect(nameInput).toHaveClass('focus-visible:ring-2');
+    expect(nameInput).toHaveClass('focus-visible:ring-indigo-500');
+
+    const descInput = screen.getByTestId('edit-flag-desc');
+    expect(descInput).toHaveClass('focus-visible:ring-2');
+    expect(descInput).toHaveClass('focus-visible:ring-indigo-500');
+
+    const typeSelect = screen.getByTestId('edit-flag-type');
+    expect(typeSelect).toHaveClass('focus-visible:ring-2');
+    expect(typeSelect).toHaveClass('focus-visible:ring-indigo-500');
   });
 });
