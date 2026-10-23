@@ -50,19 +50,28 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
       <section>
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Experiment Metadata</h2>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200" data-testid="metadata-table">
+          <table className="min-w-full divide-y divide-gray-200" data-testid="metadata-table" aria-label="Experiment metadata summary">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Property</th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  Property
+                </th>
                 {entries.map((e) => (
-                  <th key={e.experiment.experimentId} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th
+                    scope="col"
+                    key={e.experiment.experimentId}
+                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     {e.experiment.name}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Type</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm text-gray-600">
@@ -70,7 +79,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   </td>
                 ))}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">State</td>
                 {entries.map((e) => {
                   const cfg = STATE_CONFIG[e.experiment.state];
@@ -83,7 +92,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   );
                 })}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Owner</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm text-gray-600">
@@ -91,7 +100,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   </td>
                 ))}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Duration</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm text-gray-600">
@@ -99,7 +108,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   </td>
                 ))}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Started</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm text-gray-600">
@@ -107,7 +116,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   </td>
                 ))}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">SRM Status</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm">
@@ -123,7 +132,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   </td>
                 ))}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">CUPED Variance Reduction</td>
                 {entries.map((e) => {
                   const maxReduction = Math.max(...e.analysisResult.metricResults.map((m) => m.varianceReductionPct));
@@ -143,19 +152,28 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
       <section>
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Primary Metric Results</h2>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200" data-testid="primary-metric-table">
+          <table className="min-w-full divide-y divide-gray-200" data-testid="primary-metric-table" aria-label="Primary metric results summary">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Property</th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  Property
+                </th>
                 {entries.map((e) => (
-                  <th key={e.experiment.experimentId} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th
+                    scope="col"
+                    key={e.experiment.experimentId}
+                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     {e.experiment.name}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Primary Metric</td>
                 {entries.map((e) => (
                   <td key={e.experiment.experimentId} className="px-4 py-3 text-sm text-gray-600 font-mono">
@@ -173,7 +191,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   </td>
                 ))}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Treatment Effect</td>
                 {entries.map((e) => {
                   const m = getPrimaryMetricResult(e);
@@ -184,7 +202,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   );
                 })}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">95% CI</td>
                 {entries.map((e) => {
                   const m = getPrimaryMetricResult(e);
@@ -195,7 +213,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   );
                 })}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">p-value</td>
                 {entries.map((e) => {
                   const m = getPrimaryMetricResult(e);
@@ -206,7 +224,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
                   );
                 })}
               </tr>
-              <tr>
+              <tr className="hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Significance</td>
                 {entries.map((e) => {
                   const m = getPrimaryMetricResult(e);
@@ -237,12 +255,21 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
       <section>
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Metric Alignment Matrix</h2>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200" data-testid="metric-alignment-table">
+          <table className="min-w-full divide-y divide-gray-200" data-testid="metric-alignment-table" aria-label="Metric alignment matrix summary">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Metric</th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  Metric
+                </th>
                 {entries.map((e) => (
-                  <th key={e.experiment.experimentId} className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th
+                    scope="col"
+                    key={e.experiment.experimentId}
+                    className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     {e.experiment.name}
                   </th>
                 ))}
@@ -250,7 +277,7 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {allMetricIds.map((metricId) => (
-                <tr key={metricId} className="group">
+                <tr key={metricId} className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 font-mono">
                     <div className="flex items-center gap-2">
                       <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
