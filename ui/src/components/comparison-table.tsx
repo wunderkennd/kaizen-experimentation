@@ -53,9 +53,18 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
           <table className="min-w-full divide-y divide-gray-200" data-testid="metadata-table" aria-label="Experiment metadata summary">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Property</th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  Property
+                </th>
                 {entries.map((e) => (
-                  <th scope="col" key={e.experiment.experimentId} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th
+                    scope="col"
+                    key={e.experiment.experimentId}
+                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     {e.experiment.name}
                   </th>
                 ))}
@@ -146,9 +155,18 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
           <table className="min-w-full divide-y divide-gray-200" data-testid="primary-metric-table" aria-label="Primary metric results summary">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Property</th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  Property
+                </th>
                 {entries.map((e) => (
-                  <th scope="col" key={e.experiment.experimentId} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th
+                    scope="col"
+                    key={e.experiment.experimentId}
+                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     {e.experiment.name}
                   </th>
                 ))}
@@ -240,9 +258,18 @@ function ComparisonTableInner({ entries }: ComparisonTableProps) {
           <table className="min-w-full divide-y divide-gray-200" data-testid="metric-alignment-table" aria-label="Metric alignment matrix summary">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Metric</th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+                >
+                  Metric
+                </th>
                 {entries.map((e) => (
-                  <th scope="col" key={e.experiment.experimentId} className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th
+                    scope="col"
+                    key={e.experiment.experimentId}
+                    className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     {e.experiment.name}
                   </th>
                 ))}
