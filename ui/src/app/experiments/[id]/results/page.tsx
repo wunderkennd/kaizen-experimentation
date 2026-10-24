@@ -361,6 +361,7 @@ export default function ResultsPage() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              type="button"
               id={`tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={`whitespace-nowrap border-b-2 pb-3 pt-1 text-sm font-medium transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
