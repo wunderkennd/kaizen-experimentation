@@ -193,6 +193,48 @@ describe('Experiment Comparison Page', () => {
     expect(okBadges.length).toBe(2); // Both experiments have no SRM mismatch
   });
 
+  it('implements accessible table semantics and scope attributes', async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <ComparePage />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('experiment-search')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByTestId('experiment-search');
+    await user.click(searchInput);
+    await waitFor(() => { expect(screen.getByText('homepage_recs_v2')).toBeInTheDocument(); });
+    await user.click(screen.getByText('homepage_recs_v2'));
+
+    await user.click(searchInput);
+    await waitFor(() => { expect(screen.getByText('retention_nudge_v1')).toBeInTheDocument(); });
+    await user.click(screen.getByText('retention_nudge_v1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('metadata-table')).toBeInTheDocument();
+    });
+
+    const metadataTable = screen.getByTestId('metadata-table');
+    expect(metadataTable).toHaveAttribute('aria-label', 'Experiment metadata summary');
+
+    const primaryMetricTable = screen.getByTestId('primary-metric-table');
+    expect(primaryMetricTable).toHaveAttribute('aria-label', 'Primary metric results summary');
+
+    const alignmentTable = screen.getByTestId('metric-alignment-table');
+    expect(alignmentTable).toHaveAttribute('aria-label', 'Metric alignment matrix summary');
+
+    // Verify headers have scope="col"
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.length).toBeGreaterThan(0);
+    headers.forEach((th) => {
+      expect(th).toHaveAttribute('scope', 'col');
+    });
+  });
+
   it('chart renders with effect sizes', async () => {
     const user = userEvent.setup();
     render(
