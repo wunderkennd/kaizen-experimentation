@@ -178,6 +178,22 @@ describe('EValueGauge', () => {
 });
 
 describe('FdrDecisionBadge', () => {
+  it('implements keyboard accessibility and focus attributes', () => {
+    render(
+      <FdrDecisionBadge
+        eValueResult={E_VALUE_REJECTING}
+        fdrState={FDR_STATE_CONTROLLED}
+      />,
+    );
+
+    const badge = screen.getByTestId('fdr-decision-badge');
+    expect(badge).toHaveAttribute('tabIndex', '0');
+    expect(badge).toHaveAttribute('role', 'note');
+    expect(badge).toHaveAttribute('aria-label', 'FDR Pass: Null rejected and FDR is under control. Safe to act on this result.');
+    expect(badge.className).toContain('focus-visible:ring-2');
+    expect(badge.className).toContain('cursor-help');
+  });
+
   it('shows PASS when e-value rejects and FDR is under control', () => {
     render(
       <FdrDecisionBadge
