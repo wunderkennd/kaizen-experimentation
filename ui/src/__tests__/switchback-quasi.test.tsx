@@ -127,7 +127,8 @@ describe('Switchback Tab — delivery_speed_switchback_v1', () => {
     });
   });
 
-  it('shows block-level outcome table', async () => {
+  it('shows block-level outcome table with accessible table semantics and copy buttons', async () => {
+    const writeTextSpy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     const user = userEvent.setup();
     render(<ResultsPage />);
 
@@ -141,8 +142,21 @@ describe('Switchback Tab — delivery_speed_switchback_v1', () => {
       expect(screen.getByText('Block-Level Outcomes')).toBeInTheDocument();
     });
 
-    // Verify first block ID appears
-    expect(screen.getByText('blk-01')).toBeInTheDocument();
+    // Verify accessible table semantics
+    const table = screen.getByRole('table', { name: 'Block-level outcomes summary' });
+    expect(table).toBeInTheDocument();
+
+    // Verify copy button for metric ID
+    const copyMetricBtn = screen.getByRole('button', { name: 'Copy metric ID' });
+    expect(copyMetricBtn).toBeInTheDocument();
+
+    // Verify copy button for block ID and clipboard copy action
+    const copyBlockBtn = screen.getByRole('button', { name: 'Copy block ID blk-01' });
+    expect(copyBlockBtn).toBeInTheDocument();
+
+    await user.click(copyBlockBtn);
+    expect(writeTextSpy).toHaveBeenCalledWith('blk-01');
+    writeTextSpy.mockRestore();
   });
 
   it('shows block timeline', async () => {
