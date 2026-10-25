@@ -13,6 +13,8 @@ export function TypeBadge({ type }: TypeBadgeProps) {
 
   return (
     <span
+      role="note"
+      aria-label={description ? `${label}: ${description}` : label}
       className="inline-flex cursor-help items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20"
       title={description}
       data-testid="type-badge"
