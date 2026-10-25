@@ -9,6 +9,7 @@ import type { SwitchbackResult, SwitchbackBlock } from '@/lib/types';
 import { getSwitchbackResult, RpcError } from '@/lib/api';
 import { formatPValue } from '@/lib/utils';
 import { RetryableError } from '@/components/retryable-error';
+import { CopyButton } from '@/components/copy-button';
 
 interface SwitchbackTabProps {
   experimentId: string;
@@ -196,21 +197,31 @@ const BlockOutcomeTable = memo(function BlockOutcomeTable({ blocks }: { blocks: 
     <div>
       <h4 className="mb-2 text-sm font-semibold text-gray-900">Block-Level Outcomes</h4>
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200" aria-label="Block-level outcomes summary">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Block</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Period Start</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Period End</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Assignment</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Outcome</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">N</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Block</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Period Start</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Period End</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Assignment</th>
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Outcome</th>
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">N</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {blocks.map((block) => (
-              <tr key={block.blockId} className="hover:bg-gray-50">
-                <td className="whitespace-nowrap px-4 py-2 text-sm font-mono text-gray-700">{block.blockId}</td>
+              <tr key={block.blockId} className="group hover:bg-gray-50 focus-within:bg-gray-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
+                <td className="whitespace-nowrap px-4 py-2 text-sm font-mono text-gray-700">
+                  <div className="flex items-center gap-2">
+                    <span>{block.blockId}</span>
+                    <CopyButton
+                      value={block.blockId}
+                      label={`Copy block ID ${block.blockId}`}
+                      successMessage="Block ID copied"
+                      className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                    />
+                  </div>
+                </td>
                 <td className="whitespace-nowrap px-4 py-2 text-sm text-gray-600">
                   {new Date(block.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </td>
@@ -293,8 +304,14 @@ export function SwitchbackTab({ experimentId }: SwitchbackTabProps) {
     <div className="space-y-6">
       {/* Significance banner */}
       <div className={`rounded-md border p-4 ${isSignificant ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-        <h4 className={`text-sm font-semibold ${isSignificant ? 'text-green-800' : 'text-gray-800'}`}>
-          Switchback ATE — {result.metricId}
+        <h4 className={`flex items-center gap-2 text-sm font-semibold ${isSignificant ? 'text-green-800' : 'text-gray-800'}`}>
+          <span>Switchback ATE — {result.metricId}</span>
+          <CopyButton
+            value={result.metricId}
+            label="Copy metric ID"
+            successMessage="Metric ID copied"
+            className="h-4 w-4"
+          />
           {isSignificant && (
             <span className="ml-2 rounded-full bg-green-200 px-2 py-0.5 text-xs font-medium text-green-900">
               Significant
