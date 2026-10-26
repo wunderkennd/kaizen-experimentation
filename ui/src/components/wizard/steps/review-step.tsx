@@ -20,7 +20,8 @@ function ReviewSection({ title, step, onEdit, children }: ReviewSectionProps) {
         <button
           type="button"
           onClick={() => onEdit(step)}
-          className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          aria-label={`Edit ${title}`}
+          className="rounded-sm text-xs font-medium text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
         >
           Edit
         </button>

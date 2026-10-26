@@ -146,7 +146,7 @@ describe('Experiment Creation Wizard', () => {
     await fillToReview(user);
 
     // Click "Edit" on the Basic Information section
-    const editButtons = screen.getAllByRole('button', { name: 'Edit' });
+    const editButtons = screen.getAllByRole('button', { name: /^Edit/ });
     await user.click(editButtons[0]); // First Edit = Basics
 
     // Should be back on step 1
