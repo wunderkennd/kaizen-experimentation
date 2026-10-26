@@ -95,4 +95,24 @@ describe('ReviewStep Enhancements', () => {
     expect(rewardMetricValue.tagName).toBe('CODE');
     expect(screen.getByLabelText('Copy Reward Metric')).toBeInTheDocument();
   });
+
+  it('renders section edit buttons with descriptive aria-labels and focus ring styles', () => {
+    render(
+      <ToastProvider>
+        <WizardProvider initialState={mockInitialState}>
+          <ReviewStep />
+        </WizardProvider>
+      </ToastProvider>
+    );
+
+    const editBasicsBtn = screen.getByRole('button', { name: 'Edit Basic Information' });
+    expect(editBasicsBtn).toBeInTheDocument();
+    expect(editBasicsBtn).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-indigo-500');
+
+    const editVariantsBtn = screen.getByRole('button', { name: 'Edit Variants' });
+    expect(editVariantsBtn).toBeInTheDocument();
+
+    const editMetricsBtn = screen.getByRole('button', { name: 'Edit Metrics & Guardrails' });
+    expect(editMetricsBtn).toBeInTheDocument();
+  });
 });
