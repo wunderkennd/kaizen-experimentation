@@ -14,7 +14,7 @@ export function RetryableError({ message, onRetry, context }: RetryableErrorProp
   const handleRetry = async () => {
     setRetrying(true);
     try {
-      await Promise.resolve(onRetry());
+      await onRetry();
     } catch {
       // Swallowed: error state handled by caller or state update
     } finally {
