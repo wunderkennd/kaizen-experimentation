@@ -140,12 +140,18 @@ describe('Portfolio Dashboard', () => {
   });
 
   describe('ConflictBadge', () => {
-    it('shows conflict badges for experiments sharing segments', async () => {
+    it('shows conflict badges with accessible attributes for experiments sharing segments', async () => {
       // homepage_recs_v2 shares 'established' with search_ranking_v3
       // search_ranking_v3 shares 'established' with homepage_recs_v2 and 'mature' with content_diversity_boost
       await renderAndWait();
       const badges = screen.getAllByTestId('conflict-badge');
       expect(badges.length).toBeGreaterThan(0);
+
+      const badge = badges[0];
+      expect(badge).toHaveAttribute('tabindex', '0');
+      expect(badge).toHaveAttribute('role', 'note');
+      expect(badge).toHaveClass('focus-visible:ring-amber-500');
+      expect(badge.getAttribute('aria-label')).toMatch(/Segment conflict:/);
     });
   });
 });

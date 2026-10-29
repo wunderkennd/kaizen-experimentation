@@ -32,12 +32,15 @@ export function ConflictBadge({ experiment, allExperiments }: ConflictBadgeProps
 
   return (
     <span
-      className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+      tabIndex={0}
+      role="note"
+      className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
       title={`Shares segments with other experiments: ${conflicts.join(', ')}`}
       data-testid="conflict-badge"
       aria-label={`Segment conflict: ${conflicts.join(', ')}`}
     >
-      ⚠ {conflicts.length} shared {conflicts.length === 1 ? 'segment' : 'segments'}
+      <span aria-hidden="true">⚠</span>
+      <span>{conflicts.length} shared {conflicts.length === 1 ? 'segment' : 'segments'}</span>
     </span>
   );
 }
