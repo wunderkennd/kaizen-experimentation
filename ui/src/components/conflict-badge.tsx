@@ -31,6 +31,7 @@ export function ConflictBadge({ experiment, allExperiments }: ConflictBadgeProps
   if (conflicts.length === 0) return null;
 
   return (
+    // Keyboard focusable with high-contrast focus indicator for screen reader and tooltip accessibility
     <span
       tabIndex={0}
       role="note"
