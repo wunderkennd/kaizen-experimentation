@@ -121,7 +121,7 @@ describe('ErrorBoundary', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 
-  it('shows "Try again" button in default fallback', () => {
+  it('shows "Try again" button in default fallback with focus-visible styles', () => {
     render(
       <ErrorBoundary>
         <ThrowOnRender shouldThrow={true} />
@@ -131,5 +131,6 @@ describe('ErrorBoundary', () => {
     const retryButton = screen.getByTestId('error-boundary-retry');
     expect(retryButton).toBeInTheDocument();
     expect(retryButton).toHaveTextContent('Try again');
+    expect(retryButton).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-red-500');
   });
 });
