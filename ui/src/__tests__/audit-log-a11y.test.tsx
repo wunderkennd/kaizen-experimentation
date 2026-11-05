@@ -26,6 +26,7 @@ async function renderAndWait() {
   );
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Audit Log' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Audit log entries summary' })).toBeInTheDocument();
   });
 }
 
