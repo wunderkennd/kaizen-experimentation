@@ -30,6 +30,20 @@ async function renderAndWait() {
 }
 
 describe('Audit Log Accessibility', () => {
+  it('renders table with accessible label and column scopes', async () => {
+    await renderAndWait();
+
+    const table = screen.getByRole('table', { name: 'Audit log entries summary' });
+    expect(table).toBeInTheDocument();
+
+    const columnHeaders = screen.getAllByRole('columnheader');
+    expect(columnHeaders).toHaveLength(5);
+    ['Timestamp', 'Experiment', 'Action', 'Actor', 'Details'].forEach((headerText, i) => {
+      expect(columnHeaders[i]).toHaveTextContent(headerText);
+      expect(columnHeaders[i]).toHaveAttribute('scope', 'col');
+    });
+  });
+
   it('toggles row expansion with Enter key', async () => {
     const user = userEvent.setup();
     await renderAndWait();
