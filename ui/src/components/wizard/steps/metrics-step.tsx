@@ -54,7 +54,7 @@ export function MetricsStep() {
           <button
             type="button"
             onClick={() => dispatch({ type: 'ADD_GUARDRAIL' })}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             Add Guardrail
           </button>
@@ -70,7 +70,7 @@ export function MetricsStep() {
                     value={g.metricId}
                     onChange={(e) => dispatch({ type: 'UPDATE_GUARDRAIL', index: i, field: 'metricId', value: e.target.value })}
                     aria-label={`Guardrail ${i + 1} metric`}
-                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </div>
                 <div className="w-28">
@@ -81,7 +81,7 @@ export function MetricsStep() {
                     value={g.threshold}
                     onChange={(e) => dispatch({ type: 'UPDATE_GUARDRAIL', index: i, field: 'threshold', value: parseFloat(e.target.value) || 0 })}
                     aria-label={`Guardrail ${i + 1} threshold`}
-                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </div>
                 <div className="w-28">
@@ -92,13 +92,14 @@ export function MetricsStep() {
                     value={g.consecutiveBreachesRequired}
                     onChange={(e) => dispatch({ type: 'UPDATE_GUARDRAIL', index: i, field: 'consecutiveBreachesRequired', value: parseInt(e.target.value) || 1 })}
                     aria-label={`Guardrail ${i + 1} breaches required`}
-                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'REMOVE_GUARDRAIL', index: i })}
-                  className="mb-1 text-sm text-red-600 hover:text-red-800"
+                  aria-label={`Remove guardrail ${g.metricId || i + 1}`}
+                  className="mb-1 rounded-sm text-sm text-red-600 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
                 >
                   Remove
                 </button>
@@ -110,7 +111,7 @@ export function MetricsStep() {
                 id="guardrail-action"
                 value={state.guardrailAction}
                 onChange={(e) => setField('guardrailAction', e.target.value as GuardrailAction)}
-                className="mt-1 block w-48 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm"
+                className="mt-1 block w-48 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
               >
                 <option value="AUTO_PAUSE">Auto-Pause</option>
                 <option value="ALERT_ONLY">Alert Only</option>
