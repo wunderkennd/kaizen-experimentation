@@ -322,3 +322,17 @@ just update-skills           # pull latest, then commit the updated skills-lock.
 ```
 
 Skills cover: Pulumi-to-Terraform migration (`pulumi-terraform-to-pulumi`), Playwright UI testing (`webapp-testing`), ADR drafting (`documentation-and-adrs`), plus Matt Pocock's engineering productivity set (`tdd`, `diagnose`, `triage`, `to-issues`, `to-prd`, `grill-me`, etc.). Add new shared skills with `npx skills add <owner/repo@skill>` (project scope — omit `-g`).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` at the repo root, ADRs in `docs/adrs/`. See `docs/agents/domain.md`.
